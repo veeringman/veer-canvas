@@ -75,11 +75,12 @@ python3 "$IMPORT_SCRIPT" "${GITHUB_OWNER:-veeringman}" imported_projects \
   --projects-json "$SITE_DIR/projects.json" \
   --write-public-catalog
 
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "sudo mkdir -p '$WEB_ROOT/veercanvas' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "sudo mkdir -p '$WEB_ROOT' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT'"
 
 echo "Syncing site ${SITE_ID} to ${EC2_USER}@${EC2_HOST}:${WEB_ROOT} ..."
 rsync -az --delete \
   -e "$RSYNC_SSH" \
+  --filter 'P veercanvas/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
@@ -87,6 +88,9 @@ rsync -az --delete \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/"
 
 echo "Syncing VeerCanvas platform ..."
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
+  "mkdir -p '$WEB_ROOT/veercanvas/admin' '$WEB_ROOT/veercanvas/deploy'"
+
 rsync -az \
   -e "$RSYNC_SSH" \
   --exclude '__pycache__' \
