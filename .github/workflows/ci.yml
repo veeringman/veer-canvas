@@ -3,18 +3,11 @@ name: VeerCanvas CI
 on:
   push:
     branches: [main]
-    paths:
-      - 'veercanvas/**'
   pull_request:
-    paths:
-      - 'veercanvas/**'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: veercanvas
     steps:
       - uses: actions/checkout@v4
 

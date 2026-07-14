@@ -30,10 +30,9 @@ VEERCANVAS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/site-env.sh
 source "${VEERCANVAS_ROOT}/deploy/lib/site-env.sh"
 
-REPO_ROOT="$(cd "${VEERCANVAS_ROOT}/.." && pwd)"
 EC2_HOST="${EC2_HOST:-3.216.30.113}"
 EC2_USER="${EC2_USER:-ubuntu}"
-EC2_KEY="${EC2_KEY:-$REPO_ROOT/VeerSetuHost.pem}"
+EC2_KEY="${EC2_KEY:-$VEERCANVAS_ROOT/VeerSetuHost.pem}"
 
 if [[ ! -f "$EC2_KEY" ]]; then
   echo "error: SSH key not found at $EC2_KEY" >&2
@@ -48,7 +47,7 @@ echo "VeerCanvas deploy: site=${SITE_ID} domain=${SITE_DOMAIN} web_root=${WEB_RO
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" 'echo "SSH OK"'
 
 if [[ "$IMPORT_REPOS" == "1" ]]; then
-  TOKEN_FILE="$REPO_ROOT/gh_token.txt"
+  TOKEN_FILE="$VEERCANVAS_ROOT/gh_token.txt"
   IMPORT_TOKEN="${GH_TOKEN:-}"
   if [[ -z "$IMPORT_TOKEN" && -f "$TOKEN_FILE" ]]; then
     IMPORT_TOKEN="$(tr -d '\n' < "$TOKEN_FILE")"

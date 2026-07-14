@@ -1,45 +1,27 @@
-# Migrating VeerCanvas to a standalone repository
+# VeerCanvas migration
 
-The VeerCanvas platform currently lives under `veercanvas/` in the VeerSetu monorepo. It is intended to become **`veeringman/veer-canvas`** on GitHub.
+VeerCanvas was extracted from the [VeerSetu](https://github.com/veeringman/veersetu) monorepo into this repository on **2026-07-14**.
 
-## Option A — Publish `veercanvas/` as a new repo (recommended)
+## Repository
 
-```bash
-# On a machine with git and GitHub CLI
-cd /path/to/veersetu
-git subtree split --prefix=veercanvas -b veercanvas-only
+- **GitHub:** [github.com/veeringman/veer-canvas](https://github.com/veeringman/veer-canvas)
+- **Sample site:** `sites/veerlabs/` (VeerLabs Solutions)
 
-mkdir ../veer-canvas && cd ../veer-canvas
-git init
-git pull /path/to/veersetu veercanvas-only
-git remote add origin git@github.com:veeringman/veer-canvas.git
-git push -u origin main
-```
-
-## Option B — Copy directory
+## Deploy from this repo
 
 ```bash
-cp -a veersetu/veercanvas/ veer-canvas/
+git clone git@github.com:veeringman/veer-canvas.git
 cd veer-canvas
-git init && git add . && git commit -m "Initial VeerCanvas platform"
-git remote add origin git@github.com:veeringman/veer-canvas.git
-git push -u origin main
+
+SITE_ID=veerlabs EC2_KEY=./VeerSetuHost.pem ./deploy/remote-deploy.sh
 ```
 
-## After split
+Copy `EC2_SSH_KEY`, `EC2_HOST`, and `EC2_USER` GitHub Actions secrets from VeerSetu if you use CI deploy.
 
-1. Update EC2 deploy to clone/pull `veer-canvas` instead of `veersetu/veerabs_website`
-2. Point CI secrets to `veercanvas/deploy/remote-deploy.sh`
-3. In VeerSetu, replace website tree with a submodule or link:
+## VeerSetu cleanup
 
-   ```bash
-   git submodule add git@github.com:veeringman/veer-canvas.git veercanvas
-   ```
+After the split, VeerSetu retains only the edge-fabric product (agents, relay, control plane). Website and CMS code live here.
 
-## VeerSetu repo cleanup
+## History
 
-After the split, VeerSetu should retain only:
-
-- VeerSetu product code (agents, relay, control plane)
-- Optional submodule pointer to `veer-canvas` for the VeerLabs site
-- No duplicate `veerabs_website/` or website deploy scripts
+The initial commit history was preserved via `git subtree split --prefix=veercanvas` from VeerSetu.

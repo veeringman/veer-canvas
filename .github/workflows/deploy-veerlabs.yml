@@ -5,11 +5,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'veercanvas/sites/veerlabs/**'
-      - 'veercanvas/admin/**'
-      - 'veercanvas/deploy/**'
-      - 'veercanvas/cli/**'
-      - 'veercanvas/.github/workflows/deploy-veerlabs.yml'
+      - 'sites/veerlabs/**'
+      - 'admin/**'
+      - 'deploy/**'
+      - 'cli/**'
+      - '.github/workflows/deploy-veerlabs.yml'
 
 jobs:
   deploy:
@@ -33,7 +33,7 @@ jobs:
           EC2_KEY=~/.ssh/ec2.pem \
           EC2_HOST="$EC2_HOST" \
           EC2_USER="$EC2_USER" \
-          ./veercanvas/deploy/remote-deploy.sh
+          ./deploy/remote-deploy.sh
 
       - name: Verify
         run: |

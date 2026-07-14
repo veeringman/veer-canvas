@@ -7,7 +7,6 @@ The **VeerLabs Solutions** site (`sites/veerlabs/`) ships as the official refere
 ## Repository layout
 
 ```
-veercanvas/
 ├── admin/           # Flask CMS (authoring, publish, import)
 ├── cli/             # Import, catalog sync, publish tooling
 ├── core/            # Shared platform libraries (expanding)
@@ -68,8 +67,7 @@ VeerCanvas is intentionally evolving beyond static publishing:
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Split from VeerSetu
+## Related projects
 
-This directory is designed to live in its own repository: **`veer-canvas`** (GitHub: `veeringman/veer-canvas`).
-
-See [docs/MIGRATION.md](docs/MIGRATION.md) for publishing this tree as a standalone repo.
+- **[VeerSetu](https://github.com/veeringman/veersetu)** — zero-trust edge fabric (separate product repo)
+- **VeerLabs sample site** — `sites/veerlabs/` in this repository

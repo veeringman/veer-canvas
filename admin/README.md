@@ -5,7 +5,7 @@ Flask CMS for authoring and publishing VeerCanvas sites.
 ## Run locally
 
 ```bash
-cd veercanvas
+cd veer-canvas   # repo root
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r admin/requirements.txt
 export VEERCANVAS_SITE_ID=veerlabs
@@ -19,7 +19,7 @@ Admin UI: http://127.0.0.1:8080/admin/
 
 | Variable | Purpose |
 |----------|---------|
-| `VEERCANVAS_ROOT` | Platform root (`veercanvas/`) |
+| `VEERCANVAS_ROOT` | Platform root path (repo root) |
 | `VEERCANVAS_SITE_ID` | Site folder name under `sites/` |
 | `VEERCANVAS_SITE_ROOT` | Override site content path |
 | `VEERCANVAS_ADMIN_SECRET` | Flask session secret |

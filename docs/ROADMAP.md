@@ -11,7 +11,7 @@
 
 ## Phase 2 — Platform extraction (in progress)
 
-- [x] `veercanvas/` monorepo layout
+- [x] Standalone `veer-canvas` repository
 - [ ] Standalone `veer-canvas` GitHub repository
 - [ ] Generic site template and theme separation
 - [ ] Platform CI (lint, admin smoke, catalog build)
