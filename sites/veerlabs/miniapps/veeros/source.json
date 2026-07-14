@@ -1,0 +1,13 @@
+{
+  "slug": "veeros",
+  "repo": "https://github.com/veeringman/VeerOS",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://img.shields.io/badge/rust-nightly-orange",
+    "https://raw.githubusercontent.com/veeringman/VeerOS/main/veeros-logo.png?token=AHGYFSM5AUVBTIFSTEZ3SWTKKWU7DAA",
+    "https://raw.githubusercontent.com/veeringman/VeerOS/main/docs/veeros.logo.png?token=AHGYFSNR7SXM5WL6CWLUSSDKKWU7DAA"
+  ],
+  "readme_logo_url": "https://img.shields.io/badge/rust-nightly-orange"
+}

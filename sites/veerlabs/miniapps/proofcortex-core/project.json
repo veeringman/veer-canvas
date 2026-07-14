@@ -1,0 +1,39 @@
+{
+  "slug": "proofcortex-core",
+  "name": "proofcortex-core",
+  "subtitle": "Private repository for the **VeriCortex Runtime & Proof Engine**.",
+  "summary": "Private repository for the **ProofCortex Runtime & Proof Engine**.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "proofcortex-core logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Private repository for the **ProofCortex Runtime & Proof Engine**."
+    },
+    {
+      "title": "ProofCortex-Core \ud83d\udd12",
+      "body": "Private repository for the **ProofCortex Runtime & Proof Engine**."
+    },
+    {
+      "title": "Overview",
+      "body": "This repository houses the **core deterministic runtime**, **ZK/cryptographic proof modules**, and **model integrity framework**.  \nIt serves as the production-grade backend for the VeriCortex project, interfacing with the public `vericortex-blockdag-demo` repo through API and crate bindings."
+    },
+    {
+      "title": "Key Components",
+      "body": "- `runtime/`: WASM warm pool manager, sandbox engine\n- `proofs/`: Proof generator and verifier circuits\n- `model_registry/`: Model metadata integrity and checks\n- `integrations/`: BlockDAG and external API connectors\n- `tests/`: Internal stress, security, and integration tests\n\n\ud83d\udeab **Confidential:** Do not distribute or expose this repository publicly."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/proofcortex-core"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/proofcortex-core"
+}

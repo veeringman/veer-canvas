@@ -1,0 +1,12 @@
+{
+  "slug": "veerion",
+  "repo": "https://github.com/veeringman/veerion",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/veerion/main/assets/veerion_logo.png?token=AHGYFSOO7LQVVZ2QY43DS23KKWU65AA",
+    "https://raw.githubusercontent.com/veeringman/veerion/main/assets/veerion_logo_cropped.png?token=AHGYFSIKM2XEK6W5YKQ42U3KKWU65AA"
+  ],
+  "readme_logo_url": null
+}

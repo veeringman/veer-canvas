@@ -1,0 +1,27 @@
+{
+  "slug": "demo-workspaces",
+  "name": "demo-workspaces",
+  "subtitle": "TypeScript",
+  "summary": "Demo master repo",
+  "logo": "miniapps/demo-workspaces/assets/proofcortex_logo.jpeg",
+  "logoAlt": "demo-workspaces logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Demo master repo"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/demo-workspaces"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/demo-workspaces"
+}

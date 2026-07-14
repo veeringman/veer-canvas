@@ -1,0 +1,47 @@
+{
+  "slug": "brain-blocks",
+  "name": "brain_blocks",
+  "subtitle": "Rust",
+  "summary": "**BrainBlocks** is a next-generation blockchain project that merges **Artificial Intelligence (AI)** with decentralized ledger technology. Our goal is to create a **self-evolving**, **intelligence-driven** ecosystem for secure, adaptive consensus and decentralized knowledge/IP monetization.",
+  "logo": "miniapps/brain-blocks/assets/github_readme.png",
+  "logoAlt": "brain_blocks logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**BrainBlocks** is a next-generation blockchain project that merges **Artificial Intelligence (AI)** with decentralized ledger technology. Our goal is to create a **self-evolving**, **intelligence-driven** ecosystem for secure, adaptive consensus and decentralized knowledge/IP monetization."
+    },
+    {
+      "title": "BrainBlocks",
+      "body": "**BrainBlocks** is a next-generation blockchain project that merges **Artificial Intelligence (AI)** with decentralized ledger technology. Our goal is to create a **self-evolving**, **intelligence-driven** ecosystem for secure, adaptive consensus and decentralized knowledge/IP monetization.\n\n> **Key Features**  \n> - **Proof of Intelligence (PoI) / Proof of Knowledge (PoK):** Nodes validate blocks by contributing meaningful knowledge, research, or AI-driven solutions.  \n> - **AI-Driven Governance:** A decentralized autonomous organization (DAO) that leverages AI analytics to propose and vote on protocol improvements.  \n> - **Tokenized Knowledge/IP:** Tools for securely monetizing and licensing intellectual property, research, patents, and other digital content.  \n> - **BRAIN Token:** The project\u2019s native utility token, fueling transactions, governance, staking, and rewards for intellectual contributions.\n>   \n![Brain Token](./BrainCoin.png)![Brain Token](./BrainCoin.png)![Brain Token](./BrainCoin.png)![Brain Token](./BrainCoin.png)\n---"
+    },
+    {
+      "title": "Project Structure",
+      "body": "The BrainBlocks project is organized as a **Rust workspace** under the `crates/` directory. Below is a summary of key folders:\n\n```\nBrainBlocks/\n\u251c\u2500\u2500 Cargo.toml          # Workspace configuration\n\u251c\u2500\u2500 README.md           # You are here!\n\u251c\u2500\u2500 .gitignore          \n\u251c\u2500\u2500 docs/               # Whitepaper, design docs, technical specs\n\u251c\u2500\u2500 scripts/            # Utility or CI/CD scripts\n\u2514\u2500\u2500 crates/\n    \u251c\u2500\u2500 node/           # BrainBlocks Node: runtime execution, CLI, chain specs\n    \u251c\u2500\u2500 runtime/        # Core runtime logic (consensus, block validation)\n    \u251c\u2500\u2500 pallets/\n    \u2502   \u251c\u2500\u2500 consensus/  # PoI/PoK algorithms, puzzle logic, scoring\n    \u2502   \u251c\u2500\u2500 knowledge/  # Tokenization & licensing of IP\n    \u2502   \u2514\u2500\u2500 ai_integration/  # AI hooks, ML models, DAO proposals\n    \u251c\u2500\u2500 common/         # Shared primitives & utilities\n    \u2514\u2500\u2500 braincli/       # Optional CLI tool for interacting with BrainBlocks\n```"
+    },
+    {
+      "title": "Sub-Crates Overview",
+      "body": "1. **node/**\n   - Handles **node initialization**, **networking**, **CLI** arguments, and **chain services**.\n\n2. **runtime/**\n   - Defines the **on-chain logic** (state transition, block validation).\n   - Integrates pallets for consensus, AI, and IP tokenization.\n\n3. **pallets/**\n   - **consensus/**: Implements Proof of Intelligence or Proof of Knowledge.  \n   - **knowledge/**: Manages intellectual property tokenization, licensing terms, and royalty distribution.  \n   - **ai_integration/**: Interfaces with AI modules for data analysis, dynamic consensus, and governance suggestions.\n\n4. **common/**\n   - Shared modules for **primitives**, **utilities**, or constants used across the workspace.\n\n5. **braincli/**\n   - A **command-line tool** that lets end users and developers interact with the chain, publish IP assets, or retrieve data.\n\n---"
+    },
+    {
+      "title": "Prerequisites",
+      "body": "- **Rust** (stable or nightly) installed via [rustup](https://rustup.rs/).  \n- **Cargo** (comes with Rust) for building and managing dependencies.  \n- **Git** for version control."
+    },
+    {
+      "title": "Build Instructions",
+      "body": "1. **Clone the repository**:\n\n   ```bash\n   git clone https://github.com/veeringman/brain_blocks.git\n   cd brain_blocks/BrainBlocks\n   ```\n\n2. **Build the entire workspace**:\n\n   ```bash\n   cargo build\n   ```\n   \n   This command compiles all crates (`node`, `runtime`, `pallets`, `braincli`, etc.).\n\n3. **Run tests** (if available):\n\n   ```bash\n   cargo test\n   ```\n   \n   This runs unit tests and integration tests in all crates."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/brain_blocks"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/brain_blocks"
+}

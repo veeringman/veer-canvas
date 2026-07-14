@@ -1,0 +1,11 @@
+{
+  "slug": "quantum-waulta",
+  "repo": "https://github.com/veeringman/quantum-waulta",
+  "default_branch": "main",
+  "language": "Shell",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/quantum-waulta/main/docs/architecture.md"
+  ],
+  "readme_logo_url": "https://raw.githubusercontent.com/veeringman/quantum-waulta/main/docs/architecture.md"
+}

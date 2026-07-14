@@ -1,0 +1,55 @@
+{
+  "slug": "veeros",
+  "name": "VeerOS",
+  "subtitle": "Rust",
+  "summary": "<img src=\"./veeros-logo.png\" alt=\"VeerOS Logo\" width=\"180\" /><p> <img src=\"./veeros.png\" alt=\"VeerOS Logo\" width=\"210\" />",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "VeerOS logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<img src=\"./veeros-logo.png\" alt=\"VeerOS Logo\" width=\"180\" /><p> <img src=\"./veeros.png\" alt=\"VeerOS Logo\" width=\"210\" />"
+    },
+    {
+      "title": "Latest Updates (2026-05-04)",
+      "body": "- Updated VeerOS VM network smoke coverage for the current connect flow and host forwarding behavior.\n- Added shell terminal compatibility notes and routing analysis docs for VeerOS host access.\n- Clarified operator direction for host shell access: prefer `veer-connect` style shell routing for VeerOS hosts over generic SSH assumptions when host metadata advertises VeerOS capabilities.\n\nWhere traditional operating systems understand processes, threads, and files,\nVeerOS introduces three new kernel primitives: **Intents** (declarative goals),\n**Agents** (autonomous execution units), and an **Execution Fabric**\n(heterogeneous node topology). Compute, state, security, networking, and\nobservability collapse into a single fabric \u2014 not layered on after the fact.\nTogether, they replace entire cloud stacks \u2014 with few syscalls.\n\n> **Try it now:**\n> ```bash\n> cargo run -p veeros-demo      # interactive AI-native shell\n> ```\n\n---"
+    },
+    {
+      "title": "Why VeerOS Exists",
+      "body": "Every layer in the modern infrastructure stack exists because the OS doesn't\nunderstand goals:\n\n| Problem | Today's Stack | VeerOS |\n|---|---|---|\n| Orchestration | Kubernetes (2M+ lines) | `intent submit` (1 syscall) |\n| Service mesh | Istio + Envoy sidecars | ZeroServices \u2014 kernel-native routing + mTLS |\n| API gateway | Kong / Nginx / Traefik | `SYS_SVC_EXPOSE` (1 syscall) |\n| Service calls | REST endpoints + HTTP | `invoke(\"name.function\", payload)` |\n| Databases / caches / queues | Redis + Kafka + etcd | State Fabric (kernel-native KV + streams) |\n| Observability | Prometheus + Grafana + OTel | Structured events (typed, not string logs) |\n| Config management | etcd / Consul / Vault | Persistent memory (in-kernel KV) |\n| Task scheduling | Airflow / Celery / Temporal | Intent decomposition \u2192 agent DAGs |\n| Cross-arch deployment | Docker multi-arch + QEMU | Native fabric placement |\n| Failover / self-healing | Custom health checks + PDBs | Kernel heartbeat + auto-replan |\n| Network access control | ClearPass / Aruba / ISE | Kernel-native 802.1X + posture |\n| Endpoint security | CrowdStrike / Trellix / Defender | Kernel EDR \u2014 syscall-level visibility |\n| Zero Trust access | Zscaler / Cloudflare ZTNA | Kernel ZTNA \u2014 continuous auth per-request |\n| Device management | Intune / JAMF / SCCM | Fabric join = enrollment (0 agents) |\n| WAN connectivity | Tailscale / ZeroTier / VPN | WAN-scale fabric with NAT traversal |\n| Fleet management | Ansible / Terraform / Salt | Unified console + fleet intents |\n| Cross-org integration | API gateways + VPNs + OAuth2 | InterFabric (IFP) \u2014 federated invocation |\n| User interface | Browser + REST + JS frameworks | Fabric Client (VeerUX) \u2014 composable, AI-rendered views |\n\n**VeerOS collapses this entire stack into the kernel.** The OS itself plans,\nschedules, places, monitors, secures, renders, and manages \u2014 from a single MCU\nto a planet-scale fleet.\n\n---"
+    },
+    {
+      "title": "Edge AI & Industrial IoT",
+      "body": "A factory floor with 200 ESP32 sensors, 10 RPi gateways, and 2 cloud GPUs.\nSubmit `intent submit pipeline collect vibration data, detect anomalies, alert` \u2014 the kernel decomposes across the fabric, ingest on sensors, normalize on gateways, inference on GPU. Zero middleware.\n**\u2192 Smart manufacturing, precision agriculture, oil & gas monitoring.**"
+    },
+    {
+      "title": "Autonomous Robotics & Drones",
+      "body": "Each drone function (navigation, obstacle avoidance, battery management) is a\nkernel agent with a compute budget and deadline. Low battery triggers\n`intent submit admin emergency return-to-base` \u2014 the kernel re-plans in\nmicroseconds, no ROS2 restarts.\n**\u2192 Delivery drones, warehouse robots, surgical robotics, autonomous vehicles.**"
+    },
+    {
+      "title": "Satellite & Space Systems",
+      "body": "A CubeSat's RISC-V compute module, camera, and radio are fabric nodes. Ground\ncontrol sends an imaging intent; the kernel budgets compute ticks, schedules\ncapture when power permits, queues downlink for the next pass \u2014 all in-kernel.\n**\u2192 Smallsat constellations, deep-space probes, military ISR platforms.**"
+    },
+    {
+      "title": "AI-Native Architecture",
+      "body": "VeerOS is the first OS where AI agent orchestration is a **kernel subsystem**,\nnot a userspace framework.\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Shell / Application                                         \u2502\n\u2502    agents \u00b7 intent \u00b7 memory \u00b7 fabric \u00b7 demo                  \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Intent  \u2502  Agent    \u2502  Memory   \u2502  Execution Fabric         \u2502\n\u2502  Engine  \u2502  Table    \u2502  Engine   \u2502                           \u2502\n\u2502          \u2502           \u2502           \u2502  host-demo    (x86,local) \u2502\n\u2502  goals \u2192 \u2502  32 slots \u2502  context  \u2502  rpi5-edge    (arm64,rack)\u2502\n\u2502  plan DAG\u2502  lifecycle\u2502  persist  \u2502  esp32-sensor (rv32,rack) \u2502\n\u2502          \u2502  budget   \u2502  episodic \u2502  cloud-gpu    (x86,dc)    \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502               Intent Scheduler (6-phase tick)                \u2502\n\u2502  decompose \u2192 place \u2192 spawn \u2192 monitor \u2192 record \u2192 health      \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Classic Kernel: Scheduler \u00b7 IPC \u00b7 VFS \u00b7 Sockets \u00b7 Crypto    \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n**13 new syscalls** (0xF0\u20130xFF) expose the AI layer to userspace:\n`agent_spawn`, `agent_status`, `agent_complete`, `agent_ctx_set/get`,\n`intent_submit`, `intent_status`, `intent_cancel`, `memory_store`,\n`memory_query`, `fabric_status`, `sched_stats`, `agent_count`.\n\n\u27a1\ufe0f **Full design:** [Architecture Documentation](docs/architecture.md)\n\u27a1\ufe0f **macOS HVF dev loop:** [macOS Development Guide](docs/macos-dev.md) \u00b7 [macOS VM Manual](docs/macos-vm-manual.txt)\n\n---"
+    },
+    {
+      "title": "Architecture",
+      "body": "VeerOS is built around a layered, multi-architecture design that separates\nportable kernel logic from hardware- and CPU-specific code.\n\n\u27a1\ufe0f **Detailed design & diagram:** [Architecture Documentation](docs/architecture.md)\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/VeerOS"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/VeerOS"
+}

@@ -1,0 +1,31 @@
+{
+  "slug": "shieldon",
+  "name": "Shieldon",
+  "subtitle": "Modern and secure authentication service built to integrate with QuantumArc",
+  "summary": "Modern and secure authentication service built to integrate with QuantumArc",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "Shieldon logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Modern and secure authentication service built to integrate with QuantumArc"
+    },
+    {
+      "title": "Shieldon",
+      "body": "Modern and secure authentication service built to integrate with QuantumArc"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/Shieldon"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/Shieldon"
+}

@@ -1,0 +1,47 @@
+{
+  "slug": "zeroservices",
+  "name": "ZeroServices",
+  "subtitle": "This repository contains the working manuscript and ideas behind Zero Services \u2014 a book ex...",
+  "summary": "This repository is the **working space for writing the book**:",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "ZeroServices logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This repository is the **working space for writing the book**:"
+    },
+    {
+      "title": "ZeroServices (Book Manuscript)",
+      "body": "This repository is the **working space for writing the book**:\n\n***Zero Services \u2014 The AI Reset of the Software Industry***\n\n---"
+    },
+    {
+      "title": "\ud83d\udcd6 About the Book",
+      "body": "*Zero Services* explores a fundamental shift:\n\n* From labor-driven software services\n* To AI-powered, leverage-driven systems\n\nIt examines how AI is changing:\n\n* How software is built\n* How teams are structured\n* How businesses create value\n\n---"
+    },
+    {
+      "title": "\u270d\ufe0f What This Repo Contains",
+      "body": "* Draft chapters\n* Evolving ideas and frameworks\n* Notes and structural outlines\n* Experiments that support the book\n\n---"
+    },
+    {
+      "title": "\ud83e\udde0 Core Theme",
+      "body": "> The future of software is not about scaling effort \u2014\n> it is about scaling capability.\n\n---"
+    },
+    {
+      "title": "\ud83d\udc64 Author",
+      "body": "**Veer Sharma**"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/ZeroServices"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/ZeroServices"
+}

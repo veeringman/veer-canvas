@@ -1,0 +1,11 @@
+{
+  "slug": "brain-blocks",
+  "repo": "https://github.com/veeringman/brain_blocks",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/brain_blocks/main/logo_variants/github_readme.png"
+  ],
+  "readme_logo_url": "https://raw.githubusercontent.com/veeringman/brain_blocks/main/logo_variants/github_readme.png"
+}

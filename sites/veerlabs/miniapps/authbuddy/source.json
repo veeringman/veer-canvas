@@ -1,0 +1,11 @@
+{
+  "slug": "authbuddy",
+  "repo": "https://github.com/veeringman/AuthBuddy",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/AuthBuddy/main/authbuddy_logo_bluegreen.png?token=AHGYFSJA46OQM6XAGJ4GPB3KKWVAXAA"
+  ],
+  "readme_logo_url": null
+}

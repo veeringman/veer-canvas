@@ -1,0 +1,11 @@
+{
+  "slug": "veergenesis",
+  "repo": "https://github.com/veeringman/VeerGenesis",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/VeerGenesis/main/veergenesis-logo.png?token=AHGYFSOGJUUXIQFNOYG4AQ3KKWU6XAA"
+  ],
+  "readme_logo_url": null
+}

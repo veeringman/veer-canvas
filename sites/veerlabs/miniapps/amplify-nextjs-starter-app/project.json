@@ -1,0 +1,51 @@
+{
+  "slug": "amplify-nextjs-starter-app",
+  "name": "amplify-nextjs-starter-app",
+  "subtitle": "This is a Next.js starter for building a fullstack app with AWS Amplify.",
+  "summary": "This is a starter application for building fullstack apps with AWS Amplify.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "amplify-nextjs-starter-app logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This is a starter application for building fullstack apps with AWS Amplify."
+    },
+    {
+      "title": "AWS Amplify + Next.js starter",
+      "body": "This is a starter application for building fullstack apps with AWS Amplify. \n\nLearn more: https://docs.amplify.aws/gen2/start/quickstart/"
+    },
+    {
+      "title": "Getting Started",
+      "body": "First, run the development server:\n\n```bash\nnpm run dev"
+    },
+    {
+      "title": "or",
+      "body": "yarn dev"
+    },
+    {
+      "title": "or",
+      "body": "pnpm dev"
+    },
+    {
+      "title": "or",
+      "body": "bun dev\n```\n\nOpen [http://localhost:3000](http://localhost:3000) with your browser to see the result."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/amplify-nextjs-starter-app"
+    },
+    {
+      "title": "Homepage",
+      "body": "https://docs.amplify.aws/gen2"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": false,
+  "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
+}

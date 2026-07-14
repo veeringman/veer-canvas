@@ -1,0 +1,23 @@
+Prompt for Project Miniapp Content Generation:
+
+For the project "[PROJECT_NAME]", generate the following:
+
+1. A dashboard card in HTML format, including:
+   - The project logo (placed in a local assets/ folder).
+   - The project name as a heading.
+   - A 5–6 line summary/description of the project.
+   - A “Learn more” link to a detailed page.
+
+2. A detailed project page in HTML format, including:
+   - The project logo (from the local assets/ folder).
+   - Project name as a main heading.
+   - A summary section.
+   - Key features (bulleted list).
+   - Project vision or goals.
+   - Links to main documentation (README, architecture, requirements, etc.).
+
+3. Place all files (HTML and logo) in a single folder named project_dashboard_content (or similar), with an assets/ subfolder for images, so it can be used as a portable miniapp for my main website.
+
+Please generate the HTML and folder structure, and use relative paths for all links and images.
+
+Replace [PROJECT_NAME] with your project’s name and provide the logo image. This prompt will help you create a consistent, portable miniapp for each project!

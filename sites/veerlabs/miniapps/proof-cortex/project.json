@@ -1,0 +1,47 @@
+{
+  "slug": "proof-cortex",
+  "name": "proof-cortex",
+  "subtitle": "Rust",
+  "summary": "A STARK-based zero-knowledge proving engine that converts FortressDigital policy decisions into verifiable proofs anchored on FlowCortex for provably compliant stablecoin settlement.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "proof-cortex logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "A STARK-based zero-knowledge proving engine that converts FortressDigital policy decisions into verifiable proofs anchored on FlowCortex for provably compliant stablecoin settlement."
+    },
+    {
+      "title": "proof-cortex",
+      "body": "A STARK-based zero-knowledge proving engine that converts FortressDigital policy decisions into verifiable proofs anchored on FlowCortex for provably compliant stablecoin settlement."
+    },
+    {
+      "title": "Status",
+      "body": "\u2705 **Working HTTP server with real Winterfell STARK prover and PolicyAir algebraic constraints.**\n\n- Axum HTTP server on port `8841` (`POST /api/v1/prove`, `GET /health`)\n- PolicyAir STARK circuit: 13-column execution trace with 12 degree-2 algebraic constraints\n- Range-check gadgets via bit decomposition (risk < threshold, auth >= min, behavior >= min)\n- Equality constraints (device_ok == 1, hash_match == 1)\n- Guard row + shifted product for completeness\n- Winterfell 0.8 prover/verifier with full proof generation and verification"
+    },
+    {
+      "title": "Stack",
+      "body": "Rust-first modular workspace:\n\n- `proofcortex-service` \u2014 HTTP server (axum) + pipeline orchestration entrypoint\n- `proofcortex-config` \u2014 environment configuration\n- `proofcortex-domain` \u2014 shared models/contracts\n- `proofcortex-policy` \u2014 policy evaluation layer\n- `proofcortex-trace` \u2014 execution trace builder (MvpTraceBuilder)\n- `proofcortex-prover` \u2014 STARK prover (PolicyAir + PolicyProver, Winterfell 0.8)\n- `proofcortex-binding` \u2014 commitment binding validation\n- `proofcortex-flowcortex-client` \u2014 FlowCortex L1 API integration (HTTP)\n- `proofcortex-pipeline` \u2014 end-to-end orchestration"
+    },
+    {
+      "title": "Health Check",
+      "body": "```\nGET /health\n```\nReturns `{\"status\":\"ok\"}`."
+    },
+    {
+      "title": "Generate Proof",
+      "body": "```\nPOST /api/v1/prove\nContent-Type: application/json\n\n{\n  \"policy_id\": \"treasury_settlement_v1\",\n  \"commitment_hash\": \"abc123...\",\n  \"witness\": {\n    \"risk_score\": 42,\n    \"auth_strength\": 3,\n    \"device_trust\": 1,\n    \"behavior_score\": 80,\n    \"amount_bucket\": 2\n  },\n  \"public_inputs\": {\n    \"policy_id\": \"treasury_settlement_v1\",\n    \"txn_amount_bucket\": \"HIGH\"\n  }\n}\n```\n\nReturns proof hash, proof data (hex-encoded STARK proof), and verification metadata."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/proof-cortex"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/proof-cortex"
+}

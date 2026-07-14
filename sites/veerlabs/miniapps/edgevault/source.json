@@ -1,0 +1,9 @@
+{
+  "slug": "edgevault",
+  "repo": "https://github.com/veeringman/edgeVault",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

@@ -1,0 +1,55 @@
+{
+  "slug": "fortressdigital",
+  "name": "FortressDigital",
+  "subtitle": "Rust",
+  "summary": "<p align=\"left\"> <img src=\"fortress_logo.jpeg\" alt=\"FortressDigital\" width=\"220\" /> </p>",
+  "logo": "miniapps/fortressdigital/assets/fortress_logo.jpeg",
+  "logoAlt": "FortressDigital logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"left\"> <img src=\"fortress_logo.jpeg\" alt=\"FortressDigital\" width=\"220\" /> </p>"
+    },
+    {
+      "title": "FortressDigital Control Plane (MVP)",
+      "body": "FortressDigital is the Zero Trust + Zero Proof control plane that authorizes, risk-scores, cryptographically proves, and anchors every stablecoin treasury settlement on FlowCortex.\n\nThis repository implements an **integration-first MVP** where Treasury Settlement Platform and FlowCortex/ProofCortex remain separate systems."
+    },
+    {
+      "title": "Purpose in Demo Context",
+      "body": "FortressDigital sits between:\n- Enterprise Treasury Apps (business intent)\n- Wallet/Key custody execution\n- FlowCortex transaction anchoring\n- ProofCortex proof verification/anchoring\n\nFor every settlement request, it enforces:\n- Zero Trust authentication/context checks\n- Policy decision (`ALLOW` / `CHALLENGE` / `BLOCK`)\n- Real-time risk scoring\n- Zero Proof commitment generation (stub hash for MVP)\n- Anchor transaction hash generation (FlowCortex integration placeholder)\n- Immutable audit evidence record"
+    },
+    {
+      "title": "Platform Boundaries (Important)",
+      "body": "This codebase covers **FortressDigital integration layer only**.\n\nNot implemented here (external platforms):\n- Treasury Settlement UI platform\n- FlowCortex chain/node platform\n- ProofCortex verifier platform"
+    },
+    {
+      "title": "MVP Architecture (Implemented)",
+      "body": "Modular Rust layout designed for step-by-step replacement:\n- `src/api.rs`: HTTP routes and request/response boundary only\n- `src/service.rs`: settlement orchestration use-case\n- `src/domain.rs`: shared domain models and outcomes\n- `src/identity.rs`: identity/context extraction adapter\n- `src/risk.rs`: risk scoring trait + rule-based scorer\n- `src/policy.rs`: policy decision logic\n- `src/integrations.rs`: pluggable traits + HTTP adapters (ProofCortex, FlowCortex, KeyCortex)\n- `src/intents.rs`: maker-checker intent store (sled-backed)\n- `src/audit.rs`: append-only evidence ledger writer\n- `src/velocity.rs`: per-user velocity tracking + velocity-enriched scorer (feature: `velocity`)\n- `src/onnx.rs`: ONNX ML model inference scorer (feature: `ai-risk`)\n- `src/llm.rs`: Ollama LLM audit explainer (feature: `llm-explain`)\n- `src/util.rs`: shared utilities\n- `src/main.rs`: wiring/composition root"
+    },
+    {
+      "title": "Extensibility Contracts",
+      "body": "`src/integrations.rs` exposes trait-based contracts:\n- `ProofVerifier` \u2014 \u2705 `HttpProofCortexClient` (calls ProofCortex `/api/v1/prove`)\n- `CustodySigner` \u2014 \u2705 `HttpCustodySignerClient` (calls KeyCortex `/wallet/sign`)\n- `FlowAnchorClient` \u2014 \u2705 `HttpFlowAnchorClient` (calls FlowCortex `/api/anchor_commitment`)\n\nMock implementations are retained for testing (`PROOF_MODE=mock`, `CUSTODY_MODE=mock`, `FLOW_ANCHOR_MODE=mock`)."
+    },
+    {
+      "title": "Key Features",
+      "items": [
+        "`GET /v1/ai/explain/{settlement_id}` \u2014 audit narrative with risk reasoning",
+        "`POST /v1/ai/anomaly-narration` \u2014 velocity/anomaly flag narration",
+        "`POST /v1/admin/policy-suggestion` \u2014 data-driven policy threshold recommendations"
+      ]
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/FortressDigital"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/FortressDigital"
+}

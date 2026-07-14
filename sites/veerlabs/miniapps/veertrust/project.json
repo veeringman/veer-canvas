@@ -1,0 +1,47 @@
+{
+  "slug": "veertrust",
+  "name": "veertrust",
+  "subtitle": "Rust",
+  "summary": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.",
+  "logo": "miniapps/veertrust/assets/veertrust_ztn.png",
+  "logoAlt": "veertrust logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics."
+    },
+    {
+      "title": "VeerTrust - Zero Trust Architecture for Veer Edge",
+      "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.\n\n---"
+    },
+    {
+      "title": "\ud83e\udde9 Architecture Diagram",
+      "body": "![ZTN Diagram](./docs/veertrust_ztn.png)\n\n> _The above diagram represents device interaction with Edge Gateway, mobile apps, cloud services, and secure policy enforcement in a Zero Trust model._\n\n---"
+    },
+    {
+      "title": "1. **Devices**",
+      "body": "- Includes IoT sensors, mobile phones, user devices\n- **Functions**:\n  - Authenticate via JWT or device certificates\n  - TPM-backed attestation\n  - Secure telemetry/data streaming\n- **Protocols**: `mTLS`, `OAuth2`, `JWT`, `TPM attestation`"
+    },
+    {
+      "title": "2. **Edge Gateway**",
+      "body": "Core component enforcing Zero Trust principles at the edge\n\n- **Modules**:\n  - `VeerAuth Agent` \u2013 Manages workload/device identities\n  - `VeerPolicy` \u2013 Enforces RBAC/ABAC policies\n  - `VeerAttest` \u2013 Performs remote attestation\n- **Protocols**: `mTLS`, `QUIC`, `gRPC`, `SPIFFE IDs`"
+    },
+    {
+      "title": "3. **Mobile Apps / Web Consoles**",
+      "body": "- User access layer for managing and interacting with edge services\n- **Protocols**: `HTTPS`, `OAuth2`, `WebTransport`, `gRPC`"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veertrust"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veertrust"
+}

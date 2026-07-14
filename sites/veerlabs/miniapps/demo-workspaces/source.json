@@ -1,0 +1,12 @@
+{
+  "slug": "demo-workspaces",
+  "repo": "https://github.com/veeringman/demo-workspaces",
+  "default_branch": "main",
+  "language": "TypeScript",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/demo-workspaces/main/proofcortex_logo.jpeg?token=AHGYFSKXSVPBAIXAWLGKRHDKKWVAHAA",
+    "https://raw.githubusercontent.com/veeringman/demo-workspaces/main/proofcortex_logo.png?token=AHGYFSJ2VFHEH4QMGE5S7XLKKWVAHAA"
+  ],
+  "readme_logo_url": null
+}

@@ -1,0 +1,11 @@
+{
+  "slug": "woodyveer",
+  "repo": "https://github.com/veeringman/woodyveer",
+  "default_branch": "main",
+  "language": "C++",
+  "topics": [],
+  "logo_candidates": [
+    "https://img.shields.io/badge/React%20Native-0.72.6-61dafb?logo=react"
+  ],
+  "readme_logo_url": "https://img.shields.io/badge/React%20Native-0.72.6-61dafb?logo=react"
+}

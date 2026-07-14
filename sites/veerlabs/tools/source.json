@@ -1,0 +1,9 @@
+{
+  "slug": "tools",
+  "repo": "https://github.com/veeringman/tools",
+  "default_branch": "main",
+  "language": "Shell",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

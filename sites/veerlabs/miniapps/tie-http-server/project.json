@@ -1,0 +1,51 @@
+{
+  "slug": "tie-http-server",
+  "name": "tie_http_server",
+  "subtitle": "C",
+  "summary": "**Take It Easy \u2014 A High-Performance, Feature-Rich HTTP Server Written in C**",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "tie_http_server logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**Take It Easy \u2014 A High-Performance, Feature-Rich HTTP Server Written in C**"
+    },
+    {
+      "title": "TIE HTTP Server",
+      "body": "**Take It Easy \u2014 A High-Performance, Feature-Rich HTTP Server Written in C**\n\n---"
+    },
+    {
+      "title": "Overview",
+      "body": "TIE HTTP Server is a lightweight, production-capable HTTP server built from scratch in C. It supports HTTP/1.1 and HTTP/2 over TLS, with a modular architecture covering reverse proxying, virtual hosting, API gateway functionality, WebSocket connections, Server-Sent Events, CGI execution, and a built-in web-based admin console."
+    },
+    {
+      "title": "Key Capabilities",
+      "body": "| Category | Features |\n|---|---|\n| **Protocols** | HTTP/1.1, HTTP/2 (HPACK, multiplexing, server push), HTTP/3 (Alt-Svc advertisement) |\n| **Security** | TLS 1.2/1.3, ECDHE ciphers, HSTS, mTLS, post-quantum cryptography (hybrid), security headers, CORS |\n| **Serving** | Static files, CGI scripts, chunked transfer, byte-range requests, Server-Sent Events |\n| **Routing** | Path-based router, virtual hosts (wildcard), reverse proxy (round-robin), API gateway (rate limiting, API keys) |\n| **Performance** | Thread pool, in-memory cache (FIFO eviction), ETag/304 support, gzip/deflate compression |\n| **Management** | Web admin console, session-based auth, live config/routes/proxy/vhost/gateway management |\n| **Middleware** | CORS, compression, security headers, ETag, request ID, HSTS, redirect, admin auth |\n| **WebSocket** | RFC 6455 \u2014 text, binary, ping/pong, close frames, per-path handlers |\n| **Logging** | 4-level logging (DEBUG/INFO/WARNING/ERROR), file + console, thread-safe |\n\n---"
+    },
+    {
+      "title": "Prerequisites",
+      "body": "- GCC or Clang (C11)\n- OpenSSL development libraries\n- zlib\n- pthreads"
+    },
+    {
+      "title": "Build & Run",
+      "body": "```bash"
+    },
+    {
+      "title": "Architecture",
+      "body": "```\nClient Request\n     \u2502\n     \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  TCP / TLS      \u2502  Port 5050 (HTTP) or 5353 (HTTPS)\n\u2502  Listener       \u2502  ALPN negotiation for HTTP/2\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n         \u2502\n         \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Thread Pool     \u2502  Pre-allocated worker threads (4\u201316)\n\u2502  Task Queue      \u2502  FIFO dispatch, mutex + condvar\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n         \u2502\n         \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Protocol Layer  \u2502  HTTP/1.1 parser  \u2190or\u2192  HTTP/2 (HPACK, streams)\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n         \u2502\n         \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Middleware      \u2502  CORS \u2192 Security Headers \u2192 Compression \u2192 ETag\n\u2502  Pipeline        \u2502  \u2192 Request ID \u2192 HSTS \u2192 Admin Auth \u2192 Alt-Svc\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n         \u2502\n         \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Router          \u2502  Path + method matching, vhost resolution\n\u2502                  \u2502  Static files, CGI, API, Admin, Proxy, Gateway\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n         \u2502\n         \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Response        \u2502  Headers, body, compression, chunked encoding\n\u2502  Builder         \u2502  Cache integration (ETag, Last-Modified, 304)\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/tie_http_server"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/tie_http_server"
+}

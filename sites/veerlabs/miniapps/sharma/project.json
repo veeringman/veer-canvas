@@ -1,0 +1,31 @@
+{
+  "slug": "sharma",
+  "name": "sharma",
+  "subtitle": "This is Test Repository",
+  "summary": "This is Test Repository",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "sharma logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This is Test Repository"
+    },
+    {
+      "title": "sharma",
+      "body": "This is Test Repository"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/sharma"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": false,
+  "repoUrl": "https://github.com/veeringman/sharma"
+}

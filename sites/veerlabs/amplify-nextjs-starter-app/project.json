@@ -1,0 +1,26 @@
+{
+  "slug": "amplify-nextjs-starter-app",
+  "name": "amplify-nextjs-starter-app",
+  "subtitle": "This is a Next.js starter for building a fullstack app with AWS Amplify.",
+  "summary": "This is a Next.js starter for building a fullstack app with AWS Amplify.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "amplify-nextjs-starter-app logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This is a Next.js starter for building a fullstack app with AWS Amplify."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/amplify-nextjs-starter-app"
+    },
+    {
+      "title": "Homepage",
+      "body": "https://docs.amplify.aws/gen2"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "slug": "keycortex",
+  "repo": "https://github.com/veeringman/KeyCortex",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/KeyCortex/main/keycortex_logo.png?token=AHGYFSIR4C45DUX5TLSJMP3KKWU7HAA"
+  ],
+  "readme_logo_url": null
+}

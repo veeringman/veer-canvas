@@ -1,0 +1,11 @@
+{
+  "slug": "fortressdigital",
+  "repo": "https://github.com/veeringman/FortressDigital",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/FortressDigital/main/fortress_logo.jpeg?token=AHGYFSL2UOORPYWKXU2A6YDKKWVATAA"
+  ],
+  "readme_logo_url": null
+}

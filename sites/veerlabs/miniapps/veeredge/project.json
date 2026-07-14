@@ -1,0 +1,47 @@
+{
+  "slug": "veeredge",
+  "name": "veerEdge",
+  "subtitle": "eer Edge is a Rust-native Mobile Edge and IoT Gateway Platform supporting QUIC, MQTT, WebT...",
+  "summary": "**Veer Edge** is a Rust-native, modular, and secure Mobile Edge Platform that unifies mobile computing, on-device inference, IoT gateway control, and multi-protocol communication under one powerful architecture. It enables real-time decision-making, offline-first intelligence, and seamless cloud-edge-device orchestration \u2014 ideal for modern edge-native apps in logistics, manufacturing, smart cities, and more.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "veerEdge logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**Veer Edge** is a Rust-native, modular, and secure Mobile Edge Platform that unifies mobile computing, on-device inference, IoT gateway control, and multi-protocol communication under one powerful architecture. It enables real-time decision-making, offline-first intelligence, and seamless cloud-edge-device orchestration \u2014 ideal for modern edge-native apps in logistics, manufacturing, smart cities, and more."
+    },
+    {
+      "title": "Veer Edge Platform",
+      "body": "**Veer Edge** is a Rust-native, modular, and secure Mobile Edge Platform that unifies mobile computing, on-device inference, IoT gateway control, and multi-protocol communication under one powerful architecture. It enables real-time decision-making, offline-first intelligence, and seamless cloud-edge-device orchestration \u2014 ideal for modern edge-native apps in logistics, manufacturing, smart cities, and more.\n\n---"
+    },
+    {
+      "title": "\ud83e\udde0 Key Capabilities",
+      "body": "- \ud83d\ude80 **Edge-Native Runtime:** Fast, lightweight Spin/WASM runtimes with TVM, ONNX for real-time inference\n- \ud83d\udcf6 **Protocol-Rich Gateway:** Supports QUIC, WebTransport, MQTT, CoAP, HTTP/2, LwM2M\n- \ud83d\udcf1 **Offline-First Mobile Apps:** Built using Vero (Rust UI runtime), with local storage & sync\n- \ud83d\udce1 **IoT Gateway Control:** Bridging legacy and modern device protocols with pub/sub architecture\n- \ud83d\udd10 **Security Built-In:** TPM-based attestation, secure boot, Vault integration, OPA policy control\n- \ud83d\udd04 **Distributed Edge Coordination:** Runs in Far Edge, Near Edge, and Mobile Environments\n\n---"
+    },
+    {
+      "title": "\ud83e\uddf1 Architecture Overview",
+      "body": "![Veer Edge Architecture](docs/veer_edge_platform.png)"
+    },
+    {
+      "title": "\ud83d\udcf2 Mobile App Layer",
+      "body": "- `Vero Runtime`, `Edge SDK`, `Local Storage`, `ML Inference`\n- **Protocols:** gRPC, QUIC, WebTransport, HTTP/2, LwM2M, WebRTC"
+    },
+    {
+      "title": "\ud83c\udf10 Edge Gateway Node",
+      "body": "- `MQTT Broker`, `QUIC/WebTransport Listener`, `Spin Runtime`, `QuasarCache`\n- **Bridges:** MQTT, CoAP, QUIC, HTTP, NATS"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veerEdge"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veerEdge"
+}

@@ -1,0 +1,51 @@
+{
+  "slug": "seekpeek",
+  "name": "SeekPeek",
+  "subtitle": "Rust",
+  "summary": "**SeekPeek** is an advanced **AI-powered search engine** built for **speed, efficiency, and scalability**. It is designed to support multiple search variations, with **basic_search** being the first implementation.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "SeekPeek logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**SeekPeek** is an advanced **AI-powered search engine** built for **speed, efficiency, and scalability**. It is designed to support multiple search variations, with **basic_search** being the first implementation."
+    },
+    {
+      "title": "\ud83d\ude80 SeekPeek - Smart, Fast, and Scalable Search Engine \ud83d\udd0d",
+      "body": "**SeekPeek** is an advanced **AI-powered search engine** built for **speed, efficiency, and scalability**. It is designed to support multiple search variations, with **basic_search** being the first implementation."
+    },
+    {
+      "title": "\ud83d\udccc About **basic_search**",
+      "body": "`basic_search` is the foundational module of **SeekPeek**, providing a lightweight yet powerful **search indexing and retrieval system**. It efficiently crawls, indexes, and searches content with **high-speed performance**."
+    },
+    {
+      "title": "\ud83c\udf1f Features",
+      "body": "\u2705 **Fast Search** \u2013 Optimized indexing for rapid retrieval.  \n\u2705 **Web Crawling** \u2013 Fetch and index web pages dynamically.  \n\u2705 **Keyword-Based Matching** \u2013 Simple but effective ranking of search results.  \n\u2705 **Scalable Architecture** \u2013 Designed for modular expansion.  \n\u2705 **AI-Powered Extensions (Planned)** \u2013 Future support for AI-enhanced ranking and NLP-based queries.  \n\n---"
+    },
+    {
+      "title": "\ud83d\udcc2 Project Structure",
+      "body": "SeekPeek/ \u2502\u2500\u2500 basic_search/ # Core search module \u2502 \u251c\u2500\u2500 src/ # Rust source files \u2502 \u251c\u2500\u2500 data/ # Indexed search data \u2502 \u251c\u2500\u2500 target/ # Build artifacts (ignored) \u2502 \u251c\u2500\u2500 Cargo.toml # Rust dependencies \u2502 \u251c\u2500\u2500 README.md # Module-specific documentation \u2502\u2500\u2500 other_variants/ # Future search implementations \u2502\u2500\u2500 .gitignore # Global ignore rules \u2502\u2500\u2500 Cargo.toml # SeekPeek workspace manifest \u2502\u2500\u2500 README.md # Main documentation (this file)"
+    },
+    {
+      "title": "**1\ufe0f\u20e3 Prerequisites**",
+      "body": "- **Rust** (Install via [rustup](https://rustup.rs))\n- **Cargo** (Rust\u2019s package manager)"
+    },
+    {
+      "title": "**2\ufe0f\u20e3 Installation**",
+      "body": "Clone the SeekPeek repository and navigate to `basic_search`:\n```bash\ngit clone https://github.com/yourusername/SeekPeek.git\ncd SeekPeek/basic_search\ncargo build\n\n3\ufe0f\u20e3 Running the Search Engine\nStart the basic_search module:\n\ncargo run\nBy default, this will:\n\nStart crawling predefined URLs.\nIndex content dynamically.\nAllow interactive searching from the terminal.\n4\ufe0f\u20e3 Searching for Keywords\nOnce running, you can enter a search term:\n\nEnter a search query (or type 'exit' to quit):\n> Rust programming\nResults will be displayed with ranked matches.\n\n\ud83d\udee0\ufe0f Configuration & Customization\n\nYou can modify basic_search to customize:\n\nCrawling depth (config.json)\nStopwords filtering\nRanking algorithm\nFuture versions will introduce:\n\nCustomizable search APIs\nAI-powered ranking\nMulti-language support\n\ud83d\udcdc License\n\nSeekPeek is released under the MIT License.\n\n\ud83d\udc65 Contributing\n\nWe welcome contributions! Feel free to submit PRs, Issues, or Feature Requests."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/SeekPeek"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/SeekPeek"
+}

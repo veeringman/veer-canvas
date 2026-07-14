@@ -1,0 +1,47 @@
+{
+  "slug": "green-thread",
+  "name": "green_thread",
+  "subtitle": "C",
+  "summary": "This repository contains a **minimal** user-space \"green thread\" (coroutine) implementation in C, supporting both **x86-64** and **ARM64 (AArch64)** architectures. It demonstrates how to:",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "green_thread logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "This repository contains a **minimal** user-space \"green thread\" (coroutine) implementation in C, supporting both **x86-64** and **ARM64 (AArch64)** architectures. It demonstrates how to:"
+    },
+    {
+      "title": "Green Thread Example in C",
+      "body": "This repository contains a **minimal** user-space \"green thread\" (coroutine) implementation in C, supporting both **x86-64** and **ARM64 (AArch64)** architectures. It demonstrates how to:\n\n1. **Create** and **initialize** green threads with their own stacks.\n2. **Manually switch** between green threads (cooperative multitasking).\n3. Provide a simple `yield()` mechanism for concurrency.\n\n> **Disclaimer**: This example is strictly educational. It **does not** handle advanced features like stack growth, signal handling, or true preemption."
+    },
+    {
+      "title": "Features",
+      "body": "- **Architecture Support**: Compatible with both **x86-64** and **ARM64 (AArch64)** architectures, including macOS on Apple Silicon (M1, M2, M3) and Linux.\n- **Minimal Context Switching**: Implements low-level context switching logic in assembly for each supported architecture, saving and restoring callee-saved registers, stack pointers (`rsp`/`sp`), and instruction/program counters.\n- **Cooperative Multitasking**: Green threads voluntarily yield control, allowing for lightweight concurrency without the overhead of kernel threads.\n- **Extensible Design**: Easily extendable to support more architectures, add more threads, or implement advanced scheduling and synchronization mechanisms."
+    },
+    {
+      "title": "Table of Contents",
+      "body": "- [Prerequisites](#prerequisites)\n- [Project Structure](#project-structure)\n- [Building the Project](#building-the-project)\n- [Running the Example](#running-the-example)\n- [File Overview](#file-overview)\n- [Customization](#customization)\n- [Caveats](#caveats)\n- [License](#license)\n- [Contributing](#contributing)"
+    },
+    {
+      "title": "Prerequisites",
+      "body": "- **C Compiler**: `clang` (default on macOS) or `gcc`.\n- **Make**: For building the project.\n- **Supported Architectures**:\n  - **x86-64**: Linux, macOS (Intel-based).\n  - **ARM64 (AArch64)**: macOS (Apple Silicon: M1, M2, M3), Linux on ARM64.\n- **Operating System**: Unix-like systems (Linux, macOS)."
+    },
+    {
+      "title": "Project Structure",
+      "body": "- **`green_thread.h`**: Unified header defining the `green_ctx` structure and function prototypes with conditional compilation based on architecture.\n- **`green_thread.c`**: Common C implementation for initializing green threads.\n- **`green_switch_x86_64.S`**: Assembly implementation of `green_switch` for **x86-64**.\n- **`green_switch_arm64.S`**: Assembly implementation of `green_switch` for **ARM64 (AArch64)**.\n- **`main.c`**: Example usage demonstrating two green threads yielding control to each other.\n- **`Makefile`**: Build script handling compilation for both architectures.\n- **`README.md`**: Project documentation.\n- **`.gitignore`**: Specifies files and directories to ignore in Git."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/green_thread"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/green_thread"
+}

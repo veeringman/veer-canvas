@@ -1,0 +1,11 @@
+{
+  "slug": "treasurysettlement",
+  "repo": "https://github.com/veeringman/TreasurySettlement",
+  "default_branch": "master",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/TreasurySettlement/master/treasury_logo.png?token=AHGYFSNSYXBAN7EKHW2DUR3KKWVARAA"
+  ],
+  "readme_logo_url": null
+}

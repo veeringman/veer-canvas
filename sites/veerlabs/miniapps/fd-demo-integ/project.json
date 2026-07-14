@@ -1,0 +1,27 @@
+{
+  "slug": "fd-demo-integ",
+  "name": "fd_demo_integ",
+  "subtitle": "For demo integration",
+  "summary": "For demo integration",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "fd_demo_integ logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "For demo integration"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/fd_demo_integ"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/fd_demo_integ"
+}

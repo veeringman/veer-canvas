@@ -1,0 +1,54 @@
+# VeerCanvas Architecture
+
+## Vision
+
+VeerCanvas is a **publish platform**, not just a static site generator. The current release focuses on catalog-style sites (project tiles, detail pages, admin CMS). The architecture leaves room for dynamic content, APIs, and server-driven components without breaking existing sites.
+
+## Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  sites/<id>/          Site content + theme + config     │
+│  (veerlabs sample)    projects.json, miniapps, HTML   │
+├─────────────────────────────────────────────────────────┤
+│  admin/               Authoring CMS (Flask)             │
+│  cli/                 Import, sync, publish tools       │
+├─────────────────────────────────────────────────────────┤
+│  core/                Shared schemas, renderers (WIP)   │
+├─────────────────────────────────────────────────────────┤
+│  deploy/              CI/CD, nginx, systemd, remote     │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Site package
+
+Each site under `sites/<id>/` contains:
+
+| Path | Role |
+|------|------|
+| `site.config.json` | Domain, web root, GitHub owner, service names |
+| `site-meta.json` | Published version metadata |
+| `projects.json` | Full catalog (admin source of truth) |
+| `projects-public.json` | Enabled-only public catalog |
+| `catalog-exclusions.json` | Deleted slugs skipped on import |
+| `miniapps/<slug>/` | Per-entry content packages |
+| Theme files | `index.html`, `project.html`, `*.js`, `style.css` |
+
+## Publish flow (today)
+
+1. Author in **admin** (visual section editor or JSON)
+2. Admin writes `projects.json`, `projects-public.json`, `miniapps/*/project.json`
+3. **Publish** bumps `site-meta.json` version
+4. **Deploy** rsyncs site files + platform admin to host
+5. Nginx serves static theme; `/admin/` proxies to Flask
+
+## Extension points (planned)
+
+- **Dynamic routes:** `sites/<id>/routes/` or API manifest
+- **Server components:** registered in `core/components/`, rendered at request time
+- **Plugins:** `veercanvas.plugin` entry points for importers, renderers, deploy hooks
+- **CI/CD:** per-site workflows in `.github/workflows/` triggered by `sites/<id>/**`
+
+## Sample site
+
+` sites/veerlabs` — VeerLabs Solutions project catalog at [veerlabs.solutions](https://veerlabs.solutions).

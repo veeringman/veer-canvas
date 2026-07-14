@@ -1,0 +1,11 @@
+{
+  "slug": "veersetu",
+  "repo": "https://github.com/veeringman/veersetu",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/veersetu/main/veersetu_logo.png?token=AHGYFSKIII5VLVMT6K4UAOLKKWU6BAA"
+  ],
+  "readme_logo_url": null
+}

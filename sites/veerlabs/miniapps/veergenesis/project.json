@@ -1,0 +1,63 @@
+{
+  "slug": "veergenesis",
+  "name": "VeerGenesis",
+  "subtitle": "VeerGenesis is a Cognitive System Intelligence Platform that discovers, understands, culti...",
+  "summary": "<p align=\"center\"> <img src=\"veergenesis-logo.png\" alt=\"VeerGenesis\" width=\"400\"/> </p> <p align=\"center\"> <em>Software is not built. Software emerges</em> </p>",
+  "logo": "miniapps/veergenesis/assets/veergenesis-logo.png",
+  "logoAlt": "VeerGenesis logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"center\"> <img src=\"veergenesis-logo.png\" alt=\"VeerGenesis\" width=\"400\"/> </p> <p align=\"center\"> <em>Software is not built. Software emerges</em> </p>"
+    },
+    {
+      "title": "Overview",
+      "body": "VeerGenesis is a Cognitive System Intelligence Platform designed to understand, model, evolve, and eventually synthesize enterprise software systems.\n\nUnlike traditional developer tools that focus on writing code, VeerGenesis focuses on understanding systems.\n\nThe platform introduces a new set of concepts:\n\n* Mandates\n* Charters\n* System Genomes\n* Knowledge Fabrics\n* Cognitive Guilds\n* Continuous Cultivation\n\nIts long-term mission is to transform organizational purpose into continuously evolving digital systems.\n\n---"
+    },
+    {
+      "title": "Why VeerGenesis?",
+      "body": "Modern enterprises spend most of their technology budget maintaining existing software rather than building new software.\n\nThe challenge is rarely coding.\n\nThe challenge is understanding.\n\nMost organizations struggle to answer questions such as:\n\n* What does this system actually do?\n* Why does it exist?\n* Which business capabilities does it support?\n* What dependencies exist?\n* What can be modernized safely?\n* What technical debt exists?\n* What would a future architecture look like?\n\nVeerGenesis exists to answer those questions.\n\n---"
+    },
+    {
+      "title": "Vision",
+      "body": "To become the world's first Cognitive Foundry capable of transforming organizational purpose into continuously evolving software ecosystems.\n\n---"
+    },
+    {
+      "title": "Mission",
+      "body": "To eliminate the distance between purpose and realization.\n\n---"
+    },
+    {
+      "title": "Mandate",
+      "body": "A Mandate represents organizational purpose.\n\nExamples:\n\n* Launch a digital banking platform\n* Modernize a legacy ERP system\n* Reduce operational risk\n* Improve customer onboarding\n\nMandates define outcomes rather than implementations.\n\n---"
+    },
+    {
+      "title": "Architecture",
+      "body": "```text\nMandate\n    \u2193\nCharter\n    \u2193\nSystem Genome\n    \u2193\nKnowledge Fabric\n    \u2193\nCognitive Core\n    \u2193\nGuild Framework\n    \u2193\nGenesis Engine\n    \u2193\nRealized Systems\n    \u2193\nCultivation Engine\n```\n\n---"
+    },
+    {
+      "title": "Architecture Guild",
+      "body": "Synthesizes system structures and capability boundaries.\n\n---"
+    },
+    {
+      "title": "Why VeerGenesis?",
+      "body": "Modern enterprises spend most of their technology budget maintaining existing software rather than building new software.\n\nThe challenge is rarely coding.\n\nThe challenge is understanding.\n\nMost organizations struggle to answer questions such as:\n\n* What does this system actually do?\n* Why does it exist?\n* Which business capabilities does it support?\n* What dependencies exist?\n* What can be modernized safely?\n* What technical debt exists?\n* What would a future architecture look like?\n\nVeerGenesis exists to answer those questions.\n\n---"
+    },
+    {
+      "title": "Architecture",
+      "body": "```text\nMandate\n    \u2193\nCharter\n    \u2193\nSystem Genome\n    \u2193\nKnowledge Fabric\n    \u2193\nCognitive Core\n    \u2193\nGuild Framework\n    \u2193\nGenesis Engine\n    \u2193\nRealized Systems\n    \u2193\nCultivation Engine\n```\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/VeerGenesis"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/VeerGenesis"
+}

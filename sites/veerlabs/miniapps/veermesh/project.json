@@ -1,0 +1,47 @@
+{
+  "slug": "veermesh",
+  "name": "veermesh",
+  "subtitle": "AI-native distributed edge fabric for intelligent compute, data, sensing, and autonomous o...",
+  "summary": "<p align=\"center\"> <img src=\"assets/veermesh-logo.png\" alt=\"VeerMesh Logo\" width=\"180\"> </p>",
+  "logo": "miniapps/veermesh/assets/veermesh-logo.png",
+  "logoAlt": "veermesh logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"center\"> <img src=\"assets/veermesh-logo.png\" alt=\"VeerMesh Logo\" width=\"180\"> </p>"
+    },
+    {
+      "title": "Vision",
+      "body": "Create an open platform where compute, AI, data, sensing, and networking become shared resources across the edge.\n\nVeerMesh enables applications to discover resources automatically, deploy intelligence where it is needed, adapt to changing network conditions, recover autonomously from failures, and scale from a single Raspberry Pi to globally distributed edge clusters.\n\n---"
+    },
+    {
+      "title": "Core Principles",
+      "body": "* **AI Native** \u2014 AI is a first-class platform capability, not an add-on.\n* **Edge First** \u2014 Intelligence executes as close to data sources as possible.\n* **Distributed by Design** \u2014 Every node contributes compute, storage, sensing, and networking capabilities.\n* **Cloud Agnostic** \u2014 Deploy anywhere.\n* **Industrial Ready** \u2014 Native support for operational technology (OT) and industrial protocols.\n* **Secure by Default** \u2014 Zero Trust architecture with strong workload identity and encrypted communications.\n* **Open & Extensible** \u2014 Modular architecture with well-defined APIs and plugin interfaces.\n\n---"
+    },
+    {
+      "title": "Platform Architecture",
+      "body": "```text\n                    Applications\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nManufacturing\nRobotics\nDigital Twins\nHealthcare\nSmart Cities\nEnergy\nAgriculture\nTransportation\nAI Agents\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n               VeerMesh Fabric\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nAI Fabric\nCompute Fabric\nData Fabric\nService Fabric\nSecurity Fabric\nSensing Fabric\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n             VeerEdge Runtime\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nRaspberry Pi\nJetson\nIndustrial PC\nARM SBC\nx86 Server\nRobot Controller\nPLC Gateway\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nNetwork Connectivity\n\nEthernet\nWi-Fi\nPrivate 5G\nLTE\nSatellite\nFuture 6G\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nIndustrial Connectivity\n\nOPC UA\nMQTT\nPROFINET\nEtherCAT\nModbus\nCAN\nBLE\nMatter\nZigbee\n```\n\n---"
+    },
+    {
+      "title": "AI Fabric",
+      "body": "* AI model registry\n* Distributed inference\n* Federated learning\n* AI agents\n* Edge RAG\n* AI scheduling\n* Model lifecycle management\n\n---"
+    },
+    {
+      "title": "Compute Fabric",
+      "body": "* Distributed scheduling\n* Resource discovery\n* CPU/GPU/NPU orchestration\n* Workload migration\n* Edge clustering\n* Elastic scaling\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veermesh"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veermesh"
+}

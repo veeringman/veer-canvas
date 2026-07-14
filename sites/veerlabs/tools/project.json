@@ -1,0 +1,42 @@
+{
+  "slug": "tools",
+  "name": "tools",
+  "subtitle": "Utility Tools",
+  "summary": "A lightweight collection of utility tools for Raspberry Pi and Linux systems. This repository currently contains a single tool:",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "tools logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "A lightweight collection of utility tools for Raspberry Pi and Linux systems. This repository currently contains a single tool:"
+    },
+    {
+      "title": "\ud83d\udee0\ufe0f Tools",
+      "body": "A lightweight collection of utility tools for Raspberry Pi and Linux systems. This repository currently contains a single tool:\n\n---"
+    },
+    {
+      "title": "\ud83d\udd0d Vitals",
+      "body": "A terminal-based TUI system monitoring utility for Linux based systems. Designed for real-time vitals monitoring with a clean, colorized dashboard view."
+    },
+    {
+      "title": "\u2728 Features",
+      "body": "- CPU, Memory, Disk, Network, Load, Uptime\n- Top 5 processes by CPU and Memory\n- Flicker-free terminal refresh\n- ASCII/Emoji icon view (configurable)"
+    },
+    {
+      "title": "\ud83d\udd27 Prerequisites",
+      "body": "Vitals is a pure Bash script but relies on a few common utilities available on most Linux systems. To ensure full functionality, make sure these are installed:\n\n```bash\nsudo apt update\nsudo apt install -y procps coreutils bc lsb-release util-linux\n```\n\nOptional (for IO monitoring):\n```bash\nsudo apt install -y iotop\n```"
+    },
+    {
+      "title": "\ud83d\ude80 Run",
+      "body": "```bash\nchmod +x vitals\n./vitals\n```"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/tools"
+    }
+  ]
+}

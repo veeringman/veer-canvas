@@ -1,0 +1,13 @@
+{
+  "id": "my-site",
+  "name": "My VeerCanvas Site",
+  "description": "Starter site template for VeerCanvas",
+  "domain": "example.com",
+  "aliases": ["www.example.com"],
+  "webRoot": "/var/www/example.com",
+  "githubOwner": "",
+  "admin": {
+    "serviceName": "veercanvas-admin",
+    "port": 8080
+  }
+}

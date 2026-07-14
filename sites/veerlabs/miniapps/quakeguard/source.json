@@ -1,0 +1,11 @@
+{
+  "slug": "quakeguard",
+  "repo": "https://github.com/veeringman/quakeguard",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/quakeguard/main/docs/quakeguard_advanced_architecture.png"
+  ],
+  "readme_logo_url": "https://raw.githubusercontent.com/veeringman/quakeguard/main/docs/quakeguard_advanced_architecture.png"
+}

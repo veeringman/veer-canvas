@@ -1,0 +1,31 @@
+{
+  "slug": "quantumarc",
+  "name": "QuantumArc",
+  "subtitle": "Rust",
+  "summary": "The cutting-edge backend platform providing scalable, secure services for mobile and web applications",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "QuantumArc logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "The cutting-edge backend platform providing scalable, secure services for mobile and web applications"
+    },
+    {
+      "title": "QuantumArc",
+      "body": "The cutting-edge backend platform providing scalable, secure services for mobile and web applications"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/QuantumArc"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/QuantumArc"
+}

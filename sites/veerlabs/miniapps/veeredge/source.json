@@ -1,0 +1,11 @@
+{
+  "slug": "veeredge",
+  "repo": "https://github.com/veeringman/veerEdge",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/veerEdge/main/docs/veer_edge_platform.png"
+  ],
+  "readme_logo_url": "https://raw.githubusercontent.com/veeringman/veerEdge/main/docs/veer_edge_platform.png"
+}

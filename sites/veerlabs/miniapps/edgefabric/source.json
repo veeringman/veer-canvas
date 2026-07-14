@@ -1,0 +1,11 @@
+{
+  "slug": "edgefabric",
+  "repo": "https://github.com/veeringman/EdgeFabric",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/EdgeFabric/main/EdgeFabric_Logo.png?token=AHGYFSMVGKVAQEFZQEXD7H3KKWU67AA"
+  ],
+  "readme_logo_url": null
+}

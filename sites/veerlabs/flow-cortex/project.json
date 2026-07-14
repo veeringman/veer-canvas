@@ -1,0 +1,42 @@
+{
+  "slug": "flow-cortex",
+  "name": "flow-cortex",
+  "subtitle": "Blockchain",
+  "summary": "**FlowCortex** is a payment-centric, ordering-less blockchain designed for extreme throughput, stateless verification, and parallel execution.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "flow-cortex logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**FlowCortex** is a payment-centric, ordering-less blockchain designed for extreme throughput, stateless verification, and parallel execution."
+    },
+    {
+      "title": "Project Status",
+      "body": "\u2705 **Working L1 node with full REST + gRPC API, Explorer UI, WASM capsule runtime, and end-to-end demo integration.**\n\nAll 16 development phases are complete:\n- Phases 1\u20133: Core ledger, accounts, balances, blocks, transactions, gRPC handlers\n- Phase 4\u20136: Commitment anchoring, proof verification, event system\n- Phase 7\u20139: FloweR stablecoin (1 FLOWER = 1 INR), token management, pool snapshots\n- Phase 10\u201312: Capsule runtime (native + WASM via wasmtime), settlement routes, bank admin API\n- Phase 13: Demo-specific features, end-to-end scenario support\n- Phase 14\u201316: Testing, documentation, demo readiness\n\nSee [DEMO_TODO_LIST.md](DEMO_TODO_LIST.md) for the complete phase tracker.\n\n---"
+    },
+    {
+      "title": "Vision",
+      "body": "Traditional blockchains are constrained by:\n- Global transaction ordering\n- Sequential execution\n- Full state replication\n- Verification cost tied to total state size\n\nFlowCortex takes a different path:\n\n> **Transactions do not compete for position in a block.\nThey compete only for the state they touch.**\n\nThis makes FlowCortex naturally suited for:\n- High-volume payments\n- Real-time settlement\n- Stateless validators\n- Hardware-accelerated verification\n\n---"
+    },
+    {
+      "title": "Core Design Principles",
+      "body": "- **Ordering-less execution** \u2014 No global transaction sequence unless state conflicts require it.\n- **Stateless verification** \u2014 Validators do not store full state; transactions carry their own proofs.\n- **Payment-first architecture** \u2014 Optimized for balance transfers, batching, and settlement.\n- **Parallelism by default** \u2014 Proof verification and execution scale across CPU cores, GPUs, and ASICs.\n- **Post-quantum oriented** \u2014 Commitment schemes designed to evolve beyond classical cryptography.\n\n---"
+    },
+    {
+      "title": "Repository Structure",
+      "body": "```\nflow-cortex/\n\u251c\u2500\u2500 flowcortex-l1/       # L1 blockchain node (Rust/axum, gRPC/tonic)\n\u2502   \u251c\u2500\u2500 src/\n\u2502   \u2502   \u251c\u2500\u2500 main.rs      # Binary entrypoint (REST + gRPC servers)\n\u2502   \u2502   \u251c\u2500\u2500 rpc.rs       # 29 REST API routes (axum)\n\u2502   \u2502   \u251c\u2500\u2500 grpc.rs      # 6 gRPC services (tonic)\n\u2502   \u2502   \u251c\u2500\u2500 ledger.rs    # In-memory ledger (accounts, tokens, blocks, commitments, proofs)\n\u2502   \u2502   \u251c\u2500\u2500 node.rs      # Node state, block production, transaction application\n\u2502   \u2502   \u251c\u2500\u2500 demo.rs      # Demo settlement scenarios (8-step flow)\n\u2502   \u2502   \u251c\u2500\u2500 wasm_capsule.rs  # WASM capsule runtime (wasmtime)\n\u2502   \u2502   \u251c\u2500\u2500 qct.rs       # Quantum Cascade Tree stubs\n\u2502   \u2502   \u2514\u2500\u2500 ...\n\u2502   \u251c\u2500\u2500 proto/           # Protobuf definitions (6 services)\n\u2502   \u2514\u2500\u2500 tests/           # E2E integration tests\n\u251c\u2500\u2500 explorer/            # Web-based Explorer UI (Rust/axum/Askama)\n\u2502   \u251c\u2500\u2500 src/             # Backend routes + handlers\n\u2502   \u251c\u2500\u2500 templates/       # HTML/JS UI (11 tabs)\n\u2502   \u2514\u2500\u2500 static/          # CSS/JS assets\n\u251c\u2500\u2500 flowcortex-l0/       # QCT proof-of-concept library\n\u251c\u2500\u2500 docs/                # Project documentation\n\u2502   \u251c\u2500\u2500 CAPSULE_DEVELOPER_MANUAL.md\n\u2502   \u251c\u2500\u2500 API_SPECIFICATIONS.md\n\u2502   \u251c\u2500\u2500 INTEGRATION_GUIDE_*.md\n\u2502   \u2514\u2500\u2500 ...\n\u251c\u2500\u2500 scripts/             # Build, run, E2E test scripts\n\u2514\u2500\u2500 examples/            # Example configurations\n```\n\n---"
+    },
+    {
+      "title": "Start the L1 node and Explorer",
+      "body": "```bash"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/flow-cortex"
+    }
+  ]
+}

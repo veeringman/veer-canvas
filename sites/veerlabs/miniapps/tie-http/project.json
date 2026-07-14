@@ -1,0 +1,31 @@
+{
+  "slug": "tie-http",
+  "name": "tie_http",
+  "subtitle": "C",
+  "summary": "TIE HTTP Server",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "tie_http logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "TIE HTTP Server"
+    },
+    {
+      "title": "tie_http",
+      "body": "TIE HTTP Server"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/tie_http"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/tie_http"
+}

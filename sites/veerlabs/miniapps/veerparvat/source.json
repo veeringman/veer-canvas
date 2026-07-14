@@ -1,0 +1,11 @@
+{
+  "slug": "veerparvat",
+  "repo": "https://github.com/veeringman/VeerParvat",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/VeerParvat/main/veerparvat-logo.png"
+  ],
+  "readme_logo_url": null
+}

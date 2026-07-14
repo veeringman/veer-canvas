@@ -1,0 +1,51 @@
+{
+  "slug": "sentientos",
+  "name": "sentientos",
+  "subtitle": "Rust",
+  "summary": "**SentientOS** is a post-mobile era OS where intelligent agents are first-class citizens.",
+  "logo": "miniapps/sentientos/assets/sentientos_architecture.png",
+  "logoAlt": "sentientos logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**SentientOS** is a post-mobile era OS where intelligent agents are first-class citizens."
+    },
+    {
+      "title": "\ud83e\udde0 SentientOS \u2014 The AI-Native Operating System",
+      "body": "**SentientOS** is a post-mobile era OS where intelligent agents are first-class citizens."
+    },
+    {
+      "title": "Modules",
+      "body": "- aish/: Shell interface\n- runtime/: Agent execution logic\n- memory/: Context persistence\n- docs/: Architecture, roadmap, and design notes"
+    },
+    {
+      "title": "\ud83d\udda5 Shell: AISH",
+      "body": "**AISH** (AI Shell) is a native CLI/UX interface for controlling agents, context, and system behavior."
+    },
+    {
+      "title": "\ud83d\udd27 Sample Commands",
+      "body": "```bash"
+    },
+    {
+      "title": "Spawn a new agent with a goal",
+      "body": "> aish> spawn nova \"monitor system logs for anomalies\""
+    },
+    {
+      "title": "\ud83e\udde9 Architecture Overview",
+      "body": "SentientOS is built with a modular, AI-native architecture:\n\n- **AISH**: The intelligent shell interface for user-agent interaction.\n- **Agent Runtime**: Executes and manages autonomous agents.\n- **Syscall Interface**: Provides direct kernel access for agent actions.\n- **Kernel Services**:\n  - **Agent Manager**: Manages lifecycle and sandboxing of agents.\n  - **Memory Engine**: Stores AI memory and context vectors.\n  - **Governance**: Enforces permissions, policy, and coordination.\n  - **Scheduling & I/O**: Traditional device and task management.\n\n![SentientOS Architecture](./docs/sentientos_architecture.png)\n\n---\n\nBuilt for the future of intelligent, agentic, context-aware computing."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/sentientos"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/sentientos"
+}

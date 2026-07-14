@@ -1,0 +1,47 @@
+{
+  "slug": "quakeguard",
+  "name": "quakeguard",
+  "subtitle": "QuakeGuard is an AI-powered IoT system that monitors and evaluates the earthquake resilien...",
+  "summary": "**QuakeGuard** is an IoT + Edge-AI based system to assess and monitor the earthquake proofness of buildings in real-time. It combines affordable sensors, edge devices, and a mesh network to enhance building safety and disaster preparedness.",
+  "logo": "miniapps/quakeguard/assets/quakeguard_advanced_architecture.png",
+  "logoAlt": "quakeguard logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**QuakeGuard** is an IoT + Edge-AI based system to assess and monitor the earthquake proofness of buildings in real-time. It combines affordable sensors, edge devices, and a mesh network to enhance building safety and disaster preparedness."
+    },
+    {
+      "title": "\ud83c\udf0d QuakeGuard \u2013 AI-Powered Earthquake Resilience System",
+      "body": "**QuakeGuard** is an IoT + Edge-AI based system to assess and monitor the earthquake proofness of buildings in real-time. It combines affordable sensors, edge devices, and a mesh network to enhance building safety and disaster preparedness."
+    },
+    {
+      "title": "\ud83d\udce6 Key Components",
+      "body": "- \ud83d\udce1 **Firmware**: Sensor fusion + anomaly detection (ESP32)\n- \ud83e\udde0 **Edge Node**: Rust-based node for aggregation + alert\n- \ud83d\udd17 **Mesh**: Decentralized LoRa/NB-IoT network\n- \ud83d\udcf1 **Mobile UI**: Health index, diagnostics, and alerts\n- \ud83e\uddea **Simulator**: Hands-on testbed for seismic effects"
+    },
+    {
+      "title": "\ud83d\udd27 Architecture Overview",
+      "body": "The QuakeGuard system is composed of five major layers:\n\n1. **Sensor Layer**: Includes MPU6050 accelerometers, strain gauges, piezoelectric sensors, and acoustic sensors installed across key structural points of the building.\n2. **Firmware Layer**: Runs on ESP32/STM32 microcontrollers. Handles data collection, filtering (FFT/threshold), local anomaly detection, and communication logic.\n3. **Edge Node Layer**: A Rust-based processing unit that aggregates data from multiple buildings, manages health scores, and forwards alerts to the cloud or local dashboards.\n4. **Mesh Network Layer**: Powered by LoRa/NB-IoT for low-power, peer-to-peer communication and community-level tremor validation.\n5. **Application Layer**: Mobile/web UI for viewing real-time data, historical trends, risk assessment scores, and emergency notifications.\n\n![QuakeGuard Architecture](./docs/quakeguard_advanced_architecture.png)"
+    },
+    {
+      "title": "\ud83c\udfe0 Deployment Diagram",
+      "body": "The deployment layout shows placement of sensors (accelerometer, strain gauge, acoustic, vibration) on critical load-bearing parts of a building. Edge nodes handle initial processing and communicate via LoRa mesh to ensure decentralized coverage.\n\n![Deployment Diagram](./docs/quakeguard_deployment.png)"
+    },
+    {
+      "title": "\ud83e\uddea Physical Simulator Setup",
+      "body": "We also provide a physical earthquake simulation platform. It includes tectonic plates powered by a stepper motor base, mini-structures mounted on flexible ground material, and sensor nodes embedded to mimic real-world stress scenarios. This setup helps in testing algorithms and education.\n\n![Simulator Diagram](./docs/quakeguard_simulator.png)"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/quakeguard"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/quakeguard"
+}

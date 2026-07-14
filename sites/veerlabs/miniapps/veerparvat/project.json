@@ -1,0 +1,27 @@
+{
+  "slug": "veerparvat",
+  "name": "VeerParvat",
+  "subtitle": "The Operating System for the Mountains",
+  "summary": "<p align=\"center\"> <img src=\"veerparvat-logo.png\" alt=\"VeerSetu\" width=\"300\"/> </p>",
+  "logo": "miniapps/veerparvat/assets/veerparvat-logo.png",
+  "logoAlt": "VeerParvat logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"center\"> <img src=\"veerparvat-logo.png\" alt=\"VeerSetu\" width=\"300\"/> </p>"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/VeerParvat"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": false,
+  "repoUrl": "https://github.com/veeringman/VeerParvat"
+}

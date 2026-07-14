@@ -1,0 +1,51 @@
+{
+  "slug": "edgefabric",
+  "name": "EdgeFabric",
+  "subtitle": "Rust",
+  "summary": "<p align=\"left\"> <img src=\"docs/assets/EdgeFabric_Logo.png\" alt=\"EdgeFabric\" width=\"420\"/> </p>",
+  "logo": "miniapps/edgefabric/assets/EdgeFabric_Logo.png",
+  "logoAlt": "EdgeFabric logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"left\"> <img src=\"docs/assets/EdgeFabric_Logo.png\" alt=\"EdgeFabric\" width=\"420\"/> </p>"
+    },
+    {
+      "title": "Overview",
+      "body": "EdgeFabric is an end-to-end **design-to-device** platform \u2014 a single Rust-native control plane that spans hardware design (chips, PCBs, quantum), firmware/app builds, virtual & real device fleets, and CI/CD automation:\n\n- **Chip Design** \u2014 RTL \u2192 schematic \u2192 synthesis \u2192 floorplan/PnR \u2192 tape-out, with veer-vm (virtual FPGA) and hardware FPGA backends\n- **PCB / Electronic Circuit Design** \u2014 AI-assisted schematic + layout + DRC + Gerber/ODB++ export\n- **Quantum** \u2014 superconducting-qubit design, circuit designer, accelerators, VeerOS hosts\n- **Real mobile devices** \u2014 Android & iOS\n- **Virtual devices** \u2014 Emulators, simulators, Virtual IoT (digital twins)\n- **IoT devices** \u2014 Hardware boards, MQTT/SSH/Serial, sensor simulation\n- **CI/CD runners** \u2014 Windows-initiated iOS builds on networked macOS SSH runners; pluggable runner classes\n\nBuilt in **Rust** for performance, safety, and low-level device + EDA control."
+    },
+    {
+      "title": "Latest Updates (2026-05-21)",
+      "body": "- **Chip Design**: shared schematic editor engine (`components/schematic.rs`) with drag-and-drop palette, ortho wire routing, undo, JSON export; chip skin with ~30 symbols.\n- **Schematic presets**: NAND2 (CMOS), SQC-Q5 superconducting transmon, RV32I 5-stage RISC-V core, PQC Kyber accelerator (AXI/FSM/TRNG/Keccak/sampler/NTT/polymul/modred/polyram).\n- **Sim / FPGA Backends** page (`/silicon/backends`): unified management of veer-vm software-defined chips (vFPGA) and hardware FPGA boards (VCU118, Alveo U280, Arty A7, \u2026) with provision form, kind/status filters, lease + action controls.\n- **3D stack-up viewer** (`/silicon/stackup`) with isometric SVG rendering and layer toggles.\n- **PCB Design** scope locked (see `PCB_DESIGN_INTEGRATION_PLAN.md`); schematic engine reuse via `PcbLib` skin planned.\n- Earlier: iOS coordinate mapping for WebDriverAgent; ProductType\u2192bezel mapping; VeerOS host dedupe; xterm-based VeerOS shell; auth tightening on device/discovery endpoints.\n\n---"
+    },
+    {
+      "title": "Architecture at a Glance",
+      "body": "<p align=\"center\">\n  <img src=\"docs/assets/EdgeFabric_SystemArchitecture.png\" alt=\"System Architecture\" width=\"800\"/>\n</p>\n\n```mermaid\ngraph TB\n    subgraph \"Users & CI\"\n        DEV[Developers / QA]\n        CI[CI/CD Pipelines]\n    end\n\n    subgraph \"Ingress\"\n        GW[API Gateway + Auth]\n    end\n\n    subgraph \"Orchestration\"\n        SCHED[Device Scheduler]\n        ORCH[Test Orchestrator]\n        LIVE[Live Session Service]\n    end\n\n    subgraph \"Control Plane \u2014 Rust\"\n        DM[Device Manager]\n        CMD[Command Engine]\n        STREAM[Streaming Engine]\n        STATE[State Manager]\n    end\n\n    subgraph \"Devices\"\n        AND[Android Real/Virtual]\n        IOS[iOS Real/Virtual]\n        IOT[IoT / Digital Twins]\n    end\n\n    DEV --> GW\n    CI --> GW\n    GW --> SCHED\n    GW --> ORCH\n    GW --> LIVE\n    SCHED --> DM\n    ORCH --> CMD\n    LIVE --> STREAM\n    DM --> STATE\n    CMD --> STATE\n    STREAM --> STATE\n    STATE --> AND\n    STATE --> IOS\n    STATE --> IOT\n```\n\n> See [Architecture & Diagrams](docs/ARCHITECTURE.md) for full schematics including network topology and deployment layout.\n\n---"
+    },
+    {
+      "title": "Key Features",
+      "body": "| Feature | Description |\n|---------|-------------|\n| **Unified Device Abstraction** | Single API across Android, iOS, IoT \u2014 real and virtual |\n| **Hybrid Device Cloud** | Real devices for accuracy, virtual for scale, intelligent routing |\n| **Real-Time Streaming** | < 200 ms latency WebRTC streaming with remote control |\n| **CI/CD Native** | First-class GitHub Actions, Jenkins, GitLab CI integration |\n| **Parallel Testing** | Distribute test suites across device pools automatically |\n| **IoT Support** | Firmware flashing, serial/SSH access, sensor simulation |\n| **Virtual IoT** | Digital-twin devices with VeerOS-backed simulation, controllers, scenarios |\n| **Chip Design Studio** | RTL \u2192 schematic \u2192 synth \u2192 floorplan \u2192 tape-out; veer-vm vFPGA + hardware FPGA |\n| **Schematic Editor** | Shared drag-and-drop engine; chip + PCB skins; presets for CMOS, RV32I, transmon, PQC Kyber |\n| **PCB Studio** | AI-assisted schematic + layout, DRC/ERC, Gerber/ODB++/IPC-2581 export, BOM, fab submission hooks |\n| **Quantum** | Circuit designer, accelerators, jobs queue, VeerOS hosts |\n| **iOS Build Runners** | Windows-initiated iOS builds on networked macOS SSH runners with lease scheduling |\n| **Secure Multi-Tenancy** | Per-session isolation, device wipe, RBAC, TLS everywhere |\n\n---"
+    },
+    {
+      "title": "Tech Stack",
+      "body": "| Layer | Technology |\n|-------|-----------|\n| Core platform | **Rust** (Axum, tonic, tokio) |\n| API | REST + gRPC (Protocol Buffers) |\n| Streaming | WebRTC (webrtc-rs) |\n| Android control | ADB, scrcpy |\n| iOS control | WebDriverAgent, Xcode tools |\n| IoT | MQTT (rumqttc), SSH, Serial |\n| State store | PostgreSQL + Redis |\n| Messaging | NATS |\n| Virtual devices | QEMU/KVM, Kubernetes |\n| Virtual IoT | VeerOS veer-vm runtime (software-defined devices & vFPGA) |\n| FPGA backends | veer-vm (vFPGA) \u00b7 Xilinx Vivado \u00b7 Intel Quartus \u00b7 Lattice Diamond/Radiant |\n| Chip EDA (open) | Yosys \u00b7 nextpnr \u00b7 OpenROAD \u00b7 Verilator \u00b7 Icarus \u00b7 OpenSTA \u00b7 KLayout \u00b7 Magic \u00b7 Netgen |\n| PCB EDA (open) | KiCad CLI \u00b7 ngspice \u00b7 FreeCAD \u00b7 OpenEMS |\n| Dashboard | Leptos 0.7 (Rust/WASM CSR) with SVG-native schematic & 3D viewers |\n\n---"
+    },
+    {
+      "title": "Network Architecture",
+      "body": "<p align=\"center\">\n  <img src=\"docs/assets/EdgeFabric_NetworkArchitecture.png\" alt=\"Network Architecture\" width=\"800\"/>\n</p>\n\n> Multi-region edge deployment with secure VPN tunnels, global load balancing, and CDN/WAF at the perimeter. See [Architecture & Diagrams](docs/ARCHITECTURE.md#network-architecture) for details.\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/EdgeFabric"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/EdgeFabric"
+}

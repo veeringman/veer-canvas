@@ -1,0 +1,47 @@
+{
+  "slug": "veerion",
+  "name": "veerion",
+  "subtitle": "Rust",
+  "summary": "<img src=\"assets/veerion_logo.png\" alt=\"Veerion Logo\" width=\"180\" style=\"display:block;margin:0 0 24px 0;padding:0;\"/>",
+  "logo": "miniapps/veerion/assets/veerion_logo.png",
+  "logoAlt": "veerion logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<img src=\"assets/veerion_logo.png\" alt=\"Veerion Logo\" width=\"180\" style=\"display:block;margin:0 0 24px 0;padding:0;\"/>"
+    },
+    {
+      "title": "Vision",
+      "body": "A browser that changes everything again.\n\nFor thirty years the web has run on a small set of aging C++ engines whose architecture was set before mobile, before the cloud, and long before AI. Veerion is a clean-sheet rewrite of what the browser is and what it is for: a memory-safe, multi-process, capability-governed runtime for the AI-native web \u2014 designed for a world where the browser hosts not just pages, but agents that act on the user's behalf.\n\nThere is no comparable product. There is nothing to match. This is the new baseline."
+    },
+    {
+      "title": "Mission",
+      "body": "Build the world's first AI-native, memory-safe, capability-secure web browser \u2014 a ground-up Rust implementation that treats every page, extension, and agent as an untrusted workload, isolates it by default, and governs it with explicit, revocable, user-granted capabilities."
+    },
+    {
+      "title": "Problem",
+      "body": "Today's browsers were designed to render documents, not to host autonomous AI agents, tool-using assistants, and untrusted generated code. They are also built on decades-old C++ engines whose attack surface is enormous. Users face:\n\n- Weak isolation between tabs, extensions, and agent actions\n- Implicit, coarse-grained permissions (one prompt, forever)\n- No standard way to run AI agents securely inside the browser\n- Limited auditability of what code did on the user's behalf\n- A massive memory-unsafe TCB (trusted computing base) inherited from existing engines"
+    },
+    {
+      "title": "Solution Summary",
+      "body": "Veerion is a full, ground-up browser whose differentiator is a memory-safe engine and a secure runtime core:\n\n- 100% Rust implementation; no third-party browser engine code\n- Multi-process architecture: UI process, per-site renderer processes, network process, GPU/compositor process\n- Custom Rust HTML/CSS parser, DOM, style/layout, paint, and compositor\n- Custom Rust JavaScript engine (ECMAScript subset first, expanding over time)\n- Per-tab sandboxed runtime sessions, not just render processes\n- WASM-first execution layer for extensions, agents, and untrusted code\n- Capability-based, per-site and per-agent permissions\n- Optional microVM isolation for high-risk sites and agent workloads\n- Built-in AI agent runtime with auditable, revocable tool use\n- Ephemeral, disposable browsing sessions as a first-class mode"
+    },
+    {
+      "title": "Non-Goals",
+      "body": "- No reuse of Chromium, Blink, WebKit, Gecko, Servo, V8, SpiderMonkey, JavaScriptCore, Skia, ANGLE, Electron, CEF, or any other existing browser/engine codebase\n- No language other than Rust for first-party engine and runtime code (build tooling and platform glue excepted)\n- No proprietary or non-standard web platform extensions in MVP; we implement standards, not divergent dialects"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veerion"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veerion"
+}

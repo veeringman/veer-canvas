@@ -1,0 +1,9 @@
+[project]
+name = "veercanvas"
+version = "0.1.0"
+description = "VeerCanvas — content authoring and publishing platform"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+admin = ["Flask>=2.0"]

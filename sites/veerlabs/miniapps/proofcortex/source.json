@@ -1,0 +1,9 @@
+{
+  "slug": "proofcortex",
+  "repo": "https://github.com/veeringman/ProofCortex",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

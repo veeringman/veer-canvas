@@ -1,0 +1,11 @@
+{
+  "slug": "veermesh",
+  "repo": "https://github.com/veeringman/veermesh",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/veermesh/main/assets/veermesh-logo.png?token=AHGYFSI7ZMJ7ZZCV77PQ6QLKKWU6TAA"
+  ],
+  "readme_logo_url": null
+}

@@ -1,0 +1,11 @@
+{
+  "slug": "overwatch",
+  "repo": "https://github.com/veeringman/overwatch",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/overwatch/main/docs/overwatch_arch.png"
+  ],
+  "readme_logo_url": "https://raw.githubusercontent.com/veeringman/overwatch/main/docs/overwatch_arch.png"
+}

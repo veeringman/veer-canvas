@@ -1,0 +1,43 @@
+GitHub Project Import Instructions
+
+This helper is intended to bootstrap the VeerLabs website project dashboard from GitHub repositories.
+
+What it does:
+- Fetches repositories for a GitHub owner (for example, `veeringman`).
+- Extracts repo metadata, README content, and logo candidates.
+- Builds a package folder for each repo under the chosen output directory.
+- Writes `project.json` and `source.json` for each package.
+
+How to run:
+1. Set a GitHub token in your environment if you want higher API rate limits:
+   - `export GITHUB_TOKEN=ghp_...`
+   - or `export GH_TOKEN=ghp_...`
+
+2. Run the import script:
+   ```bash
+   cd veerabs_website
+   python3 scripts/import_github_projects_full.py veeringman
+   ```
+
+3. To integrate directly into the website structure and update `projects.json`:
+   ```bash
+   cd veerabs_website
+   python3 scripts/import_github_projects_full.py veeringman --site-root . --projects-json projects.json --public-only --replace-existing --fetch-repos
+   ```
+
+4. Review the generated packages:
+   - `veerabs_website/miniapps/<repo-slug>/project.json`
+   - `veerabs_website/miniapps/<repo-slug>/source.json`
+   - `veerabs_website/miniapps/<repo-slug>/README.md`
+   - `veerabs_website/miniapps/<repo-slug>/assets/<logo-file>`
+
+What still needs human review:
+- Confirm or replace the selected logo asset.
+- Improve the generated summary and detail sections.
+- Add `details` content for project vision, features, use cases, and docs links.
+- Merge the metadata into `veerabs_website/projects.json` after review.
+
+Notes:
+- The script finds candidate logos by looking for filenames containing `logo`, `icon`, `brand`, or `mark`.
+- If no logo is found automatically, the generated package includes a placeholder path and `logo_candidates` for manual selection.
+- This is a bootstrap tool, not a final quality pass. Use the output as the starting point for project content.

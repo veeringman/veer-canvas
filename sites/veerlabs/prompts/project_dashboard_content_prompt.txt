@@ -1,0 +1,63 @@
+Project Dashboard Content Package Prompt
+
+Use this prompt when collecting content for a new project tile and detailed page for the VeerLabs Solutions dashboard.
+
+For the project named "[PROJECT_NAME]", produce the following deliverables:
+
+1. A JSON metadata object suitable for insertion into `projects.json`:
+   - `slug`: short URL-safe project identifier
+   - `name`: project display name
+   - `subtitle`: short descriptive subtitle
+   - `summary`: 1-2 sentence summary for the dashboard tile
+   - `logo`: relative path to the project logo image inside the project package
+   - `logoAlt`: alt text for the logo
+   - `status`: list of status labels, e.g. ["In Development", "Experimental"]
+   - `tags`: list of project tags, e.g. ["Zero Trust", "Edge", "AI"]
+   - `details`: list of section objects, each with either:
+       - `title` and `body`, or
+       - `title` and `items` (array of strings)
+
+2. A detail page HTML fragment or full page that matches the site style:
+   - project title
+   - project subtitle
+   - summary paragraph
+   - details sections for vision, features, problem/solution, status, use cases, and docs links
+   - use relative asset paths and avoid hard-coded external CSS
+
+3. A package folder structure named `project_dashboard_content` with:
+   - `assets/` containing the logo image and any supporting visuals
+   - `project.json` or equivalent manifest for the project content
+   - `detail.html` or `project.html` that can be imported into the website
+
+4. Use the website's shared structure:
+   - dashboard cards are generated from `projects.json`
+   - detailed pages are rendered by `project.html?project=<slug>`
+   - maintain a consistent card appearance and tag styles
+
+5. Provide any documentation links for the project:
+   - README
+   - architecture docs
+   - public repo or website
+
+Output format:
+- A JSON metadata object for the project
+- The relative file path for the logo
+- A short folder/package manifest summary
+
+Example:
+{
+  "slug": "veerion",
+  "name": "Veerion",
+  "subtitle": "AI-native browser runtime for secure agents",
+  "summary": "Veerion is a next-generation browser runtime built in Rust for secure autonomous agents.",
+  "logo": "assets/veerion_logo.png",
+  "logoAlt": "Veerion Logo",
+  "status": ["In Development", "Pre-Alpha"],
+  "tags": ["Browser", "AI", "Security"],
+  "details": [
+    {"title":"Tagline","body":"Lightweight, secure WASM runtime for agents."},
+    {"title":"Key Features","items":["Memory-safe Rust architecture","Capability-based security"]}
+  ]
+}
+
+This prompt is intended for the project owner or project team to complete and return as a package, so it can be added into the VeerLabs Solutions website repository consistently.

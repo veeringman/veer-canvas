@@ -1,0 +1,12 @@
+{
+  "slug": "veer-savora",
+  "repo": "https://github.com/veeringman/veer-savora",
+  "default_branch": "main",
+  "language": "Makefile",
+  "topics": [],
+  "logo_candidates": [
+    "https://img.shields.io/badge/License-Apache%202.0-blue.svg",
+    "https://raw.githubusercontent.com/veeringman/veer-savora/main/assets/savora-logo.png?token=AHGYFSMNYLHOQORSIOPGD4LKKWU6RAA"
+  ],
+  "readme_logo_url": "https://img.shields.io/badge/License-Apache%202.0-blue.svg"
+}

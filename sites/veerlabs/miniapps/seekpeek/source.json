@@ -1,0 +1,9 @@
+{
+  "slug": "seekpeek",
+  "repo": "https://github.com/veeringman/SeekPeek",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

@@ -1,0 +1,41 @@
+name: Deploy VeerLabs (VeerCanvas)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'veercanvas/sites/veerlabs/**'
+      - 'veercanvas/admin/**'
+      - 'veercanvas/deploy/**'
+      - 'veercanvas/cli/**'
+      - 'veercanvas/.github/workflows/deploy-veerlabs.yml'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via VeerCanvas
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          SITE_ID: veerlabs
+        run: |
+          EC2_KEY=~/.ssh/ec2.pem \
+          EC2_HOST="$EC2_HOST" \
+          EC2_USER="$EC2_USER" \
+          ./veercanvas/deploy/remote-deploy.sh
+
+      - name: Verify
+        run: |
+          curl -fsSL "https://veerlabs.solutions/site-meta.json"
+          curl -fsSL "https://veerlabs.solutions/" | grep -q "VeerLabs Solutions"

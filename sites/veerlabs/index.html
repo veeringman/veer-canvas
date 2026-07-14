@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeerLabs Solutions</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="site-utils.js" defer></script>
+  <script src="content-renderer.js" defer></script>
+  <script src="site-meta.js" defer></script>
+  <script src="pagination.js" defer></script>
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="dashboard-hero">
+      <div>
+        <h1>VeerLabs Solutions</h1>
+        <p class="page-subtitle">Explore Veer Labs projects — secure edge fabric, browsers, operating systems, and networking stacks. Each tile links to documentation-rich detail pages sourced from live repositories.</p>
+      </div>
+    </header>
+
+    <div class="cards"></div>
+    <div class="pagination-bar"></div>
+    <footer id="site-footer" class="site-footer"></footer>
+  </div>
+
+  <template id="project-card-template">
+    <article class="project-card">
+      <img class="project-logo" src="" alt="">
+      <div class="project-copy">
+        <div class="project-title"></div>
+        <div class="project-subtitle"></div>
+        <p class="project-summary"></p>
+        <div class="project-tags"></div>
+        <div class="project-card-footer">
+          <a class="learn-more-icon" href="#" title="Learn more" aria-label="Learn more">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="12" cy="12" r="11" fill="#fff"/>
+              <circle cx="12" cy="12" r="10" fill="url(#info-gradient)"/>
+              <path d="M12 8.5a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm-1.25 3.25a1.25 1.25 0 1 1 2.5 0v4a1.25 1.25 0 1 1-2.5 0v-4z" fill="#fff"/>
+              <defs>
+                <linearGradient id="info-gradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#00c6fb"/>
+                  <stop offset="1" stop-color="#f7971e"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </article>
+  </template>
+</body>
+</html>

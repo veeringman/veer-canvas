@@ -1,0 +1,51 @@
+{
+  "slug": "veer-savora",
+  "name": "veer-savora",
+  "subtitle": "Makefile",
+  "summary": "<p align=\"left\"> <img src=\"assets/savora-logo.png\" alt=\"Veer Savora Logo\" width=\"210\"> </p> <p align=\"left\"> <b>The Autonomous Food Manufacturing Platform</b><br> <i>Programming the Future of Food.</i> </p>",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "veer-savora logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"left\"> <img src=\"assets/savora-logo.png\" alt=\"Veer Savora Logo\" width=\"210\"> </p> <p align=\"left\"> <b>The Autonomous Food Manufacturing Platform</b><br> <i>Programming the Future of Food.</i> </p>"
+    },
+    {
+      "title": "Vision",
+      "body": "Veer Savora is an AI-native platform for autonomous food manufacturing.\n\nIt combines robotics, artificial intelligence, cloud computing, computer vision,\ndigital twins, modular hardware, and programmable food workflows into a single,\nextensible platform capable of preparing, cooking, assembling, packaging, and\ndelivering fresh food with minimal human intervention.\n\nRather than building another smart kitchen appliance, Veer Savora introduces a\nnew computing model where food manufacturing becomes programmable.\n\n---"
+    },
+    {
+      "title": "Mission",
+      "body": "Build the world's most intelligent, composable, and autonomous platform for\nfood manufacturing.\n\nEnable anyone to create, deploy, operate, and continuously improve autonomous\nfood production systems anywhere in the world.\n\n---"
+    },
+    {
+      "title": "What is Veer Savora?",
+      "body": "Think of Veer Savora as:\n\n* Kubernetes for food manufacturing\n* GitHub for programmable food workflows\n* ROS for autonomous kitchens\n* CNC automation for food production\n* Cloud computing for distributed food manufacturing\n\nEvery food manufacturing node is connected to the cloud while remaining capable\nof autonomous local operation.\n\n---"
+    },
+    {
+      "title": "The Problem",
+      "body": "Today's food industry suffers from several limitations.\n\n* Heavy dependence on manual labor\n* Inconsistent food quality\n* Limited scalability\n* High operational costs\n* Food waste\n* Long preparation times\n* Difficult recipe standardization\n* Complex kitchen operations\n* Limited personalization\n\nThese problems become more challenging as demand increases.\n\n---"
+    },
+    {
+      "title": "Our Solution",
+      "body": "Veer Savora transforms food production into programmable manufacturing.\n\nUsers create or select food programs.\n\nArtificial intelligence converts those programs into manufacturing plans.\n\nAutonomous food nodes execute those plans using composable robotic hardware.\n\nMeals are prepared, packaged, and dispatched with minimal human involvement.\n\n---"
+    },
+    {
+      "title": "High-Level Architecture",
+      "body": "```\nCustomer\n\n    \u2502\n\nWeb / Mobile Apps\n\n    \u2502\n\nFood Marketplace\n\n    \u2502\n\nSavora AI\n\n    \u2502\n\nManufacturing Planner\n\n    \u2502\n\nSavora Cloud\n\n    \u2502\n\nNearest Savora Node\n\n    \u2502\n\nIngredient Modules\n\n    \u2502\n\nPreparation Modules\n\n    \u2502\n\nCooking Modules\n\n    \u2502\n\nAssembly Modules\n\n    \u2502\n\nPackaging\n\n    \u2502\n\nDelivery\n```\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veer-savora"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veer-savora"
+}

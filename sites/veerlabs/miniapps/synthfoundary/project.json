@@ -1,0 +1,47 @@
+{
+  "slug": "synthfoundary",
+  "name": "synthfoundary",
+  "subtitle": "Modular synthetic data and simulation platform for procedural scene generation, automated ...",
+  "summary": "SynthFoundry is a modular synthetic data generation and AI training platform for procedurally generating realistic datasets, automatically annotating them, and training production-ready machine learning models for computer vision and simulation workflows.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "synthfoundary logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "SynthFoundry is a modular synthetic data generation and AI training platform for procedurally generating realistic datasets, automatically annotating them, and training production-ready machine learning models for computer vision and simulation workflows."
+    },
+    {
+      "title": "SynthFoundry",
+      "body": "Synthetic worlds. Real intelligence.\n\nSynthFoundry is a modular synthetic data generation and AI training platform for procedurally generating realistic datasets, automatically annotating them, and training production-ready machine learning models for computer vision and simulation workflows.\n\nIt is designed to support domain-agnostic synthetic intelligence workflows across insurance AI, robotics, autonomous systems, industrial inspection, digital twins, medical imaging, manufacturing QA, and adjacent simulation ecosystems."
+    },
+    {
+      "title": "Overview",
+      "body": "SynthFoundry is intended to solve the recurring constraints in traditional AI development:\n\n- expensive data collection\n- inconsistent annotations\n- privacy limitations\n- scarce domain data\n- slow iteration cycles\n\nThe platform addresses those constraints by generating synthetic worlds with deterministic ground truth, enabling:\n\n- infinitely scalable datasets\n- perfect annotations\n- reproducible training pipelines\n- rapid model iteration loops"
+    },
+    {
+      "title": "Core Objectives",
+      "body": "SynthFoundry is designed to help teams:\n\n- procedurally generate synthetic scenes and environments\n- simulate realistic conditions, physics, and defects\n- automatically generate annotations and segmentation masks\n- apply photorealistic AI enhancement pipelines\n- train scalable AI models\n- optimize models for edge and mobile inference\n- continuously improve datasets and models over time"
+    },
+    {
+      "title": "Platform Architecture",
+      "body": "```text\nScene Generation Engine\n\t-> Procedural Simulation & Physics Engine\n\t-> Annotation & Segmentation Engine\n\t-> AI Realism Enhancement Pipeline\n\t-> Dataset Validation & Augmentation\n\t-> AI Training & Experimentation Pipeline\n\t-> Model Optimization & Export Layer\n\t-> Edge / Mobile Runtime Deployment\n```"
+    },
+    {
+      "title": "Recommended Stack",
+      "body": "| Layer | Technology |\n| --- | --- |\n| Scene Generation | Blender |\n| Procedural Logic | Python |\n| AI Framework | PyTorch |\n| Detection Models | YOLOv8 |\n| Segmentation | YOLOv8-seg |\n| Realism Pipeline | Stable Diffusion XL + ControlNet |\n| Workflow Orchestration | Prefect |\n| Backend API | FastAPI |\n| Frontend | React + TypeScript |\n| Storage | Amazon S3 / MinIO |\n| Metadata DB | PostgreSQL |\n| Training Infrastructure | Dockerized GPU workers |\n| Enterprise Training | Amazon SageMaker |\n| Mobile Export | TensorFlow Lite / CoreML / ONNX |\n| Containerization | Docker |"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/synthfoundary"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/synthfoundary"
+}

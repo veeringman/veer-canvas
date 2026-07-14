@@ -1,0 +1,23 @@
+{
+  "slug": "async-forge",
+  "name": "async_forge",
+  "subtitle": "C",
+  "summary": "",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "async_forge logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/async_forge"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/async_forge"
+}

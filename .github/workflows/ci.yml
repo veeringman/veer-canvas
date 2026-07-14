@@ -1,0 +1,57 @@
+name: VeerCanvas CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'veercanvas/**'
+  pull_request:
+    paths:
+      - 'veercanvas/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: veercanvas
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate site configs
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path('sites')
+          for cfg in root.glob('*/site.config.json'):
+              json.load(cfg.open())
+              print('ok', cfg)
+          PY
+
+      - name: Build public catalog (veerlabs sample)
+        run: |
+          python3 cli/scripts/import_github_projects_full.py veeringman imported_projects \
+            --site-root sites/veerlabs \
+            --projects-json sites/veerlabs/projects.json \
+            --write-public-catalog
+
+      - name: Check admin app loads
+        run: |
+          pip install -r admin/requirements.txt
+          VEERCANVAS_SITE_ROOT="$(pwd)/sites/veerlabs" python3 -c "
+          import importlib.util
+          spec = importlib.util.spec_from_file_location('admin_app', 'admin/admin_app.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          print('admin ok', mod.SITE_ROOT)
+          "
+
+      - name: JavaScript syntax
+        run: |
+          node --check sites/veerlabs/content-renderer.js
+          node --check sites/veerlabs/project.js
+          node --check admin/static/admin.js

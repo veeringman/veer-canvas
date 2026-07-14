@@ -1,0 +1,51 @@
+{
+  "slug": "treasurysettlement",
+  "name": "TreasurySettlement",
+  "subtitle": "Rust",
+  "summary": "<p align=\"left\"> <img src=\"treasury_logo.png\" alt=\"Treasury Settlement\" width=\"90\" /> </p>",
+  "logo": "miniapps/treasurysettlement/assets/treasury_logo.png",
+  "logoAlt": "TreasurySettlement logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"left\"> <img src=\"treasury_logo.png\" alt=\"Treasury Settlement\" width=\"90\" /> </p>"
+    },
+    {
+      "title": "Treasury Settlement System",
+      "body": "An enterprise Treasury Settlement System for managing bank settlement transactions using FloweR stablecoin. Features a Rust/Actix-web backend API with a React + TypeScript frontend."
+    },
+    {
+      "title": "Features",
+      "body": "- **Multi-Bank Onboarding** \u2014 create banks, custodial wallets, and per-bank dashboards\n- **Authentication & RBAC** \u2014 JWT-based login with enterprise operator and treasury manager roles\n- **Settlement Workflows** \u2014 create, approve, and track settlement requests in FloweR\n- **Counterparty Directory** \u2014 register and manage counterparty banks and wallet addresses\n- **Digital Wallet Management** \u2014 create, import, and link wallets with AES-256-GCM encrypted key storage\n- **OAuth / OIDC Integration** \u2014 AuthBuddy step-up authentication support"
+    },
+    {
+      "title": "Technology Stack",
+      "body": "| Layer | Stack |\n|-------|-------|\n| **Backend** | Rust, Actix-web 4, SQLite (sqlx), JWT, bcrypt, AES-256-GCM |\n| **Frontend** | React 18, TypeScript, Vite, TailwindCSS 4, React Router 7 |\n| **Infra** | Docker, Docker Compose |"
+    },
+    {
+      "title": "Prerequisites",
+      "body": "- Rust 1.70+\n- Node.js 18+\n- SQLite 3"
+    },
+    {
+      "title": "Backend",
+      "body": "```bash\ngit clone https://github.com/veeringman/TreasurySettlement.git\ncd TreasurySettlement\ncargo build -p treasury-backend --release\ncargo run -p treasury-backend\n```\n\nThe API starts on `http://192.168.29.78:8080`."
+    },
+    {
+      "title": "API Overview",
+      "body": "| Area | Endpoints |\n|------|-----------|\n| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/profile` |\n| Banks | `POST /api/banks`, `GET /api/banks/{id}`, `POST /api/banks/{id}/wallets` |\n| Settlements | `POST /api/settlements`, `GET /api/settlements`, `POST /api/settlements/{id}/approve` |\n| Counterparties | `POST /api/counterparties`, `GET /api/counterparties` |\n| Wallets | `POST /api/wallet`, `GET /api/wallet`, `POST /api/wallet/import` |\n\nSee [API_COLLECTION.json](API_COLLECTION.json) for the full request collection."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/TreasurySettlement"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/TreasurySettlement"
+}

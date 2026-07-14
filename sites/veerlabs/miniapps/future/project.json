@@ -1,0 +1,47 @@
+{
+  "slug": "future",
+  "name": "future",
+  "subtitle": "C",
+  "summary": "The **Future Library** is a lightweight C implementation of asynchronous programming with support for:",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "future logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "The **Future Library** is a lightweight C implementation of asynchronous programming with support for:"
+    },
+    {
+      "title": "Future Library",
+      "body": "The **Future Library** is a lightweight C implementation of asynchronous programming with support for:\n\n- Promise/Future-like behavior\n- Multiple callbacks\n- Thread-safe operations\n- Flexibility to integrate into real-world applications\n\nThis library is designed to simplify asynchronous programming in C by encapsulating thread management, callback execution, and result synchronization.\n\n---"
+    },
+    {
+      "title": "Features",
+      "body": "- **Thread Safety**: Built-in synchronization for concurrent access.\n- **Multiple Callbacks**: Register multiple callbacks to be executed on future resolution.\n- **Flexible Design**: Supports chaining asynchronous operations.\n- **Easy to Use**: Simple API for developers.\n\n---"
+    },
+    {
+      "title": "**Prerequisites**",
+      "body": "- GCC or any compatible C compiler\n- POSIX threads library (`pthread`)"
+    },
+    {
+      "title": "**Building the Library**",
+      "body": "1. Clone the repository:\n\n   ```bash\n   git clone https://github.com/veeringman/future.git\n   cd future\n   ```\n\n2. Build the library and example program:\n\n   ```bash\n   make\n   ```\n\n3. Run the example program:\n\n   ```bash\n   make run\n   ```\n\n---"
+    },
+    {
+      "title": "**Including the Library**",
+      "body": "Include the header file in your C program:\n\n```c\n#include \"future.h\"\n```"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/future"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/future"
+}

@@ -1,0 +1,9 @@
+{
+  "slug": "quantumarc",
+  "repo": "https://github.com/veeringman/QuantumArc",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

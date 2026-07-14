@@ -1,0 +1,23 @@
+{
+  "slug": "veer",
+  "name": "veer",
+  "subtitle": "Open-source project",
+  "summary": "",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "veer logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Repository",
+      "body": "https://github.com/vijayworld/veer"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 0,
+  "private": true,
+  "repoUrl": "https://github.com/vijayworld/veer"
+}
