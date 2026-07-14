@@ -88,17 +88,26 @@ rsync -az --delete \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/"
 
 echo "Syncing VeerCanvas platform ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
-  "mkdir -p '$WEB_ROOT/veercanvas/admin' '$WEB_ROOT/veercanvas/deploy'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_DIRS'
+set -euo pipefail
+WEB_ROOT="$1"
+sudo mkdir -p "$WEB_ROOT/veercanvas/admin" "$WEB_ROOT/veercanvas/deploy"
+sudo chown -R ubuntu:ubuntu "$WEB_ROOT/veercanvas"
+REMOTE_DIRS
 
-rsync -az \
+RSYNC_MKPATH=()
+if rsync --help 2>&1 | grep -q mkpath; then
+  RSYNC_MKPATH=(--mkpath)
+fi
+
+rsync -az "${RSYNC_MKPATH[@]}" \
   -e "$RSYNC_SSH" \
   --exclude '__pycache__' \
   --exclude 'admin.db' \
   "$VEERCANVAS_ROOT/admin/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/admin/"
 
-rsync -az \
+rsync -az "${RSYNC_MKPATH[@]}" \
   -e "$RSYNC_SSH" \
   "$VEERCANVAS_ROOT/deploy/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/deploy/"
