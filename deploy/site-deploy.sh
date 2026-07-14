@@ -94,10 +94,17 @@ Restart=always
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
+  systemctl stop veerlabs-admin.service 2>/dev/null || true
+  systemctl disable veerlabs-admin.service 2>/dev/null || true
   systemctl enable "${SERVICE_NAME}.service"
   systemctl restart "${SERVICE_NAME}.service"
-  # Disable legacy unit if present
-  systemctl disable veerlabs-admin.service 2>/dev/null || true
+  sleep 2
+  if ! systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+    echo "error: ${SERVICE_NAME} failed to start" >&2
+    journalctl -u "${SERVICE_NAME}" -n 40 --no-pager >&2 || true
+    exit 1
+  fi
+  echo "Admin service ${SERVICE_NAME} is active on port 8080"
 }
 
 echo "[1/3] Nginx config for $DOMAIN"

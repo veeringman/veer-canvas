@@ -91,7 +91,7 @@ echo "Syncing VeerCanvas platform ..."
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_DIRS'
 set -euo pipefail
 WEB_ROOT="$1"
-sudo mkdir -p "$WEB_ROOT/veercanvas/admin" "$WEB_ROOT/veercanvas/deploy"
+sudo mkdir -p "$WEB_ROOT/veercanvas/admin" "$WEB_ROOT/veercanvas/deploy" "$WEB_ROOT/veercanvas/cli/scripts"
 sudo chown -R ubuntu:ubuntu "$WEB_ROOT/veercanvas"
 REMOTE_DIRS
 
@@ -107,8 +107,24 @@ rsync -az \
   "$VEERCANVAS_ROOT/deploy/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/deploy/"
 
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
-  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"
+rsync -az \
+  -e "$RSYNC_SSH" \
+  "$VEERCANVAS_ROOT/cli/" \
+  "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/cli/"
+
+if ! ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
+  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"; then
+  echo "error: remote site-deploy failed" >&2
+  exit 1
+fi
+
+if ! ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
+  "systemctl is-active --quiet veercanvas-admin || systemctl is-active --quiet veerlabs-admin"; then
+  echo "error: admin service is not running on the server" >&2
+  ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
+    "sudo journalctl -u veercanvas-admin -n 40 --no-pager || sudo journalctl -u veerlabs-admin -n 40 --no-pager" >&2 || true
+  exit 1
+fi
 
 echo "Verifying deployment ..."
 VERIFY_URL="https://${SITE_DOMAIN}/site-meta.json"
