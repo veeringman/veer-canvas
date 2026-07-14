@@ -30,11 +30,16 @@ print(cfg.get("webRoot", ""))
 print(cfg.get("githubOwner", ""))
 PY
   }
-  mapfile -t _cfg < <(read_site_config)
-  [[ -n "${_cfg[0]}" ]] && SITE_NAME="${_cfg[0]}"
-  [[ -n "${_cfg[1]}" ]] && SITE_DOMAIN="${_cfg[1]}"
-  [[ -n "${_cfg[2]}" && -z "${WEB_ROOT_SET:-}" ]] && WEB_ROOT="${_cfg[2]}"
-  [[ -n "${_cfg[3]}" ]] && GITHUB_OWNER="${_cfg[3]}"
+  _i=0
+  while IFS= read -r _line; do
+    case "$_i" in
+      0) [[ -n "$_line" ]] && SITE_NAME="$_line" ;;
+      1) [[ -n "$_line" ]] && SITE_DOMAIN="$_line" ;;
+      2) [[ -n "$_line" && -z "${WEB_ROOT_SET:-}" ]] && WEB_ROOT="$_line" ;;
+      3) [[ -n "$_line" ]] && GITHUB_OWNER="$_line" ;;
+    esac
+    _i=$((_i + 1))
+  done < <(read_site_config)
 fi
 
 IMPORT_SCRIPT="${VEERCANVAS_ROOT}/cli/scripts/import_github_projects_full.py"
