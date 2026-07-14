@@ -95,19 +95,14 @@ sudo mkdir -p "$WEB_ROOT/veercanvas/admin" "$WEB_ROOT/veercanvas/deploy"
 sudo chown -R ubuntu:ubuntu "$WEB_ROOT/veercanvas"
 REMOTE_DIRS
 
-RSYNC_MKPATH=()
-if rsync --help 2>&1 | grep -q mkpath; then
-  RSYNC_MKPATH=(--mkpath)
-fi
-
-rsync -az "${RSYNC_MKPATH[@]}" \
+rsync -az \
   -e "$RSYNC_SSH" \
   --exclude '__pycache__' \
   --exclude 'admin.db' \
   "$VEERCANVAS_ROOT/admin/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/admin/"
 
-rsync -az "${RSYNC_MKPATH[@]}" \
+rsync -az \
   -e "$RSYNC_SSH" \
   "$VEERCANVAS_ROOT/deploy/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/deploy/"
