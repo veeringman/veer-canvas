@@ -1,4 +1,7 @@
-# VeerCanvas
+
+<p align="center">
+  <img src="assets/veercanvas-logo.png" alt="Veer Forma Logo" width="230"/>
+</p>
 
 **VeerCanvas** is a content authoring and publishing platform for building rich web experiences — from static catalogs today to dynamic pages, server components, and APIs tomorrow.
 
