@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/veer-canvas-logo.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/veercanvas-logo.png">
     <img alt="VeerCanvas" src="assets/veercanvas-logo.png" width="420">
   </picture>
 </p>
