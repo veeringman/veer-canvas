@@ -1,13 +1,41 @@
 {
   "id": "veerlabs",
   "name": "VeerLabs Solutions",
-  "description": "Official VeerLabs project catalog — sample VeerCanvas site",
+  "description": "Official VeerLabs project catalog \u2014 sample VeerCanvas site",
   "domain": "veerlabs.solutions",
-  "aliases": ["www.veerlabs.solutions", "home.veerlabs.solutions"],
+  "aliases": [
+    "www.veerlabs.solutions",
+    "home.veerlabs.solutions"
+  ],
   "webRoot": "/var/www/veerlabs.solutions",
   "githubOwner": "veeringman",
   "admin": {
     "serviceName": "veercanvas-admin",
     "port": 8080
-  }
+  },
+  "platform": false,
+  "status": "published",
+  "siteType": "responsive",
+  "templateId": "catalog-static",
+  "templateVersion": "1.0.0",
+  "locales": [
+    "en"
+  ],
+  "defaultLocale": "en",
+  "repos": [],
+  "integrations": [
+    "contact",
+    "engagement",
+    "github-sync"
+  ],
+  "ops": false,
+  "createdAt": "2026-07-25T17:12:50Z",
+  "updatedAt": "2026-07-25T17:12:50Z",
+  "statusHistory": [
+    {
+      "status": "published",
+      "at": "2026-07-25T17:12:50Z",
+      "note": "Backfilled Site Studio fields"
+    }
+  ]
 }

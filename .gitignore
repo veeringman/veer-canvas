@@ -6,6 +6,7 @@ admin.db
 
 # Secrets and keys (keep local only)
 gh_token.txt
+gt_token.txt
 *.pem
 
 # Import cache

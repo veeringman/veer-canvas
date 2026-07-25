@@ -4,6 +4,7 @@
 #
 # Usage:
 #   sudo VEERCANVAS_SITE_ROOT=/var/www/veerlabs.solutions DOMAIN=veerlabs.solutions \
+#     ADMIN_PORT=8080 VEERCANVAS_SERVICE_NAME=veercanvas-admin \
 #     bash veercanvas/deploy/site-deploy.sh
 
 set -euo pipefail
@@ -18,25 +19,91 @@ CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
 ADMIN_DIR="${WEB_ROOT}/veercanvas/admin"
 ADMIN_APP="${ADMIN_DIR}/admin_app.py"
 SERVICE_NAME="${VEERCANVAS_SERVICE_NAME:-veercanvas-admin}"
+ADMIN_PORT="${ADMIN_PORT:-8080}"
+IS_PLATFORM="${VEERCANVAS_PLATFORM:-0}"
+IS_OPS="${VEERCANVAS_OPS:-0}"
+SITE_ID="${VEERCANVAS_SITE_ID:-}"
 
 if [[ ! -f "$WEB_ROOT/index.html" ]]; then
   echo "error: site index.html not found in WEB_ROOT=$WEB_ROOT" >&2
   exit 1
 fi
 
+rewrite_admin_port() {
+  local file="$1"
+  # Replace any 127.0.0.1:<port> proxy targets with the site's admin port.
+  sed -i -E "s|127\\.0\\.0\\.1:[0-9]+|127.0.0.1:${ADMIN_PORT}|g" "$file"
+}
+
 install_nginx_config() {
   local target="$NGINX_SITES_AVAILABLE/$DOMAIN"
   local example="${SCRIPT_DIR}/nginx/examples/${DOMAIN}.conf"
-  if [[ -f "$example" ]]; then
+  local has_cert=0
+  if [[ -f "${CERT_DIR}/fullchain.pem" && -f "${CERT_DIR}/privkey.pem" ]]; then
+    has_cert=1
+  fi
+
+  if [[ -f "$example" && "$has_cert" == "1" ]]; then
     echo "Using nginx example: $example"
     cp "$example" "$target"
+    rewrite_admin_port "$target"
     return
   fi
-  if [[ -f "${WEB_ROOT}/deploy/nginx_${DOMAIN}.conf" ]]; then
+
+  if [[ -f "${WEB_ROOT}/deploy/nginx_${DOMAIN}.conf" && "$has_cert" == "1" ]]; then
     cp "${WEB_ROOT}/deploy/nginx_${DOMAIN}.conf" "$target"
+    rewrite_admin_port "$target"
     return
   fi
-  echo "Writing fallback nginx config for $DOMAIN"
+
+  echo "Writing HTTP nginx config for $DOMAIN (port ${ADMIN_PORT}; cert present=${has_cert}; ops=${IS_OPS})"
+  if [[ "$IS_OPS" == "1" || "$IS_OPS" == "true" ]]; then
+    tee "$target" > /dev/null <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN www.$DOMAIN;
+    root $WEB_ROOT;
+    index index.html;
+    client_max_body_size 20m;
+
+    # Ops: observability dashboard at /; pure CMS at /admin/
+    location = /admin { return 301 /admin/; }
+    location ^~ /admin/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Prefix /admin;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+    }
+    location ^~ /static/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/static/;
+        proxy_set_header Host \$host;
+    }
+    location ^~ /site/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/site/;
+        proxy_set_header Host \$host;
+    }
+    location = /login { return 302 /admin/login?next=/; }
+    location = /logout { return 302 /admin/logout; }
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/api/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    location / { try_files \$uri \$uri/ /index.html; }
+    location = /projects.json { return 404; }
+}
+EOF
+    return
+  fi
+
   tee "$target" > /dev/null <<EOF
 server {
     listen 80;
@@ -44,14 +111,70 @@ server {
     server_name $DOMAIN www.$DOMAIN;
     root $WEB_ROOT;
     index index.html;
+    client_max_body_size 20m;
+
     location = /admin { return 301 /admin/; }
-    location ^~ /admin/ { proxy_pass http://127.0.0.1:8080/; proxy_set_header Host \$host; }
-    location ^~ /static/ { proxy_pass http://127.0.0.1:8080/static/; }
-    location ^~ /site/ { proxy_pass http://127.0.0.1:8080/site/; }
-    location ^~ /api/ { proxy_pass http://127.0.0.1:8080/api/; }
+    location ^~ /admin/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Prefix /admin;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+    }
+    location ^~ /static/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/static/;
+        proxy_set_header Host \$host;
+    }
+    location ^~ /site/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/site/;
+        proxy_set_header Host \$host;
+    }
+    location = /login { return 302 /admin/login; }
+    location = /logout { return 302 /admin/logout; }
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:${ADMIN_PORT}/api/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
     location / { try_files \$uri \$uri/ =404; }
+    location = /projects.json { return 404; }
 }
 EOF
+}
+
+ensure_tls() {
+  if [[ -f "${CERT_DIR}/fullchain.pem" && -f "${CERT_DIR}/privkey.pem" ]]; then
+    return
+  fi
+  if ! command -v certbot >/dev/null 2>&1; then
+    echo "Warning: certbot not installed; leaving $DOMAIN on HTTP."
+    return
+  fi
+  echo "Requesting Let's Encrypt certificate for $DOMAIN ..."
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+    --register-unsafely-without-email --redirect || \
+    certbot certonly --webroot -w "$WEB_ROOT" -d "$DOMAIN" \
+      --non-interactive --agree-tos --register-unsafely-without-email || true
+
+  # Optional www alias when DNS exists.
+  if getent hosts "www.$DOMAIN" >/dev/null 2>&1; then
+    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos \
+      --register-unsafely-without-email --expand --redirect || true
+  fi
+
+  if [[ -f "${CERT_DIR}/fullchain.pem" ]]; then
+    local example="${SCRIPT_DIR}/nginx/examples/${DOMAIN}.conf"
+    if [[ -f "$example" ]]; then
+      cp "$example" "$NGINX_SITES_AVAILABLE/$DOMAIN"
+      rewrite_admin_port "$NGINX_SITES_AVAILABLE/$DOMAIN"
+    fi
+  fi
 }
 
 setup_admin_service() {
@@ -74,10 +197,19 @@ setup_admin_service() {
   sudo -u ubuntu "$WEB_ROOT/venv/bin/pip" install --upgrade pip >/dev/null
   sudo -u ubuntu "$WEB_ROOT/venv/bin/pip" install -r "${ADMIN_DIR}/requirements.txt"
 
-  echo "Installing systemd service ${SERVICE_NAME} ..."
+  local platform_env="0"
+  local ops_env="0"
+  if [[ "$IS_PLATFORM" == "1" || "$IS_PLATFORM" == "true" ]]; then
+    platform_env="1"
+  fi
+  if [[ "$IS_OPS" == "1" || "$IS_OPS" == "true" ]]; then
+    ops_env="1"
+  fi
+
+  echo "Installing systemd service ${SERVICE_NAME} (port ${ADMIN_PORT}, platform=${platform_env}, ops=${ops_env}) ..."
   tee "/etc/systemd/system/${SERVICE_NAME}.service" > /dev/null <<EOF
 [Unit]
-Description=VeerCanvas Admin
+Description=VeerCanvas Admin (${DOMAIN})
 After=network.target
 
 [Service]
@@ -86,6 +218,12 @@ WorkingDirectory=$WEB_ROOT
 Environment=VEERCANVAS_ROOT=${WEB_ROOT}/veercanvas
 Environment=VEERCANVAS_SITE_ROOT=$WEB_ROOT
 Environment=VEER_SITE_ROOT=$WEB_ROOT
+Environment=VEERCANVAS_SITE_ID=${SITE_ID}
+Environment=VEERCANVAS_PLATFORM=${platform_env}
+Environment=VEERCANVAS_OPS=${ops_env}
+Environment=VEERCANVAS_ADMIN_PREFIX=/admin
+Environment=PORT=${ADMIN_PORT}
+Environment=VEERCANVAS_ADMIN_PORT=${ADMIN_PORT}
 Environment=PATH=$WEB_ROOT/venv/bin:/usr/bin:/bin
 ExecStart=$WEB_ROOT/venv/bin/python $ADMIN_APP
 Restart=always
@@ -94,8 +232,10 @@ Restart=always
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
-  systemctl stop veerlabs-admin.service 2>/dev/null || true
-  systemctl disable veerlabs-admin.service 2>/dev/null || true
+  if [[ "$SERVICE_NAME" != "veerlabs-admin" ]]; then
+    systemctl stop veerlabs-admin.service 2>/dev/null || true
+    systemctl disable veerlabs-admin.service 2>/dev/null || true
+  fi
   systemctl enable "${SERVICE_NAME}.service"
   systemctl restart "${SERVICE_NAME}.service"
   sleep 2
@@ -104,16 +244,20 @@ EOF
     journalctl -u "${SERVICE_NAME}" -n 40 --no-pager >&2 || true
     exit 1
   fi
-  echo "Admin service ${SERVICE_NAME} is active on port 8080"
+  echo "Admin service ${SERVICE_NAME} is active on port ${ADMIN_PORT}"
 }
 
-echo "[1/3] Nginx config for $DOMAIN"
+echo "[1/4] Nginx config for $DOMAIN"
 install_nginx_config
-echo "[2/3] VeerCanvas admin service"
+echo "[2/4] VeerCanvas admin service"
 setup_admin_service
-echo "[3/3] Reload nginx"
+echo "[3/4] Enable site + TLS"
 ln -sf "$NGINX_SITES_AVAILABLE/$DOMAIN" "$NGINX_SITES_ENABLED/$DOMAIN"
 nginx -t
 systemctl reload nginx
-echo "Site: https://$DOMAIN/"
+ensure_tls
+echo "[4/4] Reload nginx"
+nginx -t
+systemctl reload nginx
+echo "Site: https://$DOMAIN/ (or http if cert pending)"
 echo "Admin: https://$DOMAIN/admin/"

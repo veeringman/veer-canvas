@@ -1,0 +1,17 @@
+{
+  "siteName": "VeerCanvas",
+  "brandName": "VeerCanvas",
+  "brandTag": "Platform",
+  "eyebrow": "Content platform by VeerLabs",
+  "title": "VeerCanvas",
+  "subtitle": "Author, publish, and manage VeerLabs websites. Create new sites here, then manage each site\u2019s content at its own /admin.",
+  "chipPrimary": "Platform control plane",
+  "chipSecondary": "Powered by VeerLabs",
+  "platform": "VeerCanvas",
+  "favicon": "assets/favicon.svg",
+  "brandMark": "assets/site/brand-mark.png",
+  "version": "v1.0.0",
+  "lastUpdated": "2026-07-25T16:49:11Z",
+  "platformSiteId": "canvas",
+  "platformMark": "assets/site/platform-mark.png"
+}

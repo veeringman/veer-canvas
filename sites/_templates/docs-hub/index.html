@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeerLabs Solutions</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20260724engage1">
+  <script src="site-utils.js?v=20260724engage1" defer></script>
+  <script src="content-renderer.js?v=20260724engage1" defer></script>
+  <script src="site-meta.js?v=20260724engage1" defer></script>
+  <script src="engagement.js?v=20260726visits1" defer></script>
+  <script src="pagination.js?v=20260724engage1" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-topbar">
+      <a class="brand-lockup" href="index.html" aria-label="VeerLabs Solutions home">
+        <img class="brand-mark" src="assets/veer-canvas-icon.svg" alt="" width="40" height="40">
+        <div>
+          <span class="brand-name">VeerLabs</span>
+          <span class="brand-tag">Solutions</span>
+        </div>
+      </a>
+      <div class="topbar-meta">
+        <span class="meta-chip">Project catalog</span>
+        <span class="meta-chip">Powered by VeerCanvas</span>
+      </div>
+    </header>
+
+    <main class="dashboard-container">
+      <header class="dashboard-hero">
+        <p class="eyebrow">Veeringman studio catalog</p>
+        <h1>VeerLabs Solutions</h1>
+        <p class="page-subtitle">Explore secure edge fabric, browsers, operating systems, and networking stacks. Each tile opens a documentation-rich project page.</p>
+      </header>
+
+      <div class="cards"></div>
+      <div class="pagination-bar" role="navigation" aria-label="Project pages"></div>
+      <footer id="site-footer" class="site-footer"></footer>
+    </main>
+  </div>
+
+  <template id="project-card-template">
+    <article class="project-card">
+      <div class="project-logo-well" aria-hidden="false">
+        <img class="project-logo" src="" alt="">
+      </div>
+      <div class="project-copy">
+        <div class="project-title"></div>
+        <div class="project-subtitle"></div>
+        <p class="project-summary"></p>
+        <div class="project-tags"></div>
+        <div class="project-card-footer">
+          <a class="learn-more-btn" href="#" title="Learn more">
+            Learn more
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+    </article>
+  </template>
+</body>
+</html>

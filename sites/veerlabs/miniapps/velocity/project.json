@@ -2,8 +2,8 @@
   "slug": "velocity",
   "name": "velocity",
   "subtitle": "Python",
-  "summary": "<p align=\"center\"> <img src=\"logo/velocity-logo.png\" alt=\"VELOCITY logo\" width=\"920\"/> </p>",
-  "logo": "assets/default-project-logo.svg",
+  "summary": "AI-native, modular, event-driven quantitative trading infrastructure \u2014 focused initially on Indian Equity & Derivatives and Cryptocurrency markets, architected to scale into a universal trading operating system.",
+  "logo": "miniapps/velocity/assets/logo.png",
   "logoAlt": "velocity logo",
   "status": [
     "Draft"
@@ -12,36 +12,43 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "<p align=\"center\"> <img src=\"logo/velocity-logo.png\" alt=\"VELOCITY logo\" width=\"920\"/> </p>"
-    },
-    {
-      "title": "\u26a1 VELOCITY",
-      "body": "<p align=\"center\">\n    <img src=\"logo/velocity-logo.png\" alt=\"VELOCITY logo\" width=\"920\"/>\n</p>\n\n> **AI-native, modular, event-driven quantitative trading infrastructure** \u2014 focused initially on Indian Equity & Derivatives and Cryptocurrency markets, architected to scale into a universal trading operating system.\n\n---"
+      "body": "AI-native, modular, event-driven quantitative trading infrastructure \u2014 focused initially on Indian Equity & Derivatives and Cryptocurrency markets, architected to scale into a universal trading operating system.",
+      "format": "markdown"
     },
     {
       "title": "Vision",
-      "body": "Velocity is **not** a trading bot. It is a **scalable AI-powered quant trading infrastructure platform** built around:\n\n- **Adaptability** \u2014 broker/exchange/strategy agnostic from day one\n- **Reliability** \u2014 institutional-grade risk controls and resilience\n- **Extensibility** \u2014 every component is an interchangeable plugin\n- **Intelligent Execution** \u2014 AI augments, never blindly replaces, the quant engine\n- **Production-grade Engineering** \u2014 observable, testable, cloud-native\n\n---"
+      "body": "Velocity is **not** a trading bot. It is a **scalable AI-powered quant trading infrastructure platform** built around:\n\n- **Adaptability** \u2014 broker/exchange/strategy agnostic from day one\n- **Reliability** \u2014 institutional-grade risk controls and resilience\n- **Extensibility** \u2014 every component is an interchangeable plugin\n- **Intelligent Execution** \u2014 AI augments, never blindly replaces, the quant engine\n- **Production-grade Engineering** \u2014 observable, testable, cloud-native\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Architecture Overview",
-      "body": "```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Market Data Layer  \u2502  \u2190 real-time feeds, order book, historical replay\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Feature Pipeline   \u2502  \u2190 momentum, volatility, VWAP, sentiment, regime\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Signal Engine      \u2502  \u2190 plug-and-play strategies (Indian + Crypto)\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Risk Engine        \u2502  \u2190 drawdown, sizing, leverage, circuit breakers\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Execution Engine   \u2502  \u2190 broker-agnostic, async, retry-safe\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Monitoring & AI    \u2502  \u2190 Grafana, Prometheus, LLM insights\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---"
+      "body": "```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Market Data Layer  \u2502  \u2190 real-time feeds, order book, historical replay\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Feature Pipeline   \u2502  \u2190 momentum, volatility, VWAP, sentiment, regime\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Signal Engine      \u2502  \u2190 plug-and-play strategies (Indian + Crypto)\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Risk Engine        \u2502  \u2190 drawdown, sizing, leverage, circuit breakers\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Execution Engine   \u2502  \u2190 broker-agnostic, async, retry-safe\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2193\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Monitoring & AI    \u2502  \u2190 Grafana, Prometheus, LLM insights\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Primary Markets",
-      "body": "| Market | Instruments | Brokers / Exchanges |\n|---|---|---|\n| Indian Equities & Derivatives | NSE equities, options, futures, indices | Zerodha Kite, Upstox, Angel One, Fyers |\n| Cryptocurrency | Spot, perpetual futures, arbitrage | Binance, Bybit, Coinbase, OKX |\n\n---"
+      "body": "| Market | Instruments | Brokers / Exchanges |\n|---|---|---|\n| Indian Equities & Derivatives | NSE equities, options, futures, indices | Zerodha Kite, Upstox, Angel One, Fyers |\n| Cryptocurrency | Spot, perpetual futures, arbitrage | Binance, Bybit, Coinbase, OKX |\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Documentation",
-      "body": "| Document | Purpose |\n|---|---|\n| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component deep-dive, interfaces, data contracts |\n| [docs/TECH_STACK.md](docs/TECH_STACK.md) | Technology choices and rationale |\n| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |\n| [docs/TODO.md](docs/TODO.md) | Granular per-component task tracker |\n| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Engineering principles and dev guidelines |\n| [docs/ORDER_LIFECYCLE_SEQUENCE.md](docs/ORDER_LIFECYCLE_SEQUENCE.md) | End-to-end order lifecycle sequence diagram |\n\n---"
+      "body": "| Document | Purpose |\n|---|---|\n| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component deep-dive, interfaces, data contracts |\n| [docs/TECH_STACK.md](docs/TECH_STACK.md) | Technology choices and rationale |\n| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |\n| [docs/TODO.md](docs/TODO.md) | Granular per-component task tracker |\n| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Engineering principles and dev guidelines |\n| [docs/ORDER_LIFECYCLE_SEQUENCE.md](docs/ORDER_LIFECYCLE_SEQUENCE.md) | End-to-end order lifecycle sequence diagram |\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/velocity"
+      "body": "https://github.com/veeringman/velocity",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 60,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/velocity"
+  "repoUrl": "https://github.com/veeringman/velocity",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 50
 }

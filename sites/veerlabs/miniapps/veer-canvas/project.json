@@ -1,0 +1,59 @@
+{
+  "slug": "veer-canvas",
+  "name": "VeerCanvas",
+  "subtitle": "",
+  "summary": "**VeerCanvas** is a content authoring and publishing platform for building rich web experiences \u2014 from static catalogs today to dynamic pages, server components, and APIs tomorrow.",
+  "logo": "miniapps/veer-canvas/assets/logo.png",
+  "logoAlt": "VeerCanvas logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "**VeerCanvas** is a content authoring and publishing platform for building rich web experiences \u2014 from static catalogs today to dynamic pages, server components, and APIs tomorrow.",
+      "format": "markdown"
+    },
+    {
+      "title": "VeerCanvas",
+      "body": "**VeerCanvas** is a content authoring and publishing platform for building rich web experiences \u2014 from static catalogs today to dynamic pages, server components, and APIs tomorrow.\n\nThe **VeerLabs Solutions** site (`sites/veerlabs/`) ships as the official reference implementation.",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository layout",
+      "body": "```\n\u251c\u2500\u2500 admin/           # Flask CMS (authoring, publish, import)\n\u251c\u2500\u2500 cli/             # Import, catalog sync, publish tooling\n\u251c\u2500\u2500 core/            # Shared platform libraries (expanding)\n\u251c\u2500\u2500 deploy/          # Remote deploy, nginx, systemd helpers\n\u251c\u2500\u2500 docs/            # Platform documentation\n\u2514\u2500\u2500 sites/\n    \u251c\u2500\u2500 veerlabs/    # Sample: VeerLabs project catalog\n    \u2514\u2500\u2500 _template/   # Starter site scaffold\n```",
+      "format": "markdown"
+    },
+    {
+      "title": "Quick start (VeerLabs sample site)",
+      "body": "```bash",
+      "format": "markdown"
+    },
+    {
+      "title": "Install admin dependencies",
+      "body": "python3 -m venv .venv\nsource .venv/bin/activate\npip install -r admin/requirements.txt",
+      "format": "markdown"
+    },
+    {
+      "title": "Run CMS locally against the VeerLabs site",
+      "body": "export VEERCANVAS_SITE_ID=veerlabs\nexport VEERCANVAS_SITE_ROOT=\"$(pwd)/sites/veerlabs\"\npython admin/admin_app.py",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veer-canvas",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 130,
+  "private": false,
+  "repoUrl": "https://github.com/veeringman/veer-canvas",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 60
+}

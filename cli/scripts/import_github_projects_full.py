@@ -20,6 +20,8 @@ DEFAULT_LOGO_PATH = "assets/default-project-logo.svg"
 ADMIN_PRESERVED_FIELDS = (
     "enabled",
     "logoSize",
+    "logoWidth",
+    "logoHeight",
     "sortOrder",
     "name",
     "subtitle",
@@ -32,6 +34,7 @@ ADMIN_PRESERVED_FIELDS = (
     "tags",
     "status",
     "details",
+    "reimport",
 )
 EXCLUSIONS_FILENAME = "catalog-exclusions.json"
 PUBLIC_CATALOG_FILENAME = "projects-public.json"
@@ -403,13 +406,40 @@ def load_catalog_exclusions(site_root: pathlib.Path | None) -> set[str]:
     return {slug for slug in (data.get("deletedSlugs") or []) if isinstance(slug, str) and slug.strip()}
 
 
-def preserve_admin_fields(existing: dict | None, incoming: dict) -> dict:
+def wants_reimport(project: dict | None) -> bool:
+    if not project:
+        return False
+    value = project.get("reimport", False)
+    if value is True or value == 1:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    return False
+
+
+def clear_reimport_flag(project: dict) -> dict:
+    cleaned = dict(project)
+    cleaned["reimport"] = False
+    return cleaned
+
+
+def is_already_imported(slug: str, site_root: pathlib.Path | None, catalog_index: dict[str, dict]) -> bool:
+    if slug in catalog_index:
+        return True
+    if not site_root:
+        return False
+    return (site_root / "miniapps" / slug / "project.json").exists()
+
+
+def preserve_admin_fields(existing: dict | None, incoming: dict, *, clear_reimport: bool = False) -> dict:
     if not existing:
         return incoming
     merged = dict(incoming)
     for key in ADMIN_PRESERVED_FIELDS:
         if key in existing:
             merged[key] = existing[key]
+    if clear_reimport:
+        merged["reimport"] = False
     return merged
 
 
@@ -427,12 +457,20 @@ def load_existing_project(slug: str, site_root: pathlib.Path | None, catalog_ind
         return None
 
 
+def is_publicly_visible(project: dict, excluded: set[str] | None = None) -> bool:
+    slug = project.get("slug")
+    if excluded and isinstance(slug, str) and slug in excluded:
+        return False
+    return is_enabled(project)
+
+
 def write_public_catalog(site_root: pathlib.Path, projects_path: pathlib.Path | None = None) -> int:
     projects_file = projects_path or (site_root / "projects.json")
     if not projects_file.exists():
         return 0
     projects = json.loads(projects_file.read_text(encoding="utf-8"))
-    visible = [project for project in projects if is_enabled(project)]
+    excluded = load_catalog_exclusions(site_root)
+    visible = [project for project in projects if is_publicly_visible(project, excluded)]
     visible.sort(key=lambda item: (item.get("sortOrder", 9999), item.get("name", "")))
     write_json(site_root / PUBLIC_CATALOG_FILENAME, visible)
     return len(visible)
@@ -442,11 +480,16 @@ def sync_catalog_from_miniapps(site_root: pathlib.Path, projects_path: pathlib.P
     existing = []
     if projects_path.exists():
         existing = json.loads(projects_path.read_text(encoding="utf-8"))
-    index = {entry["slug"]: entry for entry in existing}
+    index = {entry["slug"]: entry for entry in existing if entry.get("slug")}
     excluded = load_catalog_exclusions(site_root)
+    # Drop deleted/excluded catalog entries and leftover miniapp folders.
+    for slug in list(index.keys()):
+        if slug in excluded:
+            del index[slug]
     miniapps_dir = site_root / "miniapps"
     if not miniapps_dir.exists():
-        merged = [entry for slug, entry in index.items() if slug not in excluded]
+        merged = list(index.values())
+        merged.sort(key=lambda item: (item.get("sortOrder", 9999), item.get("name", "")))
         write_json(projects_path, merged)
         write_public_catalog(site_root, projects_path)
         return merged
@@ -467,10 +510,22 @@ def sync_catalog_from_miniapps(site_root: pathlib.Path, projects_path: pathlib.P
             preserved = {k: catalog_entry[k] for k in ADMIN_PRESERVED_FIELDS if k in catalog_entry}
             merged_entry = enrich_project_defaults({**package_data, **preserved})
             merged_entry.update(preserved)
+            # Catalog admin state wins for visibility.
+            if "enabled" in catalog_entry:
+                merged_entry["enabled"] = catalog_entry["enabled"]
             index[slug] = merged_entry
         else:
             index[slug] = enrich_project_defaults(package_data, sort_index=len(index))
-    merged = [entry for slug, entry in index.items() if slug not in excluded]
+    # Remove catalog entries whose miniapp package no longer exists (unless still marked somehow).
+    live_slugs = {
+        package_dir.name
+        for package_dir in miniapps_dir.iterdir()
+        if package_dir.is_dir() and (package_dir / "project.json").exists() and package_dir.name not in excluded
+    }
+    for slug in list(index.keys()):
+        if slug not in live_slugs:
+            del index[slug]
+    merged = list(index.values())
     merged.sort(key=lambda item: (item.get("sortOrder", 9999), item.get("name", "")))
     write_json(projects_path, merged)
     write_public_catalog(site_root, projects_path)
@@ -564,7 +619,7 @@ def make_package(
         "tags": repo.get("topics", []),
         "details": details,
     }, repo=repo)
-    project_json = preserve_admin_fields(existing_project, project_json)
+    project_json = preserve_admin_fields(existing_project, project_json, clear_reimport=True)
     write_json(package_dir / "project.json", project_json)
 
     source = {
@@ -600,6 +655,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sync-only", action="store_true", help="Only sync projects.json from miniapps/ without fetching GitHub")
     parser.add_argument("--write-public-catalog", action="store_true", help="Write projects-public.json from enabled projects in projects.json")
     parser.add_argument("--fetch-repos", action="store_true", help="Fetch repositories from GitHub (required for network import)")
+    parser.add_argument(
+        "--reimport-all",
+        action="store_true",
+        help="Force re-import of already imported projects (overwrites package content; admin fields still preserved)",
+    )
+    parser.add_argument(
+        "--reimport-slugs",
+        default="",
+        help="Comma-separated slugs to force re-import (in addition to projects with reimport:true)",
+    )
+    parser.add_argument(
+        "--only-slugs",
+        default="",
+        help="Comma-separated slugs to process (new or reimport); ignore other repos",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without writing packages")
     return parser.parse_args()
 
@@ -648,29 +718,58 @@ def main() -> int:
 
     catalog_index: dict[str, dict] = {}
     if projects_path and projects_path.exists():
-        catalog_index = {entry["slug"]: entry for entry in json.loads(projects_path.read_text(encoding="utf-8"))}
+        catalog_index = {entry["slug"]: entry for entry in json.loads(projects_path.read_text(encoding="utf-8")) if entry.get("slug")}
     excluded = load_catalog_exclusions(site_root)
+    force_slugs = {slug.strip() for slug in args.reimport_slugs.split(",") if slug.strip()}
+    only_slugs = {slugify(slug.strip()) for slug in args.only_slugs.split(",") if slug.strip()}
+    if only_slugs:
+        repos = [repo for repo in repos if slugify(repo.get("name", "")) in only_slugs]
+        print(f"Filtered to {len(repos)} repositories matching --only-slugs")
 
     print(f"Found {len(repos)} repositories for {args.owner}")
     packages = []
+    skipped = 0
+    imported = 0
     for repo in repos:
         slug = slugify(repo["name"])
         if slug in excluded:
             print(f"Skipping {repo['full_name']} (admin deleted)")
-            continue
-        print(f"Processing {repo['full_name']}...")
-        if args.dry_run:
-            packages.append({"slug": slug, "name": repo.get("name"), "repo_url": repo.get("html_url")})
+            skipped += 1
             continue
         existing_project = load_existing_project(slug, site_root, catalog_index)
+        already = is_already_imported(slug, site_root, catalog_index)
+        force = (
+            args.reimport_all
+            or slug in force_slugs
+            or wants_reimport(existing_project)
+        )
+        if already and not force:
+            print(f"Skipping {repo['full_name']} (already imported; mark reimport in admin to refresh)")
+            skipped += 1
+            continue
+        reason = "new" if not already else "reimport"
+        print(f"Processing {repo['full_name']} ({reason})...")
+        if args.dry_run:
+            packages.append({"slug": slug, "name": repo.get("name"), "repo_url": repo.get("html_url"), "action": reason})
+            imported += 1
+            continue
         result = make_package(repo, output_dir, site_root, token, existing_project=existing_project)
+        result["action"] = reason
         packages.append(result)
+        # Keep in-memory index consistent for later catalog merges.
+        try:
+            package_data = json.loads(pathlib.Path(result["package_path"]).joinpath("project.json").read_text(encoding="utf-8"))
+            catalog_index[slug] = package_data
+        except (OSError, json.JSONDecodeError):
+            pass
+        imported += 1
         print(f"  -> package={result['package_path']} logo_found={result['logo_found']}")
 
     summary_path = pathlib.Path(args.output_dir) / "import-summary.json"
     if not args.dry_run:
         write_json(summary_path, packages)
         print(f"Import summary written to {summary_path}")
+    print(f"Import complete: imported={imported} skipped={skipped}")
 
     if args.projects_json and not args.dry_run:
         projects_path = pathlib.Path(args.projects_json)

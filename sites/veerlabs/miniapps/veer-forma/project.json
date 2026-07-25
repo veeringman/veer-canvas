@@ -1,0 +1,64 @@
+{
+  "slug": "veer-forma",
+  "name": "Veer Forma",
+  "subtitle": "AI-native knowledge engineering platform for creating, designing, reasoning about, and com...",
+  "summary": "",
+  "logo": "miniapps/veer-forma/assets/logo.png",
+  "logoAlt": "Veer Forma logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Veer Forma is an AI-native platform that transforms ideas into professional, editable knowledge artifacts.\n\nUnlike traditional AI tools that generate static text or images, Forma understands the semantic structure of documents, presentations, diagrams, charts, and visual systems, enabling AI to create artifacts that remain fully editable in their native applications.",
+      "format": "markdown"
+    },
+    {
+      "title": "Vision",
+      "body": "Enable anyone to transform ideas into professional-quality, editable knowledge artifacts through AI.",
+      "format": "markdown"
+    },
+    {
+      "title": "Mission",
+      "body": "Build the world's most intelligent platform for engineering knowledge.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "\ud83d\udcc4 AI Document Engineering",
+      "body": "Generate professional:\n\n* Word documents\n* Technical specifications\n* Whitepapers\n* Research papers\n* Reports\n* Proposals\n* Manuals\n* Training material\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "\ud83d\udcca AI Presentation Engineering",
+      "body": "Create enterprise-grade PowerPoint presentations with:\n\n* Intelligent layouts\n* Professional typography\n* Speaker notes\n* Animations\n* Native PowerPoint objects\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "\ud83c\udfd7 AI Diagram Engineering",
+      "body": "Generate editable diagrams including:\n\n* Flowcharts\n* UML\n* BPMN\n* ER Models\n* C4 Architecture\n* Cloud Architecture\n* Kubernetes\n* Network Topology\n* Sequence Diagrams\n* Organizational Charts\n* Mind Maps\n* Timelines\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Architecture (High Level)",
+      "body": "```text\nPrompt\n      \u2502\n      \u25bc\n AI Planner\n      \u2502\n      \u25bc\nSemantic Knowledge Model\n      \u2502\n \u250c\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502    \u2502           \u2502               \u2502\n \u25bc    \u25bc           \u25bc               \u25bc\nDocs Slides   Diagrams        Charts\n \u2502    \u2502           \u2502               \u2502\n \u2514\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n              \u2502\n              \u25bc\n        Compiler Engine\n              \u2502\n              \u25bc\nEditable Office Documents\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veer-forma",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 110,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veer-forma",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 48
+}

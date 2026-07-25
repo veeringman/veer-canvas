@@ -1,0 +1,12 @@
+{
+  "slug": "veer-artha",
+  "repo": "https://github.com/veeringman/veer-artha",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://img.shields.io/badge/license-MIT-blue.svg",
+    "https://raw.githubusercontent.com/veeringman/veer-artha/main/assets/veerartha-logo.png?token=AHGYFSLLSIUZU5I64IU545DKMLNKBAA"
+  ],
+  "readme_logo_url": "https://img.shields.io/badge/license-MIT-blue.svg"
+}

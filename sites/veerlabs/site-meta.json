@@ -1,7 +1,17 @@
 {
-  "version": "v1.6.0",
-  "lastUpdated": "2026-07-14T06:05:00Z",
   "siteName": "VeerLabs Solutions",
+  "brandName": "VeerLabs",
+  "brandTag": "Solutions",
+  "eyebrow": "Veeringman studio catalog",
+  "title": "VeerLabs Solutions",
+  "subtitle": "Explore secure edge fabric, browsers, operating systems, and networking stacks. Each tile opens a documentation-rich project page.",
+  "chipPrimary": "VeerLabs catalog",
+  "chipSecondary": "by  veering man",
   "platform": "VeerCanvas",
-  "platformSiteId": "veerlabs"
+  "favicon": "assets/favicon.svg",
+  "brandMark": "assets/site/brand-mark.png",
+  "version": "v1.11.0",
+  "lastUpdated": "2026-07-24T18:39:36Z",
+  "platformSiteId": "veerlabs",
+  "platformMark": "assets/site/platform-mark.png"
 }

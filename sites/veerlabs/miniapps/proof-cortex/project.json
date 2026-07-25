@@ -39,9 +39,9 @@
       "body": "https://github.com/veeringman/proof-cortex"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 440,
   "private": true,
   "repoUrl": "https://github.com/veeringman/proof-cortex"
 }

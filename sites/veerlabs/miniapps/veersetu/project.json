@@ -2,46 +2,55 @@
   "slug": "veersetu",
   "name": "veersetu",
   "subtitle": "Rust",
-  "summary": "<p align=\"center\"> <img src=\"assets/logo/veersetu-logo.svg\" alt=\"VeerSetu\" width=\"640\"/> </p>",
+  "summary": "Zero-trust edge fabric for secure remote access, service publishing, and private networking.",
   "logo": "miniapps/veersetu/assets/veersetu_logo.png",
   "logoAlt": "veersetu logo",
-  "status": [
-    "Draft"
-  ],
+  "status": [],
   "tags": [],
   "details": [
     {
       "title": "Project Overview",
-      "body": "<p align=\"center\"> <img src=\"assets/logo/veersetu-logo.svg\" alt=\"VeerSetu\" width=\"640\"/> </p>"
+      "body": "VeerSetu is a programmable zero-trust edge fabric written in Rust. It securely connects humans, devices, services, and AI agents across any network \u2014 without exposing ports, without trusting the LAN, and without locking you into a SaaS.\n\nIt unifies what is today a sprawl of disjoint tools \u2014 VPN, reverse tunnel, mesh, ZTNA gateway, identity proxy, service publishing, MCP gateway \u2014 into a single identity-aware, post-quantum, programmable fabric.",
+      "format": "markdown"
     },
     {
       "title": "What makes it different",
-      "body": "| Pillar | What you get |\n|---|---|\n| **Post-quantum identity** | PQ-hybrid handshake (X25519 + ML-KEM), capability tokens (Biscuit), DIDs / Verifiable Credentials, continuous hardware attestation. |\n| **Programmable edge** | Ship signed WASM modules that run *at your own gateway* \u2014 custom auth, transforms, edge functions. Cloudflare Workers semantics on your hardware. |\n| **AI-native** | `agent:` is a first-class principal. MCP gateway with per-tool capability scoping. Inference router across local \u2192 relay GPU \u2192 cloud. |\n| **Local-first** | CRDT-based control plane. Agents keep working when the cloud doesn't. Federated deployments peer with each other. |\n| **Verifiable trust** | Sigstore-style transparency log. SLSA L3+ reproducible builds. Differential-privacy telemetry. |"
+      "body": "| Pillar | What you get |\n|---|---|\n| **Post-quantum identity** | PQ-hybrid handshake (X25519 + ML-KEM), capability tokens (Biscuit), DIDs / Verifiable Credentials, continuous hardware attestation. |\n| **Programmable edge** | Ship signed WASM modules that run *at your own gateway* \u2014 custom auth, transforms, edge functions. Cloudflare Workers semantics on your hardware. |\n| **AI-native** | `agent:` is a first-class principal. MCP gateway with per-tool capability scoping. Inference router across local \u2192 relay GPU \u2192 cloud. |\n| **Local-first** | CRDT-based control plane. Agents keep working when the cloud doesn't. Federated deployments peer with each other. |\n| **Verifiable trust** | Sigstore-style transparency log. SLSA L3+ reproducible builds. Differential-privacy telemetry. |",
+      "format": "markdown"
     },
     {
       "title": "Status",
-      "body": "Pre-alpha. Vision and architecture are stabilising; engineering scaffolding is underway.\n\nCurrent infrastructure milestones:\n\n- control-plane overlay lease and route advertisement APIs are live;\n- native host route backends are available for Linux (`linux-netlink`), Windows (`windows-route`), and macOS (`macos-route`, elevated mode);\n- integration test scaffolds exist for Linux/Windows/macOS route backends (platform and privilege gated);\n- cross-platform host bring-up SOPs are documented for Linux, Windows, macOS, and Raspberry Pi.\n\n- \ud83d\udcd6 **Vision:** [docs/VISION.md](docs/VISION.md)\n- \ud83d\uddfa\ufe0f **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)\n- \ud83e\udded **Control API:** [docs/CONTROL_API.md](docs/CONTROL_API.md)\n- \ud83d\udee0\ufe0f **Host Build Manual (Linux/Windows/macOS/Pi):** [docs/LINUX_WINDOWS_HOST_BUILD_MANUAL.md](docs/LINUX_WINDOWS_HOST_BUILD_MANUAL.md)\n- \ud83d\udcd3 **Public Host SSH Runbook:** [docs/PUBLIC_HOST_SSH_RUNBOOK.md](docs/PUBLIC_HOST_SSH_RUNBOOK.md)\n- \u2705 **TODO / Progress:** [TODO.md](TODO.md)\n- \ud83c\udfa8 **Brand:** [assets/logo/README.md](assets/logo/README.md)"
+      "body": "Pre-alpha. Vision and architecture are stabilising; engineering scaffolding is underway.\n\nCurrent infrastructure milestones:\n\n- control-plane overlay lease and route advertisement APIs are live;\n- native host route backends are available for Linux (`linux-netlink`), Windows (`windows-route`), and macOS (`macos-route`, elevated mode);\n- integration test scaffolds exist for Linux/Windows/macOS route backends (platform and privilege gated);\n- cross-platform host bring-up SOPs are documented for Linux, Windows, macOS, and Raspberry Pi.\n\n- \ud83d\udcd6 **Vision:** [docs/VISION.md](docs/VISION.md)\n- \ud83d\uddfa\ufe0f **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)\n- \ud83e\udded **Control API:** [docs/CONTROL_API.md](docs/CONTROL_API.md)\n- \ud83d\udee0\ufe0f **Host Build Manual (Linux/Windows/macOS/Pi):** [docs/LINUX_WINDOWS_HOST_BUILD_MANUAL.md](docs/LINUX_WINDOWS_HOST_BUILD_MANUAL.md)\n- \ud83d\udcd3 **Public Host SSH Runbook:** [docs/PUBLIC_HOST_SSH_RUNBOOK.md](docs/PUBLIC_HOST_SSH_RUNBOOK.md)\n- \u2705 **TODO / Progress:** [TODO.md](TODO.md)\n- \ud83c\udfa8 **Brand:** [assets/logo/README.md](assets/logo/README.md)",
+      "format": "markdown"
     },
     {
       "title": "Architecture at a glance",
-      "body": "```\nControl Plane (CRDT, PQ-CA, Policy, Transparency Log, AI Router)\n        \u2502\n        \u251c\u2500\u2500 Edge Gateway Agent  \u2500\u2500 WASM runtime \u00b7 MCP gateway \u00b7 service discovery\n        \u251c\u2500\u2500 Smart Relay Network \u2500\u2500 eBPF \u00b7 MP-QUIC + FEC \u00b7 stream multiplexing\n        \u2514\u2500\u2500 Client Nodes        \u2500\u2500 capability wallet \u00b7 attestation \u00b7 DID\n                                    \u2502\n                  PQ-hybrid QUIC over the Veer Fabric Protocol\n```"
+      "body": "```\nControl Plane (CRDT, PQ-CA, Policy, Transparency Log, AI Router)\n        \u2502\n        \u251c\u2500\u2500 Edge Gateway Agent  \u2500\u2500 WASM runtime \u00b7 MCP gateway \u00b7 service discovery\n        \u251c\u2500\u2500 Smart Relay Network \u2500\u2500 eBPF \u00b7 MP-QUIC + FEC \u00b7 stream multiplexing\n        \u2514\u2500\u2500 Client Nodes        \u2500\u2500 capability wallet \u00b7 attestation \u00b7 DID\n                                    \u2502\n                  PQ-hybrid QUIC over the Veer Fabric Protocol\n```",
+      "format": "markdown"
     },
     {
       "title": "Crates (planned)",
-      "body": "| Crate | Purpose |\n|---|---|\n| `veersetu-core`    | Shared types, VFP wire format |\n| `veersetu-quic`    | PQ-hybrid QUIC transport |\n| `veersetu-agent`   | Edge gateway daemon |\n| `veersetu-relay`   | Smart relay node |\n| `veersetu-control` | Control plane services |\n| `veersetu-policy`  | Policy DSL + WASM engine |\n| `veersetu-cli`     | Operator CLI |\n| `veersetu-sdk`     | Developer SDK |"
+      "body": "| Crate | Purpose |\n|---|---|\n| `veersetu-core`    | Shared types, VFP wire format |\n| `veersetu-quic`    | PQ-hybrid QUIC transport |\n| `veersetu-agent`   | Edge gateway daemon |\n| `veersetu-relay`   | Smart relay node |\n| `veersetu-control` | Control plane services |\n| `veersetu-policy`  | Policy DSL + WASM engine |\n| `veersetu-cli`     | Operator CLI |\n| `veersetu-sdk`     | Developer SDK |",
+      "format": "markdown"
     },
     {
       "title": "CLI sketch",
-      "body": "```bash\nveersetu login\nveersetu expose 8080                # publish a local port\nveersetu connect home               # join a mesh\nveersetu policy apply policy.yaml\nveersetu agent register code-reviewer-v3\n```"
+      "body": "```bash\nveersetu login\nveersetu expose 8080                # publish a local port\nveersetu connect home               # join a mesh\nveersetu policy apply policy.yaml\nveersetu agent register code-reviewer-v3\n```",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/veersetu"
+      "body": "https://github.com/veeringman/veersetu",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 30,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/veersetu"
+  "repoUrl": "https://github.com/veeringman/veersetu",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false
 }

@@ -1,0 +1,17 @@
+{
+  "siteName": "VeerCanvas Ops",
+  "brandName": "VeerCanvas",
+  "brandTag": "Ops",
+  "eyebrow": "Platform operations",
+  "title": "VeerCanvas Ops",
+  "subtitle": "Observability and message inbox for sites managed by VeerCanvas. Sign in at /admin to view engagement, contact messages, and comments.",
+  "chipPrimary": "Ops console",
+  "chipSecondary": "Powered by VeerCanvas",
+  "platform": "VeerCanvas",
+  "favicon": "assets/favicon.svg",
+  "brandMark": "assets/veer-canvas-icon.svg",
+  "version": "v1.0.0",
+  "lastUpdated": "2026-07-24T18:30:00Z",
+  "platformSiteId": "ops",
+  "platformMark": "assets/veer-canvas-icon.svg"
+}

@@ -19,9 +19,9 @@
       "body": "https://github.com/veeringman/fd_demo_integ"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 390,
   "private": true,
   "repoUrl": "https://github.com/veeringman/fd_demo_integ"
 }

@@ -15,9 +15,9 @@
       "body": "https://github.com/vijayworld/veer"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 470,
   "private": true,
   "repoUrl": "https://github.com/vijayworld/veer"
 }

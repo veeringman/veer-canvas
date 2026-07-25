@@ -1,10 +1,10 @@
 {
   "slug": "edgevault",
-  "name": "edgeVault",
+  "name": "EdgeVault",
   "subtitle": "Rust",
-  "summary": "<p align=\"left\"> <img src=\"edgeVault.png.png\" alt=\"EdgeVault Logo\" width=\"120\"/> </p>",
-  "logo": "assets/default-project-logo.svg",
-  "logoAlt": "edgeVault logo",
+  "summary": "Bank-grade mobile security framework \u2014 zero-trust device binding, hardware-backed crypto, and multi-jurisdiction compliance in a single, cross-platform SDK.\n\nEdgeVault unifies Android Work Profile and iOS sandbox/MDM approaches into one developer-friendly solution, with a Rust cryptographic core shared across all platforms.",
+  "logo": "miniapps/edgevault/assets/logo.png",
+  "logoAlt": "EdgeVault logo",
   "status": [
     "Draft"
   ],
@@ -12,40 +12,53 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "<p align=\"left\"> <img src=\"edgeVault.png.png\" alt=\"EdgeVault Logo\" width=\"120\"/> </p>"
+      "body": "Bank-grade mobile security framework \u2014 zero-trust device binding, hardware-backed crypto, and multi-jurisdiction compliance in a single, cross-platform SDK.\n\nEdgeVault unifies Android Work Profile and iOS sandbox/MDM approaches into one developer-friendly solution, with a Rust cryptographic core shared across all platforms.",
+      "format": "markdown"
     },
     {
       "title": "At a Glance",
-      "body": "| Metric | Value |\n|--------|-------|\n| **Languages** | Rust, Swift, Kotlin, TypeScript, Dart, Java, Go, Python |\n| **Source files** | 174 |\n| **Lines of code** | ~17,900 |\n| **Rust tests** | 208 (all passing) |\n| **Jurisdictions** | 19 countries |\n| **Platform SDKs** | iOS (Swift), Android (Kotlin), React Native, Flutter, Ionic |\n| **Backend SDKs** | Rust, Java, Python, Go |\n\n---"
+      "body": "| Metric | Value |\n|--------|-------|\n| **Languages** | Rust, Swift, Kotlin, TypeScript, Dart, Java, Go, Python |\n| **Source files** | 174 |\n| **Lines of code** | ~17,900 |\n| **Rust tests** | 208 (all passing) |\n| **Jurisdictions** | 19 countries |\n| **Platform SDKs** | iOS (Swift), Android (Kotlin), React Native, Flutter, Ionic |\n| **Backend SDKs** | Rust, Java, Python, Go |\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Architecture",
-      "body": "```\n                         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                         \u2502        Bank Backend / mBaaS          \u2502\n                         \u2502  (Backbase, Firebase, Temenos, \u2026)    \u2502\n                         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                         \u2502\n                              OpenAPI REST + Webhooks\n                                         \u2502\n                         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                         \u2502     EdgeVault Integration Layer       \u2502\n                         \u2502  Webhooks \u00b7 SIEM \u00b7 Connector Traits   \u2502\n                         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                         \u2502\n                              mTLS + Device Identity\n                                         \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u2502                                                     \u2502\n   \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510                                  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n   \u2502   iOS Device      \u2502                                  \u2502  Android Device   \u2502\n   \u2502                   \u2502                                  \u2502                   \u2502\n   \u2502  Swift SDK        \u2502                                  \u2502  Kotlin SDK       \u2502\n   \u2502  + Rust Core      \u2502                                  \u2502  + Rust Core      \u2502\n   \u2502                   \u2502                                  \u2502                   \u2502\n   \u2502  Secure Enclave   \u2502                                  \u2502  Android Keystore \u2502\n   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                                  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n              \u2502                                                     \u2502\n     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510                                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n     \u2502 React Native   \u2502                                    \u2502 Flutter / Ionic\u2502\n     \u2502 Cross-platform \u2502                                    \u2502 Cross-platform \u2502\n     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---"
+      "body": "```\n                         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                         \u2502        Bank Backend / mBaaS          \u2502\n                         \u2502  (Backbase, Firebase, Temenos, \u2026)    \u2502\n                         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                         \u2502\n                              OpenAPI REST + Webhooks\n                                         \u2502\n                         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                         \u2502     EdgeVault Integration Layer       \u2502\n                         \u2502  Webhooks \u00b7 SIEM \u00b7 Connector Traits   \u2502\n                         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                         \u2502\n                              mTLS + Device Identity\n                                         \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u2502                                                     \u2502\n   \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510                                  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n   \u2502   iOS Device      \u2502                                  \u2502  Android Device   \u2502\n   \u2502                   \u2502                                  \u2502                   \u2502\n   \u2502  Swift SDK        \u2502                                  \u2502  Kotlin SDK       \u2502\n   \u2502  + Rust Core      \u2502                                  \u2502  + Rust Core      \u2502\n   \u2502                   \u2502                                  \u2502                   \u2502\n   \u2502  Secure Enclave   \u2502                                  \u2502  Android Keystore \u2502\n   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                                  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n              \u2502                                                     \u2502\n     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510                                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n     \u2502 React Native   \u2502                                    \u2502 Flutter / Ionic\u2502\n     \u2502 Cross-platform \u2502                                    \u2502 Cross-platform \u2502\n     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Cryptography",
-      "body": "- AES-256-GCM encryption/decryption\n- HKDF-SHA256 key derivation\n- CSPRNG random byte generation\n- Hardware-backed key storage (Secure Enclave / Android Keystore)"
+      "body": "- AES-256-GCM encryption/decryption\n- HKDF-SHA256 key derivation\n- CSPRNG random byte generation\n- Hardware-backed key storage (Secure Enclave / Android Keystore)",
+      "format": "markdown"
     },
     {
       "title": "Device Identity & Trust",
-      "body": "- Hardware-bound device fingerprinting\n- X.509 certificate management\n- Platform attestation (Play Integrity / App Attest)\n- Continuous trust scoring"
+      "body": "- Hardware-bound device fingerprinting\n- X.509 certificate management\n- Platform attestation (Play Integrity / App Attest)\n- Continuous trust scoring",
+      "format": "markdown"
     },
     {
       "title": "Policy Engine",
-      "body": "- JSON-defined security rules with severity levels\n- Real-time policy evaluation per device context\n- Dynamic policy distribution from backend"
+      "body": "- JSON-defined security rules with severity levels\n- Real-time policy evaluation per device context\n- Dynamic policy distribution from backend",
+      "format": "markdown"
     },
     {
       "title": "Getting Started",
-      "body": "1. Clone: `git clone <repo-url>`\n2. Build core: `cd edgevault/core && cargo build`\n3. Run tests: `cd edgevault/core && cargo test`\n4. See platform SDK READMEs for iOS/Android/cross-platform setup\n5. See `docs/DEVELOPER_GUIDE.md` for the full developer guide\n\n---"
+      "body": "1. Clone: `git clone <repo-url>`\n2. Build core: `cd edgevault/core && cargo build`\n3. Run tests: `cd edgevault/core && cargo test`\n4. See platform SDK READMEs for iOS/Android/cross-platform setup\n5. See `docs/DEVELOPER_GUIDE.md` for the full developer guide\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/edgeVault"
+      "body": "https://github.com/veeringman/edgeVault",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 220,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/edgeVault"
+  "repoUrl": "https://github.com/veeringman/edgeVault",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 40
 }

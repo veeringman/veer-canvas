@@ -1,0 +1,16 @@
+{
+  "siteName": "New Website",
+  "brandName": "New",
+  "brandTag": "Website",
+  "eyebrow": "VeerCanvas starter site",
+  "title": "New Website",
+  "subtitle": "A fresh VeerCanvas catalog. Edit content at /admin, then promote to production when ready.",
+  "chipPrimary": "Starter catalog",
+  "chipSecondary": "Powered by VeerCanvas",
+  "platform": "VeerCanvas",
+  "favicon": "assets/favicon.svg",
+  "brandMark": "assets/veer-canvas-icon.svg",
+  "version": "v1.0.0",
+  "lastUpdated": "2026-07-24T17:00:00Z",
+  "platformSiteId": "new-website"
+}

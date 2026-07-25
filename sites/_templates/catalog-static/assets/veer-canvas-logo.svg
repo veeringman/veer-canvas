@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 256" role="img" aria-label="VeerCanvas">
+  <title>VeerCanvas</title>
+  <defs>
+    <linearGradient id="vl-frame" x1="12%" y1="8%" x2="88%" y2="92%">
+      <stop offset="0%" stop-color="#00c6fb"/>
+      <stop offset="52%" stop-color="#4facfe"/>
+      <stop offset="100%" stop-color="#f7971e"/>
+    </linearGradient>
+    <linearGradient id="vl-v" x1="28%" y1="18%" x2="72%" y2="88%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="42%" stop-color="#e0f7ff"/>
+      <stop offset="100%" stop-color="#ffe8c8"/>
+    </linearGradient>
+    <linearGradient id="vl-v-shadow" x1="30%" y1="30%" x2="70%" y2="95%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="vl-grid" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="vl-word" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="55%" stop-color="#e2e8f0"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="vl-word-accent" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#fdba74"/>
+    </linearGradient>
+    <radialGradient id="vl-glow" cx="50%" cy="38%" r="58%">
+      <stop offset="0%" stop-color="#00c6fb" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="vl-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+    <filter id="vl-shadow" x="-25%" y="-20%" width="150%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="8"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="vl-text-shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>
+      <feOffset dx="0" dy="2"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g transform="translate(0, 0) scale(0.5)">
+    <rect width="512" height="512" rx="112" fill="#0f172a"/>
+    <circle cx="256" cy="220" r="180" fill="url(#vl-glow)"/>
+
+    <g filter="url(#vl-soft)" opacity="0.55">
+      <rect x="88" y="88" width="336" height="336" rx="56" fill="#00c6fb"/>
+    </g>
+
+    <g filter="url(#vl-shadow)">
+      <rect x="96" y="96" width="320" height="320" rx="52" fill="#111827" stroke="url(#vl-frame)" stroke-width="6"/>
+      <rect x="112" y="112" width="288" height="288" rx="40" fill="url(#vl-grid)"/>
+
+      <g stroke="#ffffff" stroke-opacity="0.12" stroke-width="2">
+        <line x1="184" y1="112" x2="184" y2="400"/>
+        <line x1="256" y1="112" x2="256" y2="400"/>
+        <line x1="328" y1="112" x2="328" y2="400"/>
+        <line x1="112" y1="184" x2="400" y2="184"/>
+        <line x1="112" y1="256" x2="400" y2="256"/>
+        <line x1="112" y1="328" x2="400" y2="328"/>
+      </g>
+
+      <path d="M168 168 L256 332 L344 168"
+            fill="none" stroke="url(#vl-v-shadow)" stroke-width="34"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+      <path d="M168 168 L256 332 L344 168"
+            fill="none" stroke="url(#vl-v)" stroke-width="24"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M188 176 L256 304 L324 176"
+            fill="none" stroke="#ffffff" stroke-width="4"
+            stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+
+      <circle cx="112" cy="112" r="10" fill="#ffffff" opacity="0.85"/>
+      <circle cx="400" cy="112" r="10" fill="#ffffff" opacity="0.85"/>
+      <circle cx="112" cy="400" r="10" fill="#ffffff" opacity="0.85"/>
+      <circle cx="400" cy="400" r="10" fill="#ffffff" opacity="0.85"/>
+    </g>
+  </g>
+
+  <g transform="translate(292, 0)" filter="url(#vl-text-shadow)">
+    <text x="0" y="166"
+          font-family="Inter, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+          font-weight="800"
+          font-size="132"
+          letter-spacing="-4"
+          fill="url(#vl-word)">veer<tspan font-weight="300" fill="url(#vl-word-accent)">canvas</tspan></text>
+  </g>
+
+  <g transform="translate(296, 0)">
+    <text x="0" y="208"
+          font-family="Inter, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif"
+          font-weight="600"
+          font-size="18"
+          letter-spacing="2.2"
+          fill="#94a3b8">AUTHOR  �  PUBLISH  �  COMPOSE</text>
+  </g>
+</svg>

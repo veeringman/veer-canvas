@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeerLabs Ops</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="ops-dashboard.css?v=20260726visits1">
+  <script src="ops-dashboard.js?v=20260726visits1" defer></script>
+</head>
+<body>
+  <div class="ops-shell" id="opsShell" hidden>
+    <header class="ops-topbar">
+      <div class="brand-lockup">
+        <img class="brand-mark" src="assets/veer-canvas-icon.svg" alt="" width="40" height="40">
+        <div>
+          <span class="brand-name">VeerLabs</span>
+          <span class="brand-tag">Ops</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="meta-chip" id="opsUserChip">Signed in</span>
+        <button type="button" class="btn ghost compact" id="refreshAllBtn">Refresh</button>
+        <a class="btn secondary compact" href="/admin/">CMS</a>
+        <a class="btn ghost compact" href="/admin/logout">Logout</a>
+      </div>
+    </header>
+
+    <main class="ops-main">
+      <header class="ops-hero">
+        <p class="eyebrow">Platform operations</p>
+        <h1>Observability</h1>
+        <p class="page-subtitle">Cross-site visits, engagement, contact messages, and comments for VeerCanvas-managed websites.</p>
+      </header>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Overview</h2>
+          <span class="muted" id="obsGeneratedAt">Loading…</span>
+        </div>
+        <div class="obs-stats" id="obsStats">
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="sites">—</span><span class="obs-stat-label">Sites</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="likes">—</span><span class="obs-stat-label">Likes</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="dislikes">—</span><span class="obs-stat-label">Dislikes</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="comments">—</span><span class="obs-stat-label">Comments</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="messages">—</span><span class="obs-stat-label">Messages</span></div>
+          <div class="obs-stat accent"><span class="obs-stat-value" data-obs="unreadMessages">—</span><span class="obs-stat-label">Unread</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="visitors">—</span><span class="obs-stat-label">Visitors</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="activeTokens">—</span><span class="obs-stat-label">Active tokens</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="visits">—</span><span class="obs-stat-label">Page visits</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="uniqueIps">—</span><span class="obs-stat-label">Unique IPs</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="anonymousVisits">—</span><span class="obs-stat-label">Anon visits</span></div>
+          <div class="obs-stat"><span class="obs-stat-value" data-obs="authedVisits">—</span><span class="obs-stat-label">Token visits</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Domain</th>
+                <th>Likes</th>
+                <th>Dislikes</th>
+                <th>Comments</th>
+                <th>Messages</th>
+                <th>Unread</th>
+                <th>Visitors</th>
+                <th>Tokens</th>
+                <th>Visits</th>
+                <th>Unique IPs</th>
+              </tr>
+            </thead>
+            <tbody id="obsSiteRows">
+              <tr><td colspan="11" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <div class="panel-head">
+            <h3>Top projects</h3>
+            <span class="muted">By likes − dislikes + comments</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Slug</th>
+                <th>Likes</th>
+                <th>Dislikes</th>
+                <th>Comments</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="obsTopRows">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Messagebox</h2>
+          <span class="muted">Contact messages &amp; project comments across managed sites</span>
+        </div>
+        <div class="obs-tabs" role="tablist">
+          <button type="button" class="obs-tab is-active" data-tab="messages">Messages</button>
+          <button type="button" class="obs-tab" data-tab="comments">Comments</button>
+          <button type="button" class="obs-tab" data-tab="visits">Visits</button>
+          <button type="button" class="obs-tab" data-tab="visitors">Visitors</button>
+          <button type="button" class="obs-tab" data-tab="visitorEvents">Access events</button>
+        </div>
+        <div class="table-wrap obs-tab-panel" id="obsMessagesPanel">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>From</th>
+                <th>Email</th>
+                <th>Message</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="obsMessageRows">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap obs-tab-panel" id="obsCommentsPanel" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>Project</th>
+                <th>Name</th>
+                <th>Comment</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="obsCommentRows">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap obs-tab-panel" id="obsVisitsPanel" hidden>
+          <div class="panel-head">
+            <h3>Recent visits</h3>
+            <span class="muted">IP, path, auth mode, device — with or without token</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>IP</th>
+                <th>Path</th>
+                <th>Auth</th>
+                <th>Device</th>
+                <th>Browser</th>
+                <th>Referrer</th>
+                <th>Visitor</th>
+              </tr>
+            </thead>
+            <tbody id="obsVisitRows">
+              <tr><td colspan="9" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+          <div class="panel-head" style="margin-top:1.25rem">
+            <h3>Top paths</h3>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Path</th><th>Visits</th></tr>
+            </thead>
+            <tbody id="obsTopPathRows">
+              <tr><td colspan="2" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+          <div class="panel-head" style="margin-top:1.25rem">
+            <h3>Top referrers</h3>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Referrer</th><th>Visits</th></tr>
+            </thead>
+            <tbody id="obsTopReferrerRows">
+              <tr><td colspan="2" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap obs-tab-panel" id="obsVisitorsPanel" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Visitor id</th>
+                <th>Last IP</th>
+                <th>Visits</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody id="obsVisitorRows">
+              <tr><td colspan="7" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap obs-tab-panel" id="obsVisitorEventsPanel" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>Type</th>
+                <th>Project</th>
+                <th>Name</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody id="obsVisitorEventRows">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

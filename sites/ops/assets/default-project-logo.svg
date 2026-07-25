@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VeerLabs placeholder logo">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect x="56" y="56" width="400" height="400" rx="84" fill="url(#g)"/>
+  <path d="M160 160h78c72 0 120 40 120 112 0 72-48 112-120 112h-78V160Zm70 64h-24v64h24c24 0 40-12 40-32s-16-32-40-32Z" fill="#ffffff"/>
+  <defs>
+    <linearGradient id="g" x1="56" y1="56" x2="456" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00c6fb"/>
+      <stop offset="1" stop-color="#f7971e"/>
+    </linearGradient>
+  </defs>
+</svg>

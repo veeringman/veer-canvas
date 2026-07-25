@@ -1,10 +1,10 @@
 {
   "slug": "jee-prep-webapp",
-  "name": "jee_prep_webapp",
-  "subtitle": "Python",
+  "name": "PrepUp",
+  "subtitle": "",
   "summary": "A modular Python + HTML + CSS + JavaScript web app for IIT JEE + beginner programming learning. It includes:",
   "logo": "assets/default-project-logo.svg",
-  "logoAlt": "jee_prep_webapp logo",
+  "logoAlt": "PrepUp logo",
   "status": [
     "Draft"
   ],
@@ -12,36 +12,47 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "A modular Python + HTML + CSS + JavaScript web app for IIT JEE + beginner programming learning. It includes:"
+      "body": "A modular Python + HTML + CSS + JavaScript web app for IIT JEE + beginner programming learning. It includes:",
+      "format": "markdown"
     },
     {
       "title": "Prep Studio",
-      "body": "A modular Python + HTML + CSS + JavaScript web app for IIT JEE + beginner programming learning. It includes:\n\n- Three primary tabs: Class 11, Class 12, Programming\n- Daily syllabus-oriented learning tasks for Physics, Chemistry, and Mathematics\n- Daily practice tasks that adapt difficulty based on your recorded performance\n- Progress logging (minutes, questions, accuracy, notes)\n- 7-day planning view and progress analytics\n- Best-practice question bank with answers, full explanations, and visual diagrams\n- Beginner programming tracks with notebook-style exercises and live code runner\n- LLM-powered chatbot dock for every authenticated page\n- Multi-user login and local authentication (extensible toward social/IdP)\n- App-wide annotation and feedback system with automatic action handling\n- Configurable model selection in Settings for LLM-ready resolution layer\n- Model registry with free/paid labeling and auto-sync for new interesting models"
+      "body": "A modular Python + HTML + CSS + JavaScript web app for IIT JEE + beginner programming learning. It includes:\n\n- Three primary tabs: Class 11, Class 12, Programming\n- Daily syllabus-oriented learning tasks for Physics, Chemistry, and Mathematics\n- Daily practice tasks that adapt difficulty based on your recorded performance\n- Progress logging (minutes, questions, accuracy, notes)\n- 7-day planning view and progress analytics\n- Best-practice question bank with answers, full explanations, and visual diagrams\n- Beginner programming tracks with notebook-style exercises and live code runner\n- LLM-powered chatbot dock for every authenticated page\n- Multi-user login and local authentication (extensible toward social/IdP)\n- App-wide annotation and feedback system with automatic action handling\n- Configurable model selection in Settings for LLM-ready resolution layer\n- Model registry with free/paid labeling and auto-sync for new interesting models",
+      "format": "markdown"
     },
     {
       "title": "Modular Architecture",
-      "body": "Core modules are now separated for cleaner maintenance and future extension:\n\n- `core/config.py`: shared constants, syllabus, and programming track definitions\n- `core/auth.py`: auth helpers and decorators\n- `core/planning.py`: daily planning + analytics service logic\n- `core/llm.py`: LLM provider integration adapter\n- `app.py`: route composition, database migrations, and app bootstrap"
+      "body": "Core modules are now separated for cleaner maintenance and future extension:\n\n- `core/config.py`: shared constants, syllabus, and programming track definitions\n- `core/auth.py`: auth helpers and decorators\n- `core/planning.py`: daily planning + analytics service logic\n- `core/llm.py`: LLM provider integration adapter\n- `app.py`: route composition, database migrations, and app bootstrap",
+      "format": "markdown"
     },
     {
       "title": "Tech Stack",
-      "body": "- Python (Flask)\n- SQLite\n- HTML (Jinja templates)\n- CSS (custom responsive UI)\n- JavaScript (table filtering and progress animation)"
+      "body": "- Python (Flask)\n- SQLite\n- HTML (Jinja templates)\n- CSS (custom responsive UI)\n- JavaScript (table filtering and progress animation)",
+      "format": "markdown"
     },
     {
       "title": "Run Locally",
-      "body": "1. Create and activate a virtual environment:\n\n```bash\npython3 -m venv .venv\nsource .venv/bin/activate\n```\n\n2. Install dependencies:\n\n```bash\npip install -r requirements.txt\n```\n\n3. Start the server:\n\n```bash\npython app.py\n```\n\n4. Open your browser at:\n\n- http://127.0.0.1:5000\n\n5. Create an account from `/register`, then login."
+      "body": "1. Create and activate a virtual environment:\n\n```bash\npython3 -m venv .venv\nsource .venv/bin/activate\n```\n\n2. Install dependencies:\n\n```bash\npip install -r requirements.txt\n```\n\n3. Start the server:\n\n```bash\npython app.py\n```\n\n4. Open your browser at:\n\n- http://127.0.0.1:5000\n\n5. Create an account from `/register`, then login.",
+      "format": "markdown"
     },
     {
       "title": "Forgot Password Email Setup",
-      "body": "The forgot-password flow sends a temporary password by SMTP. Configure these variables in `.env`:\n\n- `MAIL_SERVER` (example: `smtp.gmail.com`)\n- `MAIL_PORT` (example: `587`)\n- `MAIL_USE_TLS` (`true` recommended)\n- `MAIL_USERNAME` (SMTP account username/email)\n- `MAIL_PASSWORD` (SMTP password or app password)\n- `MAIL_FROM` (sender address shown to users)\n\nQuick Gmail setup:\n\n1. Enable 2-Step Verification on the Gmail account.\n2. Create an App Password in Google Account security.\n3. Set `MAIL_USERNAME` to your Gmail address.\n4. Set `MAIL_PASSWORD` to the 16-character app password.\n5. Restart the app.\n\nIf SMTP is not configured, the app falls back to showing a temporary password message for local development."
+      "body": "The forgot-password flow sends a temporary password by SMTP. Configure these variables in `.env`:\n\n- `MAIL_SERVER` (example: `smtp.gmail.com`)\n- `MAIL_PORT` (example: `587`)\n- `MAIL_USE_TLS` (`true` recommended)\n- `MAIL_USERNAME` (SMTP account username/email)\n- `MAIL_PASSWORD` (SMTP password or app password)\n- `MAIL_FROM` (sender address shown to users)\n\nQuick Gmail setup:\n\n1. Enable 2-Step Verification on the Gmail account.\n2. Create an App Password in Google Account security.\n3. Set `MAIL_USERNAME` to your Gmail address.\n4. Set `MAIL_PASSWORD` to the 16-character app password.\n5. Restart the app.\n\nIf SMTP is not configured, the app falls back to showing a temporary password message for local development.",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/jee_prep_webapp"
+      "body": "https://github.com/veeringman/jee_prep_webapp",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 200,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/jee_prep_webapp"
+  "repoUrl": "https://github.com/veeringman/jee_prep_webapp",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false
 }

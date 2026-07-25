@@ -81,6 +81,16 @@ function setEditorMode(mode) {
   renderContentPreview();
 }
 
+function iconSvg(name) {
+  const icons = {
+    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+    remove: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
+  };
+  return icons[name] || '';
+}
+
 function renderSectionEditor() {
   const root = document.getElementById('sectionEditor');
   if (!root) return;
@@ -93,9 +103,9 @@ function renderSectionEditor() {
       <div class="section-card-head">
         <strong>Section ${index + 1}</strong>
         <div class="section-card-actions">
-          <button type="button" class="btn small ghost" data-action="up" data-index="${index}">↑</button>
-          <button type="button" class="btn small ghost" data-action="down" data-index="${index}">↓</button>
-          <button type="button" class="btn small danger" data-action="remove" data-index="${index}">Remove</button>
+          <button type="button" class="btn icon-btn" data-action="up" data-index="${index}" title="Move up" aria-label="Move section up">${iconSvg('up')}</button>
+          <button type="button" class="btn icon-btn" data-action="down" data-index="${index}" title="Move down" aria-label="Move section down">${iconSvg('down')}</button>
+          <button type="button" class="btn icon-btn danger" data-action="remove" data-index="${index}" title="Remove section" aria-label="Remove section">${iconSvg('remove')}</button>
         </div>
       </div>
       <label>Title<input data-field="title" data-index="${index}" value="${escapeAttr(section.title || '')}"></label>
@@ -110,16 +120,16 @@ function renderSectionEditor() {
           ${SIZE_OPTIONS.map(value => `<option value="${value}" ${section.size === value ? 'selected' : ''}>${value || 'default'}</option>`).join('')}
         </select></label>
       </div>
-      <label>Body<textarea data-field="body" data-index="${index}" rows="8" placeholder="Markdown, HTML, or mermaid diagram code">${escapeHtml(section.body || '')}</textarea></label>
-      <label>List items (one per line)<textarea data-field="items" data-index="${index}" rows="4" placeholder="Optional bullet list items">${escapeHtml((section.items || []).join('\n'))}</textarea></label>
+      <label>Body<textarea data-field="body" data-index="${index}" rows="6" placeholder="Markdown, HTML, or mermaid diagram code">${escapeHtml(section.body || '')}</textarea></label>
+      <label>List items (one per line)<textarea data-field="items" data-index="${index}" rows="3" placeholder="Optional bullet list items">${escapeHtml((section.items || []).join('\n'))}</textarea></label>
     `;
     root.appendChild(card);
   });
 
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
-  addBtn.className = 'btn secondary';
-  addBtn.textContent = 'Add section';
+  addBtn.className = 'btn add-section';
+  addBtn.innerHTML = `${iconSvg('plus')}<span>Add section</span>`;
   addBtn.onclick = () => {
     sectionState.push(defaultSection());
     renderSectionEditor();

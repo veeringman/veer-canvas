@@ -43,9 +43,9 @@
       "body": "https://docs.amplify.aws/gen2"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 350,
   "private": false,
   "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
 }

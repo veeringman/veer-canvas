@@ -28,11 +28,18 @@ Each site under `sites/<id>/` contains:
 |------|------|
 | `site.config.json` | Domain, web root, GitHub owner, service names |
 | `site-meta.json` | Published version metadata |
-| `projects.json` | Full catalog (admin source of truth) |
-| `projects-public.json` | Enabled-only public catalog |
-| `catalog-exclusions.json` | Deleted slugs skipped on import |
+| `projects.json` | Full catalog (admin source of truth; not publicly served) |
+| `projects-public.json` | Enabled-only public catalog (also excludes deleted slugs) |
+| `catalog-exclusions.json` | Deleted slugs skipped on import and omitted from public catalog |
 | `miniapps/<slug>/` | Per-entry content packages |
 | Theme files | `index.html`, `project.html`, `*.js`, `style.css` |
+
+## Catalog rules
+
+- **Import** only creates packages for *new* GitHub repos. Already-imported projects are skipped unless marked `reimport: true` in admin (or CLI `--reimport-all` / `--reimport-slugs`).
+- **Hide** sets `enabled: false` — project stays in admin catalog but is removed from `projects-public.json`.
+- **Delete** removes the miniapp, drops the catalog entry, and adds the slug to `catalog-exclusions.json` so future imports cannot resurrect it.
+- **Deploy** pulls the live CMS catalog from the server before syncing (unless `OVERRIDE_CATALOG=1`), so local git cannot overwrite admin hide/delete decisions.
 
 ## Publish flow (today)
 

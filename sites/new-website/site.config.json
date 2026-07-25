@@ -1,0 +1,38 @@
+{
+  "id": "new-website",
+  "name": "New Website",
+  "description": "New Website \u2014 VeerCanvas site",
+  "domain": "new-website.veerlabs.solutions",
+  "aliases": [
+    "www.new-website.veerlabs.solutions"
+  ],
+  "webRoot": "/var/www/new-website.veerlabs.solutions",
+  "githubOwner": "veeringman",
+  "admin": {
+    "serviceName": "veercanvas-admin-new-website",
+    "port": 8082
+  },
+  "platform": false,
+  "status": "authoring",
+  "siteType": "responsive",
+  "templateId": "catalog-static",
+  "templateVersion": "1.0.0",
+  "locales": [
+    "en"
+  ],
+  "defaultLocale": "en",
+  "repos": [],
+  "integrations": [
+    "github-sync"
+  ],
+  "ops": false,
+  "createdAt": "2026-07-25T17:12:50Z",
+  "updatedAt": "2026-07-25T17:12:50Z",
+  "statusHistory": [
+    {
+      "status": "authoring",
+      "at": "2026-07-25T17:12:50Z",
+      "note": "Backfilled Site Studio fields"
+    }
+  ]
+}

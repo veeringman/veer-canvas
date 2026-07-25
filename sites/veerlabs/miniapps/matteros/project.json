@@ -1,0 +1,51 @@
+{
+  "slug": "matteros",
+  "name": "matteros",
+  "subtitle": "AI-native operating system for understanding, designing, simulating, manufacturing, and ev...",
+  "summary": "<p align=\"center\"> <img src=\"assets/matteros-logo.png\" alt=\"VeerSetu\" width=\"360\"/> </p>",
+  "logo": "miniapps/matteros/assets/matteros-logo.png",
+  "logoAlt": "matteros logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"center\"> <img src=\"assets/matteros-logo.png\" alt=\"VeerSetu\" width=\"360\"/> </p>"
+    },
+    {
+      "title": "The Intelligence Layer for the Physical World",
+      "body": "*\"MatterOS doesn't store models. It stores understanding.\"*\n\n---\n\nAI-native operating system for understanding, designing, simulating, manufacturing, operating, maintaining and evolving physical objects.\n\n</div>\n\n---"
+    },
+    {
+      "title": "Vision",
+      "body": "Software has operating systems.\n\nRobots have ROS.\n\nData has databases.\n\nThe physical world has CAD files, BOMs, PDFs, drawings and disconnected engineering systems.\n\nMatterOS changes that.\n\nMatterOS represents every physical object as a living semantic entity that AI can understand, reason about and continuously improve.\n\nInstead of storing files, MatterOS stores knowledge.\n\n---"
+    },
+    {
+      "title": "Why MatterOS?",
+      "body": "Today's engineering ecosystem is fragmented.\n\n- CAD stores geometry.\n- PLM stores lifecycle data.\n- ERP stores business information.\n- MES stores manufacturing execution.\n- Digital Twins monitor operation.\n\nEach system understands only a small part of a product.\n\nMatterOS introduces a unified knowledge model where every physical object has:\n\n- Geometry\n- Materials\n- Functional intent\n- Physical behavior\n- Manufacturing knowledge\n- Assembly logic\n- Failure modes\n- Cost\n- Sustainability\n- Maintenance\n- Supply chain\n- AI reasoning metadata\n\nEverything becomes connected.\n\n---"
+    },
+    {
+      "title": "Core Philosophy",
+      "body": "MatterOS is **Purpose First**, not **Geometry First**.\n\nTraditional CAD:\n\n```\nCylinder\nBolt\nHole\nExtrusion\n```\n\nMatterOS:\n\n```\nFastener\nSupports Load\nTransfers Torque\nAllows Serviceability\nManufacturable\nRepairable\n```\n\nMatterOS understands *why* something exists.\n\n---"
+    },
+    {
+      "title": "Core Principles",
+      "body": "- AI Native\n- Knowledge Graph First\n- Physics Aware\n- Manufacturing Aware\n- Domain Agnostic\n- Open Architecture\n- Extensible\n- Explainable\n- Version Controlled\n- Human + AI Collaboration\n\n---"
+    },
+    {
+      "title": "Architecture",
+      "body": "MatterOS consists of several core platforms.\n\n- Matter Core\n- Matter Graph\n- Matter AI\n- Matter Studio\n- Matter Vision\n- Matter Sim\n- Matter Factory\n- Matter Twin\n- Matter Cloud\n- Matter SDK\n\n---"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/matteros"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 180,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/matteros"
+}

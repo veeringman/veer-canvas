@@ -1,0 +1,64 @@
+{
+  "slug": "veer-artha",
+  "name": "Veer Artha",
+  "subtitle": "\u0905\u0930\u094d\u0925",
+  "summary": "AI-Native Tax, Accounting & Financial Intelligence Platform\n\nMaking taxation and financial compliance as effortless as having a conversation with AI.",
+  "logo": "miniapps/veer-artha/assets/logo.png",
+  "logoAlt": "Veer Artha logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Veer Artha is an AI-native platform designed to redefine how individuals, professionals, businesses, and governments interact with taxation, accounting, and financial compliance.\n\nRather than asking users to fill forms and navigate complex regulations, Veer Artha understands financial documents, reasons over tax laws, explains every decision, and automates compliance with complete transparency.\n",
+      "format": "markdown"
+    },
+    {
+      "title": "AI-Native Tax, Accounting & Financial Intelligence Platform",
+      "body": "*Making taxation and financial compliance as effortless as having a conversation with AI.*\n\n---\n\n![License](https://img.shields.io/badge/license-MIT-blue.svg)\n![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)\n![Status](https://img.shields.io/badge/status-Planning-yellow.svg)\n![AI](https://img.shields.io/badge/AI-Native-success.svg)\n\n</div>\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Vision",
+      "body": "The long-term vision is to build an intelligent financial platform that continuously assists users\u2014not just during tax season, but throughout the entire financial year.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Mission",
+      "body": "> **To make tax, accounting, and financial compliance effortless through trustworthy artificial intelligence.**\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Why Veer Artha?",
+      "body": "Current tax software is workflow-driven.\n\nVeer Artha is intelligence-driven.\n\nInstead of asking users hundreds of questions, Veer Artha learns from documents, understands financial activity, applies applicable regulations, and prepares accurate, explainable outcomes.\n\nUsers spend less time filling forms and more time making informed financial decisions.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "\ud83e\udde0 AI First",
+      "body": "Artificial Intelligence is not an add-on.\n\nIt is the primary interface.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "High-Level Architecture",
+      "body": "```text\n                        Users\n                           \u2502\n                    Conversational AI\n                           \u2502\n                AI Orchestration Layer\n                           \u2502\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502              \u2502              \u2502              \u2502\nTax Engine  Accounting   Compliance    Research\n   Engine      Engine        Engine       Engine\n \u2502              \u2502              \u2502              \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                           \u2502\n              Knowledge & Reasoning Layer\n                           \u2502\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502              \u2502              \u2502              \u2502\nTax Laws   CBDT Rules   Case Laws   Financial Data\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veer-artha",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 120,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veer-artha",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 56
+}

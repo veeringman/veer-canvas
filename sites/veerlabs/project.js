@@ -19,12 +19,23 @@ window.addEventListener('DOMContentLoaded', () => {
   const bodyEl = document.getElementById('project-body');
 
   VeerSite.loadProjects()
-    .then(projects => {
+    .then(async (projects) => {
       const project = projects.find(item => item.slug === slug);
       if (!project) {
         document.title = 'Project not found — VeerLabs Solutions';
         bodyEl.innerHTML = '<p class="error-message">Project not found or unavailable. Return to the <a href="index.html">dashboard</a>.</p>';
         return;
+      }
+
+      if (project.requireAuth === true || project.requireAuth === 'true') {
+        if (window.VeerEngage && typeof VeerEngage.ensureProjectAccess === 'function') {
+          const ok = await VeerEngage.ensureProjectAccess(project.slug);
+          if (!ok) {
+            document.title = 'Access required — VeerLabs Solutions';
+            bodyEl.innerHTML = '<p class="error-message">Access required to view this project. Return to the <a href="index.html">dashboard</a> and request temporary access.</p>';
+            return;
+          }
+        }
       }
 
       document.title = `${project.name} — VeerLabs Solutions`;
@@ -39,7 +50,13 @@ window.addEventListener('DOMContentLoaded', () => {
         project.tags.forEach(tag => tagsEl.appendChild(createPill(tag)));
       }
 
-      return VeerContent.renderProjectContent(bodyEl, project);
+      return VeerContent.renderProjectContent(bodyEl, project).then(() => {
+        if (window.VeerEngage) {
+          VeerEngage.mountContactButton();
+          return VeerEngage.mountProjectEngagement(project.slug);
+        }
+        return null;
+      });
     })
     .catch(() => {
       document.title = 'Error — VeerLabs Solutions';

@@ -2,7 +2,7 @@
   "slug": "keycortex",
   "name": "KeyCortex",
   "subtitle": "Rust",
-  "summary": "<img src=\"./keycortex_logo.png\" alt=\"KeyCortex Logo\" width=\"180\" />",
+  "summary": "Secure Rust based digital wallet and cryptographic signing engine that binds enterprise identies to blockchain keys and executes policy-approved transactions.",
   "logo": "miniapps/keycortex/assets/keycortex_logo.png",
   "logoAlt": "KeyCortex logo",
   "status": [
@@ -12,36 +12,43 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "<img src=\"./keycortex_logo.png\" alt=\"KeyCortex Logo\" width=\"180\" />"
-    },
-    {
-      "title": "KeyCortex",
-      "body": "A Secure Rust based digital wallet and cryptographic signing engine that binds enterprise identies to blockchain keys and executes policy-approved transactions.\n\nKeyCortex is designed with an extensible multi-chain architecture, while the initial implementation supports only FlowCortex L1 (`flowcortex-l1`) with PROOF (native coin) and FloweR (native stablecoin)."
+      "body": "A Secure Rust based digital wallet and cryptographic signing engine that binds enterprise identies to blockchain keys and executes policy-approved transactions.\n\nKeyCortex is designed with an extensible multi-chain architecture, while the initial implementation supports only FlowCortex L1 (flowcortex-l1) with PROOF (native coin) and FloweR (native stablecoin).",
+      "format": "markdown"
     },
     {
       "title": "API Contract",
-      "body": "- Frozen v0.1 wallet/auth contract: `KeyCortex_API_v0.1_Contract.md`\n- Engineering learnings log: `KeyCortex_Learnings.md`"
+      "body": "- Frozen v0.1 wallet/auth contract: `KeyCortex_API_v0.1_Contract.md`\n- Engineering learnings log: `KeyCortex_Learnings.md`",
+      "format": "markdown"
     },
     {
       "title": "Fast Local Runs (Persistent Build Cache)",
-      "body": "To avoid repeated `librocksdb-sys` rebuilds, use a persistent Cargo target directory and run the cached launcher.\n\nOne-time shell setup (optional but recommended):\n\n```bash\necho 'export CARGO_TARGET_DIR=\"$HOME/.cache/keycortex/cargo-target\"' >> ~/.bashrc\nsource ~/.bashrc\n```\n\nRun wallet-service using cached artifacts:\n\n```bash\n./scripts/run_wallet_service_cached.sh\n```\n\nBehavior:\n\n- uses `$CARGO_TARGET_DIR/debug/wallet-service` when present\n- if missing, reuses `./target/debug/wallet-service` and seeds the cache\n- builds only when no binary is available\n\nForce a rebuild into the persistent cache:\n\n```bash\n./scripts/run_wallet_service_cached.sh --rebuild\n```"
+      "body": "To avoid repeated `librocksdb-sys` rebuilds, use a persistent Cargo target directory and run the cached launcher.\n\nOne-time shell setup (optional but recommended):\n\n```bash\necho 'export CARGO_TARGET_DIR=\"$HOME/.cache/keycortex/cargo-target\"' >> ~/.bashrc\nsource ~/.bashrc\n```\n\nRun wallet-service using cached artifacts:\n\n```bash\n./scripts/run_wallet_service_cached.sh\n```\n\nBehavior:\n\n- uses `$CARGO_TARGET_DIR/debug/wallet-service` when present\n- if missing, reuses `./target/debug/wallet-service` and seeds the cache\n- builds only when no binary is available\n\nForce a rebuild into the persistent cache:\n\n```bash\n./scripts/run_wallet_service_cached.sh --rebuild\n```",
+      "format": "markdown"
     },
     {
       "title": "Service Diagnostics",
-      "body": "Related operations docs:\n\n- `KeyCortex_Postgres_Degradation_Playbook.md`\n- `KeyCortex_Startupz_Field_Ownership_Matrix.md`"
+      "body": "Related operations docs:\n\n- `KeyCortex_Postgres_Degradation_Playbook.md`\n- `KeyCortex_Startupz_Field_Ownership_Matrix.md`",
+      "format": "markdown"
     },
     {
       "title": "`GET /startupz`",
-      "body": "Returns a consolidated startup/runtime diagnostics payload for operations visibility.\n\nKey fields:\n\n- `storage_mode`: `rocksdb-only` or `postgres+rocksdb`\n- `postgres_enabled`: true when Postgres repository is active\n- `postgres_startup`: Postgres startup status including migration directory, applied migration file count, and startup error details\n- `db_fallback_counters`: fallback counter totals and per-path counts for Postgres failure fallback behavior\n- `auth_mode` and JWKS status fields mirroring auth runtime readiness signals\n\nExample:\n\n```bash\ncurl -s http://127.0.0.1:8080/startupz | jq\n```\n\nSample response excerpt:\n\n```json\n{\n\t\"service\": \"wallet-service\",\n\t\"storage_mode\": \"postgres+rocksdb\",\n\t\"postgres_enabled\": true,\n\t\"postgres_startup\": {\n\t\t\"configured\": true,\n\t\t\"enabled\": true,\n\t\t\"migrations_dir\": \"./migrations/postgres\",\n\t\t\"migration_files_applied\": 1,\n\t\t\"last_error\": null\n\t},\n\t\"db_fallback_counters\": {\n\t\t\"postgres_unavailable\": 0,\n\t\t\"challenge_persist_failures\": 0,\n\t\t\"challenge_mark_used_failures\": 0,\n\t\t\"binding_write_failures\": 0,\n\t\t\"binding_read_failures\": 0,\n\t\t\"audit_write_failures\": 0,\n\t\t\"audit_read_failures\": 0,\n\t\t\"total\": 0\n\t}\n}\n```"
+      "body": "Returns a consolidated startup/runtime diagnostics payload for operations visibility.\n\nKey fields:\n\n- `storage_mode`: `rocksdb-only` or `postgres+rocksdb`\n- `postgres_enabled`: true when Postgres repository is active\n- `postgres_startup`: Postgres startup status including migration directory, applied migration file count, and startup error details\n- `db_fallback_counters`: fallback counter totals and per-path counts for Postgres failure fallback behavior\n- `auth_mode` and JWKS status fields mirroring auth runtime readiness signals\n\nExample:\n\n```bash\ncurl -s http://127.0.0.1:8080/startupz | jq\n```\n\nSample response excerpt:\n\n```json\n{\n\t\"service\": \"wallet-service\",\n\t\"storage_mode\": \"postgres+rocksdb\",\n\t\"postgres_enabled\": true,\n\t\"postgres_startup\": {\n\t\t\"configured\": true,\n\t\t\"enabled\": true,\n\t\t\"migrations_dir\": \"./migrations/postgres\",\n\t\t\"migration_files_applied\": 1,\n\t\t\"last_error\": null\n\t},\n\t\"db_fallback_counters\": {\n\t\t\"postgres_unavailable\": 0,\n\t\t\"challenge_persist_failures\": 0,\n\t\t\"challenge_mark_used_failures\": 0,\n\t\t\"binding_write_failures\": 0,\n\t\t\"binding_read_failures\": 0,\n\t\t\"audit_write_failures\": 0,\n\t\t\"audit_read_failures\": 0,\n\t\t\"total\": 0\n\t}\n}\n```",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/KeyCortex"
+      "body": "https://github.com/veeringman/KeyCortex",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 50,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/KeyCortex"
+  "repoUrl": "https://github.com/veeringman/KeyCortex",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 50
 }

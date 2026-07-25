@@ -1,0 +1,40 @@
+{
+  "id": "canvas",
+  "name": "VeerCanvas",
+  "description": "VeerCanvas \u2014 VeerCanvas site",
+  "domain": "canvas.veerlabs.solutions",
+  "aliases": [
+    "www.canvas.veerlabs.solutions"
+  ],
+  "webRoot": "/var/www/canvas.veerlabs.solutions",
+  "githubOwner": "veeringman",
+  "admin": {
+    "serviceName": "veercanvas-admin-canvas",
+    "port": 8081
+  },
+  "platform": true,
+  "status": "published",
+  "siteType": "dynamic",
+  "templateId": "catalog-static",
+  "templateVersion": "1.0.0",
+  "locales": [
+    "en"
+  ],
+  "defaultLocale": "en",
+  "repos": [],
+  "integrations": [
+    "auth",
+    "api-backend",
+    "github-sync"
+  ],
+  "ops": false,
+  "createdAt": "2026-07-25T17:12:50Z",
+  "updatedAt": "2026-07-25T17:12:50Z",
+  "statusHistory": [
+    {
+      "status": "published",
+      "at": "2026-07-25T17:12:50Z",
+      "note": "Backfilled Site Studio fields"
+    }
+  ]
+}

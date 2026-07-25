@@ -1,10 +1,10 @@
 {
   "slug": "woodyveer",
-  "name": "woodyveer",
-  "subtitle": "C++",
+  "name": "TimberMate",
+  "subtitle": "By WoodVeer",
   "summary": "**A comprehensive React Native mobile application for timber measurement, estimation, cost analysis, and cutting optimization.**",
   "logo": "assets/default-project-logo.svg",
-  "logoAlt": "woodyveer logo",
+  "logoAlt": "TimberMate logo",
   "status": [
     "Draft"
   ],
@@ -12,44 +12,57 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "**A comprehensive React Native mobile application for timber measurement, estimation, cost analysis, and cutting optimization.**"
+      "body": "**A comprehensive React Native mobile application for timber measurement, estimation, cost analysis, and cutting optimization.**",
+      "format": "markdown"
     },
     {
       "title": "WoodVeer - TimberMate",
-      "body": "**A comprehensive React Native mobile application for timber measurement, estimation, cost analysis, and cutting optimization.**\n\n![React Native](https://img.shields.io/badge/React%20Native-0.72.6-61dafb?logo=react)\n![TypeScript](https://img.shields.io/badge/TypeScript-4.8.4-3178c6?logo=typescript)\n![OpenCV](https://img.shields.io/badge/OpenCV-Integration-blue)\n![Status](https://img.shields.io/badge/Status-Active%20Development-green)"
+      "body": "**A comprehensive React Native mobile application for timber measurement, estimation, cost analysis, and cutting optimization.**\n\n![React Native](https://img.shields.io/badge/React%20Native-0.72.6-61dafb?logo=react)\n![TypeScript](https://img.shields.io/badge/TypeScript-4.8.4-3178c6?logo=typescript)\n![OpenCV](https://img.shields.io/badge/OpenCV-Integration-blue)\n![Status](https://img.shields.io/badge/Status-Active%20Development-green)",
+      "format": "markdown"
     },
     {
       "title": "\ud83d\udccb Project Overview",
-      "body": "**TimberMate** is a sophisticated cross-platform mobile application designed for timber merchants, sawmill operators, forest engineers, and wood product businesses. It provides real-time measurement, intelligent cutting optimization, and comprehensive cost analysis for timber operations."
+      "body": "**TimberMate** is a sophisticated cross-platform mobile application designed for timber merchants, sawmill operators, forest engineers, and wood product businesses. It provides real-time measurement, intelligent cutting optimization, and comprehensive cost analysis for timber operations.",
+      "format": "markdown"
     },
     {
       "title": "Key Capabilities",
-      "body": "- \ud83d\udcf8 **Real-time camera-based timber measurement** using OpenCV computer vision\n- \ud83d\udcd0 **Automated dimension extraction** from photographs\n- \ud83d\udcb0 **Multi-model cost calculation** (per cubic foot, kg, unit, sq ft, hourly)\n- \u2702\ufe0f **Intelligent cutting optimization** to minimize waste\n- \ud83d\udcca **Estimate management** with detailed tracking and history\n- \ud83d\udcc8 **Wastage analysis** and material utilization reports\n- \ud83d\udcf1 **Offline-first architecture** with SQLite persistence\n- \ud83d\udda8\ufe0f **Professional report generation** for printing/export"
+      "body": "- \ud83d\udcf8 **Real-time camera-based timber measurement** using OpenCV computer vision\n- \ud83d\udcd0 **Automated dimension extraction** from photographs\n- \ud83d\udcb0 **Multi-model cost calculation** (per cubic foot, kg, unit, sq ft, hourly)\n- \u2702\ufe0f **Intelligent cutting optimization** to minimize waste\n- \ud83d\udcca **Estimate management** with detailed tracking and history\n- \ud83d\udcc8 **Wastage analysis** and material utilization reports\n- \ud83d\udcf1 **Offline-first architecture** with SQLite persistence\n- \ud83d\udda8\ufe0f **Professional report generation** for printing/export",
+      "format": "markdown"
     },
     {
       "title": "\ud83c\udfaf Problem It Solves",
-      "body": "Traditional timber estimation involves manual measurements, paper-based calculations, and significant guesswork. TimberMate eliminates these inefficiencies by:\n\n1. **Automating measurement capture** - Use your phone camera instead of measuring tapes\n2. **Optimizing material usage** - Reduce waste by up to 30-40% through intelligent cutting algorithms\n3. **Streamlining cost calculation** - Instant estimates with multiple pricing models\n4. **Centralizing records** - All estimates stored and searchable locally\n5. **Generating professional reports** - Ready-to-share documentation"
+      "body": "Traditional timber estimation involves manual measurements, paper-based calculations, and significant guesswork. TimberMate eliminates these inefficiencies by:\n\n1. **Automating measurement capture** - Use your phone camera instead of measuring tapes\n2. **Optimizing material usage** - Reduce waste by up to 30-40% through intelligent cutting algorithms\n3. **Streamlining cost calculation** - Instant estimates with multiple pricing models\n4. **Centralizing records** - All estimates stored and searchable locally\n5. **Generating professional reports** - Ready-to-share documentation",
+      "format": "markdown"
     },
     {
       "title": "1. Timber Measurement & Scanning",
-      "body": "- Real-time camera capture with OpenCV analysis\n- Automated dimension extraction (length, width, thickness)\n- Support for multiple measurement angles\n- Artifact scanning for document-based measurements\n- Native module integration (iOS Swift + Android Java)"
+      "body": "- Real-time camera capture with OpenCV analysis\n- Automated dimension extraction (length, width, thickness)\n- Support for multiple measurement angles\n- Artifact scanning for document-based measurements\n- Native module integration (iOS Swift + Android Java)",
+      "format": "markdown"
     },
     {
       "title": "\ud83c\udfd7\ufe0f Architecture Overview",
-      "body": "```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502                  React Native 0.72.6                            \u2502\n\u2502        (TypeScript for type safety and developer experience)    \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  UI Layer              Navigation            State Management   \u2502\n\u2502  \u251c\u2500 React Native Paper \u2502 \u251c\u2500Stack Navigator  \u2502 \u251c\u2500Redux Store   \u2502\n\u2502  \u251c\u2500 Styled Components  \u2502 \u251c\u2500Tab Navigator    \u2502 \u251c\u2500Redux Persist \u2502\n\u2502  \u251c\u2500 React Native SVG   \u2502 \u2514\u2500Drawer Navigator \u2502 \u2514\u2500Local Storage \u2502\n\u2502  \u2514\u2500 React Native Icons \u2502                    \u2502                  \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Business Logic Layer                                            \u2502\n\u2502  \u251c\u2500 Timber Optimization Algorithm                               \u2502\n\u2502  \u251c\u2500 Cost Calculation Engine                                     \u2502\n\u2502  \u251c\u2500 Estimate Fulfillment Logic                                  \u2502\n\u2502  \u2514\u2500 Material Analysis                                           \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Data Layer                                                      \u2502\n\u2502  \u251c\u2500 SQLite Database (react-native-sqlite-storage)               \u2502\n\u2502  \u251c\u2500 Camera Integration (react-native-camera)                    \u2502\n\u2502  \u251c\u2500 Image Picker & Processing                                  \u2502\n\u2502  \u2514\u2500 Geolocation & Maps                                          \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Native Modules (Platform-Specific)                             \u2502\n\u2502  \u251c\u2500 iOS: Swift-based TimberMeasurementTool + OpenCV Framework  \u2502\n\u2502  \u2514\u2500 Android: Java-based OpenCV Integration                      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```"
+      "body": "```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502                  React Native 0.72.6                            \u2502\n\u2502        (TypeScript for type safety and developer experience)    \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  UI Layer              Navigation            State Management   \u2502\n\u2502  \u251c\u2500 React Native Paper \u2502 \u251c\u2500Stack Navigator  \u2502 \u251c\u2500Redux Store   \u2502\n\u2502  \u251c\u2500 Styled Components  \u2502 \u251c\u2500Tab Navigator    \u2502 \u251c\u2500Redux Persist \u2502\n\u2502  \u251c\u2500 React Native SVG   \u2502 \u2514\u2500Drawer Navigator \u2502 \u2514\u2500Local Storage \u2502\n\u2502  \u2514\u2500 React Native Icons \u2502                    \u2502                  \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Business Logic Layer                                            \u2502\n\u2502  \u251c\u2500 Timber Optimization Algorithm                               \u2502\n\u2502  \u251c\u2500 Cost Calculation Engine                                     \u2502\n\u2502  \u251c\u2500 Estimate Fulfillment Logic                                  \u2502\n\u2502  \u2514\u2500 Material Analysis                                           \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Data Layer                                                      \u2502\n\u2502  \u251c\u2500 SQLite Database (react-native-sqlite-storage)               \u2502\n\u2502  \u251c\u2500 Camera Integration (react-native-camera)                    \u2502\n\u2502  \u251c\u2500 Image Picker & Processing                                  \u2502\n\u2502  \u2514\u2500 Geolocation & Maps                                          \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524\n\u2502  Native Modules (Platform-Specific)                             \u2502\n\u2502  \u251c\u2500 iOS: Swift-based TimberMeasurementTool + OpenCV Framework  \u2502\n\u2502  \u2514\u2500 Android: Java-based OpenCV Integration                      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```",
+      "format": "markdown"
     },
     {
       "title": "Installation",
-      "body": "```bash"
+      "body": "```bash",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/woodyveer"
+      "body": "https://github.com/veeringman/woodyveer",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 190,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/woodyveer"
+  "repoUrl": "https://github.com/veeringman/woodyveer",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false
 }

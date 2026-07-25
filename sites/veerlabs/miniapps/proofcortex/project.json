@@ -2,8 +2,8 @@
   "slug": "proofcortex",
   "name": "ProofCortex",
   "subtitle": "Rust",
-  "summary": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/IMG_6434.png\"> <source media=\"(prefers-color-scheme: light)\" srcset=\"assets/IMG_6434.png\"> <img alt=\"ProofCortex Logo\" src=\"assets/IMG_6434.png\" width=200px> </picture> </p>",
-  "logo": "assets/default-project-logo.svg",
+  "summary": "A STARK-based zero-knowledge proving engine that converts FortressDigital policy decisions into verifiable proofs anchored on FlowCortex for provably compliant stablecoin settlement.",
+  "logo": "miniapps/proofcortex/assets/logo.png",
   "logoAlt": "ProofCortex logo",
   "status": [
     "Draft"
@@ -12,52 +12,68 @@
   "details": [
     {
       "title": "Project Overview",
-      "body": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/IMG_6434.png\"> <source media=\"(prefers-color-scheme: light)\" srcset=\"assets/IMG_6434.png\"> <img alt=\"ProofCortex Logo\" src=\"assets/IMG_6434.png\" width=200px> </picture> </p>"
+      "body": "A STARK-based zero-knowledge proving engine that converts FortressDigital policy decisions into verifiable proofs anchored on FlowCortex for provably compliant stablecoin settlement.",
+      "format": "markdown"
     },
     {
       "title": "ProofCortex \u2013 Verifiable AI",
-      "body": "**ProofCortex** is a modular AI verification and trust framework designed to run first\non blockchain networks. It enables applications to prove AI outputs, secure\nautonomous agents, and build verifiable compute pipelines.\n\nWe bring cryptographic trust to AI by validating computation proofs, inference\nattestations, and execution integrity signals. Whether AI is running locally,\nin the cloud, within smart agent swarms, or across decentralized compute\nnetworks \u2014 ProofCortex allows users to verify what really happened, not just\ntrust claims.\n\nProofCortex transforms AI systems from \"trust-based\" to \"proof-based\" by\nproviding a universal verification layer. It anchors model integrity, proves\ninference correctness, and validates execution traces using lightweight\ncryptographic proofs. This gives enterprises, regulators, and developers a\nreliable way to trust AI outputs \u2014 even when models, data, or compute\nenvironments are opaque.\n\nBy enabling verifiable AI pipelines, ProofCortex becomes foundational trust\ninfrastructure for the next generation of decentralized systems, autonomous\nagents, and high-assurance AI applications.\n\n---"
+      "body": "**ProofCortex** is a modular AI verification and trust framework designed to run first\non blockchain networks. It enables applications to prove AI outputs, secure\nautonomous agents, and build verifiable compute pipelines.\n\nWe bring cryptographic trust to AI by validating computation proofs, inference\nattestations, and execution integrity signals. Whether AI is running locally,\nin the cloud, within smart agent swarms, or across decentralized compute\nnetworks \u2014 ProofCortex allows users to verify what really happened, not just\ntrust claims.\n\nProofCortex transforms AI systems from \"trust-based\" to \"proof-based\" by\nproviding a universal verification layer. It anchors model integrity, proves\ninference correctness, and validates execution traces using lightweight\ncryptographic proofs. This gives enterprises, regulators, and developers a\nreliable way to trust AI outputs \u2014 even when models, data, or compute\nenvironments are opaque.\n\nBy enabling verifiable AI pipelines, ProofCortex becomes foundational trust\ninfrastructure for the next generation of decentralized systems, autonomous\nagents, and high-assurance AI applications.\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Mission",
-      "body": "To make **AI provable, trustworthy, and censorship-resistant** \u2014 enabling secure autonomous systems and transparent on-chain intelligence.\n\n---"
+      "body": "To make **AI provable, trustworthy, and censorship-resistant** \u2014 enabling secure autonomous systems and transparent on-chain intelligence.\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Key Concepts",
-      "body": "| Concept | Description |\n|----------|--------------|\n| **Verifiable AI** | Confirm AI outputs are correct &amp; untampered |\n| **AI Proof Layer** | Prooffy proofs of execution &amp; inference integrity |\n| **On-chain Verifier** | Minimal smart-contract verifier on BlockDAG |\n| **Off-chain Prover and Runtime** | Secure WASM execution &amp; proof pipeline |\n| **Proof Adaptors** | Supports cryptographic proofs &amp; attestations |\n\n---"
+      "body": "| Concept | Description |\n|----------|--------------|\n| **Verifiable AI** | Confirm AI outputs are correct &amp; untampered |\n| **AI Proof Layer** | Prooffy proofs of execution &amp; inference integrity |\n| **On-chain Verifier** | Minimal smart-contract verifier on BlockDAG |\n| **Off-chain Prover and Runtime** | Secure WASM execution &amp; proof pipeline |\n| **Proof Adaptors** | Supports cryptographic proofs &amp; attestations |\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Overview",
-      "body": "ProofCortex bridges **AI computation** and **decentralized trust layers** by providing:\n- Proofs of AI inference integrity  \n- Verifiable execution across distributed nodes  \n- Compatibility with cryptographic proof systems and attestations  \n- Extensible adaptors for on-chain and off-chain environments  \n\n---"
+      "body": "ProofCortex bridges **AI computation** and **decentralized trust layers** by providing:\n- Proofs of AI inference integrity  \n- Verifiable execution across distributed nodes  \n- Compatibility with cryptographic proof systems and attestations  \n- Extensible adaptors for on-chain and off-chain environments  \n\n---",
+      "format": "markdown"
     },
     {
       "title": "Vision",
-      "body": "To empower a new generation of **provable AI systems** where:\n- Outputs can be **verified** instead of **assumed**  \n- AI agents are **accountable**, **transparent**, and **trust-minimized**  \n- The infrastructure for intelligence is **open**, **secure**, and **censorship-resistant**\n\n---"
+      "body": "To empower a new generation of **provable AI systems** where:\n- Outputs can be **verified** instead of **assumed**  \n- AI agents are **accountable**, **transparent**, and **trust-minimized**  \n- The infrastructure for intelligence is **open**, **secure**, and **censorship-resistant**\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Why DAG for ProofCortex?",
-      "body": "Traditional blockchains are sequential \u2014 every block must wait for the previous one to finalize.  \nThis linear structure introduces **latency**, **bottlenecks**, and **limited parallelism**, making them unsuitable for **real-time AI verification** and **distributed inference proofs**.\n\n**DAG Chains (Directed Acyclic Graph-based architecture)** changes that.\n\n---"
+      "body": "Traditional blockchains are sequential \u2014 every block must wait for the previous one to finalize.  \nThis linear structure introduces **latency**, **bottlenecks**, and **limited parallelism**, making them unsuitable for **real-time AI verification** and **distributed inference proofs**.\n\n**DAG Chains (Directed Acyclic Graph-based architecture)** changes that.\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Why it\u2019s the perfect foundation for ProofCortex",
-      "body": "| **Challenge** | **How DAG Solves It** | **Impact on ProofCortex** |\n|----------------|----------------------------|---------------------------|\n| **Sequential validation in L1 chains** | Parallel block propagation and DAG-based finality | Enables high-throughput proof verification |\n| **Limited concurrency for proof submissions** | DAG allows multiple proofs to be appended asynchronously | Many models or nodes can submit proofs in real-time |\n| **Network latency during validation** | Blocks don\u2019t compete for a single head \u2014 they co-exist | Reduces latency for inference confirmations |\n| **Scalability constraints** | BlockDAG scales horizontally with node count | Supports massive AI inference traffic |\n| **Security-trust gap for off-chain AI** | DAG topology maintains verifiable ordering of computation | Guarantees integrity between inference & proof submission |\n\n---"
+      "body": "| **Challenge** | **How DAG Solves It** | **Impact on ProofCortex** |\n|----------------|----------------------------|---------------------------|\n| **Sequential validation in L1 chains** | Parallel block propagation and DAG-based finality | Enables high-throughput proof verification |\n| **Limited concurrency for proof submissions** | DAG allows multiple proofs to be appended asynchronously | Many models or nodes can submit proofs in real-time |\n| **Network latency during validation** | Blocks don\u2019t compete for a single head \u2014 they co-exist | Reduces latency for inference confirmations |\n| **Scalability constraints** | BlockDAG scales horizontally with node count | Supports massive AI inference traffic |\n| **Security-trust gap for off-chain AI** | DAG topology maintains verifiable ordering of computation | Guarantees integrity between inference & proof submission |\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Architecture Outline",
-      "body": "The **ProofCortex architecture** is designed to bridge the gap between *AI inference* and *on-chain verifiability*.  \nIt leverages a **modular, scalable pipeline** that ensures deterministic execution, trace generation, and proof verification \u2014 all anchored on the **BlockDAG network**.\n\nThe architecture can be viewed in three main layers:"
+      "body": "The **ProofCortex architecture** is designed to bridge the gap between *AI inference* and *on-chain verifiability*.  \nIt leverages a **modular, scalable pipeline** that ensures deterministic execution, trace generation, and proof verification \u2014 all anchored on the **BlockDAG network**.\n\nThe architecture can be viewed in three main layers:",
+      "format": "markdown"
     },
     {
       "title": "ProofCortex System Architecture",
-      "body": "Below is the architecture schematic illustrating the data flow across these layers:\n<p align=\"left\">\n  <img src=\"docs/assets/IMG_0971.jpeg\" alt=\"ProofCortex Arch\" width=72% />\n</p>\n\n---"
+      "body": "Below is the architecture schematic illustrating the data flow across these layers:\n<p align=\"left\">\n  <img src=\"docs/assets/IMG_0971.jpeg\" alt=\"ProofCortex Arch\" width=72% />\n</p>\n\n---",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/ProofCortex"
+      "body": "https://github.com/veeringman/ProofCortex",
+      "format": "markdown"
     }
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 80,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/ProofCortex"
+  "repoUrl": "https://github.com/veeringman/ProofCortex",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 50
 }

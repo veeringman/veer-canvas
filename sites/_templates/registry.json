@@ -1,0 +1,40 @@
+{
+  "templates": [
+    {
+      "id": "catalog-static",
+      "name": "Project catalog",
+      "description": "Tile grid homepage with project detail pages. Ideal for studio portfolios and product catalogs.",
+      "siteTypes": ["static", "responsive"],
+      "layout": "catalog-grid",
+      "source": "catalog-static",
+      "version": "1.0.0",
+      "preview": "catalog-static/preview.svg",
+      "builtin": true,
+      "defaultIntegrations": ["contact", "engagement", "github-sync"]
+    },
+    {
+      "id": "docs-hub",
+      "name": "Docs hub",
+      "description": "Documentation-oriented catalog chrome with the same responsive tile + detail structure.",
+      "siteTypes": ["static", "responsive"],
+      "layout": "docs-sections",
+      "source": "docs-hub",
+      "version": "1.0.0",
+      "preview": "docs-hub/preview.svg",
+      "builtin": true,
+      "defaultIntegrations": ["github-sync"]
+    },
+    {
+      "id": "ops-console",
+      "name": "Ops console (reference)",
+      "description": "Auth-gated operations shell pattern. Prefer for internal consoles, not public catalogs.",
+      "siteTypes": ["dynamic"],
+      "layout": "ops-shell",
+      "source": "ops-console",
+      "version": "1.0.0",
+      "preview": "ops-console/preview.svg",
+      "builtin": true,
+      "defaultIntegrations": ["auth", "api-backend"]
+    }
+  ]
+}

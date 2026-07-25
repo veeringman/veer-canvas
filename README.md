@@ -1,7 +1,11 @@
-
 <p align="center">
-  <img src="assets/veercanvas-logo.png" alt="Veer Forma Logo" width="230"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/veer-canvas-logo.svg">
+    <img alt="VeerCanvas" src="assets/branding/veer-canvas-logo-light.svg" width="420">
+  </picture>
 </p>
+
+# VeerCanvas
 
 **VeerCanvas** is a content authoring and publishing platform for building rich web experiences — from static catalogs today to dynamic pages, server components, and APIs tomorrow.
 
@@ -16,8 +20,10 @@ The **VeerLabs Solutions** site (`sites/veerlabs/`) ships as the official refere
 ├── deploy/          # Remote deploy, nginx, systemd helpers
 ├── docs/            # Platform documentation
 └── sites/
+    ├── canvas/      # Platform control plane (canvas.veerlabs.solutions)
+    ├── ops/         # Ops console — observability + messagebox
     ├── veerlabs/    # Sample: VeerLabs project catalog
-    └── _template/   # Starter site scaffold
+    └── _templates/  # Starter site scaffolds
 ```
 
 ## Quick start (VeerLabs sample site)
@@ -32,7 +38,7 @@ pip install -r admin/requirements.txt
 export VEERCANVAS_SITE_ID=veerlabs
 export VEERCANVAS_SITE_ROOT="$(pwd)/sites/veerlabs"
 python admin/admin_app.py
-# Admin: http://127.0.0.1:8080/admin/
+# Admin: http://127.0.0.1:8080/
 
 # Build public catalog (enabled projects only)
 python cli/scripts/import_github_projects_full.py veeringman imported_projects \
@@ -41,14 +47,52 @@ python cli/scripts/import_github_projects_full.py veeringman imported_projects \
   --write-public-catalog
 ```
 
-## Deploy VeerLabs to EC2
+## Create a new website
+
+On the platform admin ([canvas.veerlabs.solutions/admin](https://canvas.veerlabs.solutions/admin/)), choose a **site id** (the author name). That becomes both the folder under `sites/` and the default public host:
+
+`<site-id>.veerlabs.solutions` → content CMS at `https://<site-id>.veerlabs.solutions/admin/`
+
+**Ops console:** [ops.veerlabs.solutions](https://ops.veerlabs.solutions/) — auth-gated only (redirects to `/admin`). Observability metrics and messagebox across managed sites.
+
+Or via CLI:
 
 ```bash
-SITE_ID=veerlabs EC2_KEY=./VeerSetuHost.pem ./deploy/remote-deploy.sh
+python cli/scripts/create_site.py my-catalog \
+  --name "My Catalog" \
+  --domain my-catalog.veerlabs.solutions \
+  --github-owner veeringman
+
+# Content CMS for that site (not the platform):
+export VEERCANVAS_SITE_ID=my-catalog
+export VEERCANVAS_SITE_ROOT="$(pwd)/sites/my-catalog"
+python admin/admin_app.py
+```
+
+Per-site admins manage **content only**. Website creation and production deploy live on the platform host.
+
+In Admin, use **New project** to add a tile/slug/details without GitHub import. Use **Sync repos** to pull new private GitHub repos.
+
+## Deploy
+
+```bash
+# Flagship catalog
+SITE_ID=veerlabs EC2_KEY=/path/to/VeerSetuHost.pem ./deploy/remote-deploy.sh
+
+# Platform control plane
+SITE_ID=canvas EC2_KEY=/path/to/VeerSetuHost.pem ./deploy/remote-deploy.sh
+
+# Ops console (observability + messagebox)
+SITE_ID=ops EC2_KEY=/path/to/VeerSetuHost.pem ./deploy/remote-deploy.sh
+
+# Any author-created site (example)
+SITE_ID=my-catalog EC2_KEY=/path/to/VeerSetuHost.pem ./deploy/remote-deploy.sh
 
 # Refresh GitHub repos during deploy (opt-in)
-SITE_ID=veerlabs EC2_KEY=./VeerSetuHost.pem ./deploy/remote-deploy.sh --import-repos
+SITE_ID=veerlabs EC2_KEY=/path/to/VeerSetuHost.pem ./deploy/remote-deploy.sh --import-repos
 ```
+
+Before first deploy of a new site, point DNS (`<site-id>.veerlabs.solutions`) at the EC2 host so TLS can be issued.
 
 ## Environment variables
 
@@ -58,6 +102,9 @@ SITE_ID=veerlabs EC2_KEY=./VeerSetuHost.pem ./deploy/remote-deploy.sh --import-r
 | `VEERCANVAS_SITE_ID` | `veerlabs` | Site folder under `sites/` |
 | `VEERCANVAS_SITE_ROOT` | `sites/<id>` | Override site content root |
 | `VEERCANVAS_ADMIN_SECRET` | dev default | Flask session secret |
+| `VEERCANVAS_PLATFORM` | off | Enable website create/deploy APIs |
+| `VEERCANVAS_OPS` | off | Enable observability + messagebox APIs |
+| `PORT` / `VEERCANVAS_ADMIN_PORT` | `8080` | Admin listen port |
 | `IMPORT_REPOS` / `--import-repos` | off | Fetch GitHub repos on deploy |
 
 ## Roadmap

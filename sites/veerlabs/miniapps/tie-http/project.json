@@ -23,9 +23,9 @@
       "body": "https://github.com/veeringman/tie_http"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 0,
+  "sortOrder": 480,
   "private": true,
   "repoUrl": "https://github.com/veeringman/tie_http"
 }

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeerCanvas Site Studio</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="platform-console.css?v=20260725studio1">
+  <script src="platform-console.js?v=20260725studio1" defer></script>
+</head>
+<body>
+  <div class="ops-shell" id="platformShell" hidden>
+    <header class="ops-topbar">
+      <div class="brand-lockup">
+        <img class="brand-mark" src="assets/veer-canvas-icon.svg" alt="" width="40" height="40">
+        <div>
+          <span class="brand-name">VeerCanvas</span>
+          <span class="brand-tag">Site Studio</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="meta-chip" id="platformUserChip">Signed in</span>
+        <a class="btn secondary compact" href="/admin/">CMS</a>
+        <a class="btn ghost compact" href="/admin/logout">Logout</a>
+      </div>
+    </header>
+
+    <main class="ops-main">
+      <header class="ops-hero">
+        <p class="eyebrow">Design &amp; launch web interfaces</p>
+        <h1>VeerCanvas</h1>
+        <p class="page-subtitle">Define websites and web apps with templates, locales, integrations, and lifecycle — then author content at each site’s <code>/admin</code>.</p>
+      </header>
+
+      <nav class="studio-tabs" role="tablist">
+        <button type="button" class="studio-tab is-active" data-view="library">Library</button>
+        <button type="button" class="studio-tab" data-view="wizard">New website</button>
+        <button type="button" class="studio-tab" data-view="templates">Templates</button>
+        <button type="button" class="studio-tab" data-view="deleted">Deleted</button>
+      </nav>
+
+      <!-- Library -->
+      <section class="panel view-panel" id="view-library">
+        <div class="panel-head">
+          <h2>Managed websites</h2>
+          <div class="panel-head-actions">
+            <select id="statusFilter" aria-label="Filter by status">
+              <option value="">All active</option>
+              <option value="defined">Defined</option>
+              <option value="authoring">Authoring</option>
+              <option value="published">Published</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            <button type="button" class="btn ghost compact" id="refreshLibraryBtn">Refresh</button>
+            <button type="button" class="btn primary compact" id="newWebsiteBtn">New website</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Status</th>
+                <th>Type</th>
+                <th>Template</th>
+                <th>Locales</th>
+                <th>Domain</th>
+                <th>Updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sitesRows">
+              <tr><td colspan="8" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="deploy-inline panel-sub">
+          <div class="panel-head">
+            <h3>Production deploy</h3>
+            <span class="muted">Promote an authoring site to its domain</span>
+          </div>
+          <div class="grid-2">
+            <label>Site
+              <select id="deploy-site-id"><option value="">Select site…</option></select>
+            </label>
+            <label>EC2 host (optional)
+              <input id="deploy-ec2-host" type="text" placeholder="Leave blank for default"/>
+            </label>
+          </div>
+          <div class="editor-actions">
+            <button type="button" class="btn secondary compact" id="deploySiteBtn">Deploy to production</button>
+          </div>
+          <pre id="deployStatusLog" class="status-log" hidden></pre>
+        </div>
+      </section>
+
+      <!-- Wizard -->
+      <section class="panel view-panel" id="view-wizard" hidden>
+        <div class="panel-head">
+          <h2 id="wizardTitle">Define a website</h2>
+          <span class="muted" id="wizardModeHint">Capture metadata, pick a template, then scaffold</span>
+        </div>
+        <div class="wizard-steps" id="wizardSteps">
+          <button type="button" class="wizard-step is-active" data-step="0">Basics</button>
+          <button type="button" class="wizard-step" data-step="1">Type &amp; template</button>
+          <button type="button" class="wizard-step" data-step="2">Locales</button>
+          <button type="button" class="wizard-step" data-step="3">Repos &amp; integrations</button>
+          <button type="button" class="wizard-step" data-step="4">Review</button>
+        </div>
+
+        <form id="wizardForm" class="editor-form">
+          <input type="hidden" id="edit-site-id" value=""/>
+
+          <div class="wizard-pane" data-pane="0">
+            <div class="grid-2">
+              <label>Site id
+                <input id="site-create-id" name="id" placeholder="my-catalog" autocomplete="off" required/>
+                <span class="field-hint">Lowercase id — folder name and VEERCANVAS_SITE_ID.</span>
+              </label>
+              <label>Display name
+                <input id="site-create-name" name="name" placeholder="My Catalog" required/>
+              </label>
+            </div>
+            <label>Description
+              <textarea id="site-create-description" name="description" rows="3" placeholder="What this website or app is for"></textarea>
+            </label>
+            <label>Domain
+              <input id="site-create-domain" name="domain" placeholder="my-catalog.veerlabs.solutions"/>
+              <span class="field-hint">Defaults to <code>&lt;site-id&gt;.veerlabs.solutions</code>.</span>
+            </label>
+          </div>
+
+          <div class="wizard-pane" data-pane="1" hidden>
+            <label>Website type
+              <div class="choice-row" id="siteTypeChoices">
+                <label class="choice-card"><input type="radio" name="siteType" value="static"/> <span><strong>Static</strong><small>HTML/CSS/JS catalog, no app backend</small></span></label>
+                <label class="choice-card"><input type="radio" name="siteType" value="responsive" checked/> <span><strong>Responsive</strong><small>Mobile + web layout contract</small></span></label>
+                <label class="choice-card"><input type="radio" name="siteType" value="dynamic"/> <span><strong>Dynamic</strong><small>Services-backed / console style</small></span></label>
+              </div>
+            </label>
+            <div class="panel-head" style="margin-top:12px">
+              <h3>Template</h3>
+              <button type="button" class="btn ghost compact" id="gotoTemplatesBtn">Define new template…</button>
+            </div>
+            <div class="template-grid" id="templatePicker"></div>
+          </div>
+
+          <div class="wizard-pane" data-pane="2" hidden>
+            <div class="grid-2">
+              <label>Locales (comma-separated BCP-47)
+                <input id="site-locales" name="locales" value="en" placeholder="en, hi, fr"/>
+              </label>
+              <label>Default locale
+                <input id="site-default-locale" name="defaultLocale" value="en" placeholder="en"/>
+              </label>
+            </div>
+          </div>
+
+          <div class="wizard-pane" data-pane="3" hidden>
+            <label>GitHub owner
+              <input id="site-create-owner" name="githubOwner" placeholder="veeringman"/>
+            </label>
+            <label>Repositories (one per line: name | url | role)
+              <textarea id="site-repos" rows="4" placeholder="catalog | https://github.com/org/repo | content"></textarea>
+              <span class="field-hint">Roles: content, app, services</span>
+            </label>
+            <fieldset class="integrations-fieldset">
+              <legend>Capabilities / integrations</legend>
+              <div class="integrations-grid" id="integrationsGrid"></div>
+            </fieldset>
+          </div>
+
+          <div class="wizard-pane" data-pane="4" hidden>
+            <div class="review-card" id="reviewCard">Review will appear here.</div>
+          </div>
+
+          <div class="wizard-nav">
+            <button type="button" class="btn ghost compact" id="wizardBackBtn" hidden>Back</button>
+            <div class="wizard-nav-right">
+              <button type="button" class="btn secondary compact" id="wizardNextBtn">Continue</button>
+              <button type="submit" class="btn primary compact" id="wizardSubmitBtn" hidden>Create website</button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Templates -->
+      <section class="panel view-panel" id="view-templates" hidden>
+        <div class="panel-head">
+          <h2>Templates</h2>
+          <span class="muted">Layout packages used when scaffolding new sites</span>
+        </div>
+        <div class="template-grid" id="templatesLibrary"></div>
+        <div class="panel-sub">
+          <div class="panel-head"><h3>Define new template</h3></div>
+          <form id="createTemplateForm" class="editor-form">
+            <div class="grid-2">
+              <label>Template id
+                <input id="tpl-id" required placeholder="marketing-landing"/>
+              </label>
+              <label>Name
+                <input id="tpl-name" required placeholder="Marketing landing"/>
+              </label>
+            </div>
+            <label>Description
+              <input id="tpl-description" placeholder="Hero + sections layout"/>
+            </label>
+            <div class="grid-2">
+              <label>Clone from
+                <select id="tpl-clone-from"></select>
+              </label>
+              <label>Site types
+                <input id="tpl-site-types" value="static, responsive" placeholder="static, responsive"/>
+              </label>
+            </div>
+            <div class="editor-actions">
+              <button type="submit" class="btn primary compact">Create template</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Deleted -->
+      <section class="panel view-panel" id="view-deleted" hidden>
+        <div class="panel-head">
+          <h2>Deleted websites</h2>
+          <span class="muted">Restore to authoring, or permanently remove</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Site</th><th>Domain</th><th>Deleted</th><th></th></tr>
+            </thead>
+            <tbody id="deletedRows">
+              <tr><td colspan="4" class="muted">None</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

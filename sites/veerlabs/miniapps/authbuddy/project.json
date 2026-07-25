@@ -2,46 +2,57 @@
   "slug": "authbuddy",
   "name": "AuthBuddy",
   "subtitle": "Rust",
-  "summary": "<div align=\"left\"> <img src=\"auth_buddy_bluepurple.png\" alt=\"AuthBuddy Logo\" width=\"200\"/> </div>",
+  "summary": "An Identity provider and OAuth2/OIDC server that combines form login, MFA, passkeys, and standards-compliant federation in a single, extensible service.",
   "logo": "miniapps/authbuddy/assets/authbuddy_logo_bluegreen.png",
   "logoAlt": "AuthBuddy logo",
-  "status": [
-    "Draft"
-  ],
+  "status": [],
   "tags": [],
   "details": [
     {
       "title": "Project Overview",
-      "body": "<div align=\"left\"> <img src=\"auth_buddy_bluepurple.png\" alt=\"AuthBuddy Logo\" width=\"200\"/> </div>"
+      "body": "AuthBuddy provides a production-oriented authentication stack with a clean separation between domain models, services, HTTP handlers, and storage. It ships with client SDKs (TypeScript, React, Rust) and a Dioxus Web demo client.\n\n",
+      "format": "markdown"
     },
     {
-      "title": "Overview",
-      "body": "AuthBuddy provides a production-oriented authentication stack with a clean separation between domain models, services, HTTP handlers, and storage. It ships with client SDKs (TypeScript, React, Rust) and a Dioxus Web demo client."
+      "title": "Key capabilities",
+      "body": "",
+      "format": "markdown",
+      "size": "xl"
     },
     {
       "title": "Core authentication",
-      "body": "- User registration and password login with bcrypt and configurable password policy\n- Session creation, validation, and revocation\n- Account-level authentication context tracking"
+      "body": "- User registration and password login with bcrypt and configurable password policy\n- Session creation, validation, and revocation\n- Account-level authentication context tracking",
+      "format": "markdown"
     },
     {
       "title": "MFA and passkeys",
-      "body": "- TOTP setup and verification (RFC 6238)\n- OTP via email or SMS (provider interface with mock implementations)\n- Passkey registration and authentication (WebAuthn)"
+      "body": "- TOTP setup and verification (RFC 6238)\n- OTP via email or SMS (provider interface with mock implementations)\n- Passkey registration and authentication (WebAuthn)",
+      "format": "markdown"
     },
     {
       "title": "OAuth2/OIDC provider",
-      "body": "- OIDC discovery endpoint\n- Authorization Code Flow with mandatory PKCE\n- Token issuance (ID, access, refresh) with RS256 signing\n- Token introspection and revocation endpoints\n- JWKS for key distribution and rotation\n- Consent model and logout endpoint\n- Resource endpoints demonstrating access token validation"
+      "body": "- OIDC discovery endpoint\n- Authorization Code Flow with mandatory PKCE\n- Token issuance (ID, access, refresh) with RS256 signing\n- Token introspection and revocation endpoints\n- JWKS for key distribution and rotation\n- Consent model and logout endpoint\n- Resource endpoints demonstrating access token validation",
+      "format": "markdown"
     },
     {
       "title": "Client SDKs and demos",
-      "body": "- TypeScript/JavaScript SDK: `clients/typescript/`\n- React SDK: `clients/react/`\n- Rust SDK: `clients/rust/`\n- Dioxus Web demo app: `clients/rust/examples/web-client/`"
+      "body": "- TypeScript/JavaScript SDK: `clients/typescript/`\n- React SDK: `clients/react/`\n- Rust SDK: `clients/rust/`\n- Dioxus Web demo app: `clients/rust/examples/web-client/`",
+      "format": "markdown"
     },
     {
       "title": "Repository",
-      "body": "https://github.com/veeringman/AuthBuddy"
+      "body": "https://github.com/veeringman/AuthBuddy",
+      "format": "markdown"
     }
   ],
   "enabled": true,
-  "logoSize": "md",
-  "sortOrder": 0,
+  "logoSize": "sm",
+  "sortOrder": 10,
   "private": true,
-  "repoUrl": "https://github.com/veeringman/AuthBuddy"
+  "repoUrl": "https://github.com/veeringman/AuthBuddy",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "reimport": false,
+  "logoHeight": 54
 }

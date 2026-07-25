@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="VeerCanvas" src="../assets/branding/veer-canvas-icon.svg" width="96">
+</p>
+
 # VeerCanvas Admin
 
 Flask CMS for authoring and publishing VeerCanvas sites.

@@ -1,0 +1,39 @@
+{
+  "id": "ops",
+  "name": "VeerCanvas Ops",
+  "description": "Observability and message inbox for VeerCanvas-managed sites",
+  "domain": "ops.veerlabs.solutions",
+  "aliases": [
+    "www.ops.veerlabs.solutions"
+  ],
+  "webRoot": "/var/www/ops.veerlabs.solutions",
+  "githubOwner": "veeringman",
+  "admin": {
+    "serviceName": "veercanvas-admin-ops",
+    "port": 8083
+  },
+  "platform": false,
+  "ops": true,
+  "status": "published",
+  "siteType": "dynamic",
+  "templateId": "ops-console",
+  "templateVersion": "1.0.0",
+  "locales": [
+    "en"
+  ],
+  "defaultLocale": "en",
+  "repos": [],
+  "integrations": [
+    "auth",
+    "api-backend"
+  ],
+  "createdAt": "2026-07-25T17:12:50Z",
+  "updatedAt": "2026-07-25T17:12:50Z",
+  "statusHistory": [
+    {
+      "status": "published",
+      "at": "2026-07-25T17:12:50Z",
+      "note": "Backfilled Site Studio fields"
+    }
+  ]
+}
