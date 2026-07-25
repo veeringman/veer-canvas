@@ -1,163 +1,125 @@
-VeerLabs Website Developer / Admin Manual
-=========================================
+# VeerCanvas Admin Manual
 
-This manual documents the VeerLabs static website, the admin UI, deployment flow, and the content package structure.
+Operator and author guide for the Flask CMS, Site Studio (canvas), Ops console, and public engagement features.
 
-Overview
---------
-- The website is a static site under `veerabs_website/`.
-- Content is driven by `veerabs_website/projects.json` and per-project miniapp packages under `veerabs_website/miniapps/`.
-- An admin Flask app at `deploy/admin_app.py` manages `projects.json` and miniapp deletion/update.
-- Deployment is automated with `deploy/deploy_veerlabs_website_remote.sh`.
-- Remote server configuration is managed via `deploy/nginx_veerlabs.solutions.conf` when present.
+## Surfaces
 
-Repository Layout
------------------
-- `veerabs_website/`
-  - `index.html`, `project.js`, styles, and static assets for the public site.
-  - `projects.json` — the website project catalog used by the homepage/dashboard.
-  - `miniapps/<slug>/` — package folders containing project metadata and documentation.
-  - `scripts/import_github_projects_full.py` — importer script for GitHub repos.
-- `deploy/`
-  - `admin_app.py` — Flask admin UI and API.
-  - `requirements.txt` — Python dependencies for the admin app.
-  - `deploy_veerlabs_website_remote.sh` — remote deployment script.
-  - `nginx_veerlabs.solutions.conf` — recommended nginx site config for deployment.
-  - `README_admin.md` — short admin app usage notes.
+| URL | Purpose |
+|-----|---------|
+| `https://<site>/admin/` | Content CMS for that site only |
+| [canvas.veerlabs.solutions](https://canvas.veerlabs.solutions/) | Site Studio (create/manage sites) — requires `platform: true` |
+| [ops.veerlabs.solutions](https://ops.veerlabs.solutions/) | Observability + messagebox — requires `ops: true` |
 
-Website Content Model
----------------------
-- `projects.json` is the primary catalog file. Each entry is a project object with fields like:
-  - `slug`
-  - `name`
-  - `subtitle`
-  - `logo`
-  - `details` or `body`
-  - `tags`
-- Miniapp packages under `veerabs_website/miniapps/<slug>/` typically contain:
-  - `project.json` — project metadata for the package
-  - `source.json` — source repository metadata
-  - `README.md` — detailed project description
-  - `assets/` — logo and media files
+Unauthenticated visits to canvas or ops `/` redirect to `/admin/login?next=/`.
 
-Admin App
----------
-- File: `deploy/admin_app.py`
-- Default login: `admin`
-- Default password: `vijay123`
-- Default admin service URL: `http://<server>/admin/`
+## Login
 
-Capabilities:
-- View the current `projects.json` project list.
-- Delete a miniapp package by slug.
-- Remove the corresponding entry from `projects.json`.
-- Lookup a project by slug/name/subtitle.
-- Edit a project's JSON and save it back to both `projects.json` and `miniapps/<slug>/project.json`.
+1. Open `https://<host>/admin/login` (or follow the redirect from `/`).
+2. Sign in with an admin account stored in that site’s `admin.db`.
+3. On **first boot** (empty DB), the app seeds a default `admin` user — change the password immediately in production. Do not commit credentials to git.
 
-How it runs
-------------
-- The admin app reads `VEER_SITE_ROOT` to locate the website root.
-- Default `SITE_ROOT` is `../veerabs_website` relative to `deploy/admin_app.py`.
-- When deployed, the systemd service sets `VEER_SITE_ROOT=/var/www/veerlabs.solutions`.
+Session cookies gate CMS and platform/ops APIs. Set `VEERCANVAS_ADMIN_SECRET` in production.
 
-Deployment Flow
----------------
-1. Sync website files and deploy assets from the local repo to remote.
-2. Sync `deploy/` to the remote deployment folder.
-3. Install or update server packages and Python dependencies.
-4. Install the nginx site config from `deploy/nginx_veerlabs.solutions.conf` if available.
-5. Create and enable `veerlabs-admin.service`.
-6. Reload nginx.
-
-Deploy script
--------------
-- Path: `deploy/deploy_veerlabs_website_remote.sh`
-- Usage:
+## Local CMS
 
 ```bash
-chmod +x deploy/deploy_veerlabs_website_remote.sh
-./deploy/deploy_veerlabs_website_remote.sh ubuntu@3.216.30.113 /var/www/veerlabs.solutions
+cd veer-canvas
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r admin/requirements.txt
+
+export VEERCANVAS_SITE_ID=veerlabs
+export VEERCANVAS_SITE_ROOT="$(pwd)/sites/veerlabs"
+python admin/admin_app.py
+# http://127.0.0.1:8080/admin/
 ```
 
-- Default SSH key: `~/VeerSetuHost.pem` or environment variable `SSH_KEY`.
-- Local site source: `veerabs_website/`.
-- Remote root: default `/var/www/veerlabs.solutions`.
+For canvas or ops locally, point `VEERCANVAS_SITE_ID` / `SITE_ROOT` at that site and set `VEERCANVAS_PLATFORM=1` or `VEERCANVAS_OPS=1` (and a free `PORT`).
 
-Nginx Configuration
--------------------
-- Recommended config file: `deploy/nginx_veerlabs.solutions.conf`
-- The deploy script copies this file to `/etc/nginx/sites-available/veerlabs.solutions`.
-- The config proxies `/admin/`, `/login`, `/logout`, and `/api/` to the admin app on `127.0.0.1:8080`.
-- Static content is served directly from the website root.
+App entrypoint: [`admin/admin_app.py`](../admin/admin_app.py).
 
-Admin Service
--------------
-- Systemd unit: `/etc/systemd/system/veerlabs-admin.service`
-- ExecStart: `/usr/bin/python3 /var/www/veerlabs.solutions/deploy/admin_app.py`
-- Service name: `veerlabs-admin.service`
+## Content CMS (per site)
 
-Common Commands
----------------
-- Deploy the site:
+Authors manage **content only** — no create-site, no cross-site metrics.
+
+### Projects
+
+- **List / search** — catalog from `projects.json`
+- **New project** — create a slug + tile without GitHub
+- **Edit** — visual section editor (HTML / Markdown / Mermaid) or raw JSON
+- **Enable / hide** — `enabled` toggles membership in `projects-public.json`
+- **Delete** — removes miniapp + catalog entry; slug goes to `catalog-exclusions.json`
+- **Reorder** — display order on the public grid
+- **Logo / brand** — upload to miniapp assets or site brand marks under `assets/site/`
+- **Require auth** — per-project `requireAuth` gates Learn More / project detail behind visitor token or admin session
+
+### GitHub import
+
+- **Sync repos** — import *new* repos for the configured `githubOwner`
+- Projects already imported are skipped unless marked for reimport
+- CLI equivalent: [`cli/scripts/import_github_projects_full.py`](../cli/scripts/import_github_projects_full.py) (see [CLI.md](CLI.md))
+
+### Publish
+
+**Publish** bumps `site-meta.json` version metadata for the public site. Deploy separately (see [DEPLOY.md](DEPLOY.md)).
+
+## Site Studio (canvas)
+
+Available when the admin process runs with `platform: true` / `VEERCANVAS_PLATFORM=1`.
+
+- Create sites from templates (`catalog-static`, `docs-hub`, …)
+- Patch site metadata (status, domain, integrations)
+- Soft/hard delete sites
+- Trigger remote deploy for a site
+- Clone custom templates into `sites/_templates/` + `registry.json`
+
+Public shell: `sites/canvas/` (platform console UI). CMS remains at `/admin/`.
+
+## Ops console
+
+Available when `ops: true` / `VEERCANVAS_OPS=1`.
+
+Dashboard at `/` (after login) shows:
+
+- Overview — likes, comments, messages, visitors, **page visits**, unique IPs, anon vs token visits
+- Per-site table including visit counts
+- Messagebox — contact messages, comments, visitors, access events
+- **Visits** tab — recent rows (IP, path, auth mode, device, browser, referrer) + top paths/referrers
+
+Data is aggregated from each managed site’s `engagement.json`, `contact-messages.json`, and `visitor-access.json`.
+
+## Public engagement (catalog sites)
+
+On sites that ship `engagement.js` (e.g. VeerLabs):
+
+- Likes / dislikes / comments on projects
+- Contact modal → `contact-messages.json`
+- **Visit beacon** — every page load posts to `/api/public/visit` (with or without token)
+- **Learn More gate** — if `requireAuth`, visitor enters name + email, receives a ~1 hour token (`VEERCANVAS_VISITOR_TOKEN_TTL`, default `3600`), stored in browser localStorage
+
+## Data files (site root)
+
+| File | Written by | Notes |
+|------|------------|-------|
+| `projects.json` | CMS / import | Full catalog |
+| `projects-public.json` | CMS / import | Public enabled list |
+| `engagement.json` | Public APIs | Preserved on rsync deploy |
+| `contact-messages.json` | Contact form | Preserved |
+| `visitor-access.json` | Access + visits | Preserved (`visitors`, `tokens`, `events`, `visits`) |
+| `admin.db` | Flask | Under site or deploy data root — not overwritten by theme rsync |
+
+## Deploy reminder
 
 ```bash
-./deploy/deploy_veerlabs_website_remote.sh ubuntu@3.216.30.113 /var/www/veerlabs.solutions
+SITE_ID=veerlabs EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
+SITE_ID=canvas  EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
+SITE_ID=ops     EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
 ```
 
-- Start/stop the admin service on the remote host:
+See [HANDOFF.md](HANDOFF.md) and [DEPLOY.md](DEPLOY.md) for DNS, systemd service names, and troubleshooting.
 
-```bash
-ssh -i ~/VeerSetuHost.pem ubuntu@3.216.30.113 sudo systemctl restart veerlabs-admin.service
-ssh -i ~/VeerSetuHost.pem ubuntu@3.216.30.113 sudo systemctl status veerlabs-admin.service
-```
+## Related docs
 
-- Check nginx configuration and reload:
-
-```bash
-ssh -i ~/VeerSetuHost.pem ubuntu@3.216.30.113 sudo nginx -t
-ssh -i ~/VeerSetuHost.pem ubuntu@3.216.30.113 sudo systemctl reload nginx
-```
-
-- Validate admin route locally on the server:
-
-```bash
-curl -I http://127.0.0.1:8080/login
-```
-
-- Validate public admin route through nginx:
-
-```bash
-curl -I http://veerlabs.solutions/admin/
-```
-
-Project Imports and Content Updates
------------------------------------
-- Update `projects.json` and package content with the importer:
-
-```bash
-cd veerabs_website
-python3 scripts/import_github_projects_full.py veeringman --site-root . --projects-json projects.json --replace-existing
-```
-
-- After import, verify the generated package folders under `veerabs_website/miniapps/` and the updated `projects.json`.
-- Then deploy to the remote host.
-
-Troubleshooting
----------------
-- If `/admin/` is 404, ensure the nginx site config is present and the admin app is running.
-- If `/login` is 404, verify nginx is proxying `/login` to the app and the service listens on port `8080`.
-- If `favicon.ico` or static assets fail, confirm the site root contains the expected files and nginx `root` is correct.
-- If admin edits do not persist, check that `projects.json` is readable/writable by the admin service user.
-
-Security Notes
---------------
-- Change the default password immediately for production use.
-- Use HTTPS on the public site and admin interface.
-- Restrict access to the admin service by firewall or reverse proxy if possible.
-
-Further Reading
----------------
-- `deploy/README_admin.md` — quick admin app notes.
-- `deploy/admin_app.py` — admin UI source and route definitions.
-- `deploy/deploy_veerlabs_website_remote.sh` — remote deployment automation.
-- `veerabs_website/scripts/import_github_projects_full.py` — GitHub importer for site packages.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — surfaces and data model
+- [API.md](API.md) — route catalog
+- [STATUS.md](STATUS.md) — shipped vs next
+- [admin/README.md](../admin/README.md) — env vars and local run

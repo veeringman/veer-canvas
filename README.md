@@ -104,18 +104,36 @@ Before first deploy of a new site, point DNS (`<site-id>.veerlabs.solutions`) at
 | `VEERCANVAS_ADMIN_SECRET` | dev default | Flask session secret |
 | `VEERCANVAS_PLATFORM` | off | Enable website create/deploy APIs |
 | `VEERCANVAS_OPS` | off | Enable observability + messagebox APIs |
+| `VEERCANVAS_VISITOR_TOKEN_TTL` | `3600` | Visitor Learn More token lifetime (seconds) |
 | `PORT` / `VEERCANVAS_ADMIN_PORT` | `8080` | Admin listen port |
 | `IMPORT_REPOS` / `--import-repos` | off | Fetch GitHub repos on deploy |
+
+## Docs
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Surfaces, data model, auth, visits |
+| [docs/ADMIN_MANUAL.md](docs/ADMIN_MANUAL.md) | CMS, Site Studio, Ops, Learn More |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Remote deploy, nginx, preserve rules |
+| [docs/CLI.md](docs/CLI.md) | create_site + GitHub import |
+| [docs/API.md](docs/API.md) | Route catalog |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | Operator day-2 runbook |
+| [docs/STATUS.md](docs/STATUS.md) | Shipped vs next tracker |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased product roadmap |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+| [docs/MIGRATION.md](docs/MIGRATION.md) | Split from VeerSetu |
+
+Also: [admin/README.md](admin/README.md) · [deploy/README.md](deploy/README.md) · [cli/README.md](cli/README.md)
 
 ## Roadmap
 
 VeerCanvas is intentionally evolving beyond static publishing:
 
-- **Now:** catalog sites, rich sections (HTML/Markdown/Mermaid), admin CMS, GitHub import
-- **Next:** dynamic routes, server APIs, component registry, webhooks
-- **Future:** server components, edge rendering, multi-tenant hosting, plugin SDK
+- **Now:** multi-site platform (canvas / ops / catalog CMS), templates, engagement, visitor tokens, visit metrics
+- **Next:** richer dynamic routes, webhooks, draft/publish environments
+- **Future:** component registry, edge rendering, managed hosting
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/STATUS.md](docs/STATUS.md).
 
 ## Related projects
 
