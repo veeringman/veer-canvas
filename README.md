@@ -1,11 +1,9 @@
-<p align="center">
+<p align="left">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/veercanvas-logo.png">
     <img alt="VeerCanvas" src="assets/veercanvas-logo.png" width="420">
   </picture>
 </p>
-
-# VeerCanvas
 
 **VeerCanvas** is a content authoring and publishing platform for building rich web experiences — from static catalogs today to dynamic pages, server components, and APIs tomorrow.
 
