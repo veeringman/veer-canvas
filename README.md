@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/branding/veer-canvas-logo.svg">
-    <img alt="VeerCanvas" src="assets/branding/veer-canvas-logo-light.svg" width="420">
+    <img alt="VeerCanvas" src="assets/veercanvas-logo.png" width="420">
   </picture>
 </p>
 
