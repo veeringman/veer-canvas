@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — VeerLabs Solutions</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20260804pol1">
+  <script src="site-utils.js?v=20260724engage1" defer></script>
+  <script src="site-meta.js?v=20260804pol1" defer></script>
+  <script src="auth.js?v=20260804pol1" defer></script>
+  <script src="auth-page.js?v=20260804pol1" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-topbar">
+      <a class="brand-lockup" href="index.html" aria-label="VeerLabs Solutions home">
+        <img class="brand-mark" src="assets/veer-canvas-icon.svg" alt="" width="40" height="40">
+        <div>
+          <span class="brand-name">VeerLabs</span>
+          <span class="brand-tag">Solutions</span>
+        </div>
+      </a>
+    </header>
+
+    <main class="dashboard-container auth-page">
+      <header class="dashboard-hero auth-hero">
+        <p class="eyebrow">Secure access</p>
+        <h1 id="authTitle">Sign in</h1>
+        <p class="page-subtitle" id="authSubtitle">Enter your username. We’ll ask for the factors required by this site’s AuthBuddy policy.</p>
+      </header>
+
+      <div class="auth-layout">
+        <section class="auth-card" id="authCard">
+          <div class="auth-tabs" role="tablist">
+            <button type="button" class="auth-tab is-active" data-tab="login">Sign in</button>
+            <button type="button" class="auth-tab" data-tab="register">Register</button>
+          </div>
+
+          <p class="field-hint" id="authStatus" hidden></p>
+          <p class="error-message" id="authError" hidden></p>
+
+          <form id="loginForm" class="auth-form">
+            <div id="loginIdentifyStep">
+              <label>Username
+                <input id="loginUsername" name="username" required autocomplete="username" placeholder="your username"/>
+              </label>
+              <div class="editor-actions">
+                <button type="button" class="btn primary" id="loginContinueBtn">Continue</button>
+              </div>
+            </div>
+
+            <div id="loginCredentialStep" hidden>
+              <div class="login-user-chip">
+                <span>Signing in as <strong id="loginUserLabel"></strong></span>
+                <button type="button" class="btn ghost btn-compact" id="loginChangeUserBtn">Change</button>
+              </div>
+
+              <div class="auth-method-pills" id="loginMethodPills" aria-label="Available sign-in methods"></div>
+              <div class="auth-tabs auth-method-tabs" id="loginMethodTabs" role="tablist" hidden></div>
+
+              <div id="loginPasswordBlock" hidden>
+                <label>Password
+                  <input id="loginPassword" name="password" type="password" autocomplete="current-password"/>
+                </label>
+              </div>
+
+              <div id="loginOtpBlock" hidden>
+                <label><span id="loginOtpLabelText">Authenticator code</span>
+                  <input id="loginOtpCode" name="otp" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="6-digit code"/>
+                </label>
+                <div id="otpTypeSwitch" class="auth-tabs auth-method-tabs" hidden></div>
+                <p class="field-hint" id="loginOtpHint"></p>
+              </div>
+
+              <div id="loginPasskeyBlock" hidden>
+                <p class="field-hint">Use your device passkey / WebAuthn credential.</p>
+                <div class="editor-actions">
+                  <button type="button" class="btn primary" id="loginPasskeyBtn">Sign in with passkey</button>
+                </div>
+              </div>
+
+              <div class="editor-actions" id="loginSubmitRow">
+                <button type="submit" class="btn primary" id="loginSubmitBtn">Sign in</button>
+              </div>
+            </div>
+          </form>
+
+          <form id="registerForm" class="auth-form" hidden>
+            <div class="auth-method-pills" id="methodPills" aria-label="Available methods"></div>
+            <label>Username<input name="username" required autocomplete="username"/></label>
+            <label>Email<input name="email" type="email" required autocomplete="email"/></label>
+
+            <fieldset class="auth-fieldset" id="regTypeFieldset">
+              <legend>Account type</legend>
+              <label class="radio-row"><input type="radio" name="regType" value="password" checked/> Password account</label>
+              <label class="radio-row" id="regPasswordlessRow"><input type="radio" name="regType" value="passwordless"/> Passwordless (enroll authenticator next)</label>
+            </fieldset>
+
+            <div id="passwordFields">
+              <label>Password<input name="password" type="password" autocomplete="new-password" minlength="8"/></label>
+              <label>Confirm password<input name="password2" type="password" autocomplete="new-password" minlength="8"/></label>
+              <p class="field-hint" id="passwordHint">At least 8 characters, with upper, lower, and a number.</p>
+            </div>
+
+            <div class="editor-actions">
+              <button type="submit" class="btn primary">Create account</button>
+            </div>
+            <p class="field-hint" id="policyNotes"></p>
+          </form>
+
+          <section class="auth-mfa" id="mfaPanel" hidden>
+            <h2 id="mfaTitle">Authenticator</h2>
+            <p class="field-hint" id="mfaLead">Complete a second factor required by site policy before accessing protected pages.</p>
+
+            <div class="auth-tabs" id="mfaKindTabs" role="tablist">
+              <button type="button" class="auth-tab is-active" data-mfa="totp">TOTP</button>
+              <button type="button" class="auth-tab" data-mfa="hotp">HOTP</button>
+              <button type="button" class="auth-tab" data-mfa="passkey" id="mfaPasskeyTab" hidden>Passkey</button>
+            </div>
+
+            <div id="mfaVerifyOnly" hidden>
+              <label>6-digit code
+                <input id="mfaVerifyCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/>
+              </label>
+              <div class="editor-actions">
+                <button type="button" class="btn primary" id="confirmMfaVerify">Verify &amp; continue</button>
+                <button type="button" class="btn secondary" id="mfaVerifyPasskeyBtn" hidden>Use passkey instead</button>
+              </div>
+            </div>
+
+            <div id="mfaSetupBox">
+              <div id="mfaTotpHotpSetup">
+                <div class="editor-actions">
+                  <button type="button" class="btn primary" id="startMfaSetup">Show QR / setup key</button>
+                </div>
+                <div id="mfaQrArea" hidden>
+                  <img id="mfaQrImg" alt="Authenticator QR code" width="180" height="180" class="mfa-qr"/>
+                  <p class="field-hint mfa-uri"><span id="mfaUriLabel">URI</span>: <code id="mfaUri"></code></p>
+                  <p class="field-hint" id="mfaCounterHint" hidden></p>
+                  <label>Confirm 6-digit code<input id="mfaCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/></label>
+                  <div class="editor-actions">
+                    <button type="button" class="btn primary" id="confirmMfaCode">Confirm &amp; enable</button>
+                  </div>
+                </div>
+              </div>
+              <div id="mfaPasskeySetup" hidden>
+                <p class="field-hint">Register a platform or security-key passkey for this account.</p>
+                <div class="editor-actions">
+                  <button type="button" class="btn primary" id="startPasskeySetup">Create passkey</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="editor-actions mfa-footer-actions">
+              <button type="button" class="btn ghost" id="continueAfterAuth" hidden>Continue without MFA</button>
+            </div>
+          </section>
+        </section>
+      </div>
+      <footer id="site-footer" class="site-footer"></footer>
+    </main>
+  </div>
+</body>
+</html>

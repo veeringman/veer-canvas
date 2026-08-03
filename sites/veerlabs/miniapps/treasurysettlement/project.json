@@ -43,9 +43,9 @@
       "body": "https://github.com/veeringman/TreasurySettlement"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 330,
+  "sortOrder": 350,
   "private": true,
   "repoUrl": "https://github.com/veeringman/TreasurySettlement"
 }

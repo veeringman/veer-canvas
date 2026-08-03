@@ -339,6 +339,23 @@
         const href = link.getAttribute('href') || '';
         const match = href.match(/[?&]project=([^&]+)/);
         const slug = match ? decodeURIComponent(match[1]) : ((link.closest('[data-slug]') || {}).dataset || {}).slug || '';
+
+        // Prefer AuthBuddy Agent session over legacy visitor tokens.
+        if (window.VeerAuth && typeof window.VeerAuth.ensureProjectAccess === 'function') {
+          try {
+            const session = await window.VeerAuth.getSession(true);
+            if (window.VeerAuth.isAuthenticated(session)) {
+              window.location.href = href;
+              return;
+            }
+          } catch (_e) { /* fall through to auth hub */ }
+          const authPage = new URL('auth.html', window.location.href);
+          authPage.searchParams.set('return_to', new URL(href, window.location.href).toString());
+          if (slug) authPage.searchParams.set('project', slug);
+          window.location.href = authPage.toString();
+          return;
+        }
+
         try {
           const status = await api('/api/public/access/status?slug=' + encodeURIComponent(slug) + '&visitorId=' + encodeURIComponent(visitorId()));
           if (!status.requireAuth || status.authorized) {
@@ -568,15 +585,22 @@
   }
 
   function mountContactButton() {
-    const topbar = document.querySelector('.topbar-meta') || document.querySelector('.site-topbar');
-    if (!topbar || document.getElementById('contactOpenBtn')) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'contactOpenBtn';
-    btn.className = 'contact-open-btn';
-    btn.textContent = 'Contact';
-    btn.addEventListener('click', openContactModal);
-    topbar.appendChild(btn);
+    // Prefer the dedicated topbar nav slot created by auth.js.
+    let btn = document.getElementById('contactOpenBtn');
+    if (!btn) {
+      const nav = document.querySelector('.topbar-nav') || document.querySelector('.site-topbar');
+      if (!nav) return;
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'contactOpenBtn';
+      btn.className = 'topbar-link topbar-link-btn';
+      btn.textContent = 'Contact';
+      nav.appendChild(btn);
+    }
+    if (!btn.dataset.contactBound) {
+      btn.dataset.contactBound = '1';
+      btn.addEventListener('click', openContactModal);
+    }
     ensureContactModal();
   }
 

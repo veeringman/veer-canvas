@@ -110,7 +110,8 @@
       }
     ],
     "reimport": false,
-    "logoHeight": 40
+    "logoHeight": 34,
+    "requireAuth": false
   },
   {
     "slug": "veersetu",
@@ -166,7 +167,9 @@
     "summaryFormat": "auto",
     "summaryAlign": "",
     "summarySize": "",
-    "reimport": false
+    "reimport": false,
+    "requireAuth": false,
+    "logoHeight": 70
   },
   {
     "slug": "veeros",
@@ -184,13 +187,18 @@
         "format": "markdown"
       },
       {
-        "title": "Latest Updates (2026-05-04)",
-        "body": "- Updated VeerOS VM network smoke coverage for the current connect flow and host forwarding behavior.\n- Added shell terminal compatibility notes and routing analysis docs for VeerOS host access.\n- Clarified operator direction for host shell access: prefer `veer-connect` style shell routing for VeerOS hosts over generic SSH assumptions when host metadata advertises VeerOS capabilities.\n\nWhere traditional operating systems understand processes, threads, and files,\nVeerOS introduces three new kernel primitives: **Intents** (declarative goals),\n**Agents** (autonomous execution units), and an **Execution Fabric**\n(heterogeneous node topology). Compute, state, security, networking, and\nobservability collapse into a single fabric \u2014 not layered on after the fact.\nTogether, they replace entire cloud stacks \u2014 with few syscalls.\n\n> **Try it now:**\n> ```bash\n> cargo run -p veeros-demo      # interactive AI-native shell\n> ```\n\n---",
+        "title": "Latest Updates",
+        "body": "- Updated VeerOS VM network smoke coverage for the current connect flow and host forwarding behavior.\n- Added shell terminal compatibility notes and routing analysis docs for VeerOS host access.\n- Clarified operator direction for host shell access: prefer `veer-connect` style shell routing for VeerOS hosts over generic SSH assumptions when host metadata advertises VeerOS capabilities.\n\nWhere traditional operating systems understand processes, threads, and files,\nVeerOS introduces three new kernel primitives: \n**Intents** (declarative goals),\n**Agents** (autonomous execution units), and an\n **Execution Fabric** (heterogeneous node topology). \n\nCompute, state, security, networking, and observability collapse into a single fabric \u2014 not layered on after the fact.\nTogether, they replace entire cloud stacks \u2014 with few syscalls.\n\n> **Try it now:**\n> ```bash\n> cargo run -p veeros-demo      # interactive AI-native shell\n> ```\n\n---",
         "format": "markdown"
       },
       {
         "title": "Why VeerOS Exists",
         "body": "Every layer in the modern infrastructure stack exists because the OS doesn't\nunderstand goals:\n\n| Problem | Today's Stack | VeerOS |\n|---|---|---|\n| Orchestration | Kubernetes (2M+ lines) | `intent submit` (1 syscall) |\n| Service mesh | Istio + Envoy sidecars | ZeroServices \u2014 kernel-native routing + mTLS |\n| API gateway | Kong / Nginx / Traefik | `SYS_SVC_EXPOSE` (1 syscall) |\n| Service calls | REST endpoints + HTTP | `invoke(\"name.function\", payload)` |\n| Databases / caches / queues | Redis + Kafka + etcd | State Fabric (kernel-native KV + streams) |\n| Observability | Prometheus + Grafana + OTel | Structured events (typed, not string logs) |\n| Config management | etcd / Consul / Vault | Persistent memory (in-kernel KV) |\n| Task scheduling | Airflow / Celery / Temporal | Intent decomposition \u2192 agent DAGs |\n| Cross-arch deployment | Docker multi-arch + QEMU | Native fabric placement |\n| Failover / self-healing | Custom health checks + PDBs | Kernel heartbeat + auto-replan |\n| Network access control | ClearPass / Aruba / ISE | Kernel-native 802.1X + posture |\n| Endpoint security | CrowdStrike / Trellix / Defender | Kernel EDR \u2014 syscall-level visibility |\n| Zero Trust access | Zscaler / Cloudflare ZTNA | Kernel ZTNA \u2014 continuous auth per-request |\n| Device management | Intune / JAMF / SCCM | Fabric join = enrollment (0 agents) |\n| WAN connectivity | Tailscale / ZeroTier / VPN | WAN-scale fabric with NAT traversal |\n| Fleet management | Ansible / Terraform / Salt | Unified console + fleet intents |\n| Cross-org integration | API gateways + VPNs + OAuth2 | InterFabric (IFP) \u2014 federated invocation |\n| User interface | Browser + REST + JS frameworks | Fabric Client (VeerUX) \u2014 composable, AI-rendered views |\n\n**VeerOS collapses this entire stack into the kernel.** The OS itself plans,\nschedules, places, monitors, secures, renders, and manages \u2014 from a single MCU\nto a planet-scale fleet.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Real-World Applications",
+        "body": "",
         "format": "markdown"
       },
       {
@@ -233,7 +241,8 @@
     "summaryAlign": "",
     "summarySize": "",
     "reimport": false,
-    "logoHeight": 40
+    "logoHeight": 37,
+    "requireAuth": false
   },
   {
     "slug": "keycortex",
@@ -657,12 +666,147 @@
     "logoHeight": 48
   },
   {
+    "slug": "veero",
+    "name": "Veero",
+    "subtitle": "Build Native. Everywhere.",
+    "summary": "A Rust-native, AI-first application framework for building beautiful, high-performance native mobile apps across every major platform from a single codebase.",
+    "logo": "miniapps/veero/assets/veero-logo.png",
+    "logoAlt": "Veero logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "A next-generation Rust-native application framework for building beautiful, secure, AI-native mobile applications across every major platform from a single codebase.",
+        "format": "markdown"
+      },
+      {
+        "title": "Vision",
+        "body": "Veero is not another cross-platform framework.\n\nIt is a **Universal Native Application Platform** built from the ground up in Rust.\n\nModern mobile development has become fragmented.\n\n- Different languages\n- Different UI frameworks\n- Different tooling\n- Different design systems\n- Different networking stacks\n\nVeero unifies the entire application stack into one cohesive developer experience while preserving truly native user experiences.\n\nOur goal is simple:\n\n> **Write once. Feel native everywhere.**\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Why Veero?",
+        "body": "Existing frameworks usually compromise one of these:\n\n- Performance\n- Native look and feel\n- Developer productivity\n- Safety\n- Binary size\n- AI integration\n\nVeero is designed to optimize all of them.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Core Principles",
+        "body": "- Rust Native\n- Native by Design\n- GPU Accelerated\n- AI First\n- Offline First\n- Secure by Default\n- Zero JavaScript Runtime\n- Zero Reflection\n- Memory Safe\n- High Performance\n- Beautiful Developer Experience\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Native Rendering",
+        "body": "Modern GPU accelerated rendering engine.\n\n- Metal\n- Vulkan\n- OpenGL ES\n- Future WebGPU support\n\nNo HTML.\n\nNo WebView.\n\nNo JavaScript runtime.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Declarative UI",
+        "body": "Modern declarative widgets inspired by the best ideas from SwiftUI, Jetpack Compose and Flutter.\n\n```rust\nApp::new()\n    .window(|| {\n        Column::new()\n            .child(Text::new(\"Hello Veero\"))\n            .child(Button::new(\"Continue\"))\n    });\n```\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Architecture",
+        "body": "```\nApplication\n      \u2502\n      \u25bc\nReactive Widget Tree\n      \u2502\n      \u25bc\nLayout Engine\n      \u2502\n      \u25bc\nRendering Engine\n      \u2502\n      \u25bc\nGPU Backend\n      \u2502\n      \u25bc\nPlatform Layer\n      \u2502\n \u250c\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                  \u2502\nAndroid          iOS\n \u2502                  \u2502\nHarmonyOS     Future Platforms\n```\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/veero",
+        "format": "markdown"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 120,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/veero",
+    "summaryFormat": "auto",
+    "summaryAlign": "",
+    "summarySize": "",
+    "requireAuth": false,
+    "reimport": false,
+    "logoWidth": 50
+  },
+  {
+    "slug": "veer-dharam",
+    "name": "Veer Dharam",
+    "subtitle": "Veer \u0927\u0930\u094d\u092e is the AI Trust Operating System that gives every piece of data a living identit...",
+    "summary": "",
+    "logo": "miniapps/veer-dharam/assets/logo.png",
+    "logoAlt": "Veer Dharam logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "Artificial Intelligence is becoming deeply embedded in how organizations create, process, analyze, and act upon information.\n\nEnterprise data is now flowing through:\n\nLarge Language Models\nAI Agents\nRAG pipelines\nVector databases\nAI copilots\nAutonomous workflows\nModel training pipelines\nAPIs\nSaaS platforms\nCloud infrastructure\nYet most existing security and privacy systems were designed for a world of:\n\nFiles\nDatabases\nNetworks\nApplications\nUsers\nThe AI era has introduced an entirely new environment:\n\nPrompts\nContext\nEmbeddings\nModels\nAgents\nMemories\nTools\nRAG\nInference\nAutonomous Decisions\nTraditional DLP asks:\n\n\"Is this data sensitive?\"\nVeer Dharam asks a deeper question:\n\n\"Is this AI allowed to use this data, for this purpose, in this context, under these obligations?\"\n",
+        "format": "markdown"
+      },
+      {
+        "title": "Every piece of data has a Dharam. Every AI must honor it.",
+        "body": "**AI-Native Data Trust Infrastructure for Privacy, Security, Governance, Compliance, and Responsible AI**\n\n<br/>\n\n[![Status](https://img.shields.io/badge/status-under--development-orange)](https://github.com)\n[![Rust](https://img.shields.io/badge/Rust-2024-orange?logo=rust)](https://www.rust-lang.org/)\n[![AI Native](https://img.shields.io/badge/AI-Native-6C63FF)](https://github.com)\n[![Privacy First](https://img.shields.io/badge/Privacy-First-0088CC)](https://github.com)\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)\n\n</div>\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "The Problem",
+        "body": "Artificial Intelligence is becoming deeply embedded in how organizations create, process, analyze, and act upon information.\n\nEnterprise data is now flowing through:\n\n- Large Language Models\n- AI Agents\n- RAG pipelines\n- Vector databases\n- AI copilots\n- Autonomous workflows\n- Model training pipelines\n- APIs\n- SaaS platforms\n- Cloud infrastructure\n\nYet most existing security and privacy systems were designed for a world of:\n\n```text\nFiles\nDatabases\nNetworks\nApplications\nUsers\n```\n\nThe AI era has introduced an entirely new environment:\n\n```text\nPrompts\nContext\nEmbeddings\nModels\nAgents\nMemories\nTools\nRAG\nInference\nAutonomous Decisions\n```\n\nTraditional DLP asks:\n\n> **\"Is this data sensitive?\"**\n\nVeer Dharam asks a deeper question:\n\n> **\"Is this AI allowed to use this data, for this purpose, in this context, under these obligations?\"**\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "AI needs a Trust Layer",
+        "body": "Artificial Intelligence should not merely understand information.\n\nIt should understand **responsibility**.\n\nEvery piece of data has:\n\n- An identity\n- An owner\n- A purpose\n- A sensitivity\n- A consent state\n- A jurisdiction\n- A lifecycle\n- A set of obligations\n- A level of trust\n- A permitted way of being used\n\nVeer Dharam turns these properties into a machine-readable and enforceable identity.\n\nWe call this:",
+        "format": "markdown"
+      },
+      {
+        "title": "Data Dharam\u2122",
+        "body": "---",
+        "format": "markdown"
+      },
+      {
+        "title": "What is Dharam?",
+        "body": "**Dharam** represents the intrinsic nature, purpose, responsibility, and rightful conduct associated with something.\n\nFor data, its Dharam describes:\n\n```text\nWho owns it?\n\nWhy does it exist?\n\nWhy was it collected?\n\nWho may access it?\n\nWhich AI systems may process it?\n\nFor what purpose?\n\nWhere may it be processed?\n\nWhich regulations apply?\n\nHow long may it exist?\n\nWhat transformations are permitted?\n\nWhat happens when consent is revoked?\n```\n\nVeer Dharam makes these obligations understandable to machines.\n\n> **Data should not merely be protected. Its purpose should be preserved.**\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Architecture",
+        "body": "```text\n                         VEER DHARAM\n                    AI TRUST OPERATING SYSTEM\n\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                    TRUST CONTROL PLANE                  \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510   \u2502\n \u2502  \u2502 Data DNA   \u2502  \u2502   Policy   \u2502  \u2502   Risk Engine   \u2502   \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518   \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510   \u2502\n \u2502  \u2502 Trust Graph\u2502  \u2502 Compliance \u2502  \u2502 Dharam Agents   \u2502   \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518   \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                     TRUST DATA PLANE                    \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u2502\n \u2502  \u2502 AI Gateway \u2502 \u2502 Prompt FW  \u2502 \u2502 Agent Enforcement  \u2502  \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u2502\n \u2502  \u2502 RAG Guard  \u2502 \u2502 Data Guard \u2502 \u2502 Runtime Monitoring \u2502  \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u25bc              \u25bc              \u25bc\n           LLMs           Agents         Enterprise\n                                           Systems\n```\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Open Architecture",
+        "body": "Veer Dharam should integrate with existing AI infrastructure rather than replace it unnecessarily.",
+        "format": "markdown"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/veer-dharam",
+        "format": "markdown"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 130,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/veer-dharam",
+    "summaryFormat": "auto",
+    "summaryAlign": "",
+    "summarySize": "",
+    "requireAuth": false,
+    "reimport": false,
+    "logoHeight": 50
+  },
+  {
     "slug": "veer-artha",
-    "name": "Veer Artha",
+    "name": "Veer Arth",
     "subtitle": "\u0905\u0930\u094d\u0925",
     "summary": "AI-Native Tax, Accounting & Financial Intelligence Platform\n\nMaking taxation and financial compliance as effortless as having a conversation with AI.",
     "logo": "miniapps/veer-artha/assets/logo.png",
-    "logoAlt": "Veer Artha logo",
+    "logoAlt": "Veer Arth logo",
     "status": [
       "Draft"
     ],
@@ -711,14 +855,15 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 120,
+    "sortOrder": 140,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-artha",
     "summaryFormat": "auto",
     "summaryAlign": "",
     "summarySize": "",
     "reimport": false,
-    "logoHeight": 56
+    "logoHeight": 50,
+    "requireAuth": false
   },
   {
     "slug": "veer-canvas",
@@ -770,7 +915,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 130,
+    "sortOrder": 150,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veer-canvas",
     "summaryFormat": "auto",
@@ -829,7 +974,7 @@
     ],
     "enabled": true,
     "logoSize": "sm",
-    "sortOrder": 140,
+    "sortOrder": 160,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerion",
     "summaryFormat": "auto",
@@ -897,7 +1042,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 150,
+    "sortOrder": 170,
     "private": true,
     "repoUrl": "https://github.com/veeringman/VeerGenesis"
   },
@@ -924,7 +1069,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 160,
+    "sortOrder": 180,
     "private": false,
     "repoUrl": "https://github.com/veeringman/VeerParvat"
   },
@@ -983,7 +1128,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 170,
+    "sortOrder": 190,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-savora",
     "summaryFormat": "auto",
@@ -1039,7 +1184,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 180,
+    "sortOrder": 200,
     "private": true,
     "repoUrl": "https://github.com/veeringman/matteros"
   },
@@ -1103,7 +1248,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 190,
+    "sortOrder": 210,
     "private": true,
     "repoUrl": "https://github.com/veeringman/woodyveer",
     "summaryFormat": "auto",
@@ -1161,7 +1306,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 200,
+    "sortOrder": 220,
     "private": true,
     "repoUrl": "https://github.com/veeringman/jee_prep_webapp",
     "summaryFormat": "auto",
@@ -1212,7 +1357,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 210,
+    "sortOrder": 230,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veertrust"
   },
@@ -1271,7 +1416,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 220,
+    "sortOrder": 240,
     "private": true,
     "repoUrl": "https://github.com/veeringman/edgeVault",
     "summaryFormat": "auto",
@@ -1323,7 +1468,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 230,
+    "sortOrder": 250,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerEdge"
   },
@@ -1374,7 +1519,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 240,
+    "sortOrder": 260,
     "private": false,
     "repoUrl": "https://github.com/veeringman/quantum-waulta"
   },
@@ -1421,7 +1566,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 250,
+    "sortOrder": 270,
     "private": true,
     "repoUrl": "https://github.com/veeringman/synthfoundary"
   },
@@ -1468,7 +1613,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 260,
+    "sortOrder": 280,
     "private": false,
     "repoUrl": "https://github.com/veeringman/tools"
   },
@@ -1515,7 +1660,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 270,
+    "sortOrder": 290,
     "private": false,
     "repoUrl": "https://github.com/veeringman/overwatch"
   },
@@ -1566,7 +1711,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 280,
+    "sortOrder": 300,
     "private": true,
     "repoUrl": "https://github.com/veeringman/SeekPeek"
   },
@@ -1597,7 +1742,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 290,
+    "sortOrder": 310,
     "private": true,
     "repoUrl": "https://github.com/veeringman/QuantumArc"
   },
@@ -1628,7 +1773,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 300,
+    "sortOrder": 320,
     "private": true,
     "repoUrl": "https://github.com/veeringman/Shieldon"
   },
@@ -1675,7 +1820,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 310,
+    "sortOrder": 330,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroPolitics"
   },
@@ -1722,7 +1867,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 320,
+    "sortOrder": 340,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroServices"
   },
@@ -1771,9 +1916,9 @@
         "body": "https://github.com/veeringman/TreasurySettlement"
       }
     ],
-    "enabled": true,
+    "enabled": false,
     "logoSize": "md",
-    "sortOrder": 330,
+    "sortOrder": 350,
     "private": true,
     "repoUrl": "https://github.com/veeringman/TreasurySettlement"
   },
@@ -1826,9 +1971,9 @@
         "body": "https://github.com/veeringman/FortressDigital"
       }
     ],
-    "enabled": true,
+    "enabled": false,
     "logoSize": "md",
-    "sortOrder": 340,
+    "sortOrder": 360,
     "private": true,
     "repoUrl": "https://github.com/veeringman/FortressDigital"
   },
@@ -1879,7 +2024,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 350,
+    "sortOrder": 370,
     "private": false,
     "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
   },
@@ -1902,7 +2047,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 360,
+    "sortOrder": 380,
     "private": true,
     "repoUrl": "https://github.com/veeringman/async_forge"
   },
@@ -1949,7 +2094,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 370,
+    "sortOrder": 390,
     "private": true,
     "repoUrl": "https://github.com/veeringman/brain_blocks"
   },
@@ -1976,7 +2121,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 380,
+    "sortOrder": 400,
     "private": true,
     "repoUrl": "https://github.com/veeringman/demo-workspaces"
   },
@@ -2003,7 +2148,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 390,
+    "sortOrder": 410,
     "private": true,
     "repoUrl": "https://github.com/veeringman/fd_demo_integ"
   },
@@ -2050,7 +2195,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 400,
+    "sortOrder": 420,
     "private": true,
     "repoUrl": "https://github.com/veeringman/future"
   },
@@ -2097,7 +2242,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 410,
+    "sortOrder": 430,
     "private": true,
     "repoUrl": "https://github.com/veeringman/green_thread"
   },
@@ -2144,7 +2289,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 420,
+    "sortOrder": 440,
     "private": true,
     "repoUrl": "https://github.com/veeringman/quakeguard"
   },
@@ -2191,7 +2336,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 430,
+    "sortOrder": 450,
     "private": false,
     "repoUrl": "https://github.com/veeringman/lanpeek"
   },
@@ -2238,7 +2383,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 440,
+    "sortOrder": 460,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proof-cortex"
   },
@@ -2277,7 +2422,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 450,
+    "sortOrder": 470,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proofcortex-core"
   },
@@ -2328,7 +2473,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 460,
+    "sortOrder": 480,
     "private": true,
     "repoUrl": "https://github.com/veeringman/sentientos"
   },
@@ -2359,7 +2504,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 470,
+    "sortOrder": 490,
     "private": false,
     "repoUrl": "https://github.com/veeringman/sharma"
   },
@@ -2390,7 +2535,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 480,
+    "sortOrder": 500,
     "private": true,
     "repoUrl": "https://github.com/veeringman/tie_http"
   },
@@ -2437,7 +2582,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 490,
+    "sortOrder": 510,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veeringman"
   }

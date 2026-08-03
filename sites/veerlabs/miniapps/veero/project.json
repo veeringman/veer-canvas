@@ -1,0 +1,65 @@
+{
+  "slug": "veero",
+  "name": "Veero",
+  "subtitle": "Build Native. Everywhere.",
+  "summary": "A Rust-native, AI-first application framework for building beautiful, high-performance native mobile apps across every major platform from a single codebase.",
+  "logo": "miniapps/veero/assets/veero-logo.png",
+  "logoAlt": "Veero logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "A next-generation Rust-native application framework for building beautiful, secure, AI-native mobile applications across every major platform from a single codebase.",
+      "format": "markdown"
+    },
+    {
+      "title": "Vision",
+      "body": "Veero is not another cross-platform framework.\n\nIt is a **Universal Native Application Platform** built from the ground up in Rust.\n\nModern mobile development has become fragmented.\n\n- Different languages\n- Different UI frameworks\n- Different tooling\n- Different design systems\n- Different networking stacks\n\nVeero unifies the entire application stack into one cohesive developer experience while preserving truly native user experiences.\n\nOur goal is simple:\n\n> **Write once. Feel native everywhere.**\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Why Veero?",
+      "body": "Existing frameworks usually compromise one of these:\n\n- Performance\n- Native look and feel\n- Developer productivity\n- Safety\n- Binary size\n- AI integration\n\nVeero is designed to optimize all of them.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Core Principles",
+      "body": "- Rust Native\n- Native by Design\n- GPU Accelerated\n- AI First\n- Offline First\n- Secure by Default\n- Zero JavaScript Runtime\n- Zero Reflection\n- Memory Safe\n- High Performance\n- Beautiful Developer Experience\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Native Rendering",
+      "body": "Modern GPU accelerated rendering engine.\n\n- Metal\n- Vulkan\n- OpenGL ES\n- Future WebGPU support\n\nNo HTML.\n\nNo WebView.\n\nNo JavaScript runtime.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Declarative UI",
+      "body": "Modern declarative widgets inspired by the best ideas from SwiftUI, Jetpack Compose and Flutter.\n\n```rust\nApp::new()\n    .window(|| {\n        Column::new()\n            .child(Text::new(\"Hello Veero\"))\n            .child(Button::new(\"Continue\"))\n    });\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Architecture",
+      "body": "```\nApplication\n      \u2502\n      \u25bc\nReactive Widget Tree\n      \u2502\n      \u25bc\nLayout Engine\n      \u2502\n      \u25bc\nRendering Engine\n      \u2502\n      \u25bc\nGPU Backend\n      \u2502\n      \u25bc\nPlatform Layer\n      \u2502\n \u250c\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                  \u2502\nAndroid          iOS\n \u2502                  \u2502\nHarmonyOS     Future Platforms\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veero",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 120,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veero",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "requireAuth": false,
+  "reimport": false,
+  "logoWidth": 50
+}

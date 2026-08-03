@@ -31,8 +31,9 @@ fi
 
 rewrite_admin_port() {
   local file="$1"
-  # Replace any 127.0.0.1:<port> proxy targets with the site's admin port.
-  sed -i -E "s|127\\.0\\.0\\.1:[0-9]+|127.0.0.1:${ADMIN_PORT}|g" "$file"
+  # Rewrite CMS admin upstreams only. Never touch VeerSetu AuthBuddy bind :18080
+  # (or other non-admin ports used by /agent/ and /auth/ proxies).
+  sed -i -E "s|127\\.0\\.0\\.1:808[0-3]\\b|127.0.0.1:${ADMIN_PORT}|g" "$file"
 }
 
 install_nginx_config() {
@@ -109,9 +110,17 @@ server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN www.$DOMAIN;
+    server_tokens off;
     root $WEB_ROOT;
     index index.html;
     client_max_body_size 20m;
+
+    error_page 403 /errors/403.html;
+    error_page 404 /errors/404.html;
+    error_page 500 /errors/500.html;
+    error_page 502 /errors/502.html;
+    error_page 503 /errors/503.html;
+    error_page 504 /errors/504.html;
 
     location = /admin { return 301 /admin/; }
     location ^~ /admin/ {
@@ -124,14 +133,17 @@ server {
         proxy_connect_timeout 60s;
         proxy_send_timeout 600s;
         proxy_read_timeout 600s;
+        proxy_intercept_errors on;
     }
     location ^~ /static/ {
         proxy_pass http://127.0.0.1:${ADMIN_PORT}/static/;
         proxy_set_header Host \$host;
+        proxy_intercept_errors on;
     }
     location ^~ /site/ {
         proxy_pass http://127.0.0.1:${ADMIN_PORT}/site/;
         proxy_set_header Host \$host;
+        proxy_intercept_errors on;
     }
     location = /login { return 302 /admin/login; }
     location = /logout { return 302 /admin/logout; }
@@ -141,6 +153,28 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_intercept_errors on;
+    }
+    # AuthBuddy via VeerSetu connect on EC2 (127.0.0.1:18080) — not LAN IP.
+    location ^~ /agent/ {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host authbuddy.veerlabs.solutions;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_intercept_errors on;
+    }
+    location ^~ /auth/ {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host authbuddy.veerlabs.solutions;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_intercept_errors on;
     }
     location / { try_files \$uri \$uri/ =404; }
     location = /projects.json { return 404; }

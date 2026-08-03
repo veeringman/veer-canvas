@@ -1,10 +1,10 @@
 {
   "slug": "veer-artha",
-  "name": "Veer Artha",
+  "name": "Veer Arth",
   "subtitle": "\u0905\u0930\u094d\u0925",
   "summary": "AI-Native Tax, Accounting & Financial Intelligence Platform\n\nMaking taxation and financial compliance as effortless as having a conversation with AI.",
   "logo": "miniapps/veer-artha/assets/logo.png",
-  "logoAlt": "Veer Artha logo",
+  "logoAlt": "Veer Arth logo",
   "status": [
     "Draft"
   ],
@@ -53,12 +53,13 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 120,
+  "sortOrder": 140,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veer-artha",
   "summaryFormat": "auto",
   "summaryAlign": "",
   "summarySize": "",
   "reimport": false,
-  "logoHeight": 56
+  "logoHeight": 50,
+  "requireAuth": false
 }

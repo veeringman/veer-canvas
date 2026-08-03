@@ -47,9 +47,9 @@
       "body": "https://github.com/veeringman/FortressDigital"
     }
   ],
-  "enabled": true,
+  "enabled": false,
   "logoSize": "md",
-  "sortOrder": 340,
+  "sortOrder": 360,
   "private": true,
   "repoUrl": "https://github.com/veeringman/FortressDigital"
 }

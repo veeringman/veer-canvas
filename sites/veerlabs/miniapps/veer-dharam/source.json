@@ -1,0 +1,11 @@
+{
+  "slug": "veer-dharam",
+  "repo": "https://github.com/veeringman/veer-dharam",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://img.shields.io/badge/status-under--development-orange"
+  ],
+  "readme_logo_url": "https://img.shields.io/badge/status-under--development-orange"
+}

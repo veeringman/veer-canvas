@@ -1,0 +1,90 @@
+/* Minimal branded error pages — no stack traces, no server banners. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap");
+
+:root {
+  --bg-0: #071018;
+  --bg-1: #0d1b26;
+  --text: #f3f8ff;
+  --muted: rgba(226, 236, 248, 0.68);
+  --accent: #00c6fb;
+  --font: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: dark; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(900px 420px at 10% -10%, rgba(0, 198, 251, 0.16), transparent 55%),
+    linear-gradient(160deg, var(--bg-0), var(--bg-1));
+}
+
+.err-shell {
+  width: min(100%, 440px);
+  text-align: center;
+}
+
+.err-brand {
+  margin: 0 0 18px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.err-code {
+  margin: 0;
+  font-size: clamp(3.5rem, 12vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: rgba(243, 248, 255, 0.92);
+}
+
+h1 {
+  margin: 12px 0 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.err-copy {
+  margin: 0 0 22px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.err-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.err-btn {
+  display: inline-flex;
+  padding: 10px 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+  color: #041018;
+  background: linear-gradient(120deg, rgba(0, 198, 251, 0.95), rgba(0, 150, 200, 0.88));
+}
+
+.err-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.err-link:hover { text-decoration: underline; }

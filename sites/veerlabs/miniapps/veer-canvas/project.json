@@ -48,7 +48,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 130,
+  "sortOrder": 150,
   "private": false,
   "repoUrl": "https://github.com/veeringman/veer-canvas",
   "summaryFormat": "auto",

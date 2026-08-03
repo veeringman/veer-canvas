@@ -52,5 +52,7 @@
   "summaryFormat": "auto",
   "summaryAlign": "",
   "summarySize": "",
-  "reimport": false
+  "reimport": false,
+  "requireAuth": false,
+  "logoHeight": 70
 }

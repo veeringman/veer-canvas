@@ -14,13 +14,18 @@
       "format": "markdown"
     },
     {
-      "title": "Latest Updates (2026-05-04)",
-      "body": "- Updated VeerOS VM network smoke coverage for the current connect flow and host forwarding behavior.\n- Added shell terminal compatibility notes and routing analysis docs for VeerOS host access.\n- Clarified operator direction for host shell access: prefer `veer-connect` style shell routing for VeerOS hosts over generic SSH assumptions when host metadata advertises VeerOS capabilities.\n\nWhere traditional operating systems understand processes, threads, and files,\nVeerOS introduces three new kernel primitives: **Intents** (declarative goals),\n**Agents** (autonomous execution units), and an **Execution Fabric**\n(heterogeneous node topology). Compute, state, security, networking, and\nobservability collapse into a single fabric \u2014 not layered on after the fact.\nTogether, they replace entire cloud stacks \u2014 with few syscalls.\n\n> **Try it now:**\n> ```bash\n> cargo run -p veeros-demo      # interactive AI-native shell\n> ```\n\n---",
+      "title": "Latest Updates",
+      "body": "- Updated VeerOS VM network smoke coverage for the current connect flow and host forwarding behavior.\n- Added shell terminal compatibility notes and routing analysis docs for VeerOS host access.\n- Clarified operator direction for host shell access: prefer `veer-connect` style shell routing for VeerOS hosts over generic SSH assumptions when host metadata advertises VeerOS capabilities.\n\nWhere traditional operating systems understand processes, threads, and files,\nVeerOS introduces three new kernel primitives: \n**Intents** (declarative goals),\n**Agents** (autonomous execution units), and an\n **Execution Fabric** (heterogeneous node topology). \n\nCompute, state, security, networking, and observability collapse into a single fabric \u2014 not layered on after the fact.\nTogether, they replace entire cloud stacks \u2014 with few syscalls.\n\n> **Try it now:**\n> ```bash\n> cargo run -p veeros-demo      # interactive AI-native shell\n> ```\n\n---",
       "format": "markdown"
     },
     {
       "title": "Why VeerOS Exists",
       "body": "Every layer in the modern infrastructure stack exists because the OS doesn't\nunderstand goals:\n\n| Problem | Today's Stack | VeerOS |\n|---|---|---|\n| Orchestration | Kubernetes (2M+ lines) | `intent submit` (1 syscall) |\n| Service mesh | Istio + Envoy sidecars | ZeroServices \u2014 kernel-native routing + mTLS |\n| API gateway | Kong / Nginx / Traefik | `SYS_SVC_EXPOSE` (1 syscall) |\n| Service calls | REST endpoints + HTTP | `invoke(\"name.function\", payload)` |\n| Databases / caches / queues | Redis + Kafka + etcd | State Fabric (kernel-native KV + streams) |\n| Observability | Prometheus + Grafana + OTel | Structured events (typed, not string logs) |\n| Config management | etcd / Consul / Vault | Persistent memory (in-kernel KV) |\n| Task scheduling | Airflow / Celery / Temporal | Intent decomposition \u2192 agent DAGs |\n| Cross-arch deployment | Docker multi-arch + QEMU | Native fabric placement |\n| Failover / self-healing | Custom health checks + PDBs | Kernel heartbeat + auto-replan |\n| Network access control | ClearPass / Aruba / ISE | Kernel-native 802.1X + posture |\n| Endpoint security | CrowdStrike / Trellix / Defender | Kernel EDR \u2014 syscall-level visibility |\n| Zero Trust access | Zscaler / Cloudflare ZTNA | Kernel ZTNA \u2014 continuous auth per-request |\n| Device management | Intune / JAMF / SCCM | Fabric join = enrollment (0 agents) |\n| WAN connectivity | Tailscale / ZeroTier / VPN | WAN-scale fabric with NAT traversal |\n| Fleet management | Ansible / Terraform / Salt | Unified console + fleet intents |\n| Cross-org integration | API gateways + VPNs + OAuth2 | InterFabric (IFP) \u2014 federated invocation |\n| User interface | Browser + REST + JS frameworks | Fabric Client (VeerUX) \u2014 composable, AI-rendered views |\n\n**VeerOS collapses this entire stack into the kernel.** The OS itself plans,\nschedules, places, monitors, secures, renders, and manages \u2014 from a single MCU\nto a planet-scale fleet.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Real-World Applications",
+      "body": "",
       "format": "markdown"
     },
     {
@@ -63,5 +68,6 @@
   "summaryAlign": "",
   "summarySize": "",
   "reimport": false,
-  "logoHeight": 40
+  "logoHeight": 37,
+  "requireAuth": false
 }

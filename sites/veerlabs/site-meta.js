@@ -54,13 +54,16 @@ function renderSiteChrome(meta) {
   applyAttr('.brand-lockup', 'aria-label', `${siteName} home`);
   applyText('.brand-name', brandName);
   applyText('.brand-tag', brandTag);
-  applyText('.eyebrow', meta.eyebrow);
-  applyText('.dashboard-hero h1', meta.title || siteName);
-  applyText('.dashboard-hero .page-subtitle', meta.subtitle);
 
-  const chips = document.querySelectorAll('.topbar-meta .meta-chip');
-  if (chips[0] && meta.chipPrimary) chips[0].textContent = meta.chipPrimary;
-  if (chips[1] && meta.chipSecondary) chips[1].textContent = meta.chipSecondary;
+  // Auth page owns its hero copy — don't overwrite with catalog metadata.
+  const onAuthPage = /auth\.html$/i.test(window.location.pathname || '');
+  if (!onAuthPage) {
+    applyText('.eyebrow', meta.eyebrow);
+    applyText('.dashboard-hero h1', meta.title || siteName);
+    applyText('.dashboard-hero .page-subtitle', meta.subtitle);
+  }
+
+  // Header auth/nav is owned by auth.js — do not rewrite chips there.
 
   const footer = document.getElementById('site-footer');
   if (!footer) return;

@@ -1,0 +1,70 @@
+{
+  "slug": "veer-dharam",
+  "name": "Veer Dharam",
+  "subtitle": "Veer \u0927\u0930\u094d\u092e is the AI Trust Operating System that gives every piece of data a living identit...",
+  "summary": "",
+  "logo": "miniapps/veer-dharam/assets/logo.png",
+  "logoAlt": "Veer Dharam logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Artificial Intelligence is becoming deeply embedded in how organizations create, process, analyze, and act upon information.\n\nEnterprise data is now flowing through:\n\nLarge Language Models\nAI Agents\nRAG pipelines\nVector databases\nAI copilots\nAutonomous workflows\nModel training pipelines\nAPIs\nSaaS platforms\nCloud infrastructure\nYet most existing security and privacy systems were designed for a world of:\n\nFiles\nDatabases\nNetworks\nApplications\nUsers\nThe AI era has introduced an entirely new environment:\n\nPrompts\nContext\nEmbeddings\nModels\nAgents\nMemories\nTools\nRAG\nInference\nAutonomous Decisions\nTraditional DLP asks:\n\n\"Is this data sensitive?\"\nVeer Dharam asks a deeper question:\n\n\"Is this AI allowed to use this data, for this purpose, in this context, under these obligations?\"\n",
+      "format": "markdown"
+    },
+    {
+      "title": "Every piece of data has a Dharam. Every AI must honor it.",
+      "body": "**AI-Native Data Trust Infrastructure for Privacy, Security, Governance, Compliance, and Responsible AI**\n\n<br/>\n\n[![Status](https://img.shields.io/badge/status-under--development-orange)](https://github.com)\n[![Rust](https://img.shields.io/badge/Rust-2024-orange?logo=rust)](https://www.rust-lang.org/)\n[![AI Native](https://img.shields.io/badge/AI-Native-6C63FF)](https://github.com)\n[![Privacy First](https://img.shields.io/badge/Privacy-First-0088CC)](https://github.com)\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)\n\n</div>\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "The Problem",
+      "body": "Artificial Intelligence is becoming deeply embedded in how organizations create, process, analyze, and act upon information.\n\nEnterprise data is now flowing through:\n\n- Large Language Models\n- AI Agents\n- RAG pipelines\n- Vector databases\n- AI copilots\n- Autonomous workflows\n- Model training pipelines\n- APIs\n- SaaS platforms\n- Cloud infrastructure\n\nYet most existing security and privacy systems were designed for a world of:\n\n```text\nFiles\nDatabases\nNetworks\nApplications\nUsers\n```\n\nThe AI era has introduced an entirely new environment:\n\n```text\nPrompts\nContext\nEmbeddings\nModels\nAgents\nMemories\nTools\nRAG\nInference\nAutonomous Decisions\n```\n\nTraditional DLP asks:\n\n> **\"Is this data sensitive?\"**\n\nVeer Dharam asks a deeper question:\n\n> **\"Is this AI allowed to use this data, for this purpose, in this context, under these obligations?\"**\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "AI needs a Trust Layer",
+      "body": "Artificial Intelligence should not merely understand information.\n\nIt should understand **responsibility**.\n\nEvery piece of data has:\n\n- An identity\n- An owner\n- A purpose\n- A sensitivity\n- A consent state\n- A jurisdiction\n- A lifecycle\n- A set of obligations\n- A level of trust\n- A permitted way of being used\n\nVeer Dharam turns these properties into a machine-readable and enforceable identity.\n\nWe call this:",
+      "format": "markdown"
+    },
+    {
+      "title": "Data Dharam\u2122",
+      "body": "---",
+      "format": "markdown"
+    },
+    {
+      "title": "What is Dharam?",
+      "body": "**Dharam** represents the intrinsic nature, purpose, responsibility, and rightful conduct associated with something.\n\nFor data, its Dharam describes:\n\n```text\nWho owns it?\n\nWhy does it exist?\n\nWhy was it collected?\n\nWho may access it?\n\nWhich AI systems may process it?\n\nFor what purpose?\n\nWhere may it be processed?\n\nWhich regulations apply?\n\nHow long may it exist?\n\nWhat transformations are permitted?\n\nWhat happens when consent is revoked?\n```\n\nVeer Dharam makes these obligations understandable to machines.\n\n> **Data should not merely be protected. Its purpose should be preserved.**\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Architecture",
+      "body": "```text\n                         VEER DHARAM\n                    AI TRUST OPERATING SYSTEM\n\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                    TRUST CONTROL PLANE                  \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510   \u2502\n \u2502  \u2502 Data DNA   \u2502  \u2502   Policy   \u2502  \u2502   Risk Engine   \u2502   \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518   \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510   \u2502\n \u2502  \u2502 Trust Graph\u2502  \u2502 Compliance \u2502  \u2502 Dharam Agents   \u2502   \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518   \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n                             \u25bc\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                     TRUST DATA PLANE                    \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u2502\n \u2502  \u2502 AI Gateway \u2502 \u2502 Prompt FW  \u2502 \u2502 Agent Enforcement  \u2502  \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2502\n \u2502                                                         \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u2502\n \u2502  \u2502 RAG Guard  \u2502 \u2502 Data Guard \u2502 \u2502 Runtime Monitoring \u2502  \u2502\n \u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518  \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u25bc              \u25bc              \u25bc\n           LLMs           Agents         Enterprise\n                                           Systems\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Open Architecture",
+      "body": "Veer Dharam should integrate with existing AI infrastructure rather than replace it unnecessarily.",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/veer-dharam",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 130,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/veer-dharam",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "requireAuth": false,
+  "reimport": false,
+  "logoHeight": 50
+}

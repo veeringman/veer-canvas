@@ -1,0 +1,11 @@
+{
+  "slug": "veero",
+  "repo": "https://github.com/veeringman/veero",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/veero/main/assets/veero-logo.png?token=AHGYFSL3I5TPIW7MIQQVTG3KNVNNJAA"
+  ],
+  "readme_logo_url": null
+}

@@ -53,7 +53,7 @@ window.addEventListener('DOMContentLoaded', function () {
 
     if (link) {
       link.href = `project.html?project=${encodeURIComponent(project.slug || '')}`;
-      if (project.requireAuth === true || project.requireAuth === 'true') {
+      if (window.VeerAuth && window.VeerAuth.projectRequiresAuth(project)) {
         link.dataset.requireAuth = '1';
         link.classList.add('is-gated');
         link.title = 'Learn more (sign-in required)';
@@ -61,7 +61,7 @@ window.addEventListener('DOMContentLoaded', function () {
     }
     if (cardEl) {
       cardEl.dataset.slug = project.slug || '';
-      if (project.requireAuth === true || project.requireAuth === 'true') {
+      if (window.VeerAuth && window.VeerAuth.projectRequiresAuth(project)) {
         cardEl.dataset.requireAuth = '1';
       }
     }

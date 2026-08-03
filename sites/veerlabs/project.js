@@ -27,12 +27,16 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (project.requireAuth === true || project.requireAuth === 'true') {
-        if (window.VeerEngage && typeof VeerEngage.ensureProjectAccess === 'function') {
+      if (project.requireAuth === true || project.requireAuth === 'true' ||
+          (window.VeerAuth && window.VeerAuth.projectRequiresAuth(project))) {
+        if (window.VeerAuth && typeof window.VeerAuth.ensureProjectAccess === 'function') {
+          const ok = await window.VeerAuth.ensureProjectAccess(project.slug, project);
+          if (!ok) return;
+        } else if (window.VeerEngage && typeof VeerEngage.ensureProjectAccess === 'function') {
           const ok = await VeerEngage.ensureProjectAccess(project.slug);
           if (!ok) {
             document.title = 'Access required — VeerLabs Solutions';
-            bodyEl.innerHTML = '<p class="error-message">Access required to view this project. Return to the <a href="index.html">dashboard</a> and request temporary access.</p>';
+            bodyEl.innerHTML = '<p class="error-message">Access required to view this project. Return to the <a href="index.html">dashboard</a> and sign in.</p>';
             return;
           }
         }

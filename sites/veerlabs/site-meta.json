@@ -10,8 +10,14 @@
   "platform": "VeerCanvas",
   "favicon": "assets/favicon.svg",
   "brandMark": "assets/site/brand-mark.png",
-  "version": "v1.11.0",
-  "lastUpdated": "2026-07-24T18:39:36Z",
+  "version": "v1.12.0",
+  "lastUpdated": "2026-08-01T01:59:55Z",
   "platformSiteId": "veerlabs",
-  "platformMark": "assets/site/platform-mark.png"
+  "platformMark": "assets/site/platform-mark.png",
+  "auth": {
+    "agentBaseUrl": "",
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "veerlabs-web",
+    "gateAllLearnMore": true
+  }
 }

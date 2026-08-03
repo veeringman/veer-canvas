@@ -117,9 +117,41 @@ for key, rel in (("favicon", "assets/favicon.svg"), ("brandMark", "assets/veer-c
         merged[key] = f"assets/site/{uploaded.name}"
     elif (site / rel).exists():
         merged[key] = rel
+# Ensure AuthBuddy agent auth gate keys survive live CMS pull.
+auth_defaults = {
+    "agentBaseUrl": "",
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "veerlabs-web",
+    "gateAllLearnMore": True,
+}
+cfg_path = site / "site.config.json"
+if cfg_path.exists():
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg_auth = cfg.get("auth") if isinstance(cfg, dict) else None
+        if isinstance(cfg_auth, dict):
+            auth_defaults.update({k: v for k, v in cfg_auth.items() if v not in (None, "")})
+    except json.JSONDecodeError:
+        pass
+live_auth = merged.get("auth") if isinstance(merged.get("auth"), dict) else {}
+auth = dict(auth_defaults)
+auth.update({k: v for k, v in live_auth.items() if v not in (None, "")})
+# Prefer local site.config auth for IdP / gate flags when present.
+if cfg_path.exists():
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg_auth = cfg.get("auth") if isinstance(cfg, dict) else None
+        if isinstance(cfg_auth, dict):
+            for k in ("idpPublicUrl", "clientId", "gateAllLearnMore", "agentBaseUrl"):
+                if k in cfg_auth and cfg_auth[k] not in (None, ""):
+                    auth[k] = cfg_auth[k]
+    except json.JSONDecodeError:
+        pass
+merged["auth"] = auth
 path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
 print(f"Merged site-meta keys: {', '.join(sorted(merged.keys()))}")
 print(f"brandMark={merged.get('brandMark')} favicon={merged.get('favicon')}")
+print(f"auth={merged.get('auth')}")
 PY
 fi
 

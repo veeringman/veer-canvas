@@ -25,7 +25,7 @@
   ],
   "enabled": false,
   "logoSize": "md",
-  "sortOrder": 480,
+  "sortOrder": 500,
   "private": true,
   "repoUrl": "https://github.com/veeringman/tie_http"
 }

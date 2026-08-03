@@ -45,7 +45,7 @@
   ],
   "enabled": false,
   "logoSize": "md",
-  "sortOrder": 350,
+  "sortOrder": 370,
   "private": false,
   "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
 }
