@@ -56,6 +56,12 @@ Important flags:
 
 **Default behavior:** already-imported projects are skipped unless reimport is marked in admin or via flags.
 
+Raster logos are recompressed on CMS upload and GitHub import; `*.card.webp` and `*.detail.webp` variants power fast catalog tiles and detail headers. Batch-optimize existing logos:
+
+```bash
+python cli/scripts/optimize_project_logos.py --site-root sites/veerlabs
+```
+
 ## `import_github_projects.py`
 
 Lightweight helper: fetch repos into package dirs + `import-summary.json` without the full site-root integration path. Prefer the **full** importer for VeerCanvas sites.

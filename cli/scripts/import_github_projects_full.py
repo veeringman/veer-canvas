@@ -11,6 +11,14 @@ import urllib.parse
 import urllib.request
 
 API_BASE = "https://api.github.com"
+ADMIN_DIR = pathlib.Path(__file__).resolve().parents[2] / "admin"
+if str(ADMIN_DIR) not in sys.path:
+    sys.path.insert(0, str(ADMIN_DIR))
+try:
+    from logo_optimize import optimize_logo_file
+except ImportError:
+    optimize_logo_file = None  # type: ignore[misc, assignment]
+
 USER_AGENT = "VeerLabs-Project-Importer/1.0"
 LOGO_PATTERNS = [r"logo", r"icon", r"brand", r"mark"]
 LOGO_EXTENSIONS = [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"]
@@ -596,6 +604,8 @@ def make_package(
             local_logo = assets_dir / filename
             try:
                 download_url(logo_url, local_logo, token)
+                if optimize_logo_file and local_logo.is_file():
+                    optimize_logo_file(local_logo, force=True)
                 if site_root:
                     logo_path = os.path.relpath(local_logo, site_root).replace(os.sep, "/")
                 else:

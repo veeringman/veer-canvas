@@ -22,6 +22,10 @@ from flask import Flask, jsonify, redirect, render_template_string, request, sen
 import sqlite3
 
 APP_DIR = pathlib.Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+from logo_optimize import optimize_logo_file  # noqa: E402
+
 VEERCANVAS_ROOT = pathlib.Path(
     os.environ.get("VEERCANVAS_ROOT", str(APP_DIR.parent))
 ).resolve()
@@ -1771,7 +1775,18 @@ def api_upload_logo():
     assets_dir = SITE_ROOT / "miniapps" / slug / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     dest = assets_dir / f"logo{ext}"
+    for old in assets_dir.glob("logo.*"):
+        if old.name != dest.name:
+            try:
+                old.unlink()
+            except OSError:
+                pass
     file.save(dest)
+    opt = optimize_logo_file(dest, force=True)
+    try:
+        os.chmod(dest, 0o644)
+    except OSError:
+        pass
     logo_path = f"miniapps/{slug}/assets/logo{ext}"
     data, project, idx = find_project(slug)
     if project is None:
@@ -1780,7 +1795,15 @@ def api_upload_logo():
     data[idx] = project
     save_projects(data)
     sync_miniapp(slug, project)
-    return jsonify({"ok": True, "logo": logo_path})
+    return jsonify({
+        "ok": True,
+        "logo": logo_path,
+        "optimized": bool(opt.get("optimized")),
+        "bytesBefore": opt.get("bytes_before"),
+        "bytesAfter": opt.get("bytes_after"),
+        "variants": [v.get("path") for v in opt.get("variants") or [] if v.get("path")],
+        "optimizeError": opt.get("error") or opt.get("skipped"),
+    })
 
 
 @app.route("/api/upload-brand", methods=["POST"])

@@ -65,6 +65,34 @@
     return logo;
   }
 
+  function optimizedLogoPath(originalPath, context) {
+    if (!originalPath || typeof originalPath !== 'string') return null;
+    if (/^https?:\/\//i.test(originalPath) || /\.svg$/i.test(originalPath)) return null;
+    if (!/\.(png|jpe?g|webp)$/i.test(originalPath)) return null;
+    const variant = context === 'detail' ? 'detail' : 'card';
+    return originalPath.replace(/\.(png|jpe?g|webp)$/i, `.${variant}.webp`);
+  }
+
+  function ensureLogoPicture(imageEl, webpSrc, fallbackSrc) {
+    if (!imageEl || !webpSrc) return;
+    let picture = imageEl.closest('picture');
+    if (!picture) {
+      picture = document.createElement('picture');
+      imageEl.parentNode.insertBefore(picture, imageEl);
+      picture.appendChild(imageEl);
+    }
+    let source = picture.querySelector('source[data-logo-webp]');
+    if (!source) {
+      source = document.createElement('source');
+      source.type = 'image/webp';
+      source.dataset.logoWebp = '1';
+      picture.insertBefore(source, imageEl);
+    }
+    source.srcset = webpSrc;
+    imageEl.src = fallbackSrc;
+    imageEl.dataset.logoFallback = fallbackSrc;
+  }
+
   function logoSizeClass(project, context) {
     const { sizeKey } = resolveLogoDims(project, context || 'card');
     const prefix = context === 'detail' ? 'project-logo-detail' : 'project-logo';
@@ -75,14 +103,24 @@
     if (!imageEl) return;
     const mode = context || 'card';
     const { width, height, sizeKey } = resolveLogoDims(project, mode);
-    imageEl.src = normalizeLogoPath(project);
+    const original = normalizeLogoPath(project);
+    const optimized = optimizedLogoPath(original, mode);
     imageEl.alt = (project && project.logoAlt) || `${(project && project.name) || 'Project'} logo`;
     imageEl.className = logoSizeClass(project, mode);
+    imageEl.loading = mode === 'card' ? 'lazy' : 'eager';
+    imageEl.decoding = 'async';
     imageEl.style.objectFit = 'contain';
     imageEl.dataset.logoSize = sizeKey;
     if (width) imageEl.dataset.logoWidth = String(width);
     else delete imageEl.dataset.logoWidth;
     imageEl.dataset.logoHeight = String(height);
+    delete imageEl.dataset.fallbackApplied;
+
+    if (optimized) {
+      ensureLogoPicture(imageEl, optimized, original);
+    } else {
+      imageEl.src = original;
+    }
 
     if (mode === 'card') {
       // Fit inside the fixed logo well so tile copy shares one baseline.
@@ -100,8 +138,16 @@
 
     imageEl.onerror = () => {
       if (imageEl.dataset.fallbackApplied === 'true') return;
-      imageEl.dataset.fallbackApplied = 'true';
-      imageEl.src = DEFAULT_LOGO;
+      const fallback = imageEl.dataset.logoFallback || original;
+      if (fallback && imageEl.src !== fallback && !imageEl.src.endsWith(fallback)) {
+        imageEl.dataset.fallbackApplied = 'webp-miss';
+        imageEl.src = fallback;
+        return;
+      }
+      if (fallback !== DEFAULT_LOGO) {
+        imageEl.dataset.fallbackApplied = 'true';
+        imageEl.src = DEFAULT_LOGO;
+      }
     };
   }
 
@@ -169,6 +215,7 @@
     sortProjects,
     visibleProjects,
     normalizeLogoPath,
+    optimizedLogoPath,
     resolveLogoDims,
     logoSizeClass,
     applyProjectLogo,
