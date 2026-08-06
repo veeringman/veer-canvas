@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HBC Sanyard RWA — Executive Committee Pad</title>
+  <style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Times New Roman", Times, Georgia, serif;
+      color: #1a1208;
+      background: #e8e0d0;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 8mm 10mm 10mm;
+      background: #fdfaf3;
+      border: 2px solid #6b4a2e;
+      position: relative;
+    }
+    .corner { position: absolute; width: 16mm; height: 16mm; border: 2px solid #6b4a2e; }
+    .c-tl { top: 5mm; left: 5mm; border-right: 0; border-bottom: 0; }
+    .c-tr { top: 5mm; right: 5mm; border-left: 0; border-bottom: 0; }
+    .c-bl { bottom: 5mm; left: 5mm; border-right: 0; border-top: 0; }
+    .c-br { bottom: 5mm; right: 5mm; border-left: 0; border-top: 0; }
+    .head {
+      display: grid;
+      grid-template-columns: 26mm 1fr;
+      gap: 7mm;
+      align-items: center;
+      margin-bottom: 4mm;
+    }
+    .seal {
+      width: 24mm;
+      height: 24mm;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #9e7d3a;
+    }
+    .org h1 {
+      margin: 0;
+      font-size: 16pt;
+      color: #3d2914;
+      line-height: 1.12;
+    }
+    .org p {
+      margin: 1.5mm 0 0;
+      font-size: 10pt;
+      color: #4a3728;
+      line-height: 1.3;
+    }
+    .main-banner {
+      text-align: center;
+      background: #4a3728;
+      color: #fdf6e8;
+      font-size: 10pt;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 2.5mm;
+      margin: 3mm 0 4mm;
+    }
+    .section-title {
+      text-align: center;
+      font-size: 11pt;
+      font-weight: 700;
+      color: #3d2914;
+      margin: 4mm 0 2mm;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+    }
+    th, td {
+      border: 1px solid #6b4a2e;
+      padding: 1.8mm 2mm;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      background: #4a3728;
+      color: #fdf6e8;
+      font-weight: 700;
+      text-align: center;
+      font-size: 9pt;
+      letter-spacing: 0.04em;
+    }
+    td:first-child { text-align: center; width: 10mm; }
+    .office-table td:nth-child(2) { width: 38%; }
+    .members-heading {
+      display: flex;
+      align-items: center;
+      gap: 4mm;
+      margin: 5mm 0 2mm;
+    }
+    .members-heading::before,
+    .members-heading::after {
+      content: "";
+      flex: 1;
+      border-top: 1px solid #6b4a2e;
+    }
+    .members-heading span {
+      font-size: 10pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #3d2914;
+      white-space: nowrap;
+    }
+    .member-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+    }
+    .member-table td:first-child { width: 8mm; }
+    .empty-members { text-align: center; color: #666; font-size: 9pt; }
+    .footer {
+      margin-top: 6mm;
+      text-align: center;
+      font-size: 8.5pt;
+      color: #6b4a2e;
+      letter-spacing: 0.06em;
+      border-top: 1px solid rgba(107, 74, 46, 0.4);
+      padding-top: 3mm;
+    }
+    .meta {
+      text-align: right;
+      font-size: 7.5pt;
+      color: #888;
+      margin-top: 2mm;
+    }
+    .screen-hint {
+      text-align: center;
+      padding: 8px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      color: #555;
+    }
+    @media print {
+      body { background: #fff; }
+      .screen-hint { display: none; }
+      .sheet { margin: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <p class="screen-hint">Print on A4 — send to press for EC pad / chart. Generated 06 Aug 2026.</p>
+  <div class="sheet">
+    <span class="corner c-tl" aria-hidden="true"></span>
+    <span class="corner c-tr" aria-hidden="true"></span>
+    <span class="corner c-bl" aria-hidden="true"></span>
+    <span class="corner c-br" aria-hidden="true"></span>
+
+    <header class="head">
+      <img class="seal" src="../assets/hbcs-sanyard-seal-mark.jpg" alt="HBC Sanyard seal">
+      <div class="org">
+        <h1>Housing Board Colony Sanyard<br>Residents Welfare Association</h1>
+        <p>HIMUDA Housing Colony Sanyard · Mandi (H.P.)</p>
+        <p><strong>Executive Committee</strong></p>
+      </div>
+    </header>
+
+    <div class="main-banner">Office Bearers &amp; Executive Committee Members</div>
+
+    <div class="section-title">Office Bearers</div>
+    <table class="office-table">
+      <thead>
+        <tr><th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>President</td><td>ANUP VAIDYA</td><td>94184 95449</td></tr>
+<tr><td>2</td><td>Vice President</td><td>M L MODGIL</td><td>—</td></tr>
+<tr><td>3</td><td>General Secretary</td><td>VIJAY KUMAR SHARMA</td><td>82197 88139</td></tr>
+<tr><td>4</td><td>Treasurer</td><td>PARVEEN KUMAR THAKUR</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <div class="members-heading"><span>Executive Committee Members</span></div>
+    <p class="empty-members">—</p>
+
+    <footer class="footer">Service to the Colony · Collective Strength · Cooperation for All</footer>
+    <p class="meta">Chart generated 06 Aug 2026 · HBC Sanyard RWA</p>
+  </div>
+</body>
+</html>

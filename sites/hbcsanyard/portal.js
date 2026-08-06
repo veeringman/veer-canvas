@@ -52,6 +52,113 @@
     return r?.role === 'admin';
   }
 
+  const MOBILE_MQ = window.matchMedia('(max-width: 900px)');
+
+  function isMobileLayout() {
+    return MOBILE_MQ.matches;
+  }
+
+  function applyMobileListLimit(container, itemSelector, limit = 5) {
+    if (!container) return;
+    const mount = container.closest('.table-wrap') || container.closest('.mobile-list') || container;
+    mount.parentElement?.querySelector(':scope > .list-show-more')?.remove();
+    const items = [...container.querySelectorAll(itemSelector)];
+    items.forEach((item) => item.classList.remove('is-list-hidden'));
+    if (!isMobileLayout() || items.length <= limit) return;
+    items.forEach((item, i) => {
+      if (i >= limit) item.classList.add('is-list-hidden');
+    });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ghost compact list-show-more';
+    btn.textContent = `Show all ${items.length} (${items.length - limit} more)`;
+    btn.addEventListener('click', () => {
+      items.forEach((item) => item.classList.remove('is-list-hidden'));
+      btn.remove();
+    }, { once: true });
+    mount.insertAdjacentElement('afterend', btn);
+  }
+
+  function prepareMobileSections(root = document) {
+    const blocks = root.querySelectorAll('#panel-admin .roster-block, #panel-observability .roster-block, #adminDues');
+    blocks.forEach((block, index) => {
+      if (block.dataset.mobileSectionReady) return;
+      block.dataset.mobileSectionReady = '1';
+      block.classList.add('mobile-section');
+      const toolbar = block.querySelector(':scope > .roster-toolbar, :scope > .panel-head, :scope > .ledger-toolbar');
+      if (!toolbar) return;
+
+      const bodyNodes = [];
+      let node = toolbar.nextElementSibling;
+      while (node) {
+        bodyNodes.push(node);
+        node = node.nextElementSibling;
+      }
+      if (!bodyNodes.length) return;
+
+      const body = document.createElement('div');
+      body.className = 'mobile-section-body';
+      bodyNodes.forEach((n) => body.appendChild(n));
+      block.appendChild(body);
+
+      const heading = toolbar.querySelector('h3, h2');
+      if (heading && !toolbar.querySelector('.mobile-section-toggle')) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'mobile-section-toggle';
+        toggle.setAttribute('aria-expanded', index === 0 ? 'true' : 'false');
+        toggle.innerHTML = '<span class="mobile-section-chevron" aria-hidden="true"></span>';
+        heading.parentElement.insertBefore(toggle, heading);
+        if (index !== 0) block.classList.add('is-section-collapsed');
+      }
+    });
+  }
+
+  function refreshMobileListUi() {
+    applyMobileListLimit(el('ledgerRows'), 'tr:not(.is-empty-row)', 5);
+    applyMobileListLimit(el('rosterRows'), 'tr:not(.is-empty-row)', 5);
+    applyMobileListLimit(el('revisionRows'), 'tr:not(.is-empty-row)', 5);
+    applyMobileListLimit(el('obsRecentRows'), 'tr:not(.is-empty-row)', 8);
+    applyMobileListLimit(el('noticeList'), '.notice.mobile-fold', 4);
+    applyMobileListLimit(el('mailboxList'), '.grievance-card.mobile-fold', 4);
+    applyMobileListLimit(el('ecGrievanceList'), '.grievance-card.mobile-fold', 4);
+    applyMobileListLimit(el('infoDocList'), '.info-doc-card.mobile-fold', 5);
+    applyMobileListLimit(el('noticeDraftList'), '.notice-draft-card.mobile-fold', 4);
+    applyMobileListLimit(el('worksList'), '.works-card.mobile-fold', 5);
+  }
+
+  function updateAppTopOffset() {
+    const top = document.querySelector('.app-top');
+    if (!top) return;
+    document.documentElement.style.setProperty('--app-top-offset', `${Math.ceil(top.offsetHeight)}px`);
+  }
+
+  function scrollBelowAppHeader(target) {
+    if (!target || !isMobileLayout()) return;
+    const main = document.querySelector('.app-main');
+    if (main) {
+      const mainRect = main.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const y = main.scrollTop + (targetRect.top - mainRect.top) - 8;
+      main.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      return;
+    }
+    updateAppTopOffset();
+    const topBar = document.querySelector('.app-top');
+    const offset = (topBar?.offsetHeight || 118) + 10;
+    const y = target.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
+
+  function scrollMainToTop() {
+    const main = document.querySelector('.app-main');
+    if (main && isMobileLayout()) {
+      main.scrollTo({ top: 0, behavior: 'instant' in main.scrollTo ? 'instant' : 'auto' });
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
   function setAuthed(session) {
     state.session = session;
     const isAuthed = Boolean(session?.resident);
@@ -65,6 +172,8 @@
       document.querySelectorAll('.admin-only, .superadmin-only').forEach((node) => {
         node.hidden = true;
       });
+      const duesTab = el('duesTab') || document.querySelector('.tab[data-panel="dues"]');
+      if (duesTab) duesTab.hidden = false;
       return;
     }
 
@@ -100,6 +209,14 @@
       node.hidden = !isSuperAdmin(r);
     });
 
+    // Super admin has no personal dues / ledger view.
+    const duesTab = el('duesTab') || document.querySelector('.tab[data-panel="dues"]');
+    if (duesTab) duesTab.hidden = isSuperAdmin(r);
+    if (isSuperAdmin(r) && el('panel-dues')) {
+      el('panel-dues').hidden = true;
+      el('panel-dues').classList.remove('is-active');
+    }
+
     const officialWrap = el('profileOfficialTitleWrap');
     if (officialWrap) officialWrap.hidden = !(isEcAdmin(r) && !r.superAdmin);
 
@@ -121,6 +238,7 @@
     let name = preferred || activePanelName() || 'home';
     if (name === 'admin' && !isEcAdmin()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
+    if (name === 'dues' && isSuperAdmin()) name = 'home';
     switchPanel(name);
   }
 
@@ -175,6 +293,9 @@
     const date = (n.publishedAt || '').slice(0, 10);
     const welcome = isWelcomeNotice(n);
     const recent = isRecentNotice(n);
+    const likeCount = Number(n.likeCount || 0);
+    const commentCount = Number(n.commentCount || 0);
+    const liked = Boolean(n.likedByMe);
     const moveActions = (isEcAdmin() && n.pinned && !welcome) ? `
         <button type="button" class="btn ghost compact notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up">↑ Up</button>
         <button type="button" class="btn ghost compact notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down">↓ Down</button>` : '';
@@ -195,14 +316,47 @@
       (n.pinned && !welcome) ? '<span class="notice-pin-badge">Pinned</span>' : '',
     ].filter(Boolean).join('');
     return `
-      <article class="notice ${n.pinned ? 'is-pinned' : ''} ${welcome ? 'is-welcome' : ''} ${recent ? 'is-recent' : ''}" data-id="${escapeHtml(n.id)}">
-        <div class="notice-head">
-          <h3 class="notice-title">${escapeHtml(n.title)}</h3>
-          ${badges ? `<div class="notice-badges">${badges}</div>` : ''}
+      <article class="notice mobile-fold ${n.pinned ? 'is-pinned' : ''} ${welcome ? 'is-welcome' : ''} ${recent ? 'is-recent' : ''}" data-id="${escapeHtml(n.id)}">
+        <button type="button" class="mobile-fold-head" aria-expanded="false">
+          <span class="mobile-fold-head-main">
+            <span class="notice-head">
+              <span class="notice-title">${escapeHtml(n.title)}</span>
+              ${badges ? `<span class="notice-badges">${badges}</span>` : ''}
+            </span>
+            <span class="meta">${escapeHtml(n.category || 'general')}${date ? ` · ${escapeHtml(date)}` : ''}${recent ? ' · past week' : ''}</span>
+          </span>
+          <span class="mobile-fold-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="mobile-fold-body">
+          <div class="notice-body">${formatNoticeBody(n.body)}</div>
+          ${actions}
         </div>
-        <div class="meta">${escapeHtml(n.category || 'general')}${date ? ` · ${escapeHtml(date)}` : ''}${recent ? ' · past week' : ''}</div>
-        <div class="notice-body">${formatNoticeBody(n.body)}</div>
-        ${actions}
+        <div class="notice-engage">
+          <button type="button" class="notice-engage-btn notice-like${liked ? ' is-active' : ''}" data-id="${escapeHtml(n.id)}" aria-pressed="${liked ? 'true' : 'false'}" title="${liked ? 'Unlike' : 'Like'}">
+            <span class="notice-engage-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.1C.7 10.1 1.5 6.8 4.4 5.4 6.5 4.4 9 5 12 7.4c3-2.4 5.5-3 7.6-2 2.9 1.4 3.7 4.7 1.9 7.5C19 16.65 12 21 12 21z"/></svg>
+            </span>
+            <span class="notice-like-count">${likeCount}</span>
+            <span class="sr-only">Like</span>
+          </button>
+          <button type="button" class="notice-engage-btn notice-comment-toggle" data-id="${escapeHtml(n.id)}" aria-expanded="false" title="Comments">
+            <span class="notice-engage-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
+            </span>
+            <span class="notice-comment-count">${commentCount}</span>
+            <span class="sr-only">Comments</span>
+          </button>
+        </div>
+        <div class="notice-comments" data-id="${escapeHtml(n.id)}" hidden>
+          <div class="notice-comments-list"><p class="muted">Loading comments…</p></div>
+          <form class="notice-comment-form stack" data-id="${escapeHtml(n.id)}">
+            <label>
+              <span class="sr-only">Add a comment</span>
+              <textarea name="body" rows="2" maxlength="1000" placeholder="Write a comment…" required></textarea>
+            </label>
+            <button type="submit" class="btn secondary compact">Post comment</button>
+          </form>
+        </div>
       </article>`;
   }
 
@@ -228,6 +382,7 @@
           });
         }).join('')
       : '<p class="muted">No notices yet.</p>';
+    refreshMobileListUi();
   }
 
   function draftShareSummary(n) {
@@ -287,15 +442,23 @@
         actions.push(`<button type="button" class="btn ghost compact notice-draft-delete" data-id="${escapeHtml(n.id)}">Delete</button>`);
       }
       return `
-        <article class="notice-draft-card${canEdit ? '' : ' is-view-only'}" data-id="${escapeHtml(n.id)}">
-          <div class="notice-badges">${badges}</div>
-          <h4>${escapeHtml(n.title || 'Untitled draft')}</h4>
-          <p class="meta">${escapeHtml(n.category || 'general')}${when ? ` · saved ${escapeHtml(when)}` : ''}</p>
-          ${shareLine ? `<p class="draft-share-line">${escapeHtml(shareLine)}</p>` : ''}
-          <p class="draft-excerpt">${escapeHtml(short)}</p>
-          <div class="btn-row">${actions.join('')}</div>
+        <article class="notice-draft-card mobile-fold${canEdit ? '' : ' is-view-only'}" data-id="${escapeHtml(n.id)}">
+          <button type="button" class="mobile-fold-head" aria-expanded="false">
+            <span class="mobile-fold-head-main">
+              <span class="notice-badges">${badges}</span>
+              <span class="notice-draft-card-title">${escapeHtml(n.title || 'Untitled draft')}</span>
+              <span class="meta">${escapeHtml(n.category || 'general')}${when ? ` · saved ${escapeHtml(when)}` : ''}</span>
+            </span>
+            <span class="mobile-fold-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="mobile-fold-body">
+            ${shareLine ? `<p class="draft-share-line">${escapeHtml(shareLine)}</p>` : ''}
+            <p class="draft-excerpt">${escapeHtml(short)}</p>
+            <div class="btn-row">${actions.join('')}</div>
+          </div>
         </article>`;
     }).join('');
+    refreshMobileListUi();
   }
 
   async function loadNoticeDrafts() {
@@ -795,6 +958,7 @@
     });
     if (!rows.length) {
       tbody.innerHTML = '<tr class="is-empty-row"><td colspan="8" class="muted">No matching ledger rows.</td></tr>';
+      refreshMobileListUi();
       return;
     }
     tbody.innerHTML = rows.map((r) => `
@@ -808,6 +972,7 @@
         <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
         <td data-label="Actions" class="row-actions"><button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button></td>
       </tr>`).join('');
+    refreshMobileListUi();
   }
 
   async function loadLedger() {
@@ -1093,14 +1258,22 @@
         actions.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
       }
       return `
-        <article class="info-doc-card" data-id="${escapeHtml(d.id)}">
-          <div>${badges}</div>
-          <h3>${escapeHtml(d.title || 'Untitled')}</h3>
-          <p class="meta">${escapeHtml(metaBits)}</p>
-          ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
-          <div class="btn-row">${actions.join('')}</div>
+        <article class="info-doc-card mobile-fold" data-id="${escapeHtml(d.id)}">
+          <button type="button" class="mobile-fold-head" aria-expanded="false">
+            <span class="mobile-fold-head-main">
+              <span>${badges}</span>
+              <span class="info-doc-card-title">${escapeHtml(d.title || 'Untitled')}</span>
+              <span class="meta">${escapeHtml(metaBits)}</span>
+            </span>
+            <span class="mobile-fold-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="mobile-fold-body">
+            ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
+            <div class="btn-row">${actions.join('')}</div>
+          </div>
         </article>`;
     }).join('');
+    refreshMobileListUi();
   }
 
   async function loadInfoCentre() {
@@ -1260,9 +1433,21 @@
     }).catch(() => {});
   }
 
+  function scrollActiveTabIntoView() {
+    const nav = document.querySelector('.tabs');
+    const active = nav?.querySelector('.tab.is-active');
+    if (!nav || !active) return;
+    const navRect = nav.getBoundingClientRect();
+    const tabRect = active.getBoundingClientRect();
+    if (tabRect.left < navRect.left + 4 || tabRect.right > navRect.right - 4) {
+      active.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
   function switchPanel(name) {
     if (name === 'admin' && !isEcAdmin()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
+    if (name === 'dues' && isSuperAdmin()) name = 'home';
     document.querySelectorAll('.tab').forEach((t) => {
       const isTab = t.dataset.panel === name;
       t.classList.toggle('is-active', isTab);
@@ -1273,10 +1458,13 @@
       p.hidden = !on;
       p.classList.toggle('is-active', on);
     });
-    // Nested EC ledger block belongs to Dues only
+    // Nested EC ledger block belongs to Dues only (not for super admin)
     if (el('adminDues')) {
-      el('adminDues').hidden = !(name === 'dues' && isEcAdmin());
+      el('adminDues').hidden = !(name === 'dues' && isEcAdmin() && !isSuperAdmin());
     }
+    scrollActiveTabIntoView();
+    updateAppTopOffset();
+    scrollMainToTop();
     trackPanel(name);
     if (name === 'home') loadHome().catch(console.error);
     if (name === 'dues') loadDues().catch((e) => { el('duesCard').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
@@ -1291,6 +1479,7 @@
       if (el('worksList')) el('worksList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
     if (name === 'admin') {
+      prepareMobileSections();
       loadSmtpStatus();
       loadNoticeDrafts().catch((e) => {
         if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
@@ -1302,6 +1491,7 @@
       if (isSuperAdmin()) loadSettings().catch((e) => { if (el('settingsStatus')) el('settingsStatus').textContent = e.message || 'Settings failed'; });
     }
     if (name === 'observability' && isSuperAdmin()) {
+      prepareMobileSections();
       loadObservability().catch((e) => {
         if (el('obsStatus')) el('obsStatus').textContent = e.message || 'Observability failed';
       });
@@ -1310,14 +1500,25 @@
 
   function switchGate(mode) {
     const plot = mode !== 'admin';
-    el('gateTabPlot')?.classList.toggle('is-active', plot);
-    el('gateTabAdmin')?.classList.toggle('is-active', !plot);
     if (el('plotLoginPane')) el('plotLoginPane').hidden = !plot;
     if (el('adminLoginPane')) el('adminLoginPane').hidden = plot;
     showError('');
   }
-  el('gateTabPlot')?.addEventListener('click', () => switchGate('plot'));
-  el('gateTabAdmin')?.addEventListener('click', () => switchGate('admin'));
+
+  // Hidden super-admin entry: triple-tap / triple-click the logo seal.
+  let gateLogoTaps = 0;
+  let gateLogoTapTimer = 0;
+  function onGateLogoTap(event) {
+    event.preventDefault();
+    gateLogoTaps += 1;
+    window.clearTimeout(gateLogoTapTimer);
+    gateLogoTapTimer = window.setTimeout(() => { gateLogoTaps = 0; }, 900);
+    if (gateLogoTaps < 3) return;
+    gateLogoTaps = 0;
+    const adminOpen = !el('adminLoginPane')?.hidden;
+    switchGate(adminOpen ? 'plot' : 'admin');
+  }
+  el('gateSeal')?.addEventListener('click', onGateLogoTap);
 
   el('adminLoginForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1606,12 +1807,131 @@
     }
   });
 
+  function updateNoticeEngageUi(noticeId, { likeCount, commentCount, likedByMe } = {}) {
+    const card = el('noticeList')?.querySelector(`.notice[data-id="${CSS.escape(noticeId)}"]`);
+    if (!card) return;
+    const likeBtn = card.querySelector('.notice-like');
+    const likeCountEl = card.querySelector('.notice-like-count');
+    const commentCountEl = card.querySelector('.notice-comment-count');
+    if (typeof likeCount === 'number' && likeCountEl) likeCountEl.textContent = String(likeCount);
+    if (typeof commentCount === 'number' && commentCountEl) commentCountEl.textContent = String(commentCount);
+    if (likeBtn && typeof likedByMe === 'boolean') {
+      likeBtn.classList.toggle('is-active', likedByMe);
+      likeBtn.setAttribute('aria-pressed', likedByMe ? 'true' : 'false');
+      likeBtn.title = likedByMe ? 'Unlike' : 'Like';
+      const svg = likeBtn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', likedByMe ? 'currentColor' : 'none');
+    }
+    const cached = noticesCache.find((n) => n.id === noticeId);
+    if (cached) {
+      if (typeof likeCount === 'number') cached.likeCount = likeCount;
+      if (typeof commentCount === 'number') cached.commentCount = commentCount;
+      if (typeof likedByMe === 'boolean') cached.likedByMe = likedByMe;
+    }
+  }
+
+  function renderNoticeCommentsList(comments) {
+    if (!comments?.length) {
+      return '<p class="muted">No comments yet. Be the first.</p>';
+    }
+    const me = state.session?.resident?.houseId;
+    return comments.map((c) => {
+      const canDelete = c.houseId === me || isEcAdmin();
+      const when = (c.createdAt || '').slice(0, 16).replace('T', ' ');
+      return `
+        <div class="notice-comment" data-comment-id="${escapeHtml(c.id)}">
+          <div class="notice-comment-head">
+            <strong>${escapeHtml(c.authorName || c.houseId || 'Resident')}</strong>
+            <span class="muted">${escapeHtml(when)}</span>
+            ${canDelete ? `<button type="button" class="btn ghost compact notice-comment-delete" data-comment-id="${escapeHtml(c.id)}" title="Remove">Remove</button>` : ''}
+          </div>
+          <p>${escapeHtml(c.body || '')}</p>
+        </div>`;
+    }).join('');
+  }
+
+  async function loadNoticeComments(noticeId, panel) {
+    const list = panel?.querySelector('.notice-comments-list');
+    if (!list) return;
+    list.innerHTML = '<p class="muted">Loading comments…</p>';
+    try {
+      const data = await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}/comments`);
+      list.innerHTML = renderNoticeCommentsList(data.comments || []);
+      updateNoticeEngageUi(noticeId, data);
+    } catch (err) {
+      list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load comments')}</p>`;
+    }
+  }
+
   el('noticeList')?.addEventListener('click', async (event) => {
+    const likeBtn = event.target.closest('.notice-like');
+    const commentToggle = event.target.closest('.notice-comment-toggle');
+    const commentDelete = event.target.closest('.notice-comment-delete');
     const editBtn = event.target.closest('.notice-edit');
     const pinBtn = event.target.closest('.notice-pin');
     const delBtn = event.target.closest('.notice-delete');
     const upBtn = event.target.closest('.notice-move-up');
     const downBtn = event.target.closest('.notice-move-down');
+
+    if (likeBtn) {
+      event.preventDefault();
+      const id = likeBtn.getAttribute('data-id');
+      likeBtn.disabled = true;
+      try {
+        const data = await api(`/api/rwa/notices/${encodeURIComponent(id)}/like`, {
+          method: 'POST',
+          body: '{}',
+        });
+        updateNoticeEngageUi(id, data);
+      } catch (err) {
+        alert(err.message || 'Could not update like');
+      } finally {
+        likeBtn.disabled = false;
+      }
+      return;
+    }
+
+    if (commentToggle) {
+      event.preventDefault();
+      const id = commentToggle.getAttribute('data-id');
+      const card = commentToggle.closest('.notice');
+      const panel = card?.querySelector('.notice-comments');
+      if (!panel) return;
+      const open = panel.hidden;
+      panel.hidden = !open;
+      commentToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        card?.classList.add('is-open');
+        card?.querySelector('.mobile-fold-head')?.setAttribute('aria-expanded', 'true');
+        await loadNoticeComments(id, panel);
+        scrollBelowAppHeader(panel);
+      }
+      return;
+    }
+
+    if (commentDelete) {
+      event.preventDefault();
+      const card = commentDelete.closest('.notice');
+      const id = card?.getAttribute('data-id');
+      const commentId = commentDelete.getAttribute('data-comment-id');
+      if (!id || !commentId) return;
+      if (!window.confirm('Remove this comment?')) return;
+      commentDelete.disabled = true;
+      try {
+        const data = await api(
+          `/api/rwa/notices/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
+          { method: 'DELETE', body: '{}' },
+        );
+        updateNoticeEngageUi(id, data);
+        const panel = card.querySelector('.notice-comments');
+        await loadNoticeComments(id, panel);
+      } catch (err) {
+        alert(err.message || 'Could not remove comment');
+        commentDelete.disabled = false;
+      }
+      return;
+    }
+
     if (!isEcAdmin()) return;
 
     if (editBtn) {
@@ -1673,6 +1993,31 @@
     }
   });
 
+  el('noticeList')?.addEventListener('submit', async (event) => {
+    const form = event.target.closest('.notice-comment-form');
+    if (!form) return;
+    event.preventDefault();
+    const id = form.getAttribute('data-id');
+    const body = form.querySelector('textarea')?.value?.trim() || '';
+    const btn = form.querySelector('button[type="submit"]');
+    if (!id || !body) return;
+    if (btn) btn.disabled = true;
+    try {
+      const data = await api(`/api/rwa/notices/${encodeURIComponent(id)}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      });
+      form.querySelector('textarea').value = '';
+      updateNoticeEngageUi(id, data);
+      const panel = form.closest('.notice-comments');
+      await loadNoticeComments(id, panel);
+    } catch (err) {
+      alert(err.message || 'Could not post comment');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
   function statusLabel(status) {
     return ({
       open: 'Open',
@@ -1731,20 +2076,27 @@
           <p class="muted row-status" hidden></p>
         </form>`;
     return `
-      <article class="grievance-card" data-id="${escapeHtml(g.id)}">
-        <div class="grievance-card-head">
-          <h4>${escapeHtml(g.subject)}</h4>
-          <span class="grievance-badge is-${escapeHtml(g.status)}">${escapeHtml(statusLabel(g.status))}</span>
+      <article class="grievance-card mobile-fold" data-id="${escapeHtml(g.id)}">
+        <button type="button" class="mobile-fold-head" aria-expanded="false">
+          <span class="mobile-fold-head-main">
+            <span class="grievance-card-head">
+              <span class="grievance-card-title">${escapeHtml(g.subject)}</span>
+              <span class="grievance-badge is-${escapeHtml(g.status)}">${escapeHtml(statusLabel(g.status))}</span>
+            </span>
+            <span class="grievance-meta">
+              ${escapeHtml(g.categoryLabel || g.category)}
+              · plot <code>${escapeHtml(g.houseId)}</code>
+              ${g.name ? ` · ${escapeHtml(g.name)}` : ''}
+              · ${escapeHtml(formatWhen(g.updatedAt || g.createdAt))}
+              · ${(g.messages || []).length} message${(g.messages || []).length === 1 ? '' : 's'}
+            </span>
+          </span>
+          <span class="mobile-fold-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="mobile-fold-body">
+          ${renderMessageTrail(g.messages)}
+          ${replyBox}
         </div>
-        <p class="grievance-meta">
-          ${escapeHtml(g.categoryLabel || g.category)}
-          · plot <code>${escapeHtml(g.houseId)}</code>
-          ${g.name ? ` · ${escapeHtml(g.name)}` : ''}
-          · ${escapeHtml(formatWhen(g.updatedAt || g.createdAt))}
-          · ${(g.messages || []).length} message${(g.messages || []).length === 1 ? '' : 's'}
-        </p>
-        ${renderMessageTrail(g.messages)}
-        ${replyBox}
       </article>`;
   }
 
@@ -1768,6 +2120,7 @@
       return;
     }
     list.innerHTML = rows.map((g) => renderMailboxCard(g, { ecMode: isEcAdmin() })).join('');
+    refreshMobileListUi();
   }
 
   async function loadEcGrievances() {
@@ -1792,6 +2145,7 @@
     }
     list.innerHTML = rows.map((g) => renderMailboxCard(g, { ecMode: true })).join('');
     if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = '';
+    refreshMobileListUi();
   }
 
   async function submitMailboxReply(form) {
@@ -1997,6 +2351,7 @@
     const superOnly = isSuperAdmin();
     if (!rows.length) {
       tbody.innerHTML = '<tr class="is-empty-row"><td colspan="12" class="muted">No matching residents.</td></tr>';
+      refreshMobileListUi();
       return;
     }
     tbody.innerHTML = rows.map((r) => {
@@ -2038,6 +2393,7 @@
         </td>
       </tr>`;
     }).join('');
+    refreshMobileListUi();
   }
 
   async function loadRoster() {
@@ -2145,6 +2501,7 @@
     if (!rows.length) {
       tbody.innerHTML = '<tr class="is-empty-row"><td colspan="5" class="muted">No revisions yet.</td></tr>';
       if (el('revisionStatus')) el('revisionStatus').textContent = '';
+      refreshMobileListUi();
       return;
     }
     tbody.innerHTML = rows.map((rev) => `
@@ -2156,6 +2513,7 @@
         <td data-label="Summary" class="revision-summary muted">${escapeHtml(fieldDiffSummary(rev))}</td>
       </tr>`).join('');
     if (el('revisionStatus')) el('revisionStatus').textContent = `${rows.length} recent change(s)`;
+    refreshMobileListUi();
   }
 
   el('revisionRefreshBtn')?.addEventListener('click', () => loadRevisions().catch(console.error));
@@ -2277,9 +2635,8 @@
         : '<tr><td colspan="5">No events yet.</td></tr>';
     }
     if (status) status.textContent = '';
+    refreshMobileListUi();
   }
-
-  el('obsRefreshBtn')?.addEventListener('click', () => loadObservability().catch(console.error));
   el('obsDays')?.addEventListener('change', () => loadObservability().catch(console.error));
   el('obsHouseFilter')?.addEventListener('change', () => loadObservability().catch(console.error));
   el('obsHouseFilter')?.addEventListener('keydown', (event) => {
@@ -2424,5 +2781,35 @@
     el('appRefreshBtn')?.addEventListener('click', () => window.location.reload());
   }
 
+  document.addEventListener('click', (event) => {
+    const foldHead = event.target.closest('.mobile-fold-head');
+    if (foldHead && isMobileLayout()) {
+      if (event.target.closest('.notice-actions, .notice-engage, .notice-comments, .btn-row, .mailbox-reply, input, select, textarea, a')) return;
+      const card = foldHead.closest('.mobile-fold');
+      if (!card) return;
+      const open = card.classList.toggle('is-open');
+      foldHead.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) scrollBelowAppHeader(card.querySelector('.mobile-fold-body') || card);
+      return;
+    }
+    const sectionToggle = event.target.closest('.mobile-section-toggle');
+    if (sectionToggle && isMobileLayout()) {
+      const section = sectionToggle.closest('.mobile-section');
+      if (!section) return;
+      const open = !section.classList.contains('is-section-collapsed');
+      section.classList.toggle('is-section-collapsed', open);
+      sectionToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (!open) scrollBelowAppHeader(section.querySelector('.mobile-section-body') || section);
+    }
+  });
+
+  MOBILE_MQ.addEventListener('change', () => {
+    updateAppTopOffset();
+    refreshMobileListUi();
+  });
+  window.addEventListener('resize', updateAppTopOffset);
+
+  prepareMobileSections();
+  updateAppTopOffset();
   refreshSession().catch(() => setAuthed(null));
 })();

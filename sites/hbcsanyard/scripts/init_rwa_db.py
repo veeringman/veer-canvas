@@ -192,6 +192,8 @@ def migrate_roman_plot_ids(conn: sqlite3.Connection) -> int:
             ("portal_accounts", "house_id"),
             ("notice_shares", "house_id"),
             ("notice_shares", "shared_by"),
+            ("notice_likes", "house_id"),
+            ("notice_comments", "house_id"),
             ("access_events", "house_id"),
             ("resident_revisions", "house_id"),
             ("resident_revisions", "changed_by_house_id"),
@@ -307,6 +309,27 @@ def init_schema(conn: sqlite3.Connection) -> None:
           PRIMARY KEY (notice_id, house_id)
         );
         CREATE INDEX IF NOT EXISTS idx_notice_shares_house ON notice_shares(house_id);
+
+        CREATE TABLE IF NOT EXISTS notice_likes (
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (notice_id, house_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_likes_notice ON notice_likes(notice_id);
+
+        CREATE TABLE IF NOT EXISTS notice_comments (
+          id TEXT PRIMARY KEY,
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          author_name TEXT,
+          body TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active', 'hidden', 'deleted'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_comments_notice
+          ON notice_comments(notice_id, created_at ASC);
 
         CREATE TABLE IF NOT EXISTS access_events (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -568,6 +591,35 @@ def ensure_notice_shares_table(conn: sqlite3.Connection) -> None:
           PRIMARY KEY (notice_id, house_id)
         );
         CREATE INDEX IF NOT EXISTS idx_notice_shares_house ON notice_shares(house_id);
+        """
+    )
+    conn.commit()
+
+
+def ensure_notice_engagement_tables(conn: sqlite3.Connection) -> None:
+    """Likes and comments on published colony-board notices."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS notice_likes (
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (notice_id, house_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_likes_notice ON notice_likes(notice_id);
+
+        CREATE TABLE IF NOT EXISTS notice_comments (
+          id TEXT PRIMARY KEY,
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          author_name TEXT,
+          body TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active', 'hidden', 'deleted'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_comments_notice
+          ON notice_comments(notice_id, created_at ASC);
         """
     )
     conn.commit()

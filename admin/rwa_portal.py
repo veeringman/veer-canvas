@@ -46,6 +46,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_grievances_table,
     ensure_notice_pin_order,
     ensure_notice_shares_table,
+    ensure_notice_engagement_tables,
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
@@ -309,6 +310,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_otp_pending_columns(conn)
         ensure_notice_pin_order(conn)
         ensure_notice_shares_table(conn)
+        ensure_notice_engagement_tables(conn)
         ensure_access_events_table(conn)
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
@@ -508,12 +510,13 @@ def send_otp_email(email: str | None, code: str, house_id: str, site_root: pathl
         }
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"HBC Sanyard login code for plot {house_id}"
+        msg["Subject"] = "HBC Sanyard — code for resident login"
         msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
         msg["To"] = email
         msg["Reply-To"] = cfg["from"]
         msg.set_content(
-            f"Your one-time login code for plot {house_id} is: {code}\n\n"
+            f"Your one-time code for resident login is: {code}\n\n"
+            f"Plot: {house_id}\n"
             f"It expires in {OTP_TTL_SECONDS // 60} minutes.\n"
             "If you did not request this, ignore this email.\n\n"
             "— Residents Welfare Association\n"
@@ -2638,6 +2641,7 @@ def list_notices(
     """List notices. status: published (default), draft, archived, or all."""
     ensure_notice_pin_order(conn)
     ensure_notice_shares_table(conn)
+    ensure_notice_engagement_tables(conn)
     # Welcome notice is always first among published; drafts sort by updated/published date.
     order_sql = (
         "ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, "
@@ -2660,6 +2664,35 @@ def list_notices(
             continue
         out.append(_notice_public(conn, r, viewer=viewer))
     return out
+
+
+def _notice_engagement(conn: sqlite3.Connection, notice_id: str, viewer: dict | None) -> dict:
+    ensure_notice_engagement_tables(conn)
+    like_count = conn.execute(
+        "SELECT COUNT(*) FROM notice_likes WHERE notice_id = ?",
+        (notice_id,),
+    ).fetchone()[0]
+    comment_count = conn.execute(
+        """
+        SELECT COUNT(*) FROM notice_comments
+        WHERE notice_id = ? AND status = 'active'
+        """,
+        (notice_id,),
+    ).fetchone()[0]
+    liked_by_me = False
+    house_id = (viewer or {}).get("houseId") or (viewer or {}).get("house_id") or ""
+    if house_id:
+        liked_by_me = bool(
+            conn.execute(
+                "SELECT 1 FROM notice_likes WHERE notice_id = ? AND house_id = ?",
+                (notice_id, house_id),
+            ).fetchone()
+        )
+    return {
+        "likeCount": int(like_count or 0),
+        "commentCount": int(comment_count or 0),
+        "likedByMe": liked_by_me,
+    }
 
 
 def _notice_public(
@@ -2688,6 +2721,11 @@ def _notice_public(
         if status == "draft"
         else True
     )
+    engagement = (
+        _notice_engagement(conn, notice_id, viewer)
+        if conn is not None and notice_id
+        else {"likeCount": 0, "commentCount": 0, "likedByMe": False}
+    )
     return {
         "id": notice_id,
         "title": data.get("title") or "",
@@ -2703,7 +2741,156 @@ def _notice_public(
         "isOwner": is_owner,
         "canEdit": can_edit,
         "sharedWithMe": bool(share_access) and not is_owner,
+        "likeCount": engagement["likeCount"],
+        "commentCount": engagement["commentCount"],
+        "likedByMe": engagement["likedByMe"],
     }
+
+
+def list_notice_comments(conn: sqlite3.Connection, notice_id: str) -> list[dict]:
+    ensure_notice_engagement_tables(conn)
+    nid = (notice_id or "").strip()
+    if not nid:
+        raise ValueError("notice id required")
+    exists = conn.execute("SELECT 1 FROM notices WHERE id = ?", (nid,)).fetchone()
+    if not exists:
+        raise ValueError("Notice not found")
+    rows = conn.execute(
+        """
+        SELECT id, notice_id, house_id, author_name, body, created_at
+        FROM notice_comments
+        WHERE notice_id = ? AND status = 'active'
+        ORDER BY created_at ASC, id ASC
+        """,
+        (nid,),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"],
+            "noticeId": r["notice_id"],
+            "houseId": r["house_id"],
+            "authorName": r["author_name"] or r["house_id"],
+            "body": r["body"] or "",
+            "createdAt": r["created_at"],
+        }
+        for r in rows
+    ]
+
+
+def toggle_notice_like(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    actor: dict,
+) -> dict:
+    ensure_notice_engagement_tables(conn)
+    nid = (notice_id or "").strip()
+    house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    if not nid:
+        raise ValueError("notice id required")
+    if not house_id:
+        raise ValueError("Sign in required")
+    row = conn.execute("SELECT id, status FROM notices WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        raise ValueError("Notice not found")
+    if (row["status"] or "") != "published":
+        raise ValueError("Only published notices can be liked")
+    existing = conn.execute(
+        "SELECT 1 FROM notice_likes WHERE notice_id = ? AND house_id = ?",
+        (nid, house_id),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "DELETE FROM notice_likes WHERE notice_id = ? AND house_id = ?",
+            (nid, house_id),
+        )
+        liked = False
+    else:
+        conn.execute(
+            "INSERT INTO notice_likes(notice_id, house_id, created_at) VALUES (?, ?, ?)",
+            (nid, house_id, utc_now()),
+        )
+        liked = True
+    conn.commit()
+    engagement = _notice_engagement(conn, nid, actor)
+    return {"liked": liked, **engagement}
+
+
+def add_notice_comment(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    actor: dict,
+    body: str,
+) -> dict:
+    ensure_notice_engagement_tables(conn)
+    nid = (notice_id or "").strip()
+    house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    text = (body or "").strip()
+    if not nid:
+        raise ValueError("notice id required")
+    if not house_id:
+        raise ValueError("Sign in required")
+    if len(text) < 2:
+        raise ValueError("Comment is too short")
+    if len(text) > 1000:
+        raise ValueError("Comment is too long (max 1000 characters)")
+    row = conn.execute("SELECT id, status FROM notices WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        raise ValueError("Notice not found")
+    if (row["status"] or "") != "published":
+        raise ValueError("Only published notices can be commented on")
+    author = (actor or {}).get("name") or house_id
+    if (actor or {}).get("superAdmin"):
+        author = "Super admin"
+    cid = f"nc_{secrets.token_hex(8)}"
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT INTO notice_comments(id, notice_id, house_id, author_name, body, created_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'active')
+        """,
+        (cid, nid, house_id, author, text, now),
+    )
+    conn.commit()
+    return {
+        "id": cid,
+        "noticeId": nid,
+        "houseId": house_id,
+        "authorName": author,
+        "body": text,
+        "createdAt": now,
+        **_notice_engagement(conn, nid, actor),
+    }
+
+
+def delete_notice_comment(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    comment_id: str,
+    actor: dict,
+) -> dict:
+    ensure_notice_engagement_tables(conn)
+    nid = (notice_id or "").strip()
+    cid = (comment_id or "").strip()
+    house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    if not nid or not cid:
+        raise ValueError("notice and comment id required")
+    row = conn.execute(
+        "SELECT * FROM notice_comments WHERE id = ? AND notice_id = ?",
+        (cid, nid),
+    ).fetchone()
+    if not row or (row["status"] or "") != "active":
+        raise ValueError("Comment not found")
+    is_owner = row["house_id"] == house_id
+    is_admin = (actor or {}).get("role") == "admin" or (actor or {}).get("superAdmin")
+    if not is_owner and not is_admin:
+        raise ValueError("You can only remove your own comment")
+    conn.execute(
+        "UPDATE notice_comments SET status = 'deleted' WHERE id = ?",
+        (cid,),
+    )
+    conn.commit()
+    return {"deleted": cid, **_notice_engagement(conn, nid, actor)}
+
 
 def get_notice(
     conn: sqlite3.Connection,
@@ -2713,6 +2900,7 @@ def get_notice(
 ) -> dict | None:
     ensure_notice_pin_order(conn)
     ensure_notice_shares_table(conn)
+    ensure_notice_engagement_tables(conn)
     row = conn.execute("SELECT * FROM notices WHERE id = ?", (notice_id,)).fetchone()
     if not row:
         return None
@@ -2987,6 +3175,8 @@ def delete_notice(
         raise ValueError("Only the draft owner can delete this draft")
     was_pinned = bool(int(row["pinned"] or 0))
     conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (nid,))
+    conn.execute("DELETE FROM notice_likes WHERE notice_id = ?", (nid,))
+    conn.execute("DELETE FROM notice_comments WHERE notice_id = ?", (nid,))
     cur = conn.execute("DELETE FROM notices WHERE id = ?", (nid,))
     if cur.rowcount < 1:
         conn.commit()
@@ -3008,6 +3198,10 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^POST /api/rwa/notices$"), "Create notice"),
     (re.compile(r"^PATCH /api/rwa/notices/[^/]+$"), "Update notice"),
     (re.compile(r"^DELETE /api/rwa/notices/[^/]+$"), "Delete notice"),
+    (re.compile(r"^POST /api/rwa/notices/[^/]+/like$"), "Like / unlike notice"),
+    (re.compile(r"^GET /api/rwa/notices/[^/]+/comments$"), "View notice comments"),
+    (re.compile(r"^POST /api/rwa/notices/[^/]+/comments$"), "Comment on notice"),
+    (re.compile(r"^DELETE /api/rwa/notices/[^/]+/comments/[^/]+$"), "Delete notice comment"),
     (re.compile(r"^PUT /api/rwa/notices/[^/]+/shares$"), "Share draft"),
     (re.compile(r"^GET /api/rwa/notices/[^/]+/shares$"), "View draft shares"),
     (re.compile(r"^GET /api/rwa/ec-members$"), "List EC members"),

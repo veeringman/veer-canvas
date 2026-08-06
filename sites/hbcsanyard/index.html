@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>HBC Sanyard RWA</title>
   <meta name="description" content="Residents Welfare Association — Housing Board Colony Sanyard. Notices, dues, directory, and household profile.">
   <link rel="manifest" href="manifest.webmanifest">
@@ -20,14 +20,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260806plots">
-  <script src="portal.js?v=20260806plots" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260806engage">
+  <script src="portal.js?v=20260806engage" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
 
   <div id="gateView" class="shell gate-shell">
-    <header class="gate-brand">
+    <header class="gate-brand" id="gateBrand">
       <picture>
         <source
           type="image/webp"
@@ -36,6 +36,7 @@
         >
         <img
           class="seal"
+          id="gateSeal"
           src="assets/hbcs-sanyard-seal-240.jpg"
           srcset="assets/hbcs-sanyard-seal-240.jpg 240w, assets/hbcs-sanyard-seal-480.jpg 480w"
           sizes="(max-width: 720px) 52vw, 236px"
@@ -54,14 +55,9 @@
     </header>
 
     <section class="gate-card" id="loginCard">
-      <div class="gate-tabs" role="tablist" aria-label="Sign-in method">
-        <button type="button" class="gate-tab is-active" data-gate="plot" id="gateTabPlot">Plot OTP</button>
-        <button type="button" class="gate-tab" data-gate="admin" id="gateTabAdmin">Super admin</button>
-      </div>
-
       <div id="plotLoginPane">
-        <h2>Sign in with plot number</h2>
-        <p class="muted">Use your house / plot number as registered with the RWA. A one-time code is emailed when an address is on file.</p>
+        <h2>Residents</h2>
+        <p class="muted">Sign in with your house / plot number as registered with the RWA. A one-time code is emailed when an address is on file.</p>
         <form id="otpRequestForm" class="stack">
           <label>
             House / plot number
@@ -127,26 +123,40 @@
 
   <div id="appView" class="shell app-shell" hidden>
     <header class="app-top">
-      <div class="brand-mini">
-        <img class="seal-mini" src="assets/hbcs-sanyard-seal-mark.jpg" alt="" width="42" height="42" decoding="async">
-        <div>
-          <strong>HBC Sanyard</strong>
-          <span id="userChip" class="chip">—</span>
+      <div class="app-top-bar">
+        <div class="brand-mini">
+          <img class="seal-mini" src="assets/hbcs-sanyard-seal-mark.jpg" alt="" width="42" height="42" decoding="async">
+          <div class="brand-mini-text">
+            <strong>HBC Sanyard</strong>
+            <span id="userChip" class="chip">—</span>
+          </div>
+        </div>
+        <div class="app-top-actions">
+          <a class="btn ghost compact superadmin-only" href="/admin/" title="VeerCanvas content CMS" id="cmsNavLink" hidden>CMS</a>
+          <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
         </div>
       </div>
-      <nav class="tabs" role="tablist">
-        <button type="button" class="tab is-active" data-panel="home">Home</button>
-        <button type="button" class="tab" data-panel="dues">Dues</button>
-        <button type="button" class="tab" data-panel="concerns">Concerns</button>
-        <button type="button" class="tab" data-panel="info">Information Centre</button>
-        <button type="button" class="tab" data-panel="works">Works &amp; Events</button>
-        <button type="button" class="tab" data-panel="directory">Directory</button>
-        <button type="button" class="tab" data-panel="profile">Profile</button>
-        <button type="button" class="tab admin-only" data-panel="admin" hidden>EC desk</button>
-        <button type="button" class="tab superadmin-only" data-panel="observability" hidden>Observability</button>
-      </nav>
-      <a class="btn ghost compact superadmin-only" href="/admin/" title="VeerCanvas content CMS" id="cmsNavLink" hidden>CMS</a>
-      <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
+      <div class="app-top-nav">
+        <nav class="tabs" role="tablist" aria-label="Portal sections">
+          <button type="button" class="tab is-active" data-panel="home" aria-selected="true">Home</button>
+          <button type="button" class="tab" data-panel="dues" id="duesTab" aria-selected="false">Dues</button>
+          <button type="button" class="tab" data-panel="concerns" aria-selected="false">Concerns</button>
+          <button type="button" class="tab" data-panel="info" aria-selected="false" aria-label="Information Centre">
+            <span class="tab-long">Information Centre</span><span class="tab-short" aria-hidden="true">Info</span>
+          </button>
+          <button type="button" class="tab" data-panel="works" aria-selected="false" aria-label="Works and Events">
+            <span class="tab-long">Works &amp; Events</span><span class="tab-short" aria-hidden="true">Works</span>
+          </button>
+          <button type="button" class="tab" data-panel="directory" aria-selected="false">Directory</button>
+          <button type="button" class="tab" data-panel="profile" aria-selected="false">Profile</button>
+          <button type="button" class="tab admin-only" data-panel="admin" hidden aria-selected="false" aria-label="EC desk">
+            <span class="tab-long">EC desk</span><span class="tab-short" aria-hidden="true">EC</span>
+          </button>
+          <button type="button" class="tab superadmin-only" data-panel="observability" hidden aria-selected="false" aria-label="Observability">
+            <span class="tab-long">Observability</span><span class="tab-short" aria-hidden="true">Activity</span>
+          </button>
+        </nav>
+      </div>
     </header>
 
     <main class="app-main">
@@ -742,7 +752,9 @@
               <label>Super admin username <input name="superadminUser" id="settingsSaUser"></label>
               <label>New super admin password <input name="superadminPassword" id="settingsSaPass" type="password" placeholder="leave blank to keep" autocomplete="new-password"></label>
             </div>
-            <button type="submit" class="btn primary" id="settingsSaveBtn">Save settings</button>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="settingsSaveBtn">Save settings</button>
+            </div>
             <p class="muted" id="settingsStatus"></p>
           </form>
         </div>

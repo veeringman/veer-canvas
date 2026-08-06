@@ -3130,6 +3130,76 @@ def api_rwa_notice_shares(notice_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/notices/<notice_id>/like", methods=["POST"])
+def api_rwa_notice_like(notice_id: str):
+    """Toggle like on a published notice (any signed-in resident)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        result = rwa_portal.toggle_notice_like(conn, notice_id, sess["resident"])
+        return jsonify({"ok": True, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notices/<notice_id>/comments", methods=["GET", "POST"])
+def api_rwa_notice_comments(notice_id: str):
+    """List or add comments on a published notice."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            comments = rwa_portal.list_notice_comments(conn, notice_id)
+            notice = rwa_portal.get_notice(conn, notice_id, viewer=sess["resident"])
+            return jsonify({
+                "ok": True,
+                "comments": comments,
+                "likeCount": (notice or {}).get("likeCount", 0),
+                "commentCount": (notice or {}).get("commentCount", 0),
+                "likedByMe": (notice or {}).get("likedByMe", False),
+            })
+        payload = request.get_json(force=True, silent=True) or {}
+        comment = rwa_portal.add_notice_comment(
+            conn,
+            notice_id,
+            sess["resident"],
+            payload.get("body") or payload.get("text") or "",
+        )
+        return jsonify({"ok": True, "comment": comment, **{
+            "likeCount": comment.get("likeCount", 0),
+            "commentCount": comment.get("commentCount", 0),
+            "likedByMe": comment.get("likedByMe", False),
+        }})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notices/<notice_id>/comments/<comment_id>", methods=["DELETE"])
+def api_rwa_notice_comment_delete(notice_id: str, comment_id: str):
+    """Remove own comment (or any comment if EC/super admin)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        result = rwa_portal.delete_notice_comment(
+            conn, notice_id, comment_id, sess["resident"]
+        )
+        return jsonify({"ok": True, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/grievances/categories", methods=["GET"])
 def api_rwa_grievance_categories():
     return jsonify({"ok": True, "categories": rwa_portal.grievance_categories()})
