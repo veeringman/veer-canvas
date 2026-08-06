@@ -194,6 +194,7 @@ def migrate_roman_plot_ids(conn: sqlite3.Connection) -> int:
             ("notice_shares", "shared_by"),
             ("notice_likes", "house_id"),
             ("notice_comments", "house_id"),
+            ("household_members", "house_id"),
             ("access_events", "house_id"),
             ("resident_revisions", "house_id"),
             ("resident_revisions", "changed_by_house_id"),
@@ -312,9 +313,10 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS notice_likes (
           notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          member_id TEXT NOT NULL,
           house_id TEXT NOT NULL,
           created_at TEXT NOT NULL,
-          PRIMARY KEY (notice_id, house_id)
+          PRIMARY KEY (notice_id, member_id)
         );
         CREATE INDEX IF NOT EXISTS idx_notice_likes_notice ON notice_likes(notice_id);
 
@@ -322,6 +324,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
           id TEXT PRIMARY KEY,
           notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
           house_id TEXT NOT NULL,
+          member_id TEXT,
           author_name TEXT,
           body TEXT NOT NULL,
           created_at TEXT NOT NULL,
@@ -330,6 +333,28 @@ def init_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_notice_comments_notice
           ON notice_comments(notice_id, created_at ASC);
+
+        CREATE TABLE IF NOT EXISTS household_members (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          relation TEXT NOT NULL DEFAULT 'owner'
+            CHECK(relation IN ('owner','spouse','parent','child','other')),
+          is_primary INTEGER NOT NULL DEFAULT 0,
+          can_manage INTEGER NOT NULL DEFAULT 0,
+          view_only INTEGER NOT NULL DEFAULT 0,
+          name TEXT NOT NULL,
+          title TEXT,
+          email TEXT,
+          phone TEXT,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active','inactive')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_household_members_house
+          ON household_members(house_id, status);
+        CREATE INDEX IF NOT EXISTS idx_household_members_email
+          ON household_members(email);
 
         CREATE TABLE IF NOT EXISTS access_events (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -416,6 +441,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS otp_challenges (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           house_id TEXT NOT NULL,
+          member_id TEXT,
           code_hash TEXT NOT NULL,
           email_masked TEXT,
           expires_at TEXT NOT NULL,
@@ -429,6 +455,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS sessions (
           token TEXT PRIMARY KEY,
           house_id TEXT NOT NULL REFERENCES residents(house_id),
+          member_id TEXT,
           role TEXT NOT NULL,
           created_at TEXT NOT NULL,
           expires_at TEXT NOT NULL
@@ -513,6 +540,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_resident_profile_columns(conn)
     ensure_bank_account_columns(conn)
     ensure_otp_pending_columns(conn)
+    ensure_notice_engagement_tables(conn)
+    ensure_household_members_table(conn)
     ensure_grievances_table(conn)
     ensure_info_documents_table(conn)
     ensure_colony_works_table(conn)
@@ -622,6 +651,140 @@ def ensure_notice_engagement_tables(conn: sqlite3.Connection) -> None:
           ON notice_comments(notice_id, created_at ASC);
         """
     )
+    conn.commit()
+
+
+MEMBER_RELATIONS = ("owner", "spouse", "parent", "child", "other")
+
+
+def ensure_household_members_table(conn: sqlite3.Connection) -> None:
+    """People who can log in for a plot (owner + delegates).
+
+    Owners may mark a delegate as view_only (read notices/dues/directory;
+    cannot post concerns, like/comment, edit household, or use EC desk).
+    """
+    import secrets as _secrets
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS household_members (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          relation TEXT NOT NULL DEFAULT 'owner'
+            CHECK(relation IN ('owner','spouse','parent','child','other')),
+          is_primary INTEGER NOT NULL DEFAULT 0,
+          can_manage INTEGER NOT NULL DEFAULT 0,
+          view_only INTEGER NOT NULL DEFAULT 0,
+          name TEXT NOT NULL,
+          title TEXT,
+          email TEXT,
+          phone TEXT,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active','inactive')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_household_members_house
+          ON household_members(house_id, status);
+        CREATE INDEX IF NOT EXISTS idx_household_members_email
+          ON household_members(email);
+        """
+    )
+
+    member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
+    if "view_only" not in member_cols:
+        conn.execute("ALTER TABLE household_members ADD COLUMN view_only INTEGER NOT NULL DEFAULT 0")
+
+    sess_cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+    if "member_id" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN member_id TEXT")
+
+    otp_cols = {row[1] for row in conn.execute("PRAGMA table_info(otp_challenges)").fetchall()}
+    if "member_id" not in otp_cols:
+        conn.execute("ALTER TABLE otp_challenges ADD COLUMN member_id TEXT")
+
+    comment_cols = {row[1] for row in conn.execute("PRAGMA table_info(notice_comments)").fetchall()}
+    if "member_id" not in comment_cols:
+        conn.execute("ALTER TABLE notice_comments ADD COLUMN member_id TEXT")
+
+    # Seed one primary owner member per plot from the residents row (before likes migration).
+    plots = conn.execute(
+        """
+        SELECT house_id, name, title, email, phone, status, created_at, updated_at
+        FROM residents
+        WHERE house_id != ?
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    now = utc_now()
+    for r in plots:
+        exists = conn.execute(
+            "SELECT 1 FROM household_members WHERE house_id = ? LIMIT 1",
+            (r["house_id"],),
+        ).fetchone()
+        if exists:
+            continue
+        mid = f"hm_{_secrets.token_hex(8)}"
+        conn.execute(
+            """
+            INSERT INTO household_members(
+              id, house_id, relation, is_primary, can_manage, view_only,
+              name, title, email, phone, status, created_at, updated_at
+            ) VALUES (?, ?, 'owner', 1, 1, 0, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                mid,
+                r["house_id"],
+                r["name"] or r["house_id"],
+                r["title"],
+                (r["email"] or None),
+                (r["phone"] or None),
+                r["status"] or "active",
+                r["created_at"] or now,
+                r["updated_at"] or now,
+            ),
+        )
+
+    like_cols = {row[1] for row in conn.execute("PRAGMA table_info(notice_likes)").fetchall()}
+    if "member_id" not in like_cols:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS notice_likes_v2 (
+              notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+              member_id TEXT NOT NULL,
+              house_id TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              PRIMARY KEY (notice_id, member_id)
+            );
+            """
+        )
+        old = conn.execute("SELECT notice_id, house_id, created_at FROM notice_likes").fetchall()
+        for row in old:
+            mid = conn.execute(
+                """
+                SELECT id FROM household_members
+                WHERE house_id = ? AND status = 'active'
+                ORDER BY is_primary DESC, created_at ASC LIMIT 1
+                """,
+                (row[1],),
+            ).fetchone()
+            if not mid:
+                continue
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO notice_likes_v2(notice_id, member_id, house_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (row[0], mid[0], row[1], row[2]),
+            )
+        conn.executescript(
+            """
+            DROP TABLE IF EXISTS notice_likes;
+            ALTER TABLE notice_likes_v2 RENAME TO notice_likes;
+            CREATE INDEX IF NOT EXISTS idx_notice_likes_notice ON notice_likes(notice_id);
+            """
+        )
+
     conn.commit()
 
 

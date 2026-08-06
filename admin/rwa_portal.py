@@ -47,6 +47,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_notice_pin_order,
     ensure_notice_shares_table,
     ensure_notice_engagement_tables,
+    ensure_household_members_table,
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
@@ -59,6 +60,8 @@ from init_rwa_db import (  # noqa: E402
     utc_now,
     verify_password,
 )
+
+import rwa_household as household  # noqa: E402
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
 SESSION_TTL_SECONDS = int(os.environ.get("RWA_SESSION_TTL", str(7 * 24 * 3600)))
@@ -311,6 +314,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_notice_pin_order(conn)
         ensure_notice_shares_table(conn)
         ensure_notice_engagement_tables(conn)
+        ensure_household_members_table(conn)
         ensure_access_events_table(conn)
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
@@ -318,6 +322,10 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         migrate_roman_plot_ids(conn)
         ensure_superadmin_account(conn)
     return conn
+
+
+def ensure_household_ready(conn: sqlite3.Connection) -> None:
+    ensure_household_members_table(conn)
 
 
 def is_superadmin_resident(r: dict | None) -> bool:
@@ -539,10 +547,12 @@ def create_otp(
     email: str | None,
     site_root: pathlib.Path | None = None,
     *,
+    member_id: str | None = None,
     pending_email: str | None = None,
     pending_phone: str | None = None,
 ) -> dict:
     ensure_otp_pending_columns(conn)
+    ensure_household_members_table(conn)
     code = f"{secrets.randbelow(1_000_000):06d}"
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(seconds=OTP_TTL_SECONDS)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -550,13 +560,14 @@ def create_otp(
     conn.execute(
         """
         INSERT INTO otp_challenges(
-          house_id, code_hash, email_masked, expires_at, attempts, consumed, created_at,
+          house_id, member_id, code_hash, email_masked, expires_at, attempts, consumed, created_at,
           pending_email, pending_phone
         )
-        VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
         """,
         (
             house_id,
+            member_id,
             hash_otp(code),
             mask_email(delivery_email),
             expires,
@@ -569,6 +580,7 @@ def create_otp(
     delivery = send_otp_email(delivery_email, code, house_id, site_root=site_root)
     result = {
         "houseId": house_id,
+        "memberId": member_id,
         "emailMasked": mask_email(delivery_email),
         "expiresAt": expires,
         "ttlSeconds": OTP_TTL_SECONDS,
@@ -581,8 +593,15 @@ def create_otp(
     return result
 
 
-def verify_otp(conn: sqlite3.Connection, house_id: str, code: str) -> dict | None:
+def verify_otp(
+    conn: sqlite3.Connection,
+    house_id: str,
+    code: str,
+    *,
+    member_id: str | None = None,
+) -> dict | None:
     ensure_otp_pending_columns(conn)
+    ensure_household_members_table(conn)
     hid = normalize_house_id(house_id)
     row = conn.execute(
         """
@@ -614,8 +633,23 @@ def verify_otp(conn: sqlite3.Connection, house_id: str, code: str) -> dict | Non
     except (KeyError, IndexError, TypeError):
         pass
 
+    otp_member_id = None
+    try:
+        otp_member_id = (row["member_id"] or "").strip() or None
+    except (KeyError, IndexError, TypeError):
+        pass
+    mid = (member_id or otp_member_id or "").strip() or None
+
     contact_updated = False
-    if pending_email or pending_phone:
+    if mid and (pending_email or pending_phone):
+        try:
+            household.apply_member_contacts(
+                conn, mid, email=pending_email, phone=pending_phone
+            )
+            contact_updated = True
+        except ValueError:
+            contact_updated = False
+    elif pending_email or pending_phone:
         try:
             apply_login_contacts(
                 conn,
@@ -625,14 +659,17 @@ def verify_otp(conn: sqlite3.Connection, house_id: str, code: str) -> dict | Non
             )
             contact_updated = True
         except ValueError:
-            # Do not block login if contact apply fails after a valid code;
-            # resident can fix details in Profile.
             contact_updated = False
 
     resident = find_resident(conn, hid)
     if not resident:
         return None
-    sess = create_session_for_resident(conn, resident)
+    member = household.get_member(conn, mid) if mid else household.primary_member(conn, hid)
+    if mid and (not member or member.get("house_id") != hid):
+        return None
+    if member and (member.get("status") or "active") != "active":
+        return None
+    sess = create_session_for_resident(conn, resident, member=member)
     if contact_updated:
         sess["contactUpdated"] = True
     return sess
@@ -641,6 +678,7 @@ def verify_otp(conn: sqlite3.Connection, house_id: str, code: str) -> dict | Non
 def session_from_token(conn: sqlite3.Connection, token: str | None) -> dict | None:
     if not token:
         return None
+    ensure_household_members_table(conn)
     row = conn.execute("SELECT * FROM sessions WHERE token = ?", (token,)).fetchone()
     if not row:
         return None
@@ -652,10 +690,21 @@ def session_from_token(conn: sqlite3.Connection, token: str | None) -> dict | No
     resident = find_resident(conn, row["house_id"])
     if not resident:
         return None
+    member = None
+    try:
+        mid = (row["member_id"] or "").strip() or None
+    except (KeyError, IndexError, TypeError):
+        mid = None
+    if mid:
+        member = household.get_member(conn, mid)
+        if member and (member.get("status") or "active") != "active":
+            return None
+    if not member and resident.get("house_id") != SUPERADMIN_HOUSE_ID:
+        member = household.primary_member(conn, row["house_id"])
     return {
         "token": token,
         "expiresAt": row["expires_at"],
-        "resident": public_resident(resident),
+        "resident": public_resident(resident, member=member),
     }
 
 
@@ -666,9 +715,10 @@ def destroy_session(conn: sqlite3.Connection, token: str | None) -> None:
     conn.commit()
 
 
-def public_resident(r: dict) -> dict:
+def public_resident(r: dict, member: dict | None = None) -> dict:
     super_admin = str(r.get("house_id") or "") == SUPERADMIN_HOUSE_ID
-    return {
+    household_name = r.get("name") or ""
+    out = {
         "houseId": r.get("house_id"),
         "plotNo": r.get("plot_no"),
         "section": r.get("section"),
@@ -683,7 +733,37 @@ def public_resident(r: dict) -> dict:
         "status": r.get("status") or "active",
         "notes": r.get("notes") or "",
         "superAdmin": super_admin,
+        "householdName": household_name,
+        "memberId": None,
+        "relation": "owner" if not super_admin else "",
+        "relationLabel": "Owner" if not super_admin else "",
+        "isPrimary": True,
+        "canManageHousehold": True,
+        "viewOnly": False,
     }
+    if member and not super_admin:
+        pub = household.public_member(member, include_contacts=True)
+        out["memberId"] = pub.get("id")
+        out["name"] = pub.get("name") or out["name"]
+        out["title"] = pub.get("title") or ""
+        out["email"] = pub.get("email") or ""
+        out["phone"] = pub.get("phone") or ""
+        out["relation"] = pub.get("relation") or "other"
+        out["relationLabel"] = pub.get("relationLabel") or ""
+        out["isPrimary"] = bool(pub.get("isPrimary"))
+        out["canManageHousehold"] = bool(pub.get("canManage") or pub.get("isPrimary")) and not bool(pub.get("viewOnly"))
+        out["viewOnly"] = bool(pub.get("viewOnly"))
+        plot_is_ec = (r.get("role") or "") == "admin"
+        out["plotIsEc"] = plot_is_ec
+        # EC seat is plot-level, but only the primary owner may act as EC admin.
+        # Delegates (including full-access spouses) get resident access at most.
+        if not out["isPrimary"] and out["role"] == "admin":
+            out["role"] = "resident"
+        if out["viewOnly"]:
+            out["role"] = "resident"
+            out["canManageHousehold"] = False
+            out["officialTitle"] = ""
+    return out
 
 
 def normalize_phone(raw: str | None) -> str | None:
@@ -2668,6 +2748,7 @@ def list_notices(
 
 def _notice_engagement(conn: sqlite3.Connection, notice_id: str, viewer: dict | None) -> dict:
     ensure_notice_engagement_tables(conn)
+    ensure_household_members_table(conn)
     like_count = conn.execute(
         "SELECT COUNT(*) FROM notice_likes WHERE notice_id = ?",
         (notice_id,),
@@ -2680,8 +2761,16 @@ def _notice_engagement(conn: sqlite3.Connection, notice_id: str, viewer: dict | 
         (notice_id,),
     ).fetchone()[0]
     liked_by_me = False
+    member_id = (viewer or {}).get("memberId") or (viewer or {}).get("member_id") or ""
     house_id = (viewer or {}).get("houseId") or (viewer or {}).get("house_id") or ""
-    if house_id:
+    if member_id:
+        liked_by_me = bool(
+            conn.execute(
+                "SELECT 1 FROM notice_likes WHERE notice_id = ? AND member_id = ?",
+                (notice_id, member_id),
+            ).fetchone()
+        )
+    elif house_id:
         liked_by_me = bool(
             conn.execute(
                 "SELECT 1 FROM notice_likes WHERE notice_id = ? AND house_id = ?",
@@ -2783,31 +2872,40 @@ def toggle_notice_like(
     actor: dict,
 ) -> dict:
     ensure_notice_engagement_tables(conn)
+    ensure_household_members_table(conn)
     nid = (notice_id or "").strip()
     house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    member_id = (actor or {}).get("memberId") or (actor or {}).get("member_id") or ""
     if not nid:
         raise ValueError("notice id required")
     if not house_id:
         raise ValueError("Sign in required")
+    if household.actor_is_view_only(actor):
+        raise ValueError("View-only access cannot like notices")
+    if not member_id:
+        primary = household.primary_member(conn, house_id)
+        member_id = (primary or {}).get("id") or ""
+    if not member_id:
+        raise ValueError("Household member required")
     row = conn.execute("SELECT id, status FROM notices WHERE id = ?", (nid,)).fetchone()
     if not row:
         raise ValueError("Notice not found")
     if (row["status"] or "") != "published":
         raise ValueError("Only published notices can be liked")
     existing = conn.execute(
-        "SELECT 1 FROM notice_likes WHERE notice_id = ? AND house_id = ?",
-        (nid, house_id),
+        "SELECT 1 FROM notice_likes WHERE notice_id = ? AND member_id = ?",
+        (nid, member_id),
     ).fetchone()
     if existing:
         conn.execute(
-            "DELETE FROM notice_likes WHERE notice_id = ? AND house_id = ?",
-            (nid, house_id),
+            "DELETE FROM notice_likes WHERE notice_id = ? AND member_id = ?",
+            (nid, member_id),
         )
         liked = False
     else:
         conn.execute(
-            "INSERT INTO notice_likes(notice_id, house_id, created_at) VALUES (?, ?, ?)",
-            (nid, house_id, utc_now()),
+            "INSERT INTO notice_likes(notice_id, member_id, house_id, created_at) VALUES (?, ?, ?, ?)",
+            (nid, member_id, house_id, utc_now()),
         )
         liked = True
     conn.commit()
@@ -2822,13 +2920,17 @@ def add_notice_comment(
     body: str,
 ) -> dict:
     ensure_notice_engagement_tables(conn)
+    ensure_household_members_table(conn)
     nid = (notice_id or "").strip()
     house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    member_id = (actor or {}).get("memberId") or (actor or {}).get("member_id") or ""
     text = (body or "").strip()
     if not nid:
         raise ValueError("notice id required")
     if not house_id:
         raise ValueError("Sign in required")
+    if household.actor_is_view_only(actor):
+        raise ValueError("View-only access cannot comment")
     if len(text) < 2:
         raise ValueError("Comment is too short")
     if len(text) > 1000:
@@ -2839,22 +2941,29 @@ def add_notice_comment(
     if (row["status"] or "") != "published":
         raise ValueError("Only published notices can be commented on")
     author = (actor or {}).get("name") or house_id
+    relation = (actor or {}).get("relationLabel") or (actor or {}).get("relation") or ""
+    if relation and relation.lower() not in {"owner", ""}:
+        author = f"{author} ({relation})"
     if (actor or {}).get("superAdmin"):
         author = "Super admin"
+    if not member_id:
+        primary = household.primary_member(conn, house_id)
+        member_id = (primary or {}).get("id")
     cid = f"nc_{secrets.token_hex(8)}"
     now = utc_now()
     conn.execute(
         """
-        INSERT INTO notice_comments(id, notice_id, house_id, author_name, body, created_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'active')
+        INSERT INTO notice_comments(id, notice_id, house_id, member_id, author_name, body, created_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
         """,
-        (cid, nid, house_id, author, text, now),
+        (cid, nid, house_id, member_id, author, text, now),
     )
     conn.commit()
     return {
         "id": cid,
         "noticeId": nid,
         "houseId": house_id,
+        "memberId": member_id,
         "authorName": author,
         "body": text,
         "createdAt": now,
@@ -2872,15 +2981,23 @@ def delete_notice_comment(
     nid = (notice_id or "").strip()
     cid = (comment_id or "").strip()
     house_id = (actor or {}).get("houseId") or (actor or {}).get("house_id") or ""
+    member_id = (actor or {}).get("memberId") or (actor or {}).get("member_id") or ""
     if not nid or not cid:
         raise ValueError("notice and comment id required")
+    if household.actor_is_view_only(actor):
+        raise ValueError("View-only access cannot remove comments")
     row = conn.execute(
         "SELECT * FROM notice_comments WHERE id = ? AND notice_id = ?",
         (cid, nid),
     ).fetchone()
     if not row or (row["status"] or "") != "active":
         raise ValueError("Comment not found")
-    is_owner = row["house_id"] == house_id
+    row_member = None
+    try:
+        row_member = row["member_id"]
+    except (KeyError, IndexError, TypeError):
+        row_member = None
+    is_owner = (row_member and row_member == member_id) or (not row_member and row["house_id"] == house_id)
     is_admin = (actor or {}).get("role") == "admin" or (actor or {}).get("superAdmin")
     if not is_owner and not is_admin:
         raise ValueError("You can only remove your own comment")
@@ -3202,6 +3319,10 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^GET /api/rwa/notices/[^/]+/comments$"), "View notice comments"),
     (re.compile(r"^POST /api/rwa/notices/[^/]+/comments$"), "Comment on notice"),
     (re.compile(r"^DELETE /api/rwa/notices/[^/]+/comments/[^/]+$"), "Delete notice comment"),
+    (re.compile(r"^GET /api/rwa/household/[^/]+/members$"), "View household members"),
+    (re.compile(r"^POST /api/rwa/household/[^/]+/members$"), "Add household member"),
+    (re.compile(r"^PATCH /api/rwa/household/[^/]+/members/[^/]+$"), "Update household member"),
+    (re.compile(r"^DELETE /api/rwa/household/[^/]+/members/[^/]+$"), "Remove household member"),
     (re.compile(r"^PUT /api/rwa/notices/[^/]+/shares$"), "Share draft"),
     (re.compile(r"^GET /api/rwa/notices/[^/]+/shares$"), "View draft shares"),
     (re.compile(r"^GET /api/rwa/ec-members$"), "List EC members"),
@@ -3623,19 +3744,32 @@ def update_profile(
     return public_resident(refreshed)
 
 
-def create_session_for_resident(conn: sqlite3.Connection, resident: dict) -> dict:
+def create_session_for_resident(
+    conn: sqlite3.Connection,
+    resident: dict,
+    *,
+    member: dict | None = None,
+) -> dict:
+    ensure_household_members_table(conn)
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     expires_at = (now + timedelta(seconds=SESSION_TTL_SECONDS)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    mid = None
+    if member:
+        mid = member.get("id")
+    elif resident.get("house_id") != SUPERADMIN_HOUSE_ID:
+        primary = household.primary_member(conn, resident["house_id"])
+        mid = primary.get("id") if primary else None
+        member = primary
     conn.execute(
-        "INSERT INTO sessions(token, house_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-        (token, resident["house_id"], resident["role"], utc_now(), expires_at),
+        "INSERT INTO sessions(token, house_id, member_id, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (token, resident["house_id"], mid, resident["role"], utc_now(), expires_at),
     )
     conn.commit()
     return {
         "token": token,
         "expiresAt": expires_at,
-        "resident": public_resident(resident),
+        "resident": public_resident(resident, member=member),
     }
 
 

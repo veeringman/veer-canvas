@@ -731,6 +731,58 @@ input:focus, textarea:focus, select:focus {
   justify-self: start;
 }
 
+.member-pick-list {
+  display: grid;
+  gap: 0.45rem;
+}
+.member-pick-btn {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.member-pick-btn:hover {
+  border-color: rgba(21, 35, 63, 0.28);
+  background: #fff;
+}
+.household-block {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.household-member-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+.household-member-card {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 252, 246, 0.8);
+}
+.household-member-card .btn-row {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+body.is-view-only .mailbox-reply,
+body.is-view-only #grievanceForm {
+  display: none !important;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

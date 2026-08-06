@@ -26,6 +26,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 from logo_optimize import optimize_logo_file  # noqa: E402
 import rwa_portal  # noqa: E402
+import rwa_household  # noqa: E402
 
 VEERCANVAS_ROOT = pathlib.Path(
     os.environ.get("VEERCANVAS_ROOT", str(APP_DIR.parent))
@@ -2861,19 +2862,45 @@ def api_rwa_otp_request():
     if honeypot_tripped(payload):
         return jsonify({"ok": True, "ignored": True})
     house_id = str(payload.get("houseId") or payload.get("plotNo") or "").strip()
+    member_id = str(payload.get("memberId") or payload.get("member_id") or "").strip() or None
     if not house_id:
         return jsonify({"ok": False, "error": "House / plot number required"}), 400
     if house_id.upper().replace(" ", "") in {"ADMIN", "__SUPERADMIN__", "SUPERADMIN"}:
         return jsonify({"ok": False, "error": "Use Super admin password login"}), 400
     conn = _rwa_conn()
     try:
+        rwa_portal.ensure_household_ready(conn)
         resident = rwa_portal.find_resident(conn, house_id)
         if not resident:
             return jsonify({"ok": False, "error": "Plot not found in colony register"}), 404
         if resident.get("house_id") == rwa_portal.SUPERADMIN_HOUSE_ID:
             return jsonify({"ok": False, "error": "Use Super admin password login"}), 400
 
-        gaps = rwa_portal.contact_gaps(resident)
+        members = rwa_household.login_members_public(conn, resident["house_id"])
+        if not members:
+            return jsonify({"ok": False, "error": "No active household members for this plot"}), 400
+
+        # Multiple people: ask which person is signing in (unless already chosen).
+        if len(members) > 1 and not member_id:
+            return jsonify({
+                "ok": True,
+                "needsMemberPick": True,
+                "houseId": resident["house_id"],
+                "householdName": resident.get("name") or "",
+                "members": members,
+                "message": "Who is signing in for this plot?",
+            })
+
+        if member_id:
+            member = rwa_household.get_member(conn, member_id)
+            if not member or member.get("house_id") != resident["house_id"]:
+                return jsonify({"ok": False, "error": "Household member not found"}), 404
+            if (member.get("status") or "active") != "active":
+                return jsonify({"ok": False, "error": "This household member is inactive"}), 400
+        else:
+            member = rwa_household.get_member(conn, members[0]["id"])
+
+        gaps = rwa_household.member_contact_gaps(member)
         provided_email = str(payload.get("email") or "").strip()
         provided_phone = str(payload.get("phone") or "").strip()
         contact_supplied = bool(provided_email or provided_phone)
@@ -2883,24 +2910,25 @@ def api_rwa_otp_request():
                 "ok": True,
                 "needsContact": True,
                 "houseId": resident["house_id"],
-                "name": resident.get("name") or "",
+                "memberId": member["id"],
+                "name": member.get("name") or "",
                 "missingEmail": gaps["missingEmail"],
                 "missingPhone": gaps["missingPhone"],
                 "message": (
-                    "This plot is missing contact details. Enter them below — "
-                    "we will email a one-time code, and only after you verify "
-                    "that code will email/phone be saved to the register."
+                    f"Contact details are missing for {member.get('name') or 'this person'}. "
+                    "Enter them below — we email a one-time code, and only after you verify "
+                    "that code will email/phone be saved."
                 ),
             })
 
         pending_email = None
         pending_phone = None
-        delivery_email = resident.get("email")
+        delivery_email = member.get("email")
 
         if gaps["needsContact"]:
             try:
-                prepared = rwa_portal.prepare_pending_contacts(
-                    resident,
+                prepared = rwa_household.prepare_member_pending_contacts(
+                    member,
                     email=provided_email or None,
                     phone=provided_phone or None,
                 )
@@ -2912,11 +2940,12 @@ def api_rwa_otp_request():
                     "missingEmail": gaps["missingEmail"],
                     "missingPhone": gaps["missingPhone"],
                     "houseId": resident["house_id"],
+                    "memberId": member["id"],
                 }), 400
             pending_email = prepared["pendingEmail"]
             pending_phone = prepared["pendingPhone"]
             delivery_email = prepared["deliveryEmail"]
-        elif not (resident.get("email") or "").strip():
+        elif not (member.get("email") or "").strip():
             return jsonify({
                 "ok": False,
                 "error": "Email is required to receive a login code",
@@ -2924,22 +2953,25 @@ def api_rwa_otp_request():
                 "missingEmail": True,
                 "missingPhone": gaps["missingPhone"],
                 "houseId": resident["house_id"],
+                "memberId": member["id"],
             }), 400
 
-        # Do NOT write residents yet — pending contacts land only after OTP verify.
         result = rwa_portal.create_otp(
             conn,
             resident["house_id"],
             delivery_email,
             site_root=SITE_ROOT,
+            member_id=member["id"],
             pending_email=pending_email,
             pending_phone=pending_phone,
         )
         result["houseId"] = resident["house_id"]
+        result["memberId"] = member["id"]
+        result["memberName"] = member.get("name") or ""
         result["contactPending"] = bool(pending_email or pending_phone)
         if result["contactPending"]:
             result["message"] = (
-                "Code sent. Email/phone will be saved to the register only after you enter the correct code."
+                "Code sent. Email/phone will be saved only after you enter the correct code."
             )
         return jsonify({"ok": True, **result})
     finally:
@@ -2952,6 +2984,7 @@ def api_rwa_password_login():
     payload = request.get_json(force=True, silent=True) or {}
     if honeypot_tripped(payload):
         return jsonify({"ok": True, "ignored": True})
+
     username = str(payload.get("username") or payload.get("user") or "").strip()
     password = str(payload.get("password") or "")
     if not username or not password:
@@ -2978,12 +3011,13 @@ def api_rwa_password_login():
 def api_rwa_otp_verify():
     payload = request.get_json(force=True, silent=True) or {}
     house_id = str(payload.get("houseId") or payload.get("plotNo") or "").strip()
+    member_id = str(payload.get("memberId") or payload.get("member_id") or "").strip() or None
     code = str(payload.get("code") or payload.get("otp") or "").strip()
     if not house_id or not code:
         return jsonify({"ok": False, "error": "House / plot number and code required"}), 400
     conn = _rwa_conn()
     try:
-        sess = rwa_portal.verify_otp(conn, house_id, code)
+        sess = rwa_portal.verify_otp(conn, house_id, code, member_id=member_id)
         if not sess:
             return jsonify({"ok": False, "error": "Invalid or expired code"}), 401
         resp = jsonify({"ok": True, **sess})
@@ -3007,6 +3041,68 @@ def api_rwa_logout():
         resp = jsonify({"ok": True})
         resp.set_cookie("rwa_session", "", expires=0)
         return resp
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/household/<path:house_id>/members", methods=["GET", "POST"])
+def api_rwa_household_members(house_id: str):
+    """List or add household members (owner / EC)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        resident = rwa_portal.find_resident(conn, house_id, include_inactive=True)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        same_house = actor.get("houseId") == hid
+        if not same_house and not rwa_household.actor_can_use_ec_desk(actor) and not actor.get("superAdmin"):
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        if request.method == "GET":
+            include_inactive = rwa_household.can_actor_manage_household(actor, hid)
+            members = [
+                rwa_household.public_member(m, include_contacts=include_inactive or same_house)
+                for m in rwa_household.list_members(conn, hid, include_inactive=include_inactive)
+            ]
+            return jsonify({
+                "ok": True,
+                "houseId": hid,
+                "householdName": resident.get("name") or "",
+                "canManage": rwa_household.can_actor_manage_household(actor, hid),
+                "members": members,
+            })
+        payload = request.get_json(force=True, silent=True) or {}
+        member = rwa_household.add_member(conn, hid, payload, actor=actor)
+        return jsonify({"ok": True, "member": member})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/household/<path:house_id>/members/<member_id>", methods=["PATCH", "DELETE"])
+def api_rwa_household_member_item(house_id: str, member_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        resident = rwa_portal.find_resident(conn, house_id, include_inactive=True)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        if request.method == "DELETE":
+            rwa_household.delete_member(conn, hid, member_id, actor=actor)
+            return jsonify({"ok": True, "deleted": member_id})
+        payload = request.get_json(force=True, silent=True) or {}
+        member = rwa_household.update_member(conn, hid, member_id, payload, actor=actor)
+        return jsonify({"ok": True, "member": member})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
     finally:
         conn.close()
 
@@ -3237,6 +3333,8 @@ def api_rwa_grievances():
             })
 
         payload = request.get_json(force=True, silent=True) or {}
+        if rwa_household.actor_is_view_only(resident):
+            return jsonify({"ok": False, "error": "View-only access cannot post concerns"}), 403
         created = rwa_portal.create_grievance(conn, resident["houseId"], payload)
         return jsonify({"ok": True, "grievance": created}), 201
     except ValueError as exc:
@@ -3253,6 +3351,8 @@ def api_rwa_grievance_message(grievance_id: str):
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if rwa_household.actor_is_view_only(sess["resident"]):
+            return jsonify({"ok": False, "error": "View-only access cannot reply to concerns"}), 403
         payload = request.get_json(force=True, silent=True) or {}
         updated = rwa_portal.add_grievance_message(conn, grievance_id, payload, sess["resident"])
         return jsonify({
@@ -3714,19 +3814,53 @@ def api_rwa_profile():
         if request.method == "GET":
             return jsonify({"ok": True, "resident": sess["resident"]})
         payload = request.get_json(force=True, silent=True) or {}
-        target = sess["resident"]["houseId"]
-        as_admin = sess["resident"].get("role") == "admin"
+        actor = sess["resident"]
+        target = actor["houseId"]
+        as_admin = actor.get("role") == "admin"
         if as_admin and payload.get("houseId"):
             target = str(payload["houseId"]).strip()
-        # Admin editing another plot (or own role) gets full as_admin; self profile edit without role stays limited.
-        admin_mode = bool(as_admin and (target != sess["resident"]["houseId"] or payload.get("role")))
+        admin_mode = bool(as_admin and (target != actor["houseId"] or payload.get("role")))
+        member_id = actor.get("memberId")
+
+        # Self profile: update the logged-in household member for personal fields.
+        if member_id and target == actor["houseId"] and not admin_mode:
+            member_payload = {}
+            for key in ("name", "title", "email", "phone"):
+                if key in payload:
+                    member_payload[key] = payload.get(key)
+            if member_payload:
+                if rwa_household.actor_is_view_only(actor):
+                    # View-only may only refresh own contact channels for OTP.
+                    member_payload = {k: v for k, v in member_payload.items() if k in {"email", "phone"}}
+                if member_payload:
+                    rwa_household.update_member(
+                        conn, target, member_id, member_payload, actor=actor
+                    )
+            # Plot-level fields only for primary / managing owners.
+            plot_payload = {}
+            if actor.get("isPrimary") or actor.get("canManageHousehold"):
+                for key in ("profession", "employmentStatus", "officialTitle"):
+                    if key in payload:
+                        plot_payload[key] = payload.get(key)
+            if plot_payload:
+                rwa_portal.update_profile(
+                    conn,
+                    target,
+                    plot_payload,
+                    as_admin=False,
+                    actor=actor,
+                    change_source="profile",
+                )
+            refreshed = rwa_portal.session_from_token(conn, sess["token"])
+            return jsonify({"ok": True, "resident": (refreshed or sess)["resident"]})
+
         updated = rwa_portal.update_profile(
             conn,
             target,
             payload,
             as_admin=admin_mode,
-            actor=sess["resident"],
-            change_source="roster" if admin_mode and target != sess["resident"]["houseId"] else "profile",
+            actor=actor,
+            change_source="roster" if admin_mode and target != actor["houseId"] else "profile",
         )
         return jsonify({"ok": True, "resident": updated})
     except ValueError as exc:

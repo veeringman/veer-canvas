@@ -85,6 +85,10 @@ SITE_ID=hbcsanyard EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
 
 ## Next
 
+See **[BACKLOG.md](./BACKLOG.md)** for planned features (PDF reports, consent votes, receipt vault, etc.).
+
+Older notes:
+
 - Excel upload for payment ledger refresh
 - AuthBuddy SSO
 - Companion mobile app against the same `/api/rwa/*` surface

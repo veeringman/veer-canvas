@@ -2,6 +2,7 @@
   const state = {
     session: null,
     pendingHouse: '',
+    pendingMemberId: '',
     pendingContact: false,
     missingEmail: false,
     missingPhone: false,
@@ -49,7 +50,16 @@
   }
 
   function isEcAdmin(r = state.session?.resident) {
-    return r?.role === 'admin';
+    // Delegates never get EC desk — role is already stripped server-side for non-primary.
+    return r?.role === 'admin' && Boolean(r?.isPrimary !== false || r?.superAdmin);
+  }
+
+  function isViewOnly(r = state.session?.resident) {
+    return Boolean(r?.viewOnly) && !isSuperAdmin(r);
+  }
+
+  function canManageHousehold(r = state.session?.resident) {
+    return Boolean(r?.canManageHousehold || r?.isPrimary) && !isViewOnly(r);
   }
 
   const MOBILE_MQ = window.matchMedia('(max-width: 900px)');
@@ -180,9 +190,11 @@
     const r = session.resident;
     const chip = el('userChip');
     if (chip) {
-      const tag = r.superAdmin ? ' · Super admin' : (r.role === 'admin' ? ' · EC' : '');
+      const tag = r.superAdmin
+        ? ' · Super admin'
+        : (r.role === 'admin' ? ' · EC' : (r.viewOnly ? ' · View only' : (r.isPrimary ? '' : ` · ${r.relationLabel || 'Delegate'}`)));
       const label = r.superAdmin ? 'admin' : r.houseId;
-      const titleBit = r.officialTitle ? ` (${r.officialTitle})` : '';
+      const titleBit = (r.officialTitle && r.role === 'admin') ? ` (${r.officialTitle})` : '';
       chip.textContent = `${label} · ${r.name}${titleBit}${tag}`;
     }
 
@@ -220,6 +232,28 @@
     const officialWrap = el('profileOfficialTitleWrap');
     if (officialWrap) officialWrap.hidden = !(isEcAdmin(r) && !r.superAdmin);
 
+    const meta = el('profileMemberMeta');
+    if (meta) {
+      if (r.superAdmin) {
+        meta.hidden = true;
+      } else {
+        const bits = [
+          r.relationLabel || (r.isPrimary ? 'Owner' : 'Delegate'),
+          r.viewOnly ? 'view only' : null,
+          r.householdName && r.householdName !== r.name ? `plot: ${r.householdName}` : null,
+        ].filter(Boolean);
+        meta.hidden = false;
+        meta.textContent = bits.join(' · ');
+      }
+    }
+    const profWrap = el('profileProfessionWrap');
+    const empWrap = el('profileEmploymentWrap');
+    const canEditPlotFields = Boolean(r.isPrimary || r.canManageHousehold) && !isViewOnly(r);
+    if (profWrap) profWrap.hidden = !canEditPlotFields && !r.superAdmin;
+    if (empWrap) empWrap.hidden = !canEditPlotFields && !r.superAdmin;
+    if (el('profileName')) el('profileName').disabled = isViewOnly(r);
+    if (el('profileTitle')) el('profileTitle').disabled = isViewOnly(r);
+
     if (el('profileHouse')) el('profileHouse').value = r.houseId || '';
     if (el('profileTitle')) el('profileTitle').value = r.title || '';
     if (el('profileName')) el('profileName').value = r.name || '';
@@ -228,6 +262,11 @@
     if (el('profileOfficialTitle')) el('profileOfficialTitle').value = r.officialTitle || '';
     if (el('profileEmail')) el('profileEmail').value = r.email || '';
     if (el('profilePhone')) el('profilePhone').value = r.phone || '';
+
+    document.body.classList.toggle('is-view-only', isViewOnly(r));
+    const grievanceForm = el('grievanceForm');
+    if (grievanceForm) grievanceForm.hidden = isViewOnly(r);
+    loadHouseholdMembers().catch(() => {});
   }
 
   function activePanelName() {
@@ -296,6 +335,8 @@
     const likeCount = Number(n.likeCount || 0);
     const commentCount = Number(n.commentCount || 0);
     const liked = Boolean(n.likedByMe);
+    const viewOnly = isViewOnly();
+    const engageDisabled = viewOnly ? ' disabled title="View-only access"' : '';
     const moveActions = (isEcAdmin() && n.pinned && !welcome) ? `
         <button type="button" class="btn ghost compact notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up">↑ Up</button>
         <button type="button" class="btn ghost compact notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down">↓ Down</button>` : '';
@@ -332,7 +373,7 @@
           ${actions}
         </div>
         <div class="notice-engage">
-          <button type="button" class="notice-engage-btn notice-like${liked ? ' is-active' : ''}" data-id="${escapeHtml(n.id)}" aria-pressed="${liked ? 'true' : 'false'}" title="${liked ? 'Unlike' : 'Like'}">
+          <button type="button" class="notice-engage-btn notice-like${liked ? ' is-active' : ''}" data-id="${escapeHtml(n.id)}" aria-pressed="${liked ? 'true' : 'false'}" title="${viewOnly ? 'View-only access' : (liked ? 'Unlike' : 'Like')}"${engageDisabled}>
             <span class="notice-engage-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.1C.7 10.1 1.5 6.8 4.4 5.4 6.5 4.4 9 5 12 7.4c3-2.4 5.5-3 7.6-2 2.9 1.4 3.7 4.7 1.9 7.5C19 16.65 12 21 12 21z"/></svg>
             </span>
@@ -349,13 +390,13 @@
         </div>
         <div class="notice-comments" data-id="${escapeHtml(n.id)}" hidden>
           <div class="notice-comments-list"><p class="muted">Loading comments…</p></div>
-          <form class="notice-comment-form stack" data-id="${escapeHtml(n.id)}">
+          ${viewOnly ? '<p class="muted">View-only access — you can read comments but not post.</p>' : `<form class="notice-comment-form stack" data-id="${escapeHtml(n.id)}">
             <label>
               <span class="sr-only">Add a comment</span>
               <textarea name="body" rows="2" maxlength="1000" placeholder="Write a comment…" required></textarea>
             </label>
             <button type="submit" class="btn secondary compact">Post comment</button>
-          </form>
+          </form>`}
         </div>
       </article>`;
   }
@@ -1545,23 +1586,47 @@
 
   function resetLoginForms() {
     el('otpRequestForm') && (el('otpRequestForm').hidden = false);
+    el('otpMemberForm') && (el('otpMemberForm').hidden = true);
     el('otpContactForm') && (el('otpContactForm').hidden = true);
     el('otpVerifyForm') && (el('otpVerifyForm').hidden = true);
     if (el('otpInput')) el('otpInput').value = '';
     if (el('otpContactEmail')) el('otpContactEmail').value = '';
     if (el('otpContactPhone')) el('otpContactPhone').value = '';
+    if (el('otpMemberList')) el('otpMemberList').innerHTML = '';
     state.pendingHouse = '';
+    state.pendingMemberId = '';
     state.pendingContact = false;
     state.missingEmail = false;
     state.missingPhone = false;
     showError('');
   }
 
+  function showMemberPicker(data) {
+    state.pendingHouse = data.houseId || state.pendingHouse;
+    state.pendingMemberId = '';
+    el('otpRequestForm').hidden = true;
+    el('otpContactForm').hidden = true;
+    el('otpVerifyForm').hidden = true;
+    el('otpMemberForm').hidden = false;
+    const name = data.householdName ? ` (${escapeHtml(data.householdName)})` : '';
+    el('otpMemberHint').innerHTML = data.message
+      || `Who is signing in for plot <strong>${escapeHtml(state.pendingHouse)}</strong>${name}?`;
+    const list = el('otpMemberList');
+    list.innerHTML = (data.members || []).map((m) => `
+      <button type="button" class="member-pick-btn" data-member-id="${escapeHtml(m.id)}">
+        <strong>${escapeHtml(m.name || 'Member')}</strong>
+        <span class="muted">${escapeHtml(m.relationLabel || m.relation || '')}${m.viewOnly ? ' · view only' : ''}${m.emailMasked ? ` · ${escapeHtml(m.emailMasked)}` : ''}</span>
+      </button>
+    `).join('');
+  }
+
   function showContactForm(data) {
     state.pendingHouse = data.houseId || state.pendingHouse;
+    state.pendingMemberId = data.memberId || state.pendingMemberId;
     state.missingEmail = Boolean(data.missingEmail);
     state.missingPhone = Boolean(data.missingPhone);
     el('otpRequestForm').hidden = true;
+    el('otpMemberForm') && (el('otpMemberForm').hidden = true);
     el('otpVerifyForm').hidden = true;
     el('otpContactForm').hidden = false;
     const name = data.name ? ` for ${data.name}` : '';
@@ -1581,11 +1646,14 @@
 
   function showVerifyForm(data) {
     state.pendingHouse = data.houseId || state.pendingHouse;
+    state.pendingMemberId = data.memberId || state.pendingMemberId;
     state.pendingContact = Boolean(data.contactPending || data.pendingContact);
     el('otpRequestForm').hidden = true;
+    el('otpMemberForm') && (el('otpMemberForm').hidden = true);
     el('otpContactForm').hidden = true;
     el('otpVerifyForm').hidden = false;
-    let hint = `Code sent for plot <strong>${escapeHtml(state.pendingHouse)}</strong>`;
+    const who = data.memberName ? ` · ${escapeHtml(data.memberName)}` : '';
+    let hint = `Code sent for plot <strong>${escapeHtml(state.pendingHouse)}</strong>${who}`;
     if (data.emailMasked) hint += ` to ${escapeHtml(data.emailMasked)}`;
     if (data.devCode) hint += `. Dev code: <code>${escapeHtml(data.devCode)}</code>`;
     if (state.pendingContact) {
@@ -1601,6 +1669,20 @@
     });
   }
 
+  async function handleOtpRequestResult(data, houseId) {
+    state.pendingHouse = data.houseId || houseId;
+    if (data.memberId) state.pendingMemberId = data.memberId;
+    if (data.needsMemberPick) {
+      showMemberPicker(data);
+      return;
+    }
+    if (data.needsContact) {
+      showContactForm(data);
+      return;
+    }
+    showVerifyForm(data);
+  }
+
   el('otpRequestForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
@@ -1608,12 +1690,7 @@
     el('requestOtpBtn').disabled = true;
     try {
       const data = await requestOtp({ houseId });
-      state.pendingHouse = data.houseId || houseId;
-      if (data.needsContact) {
-        showContactForm(data);
-        return;
-      }
-      showVerifyForm(data);
+      await handleOtpRequestResult(data, houseId);
     } catch (err) {
       showError(err.message || 'Could not send code');
     } finally {
@@ -1621,13 +1698,36 @@
     }
   });
 
+  el('otpMemberList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.member-pick-btn');
+    if (!btn) return;
+    showError('');
+    const memberId = btn.getAttribute('data-member-id');
+    btn.disabled = true;
+    try {
+      const data = await requestOtp({
+        houseId: state.pendingHouse,
+        memberId,
+      });
+      await handleOtpRequestResult(data, state.pendingHouse);
+    } catch (err) {
+      showError(err.message || 'Could not send code');
+      btn.disabled = false;
+    }
+  });
+
+  el('otpMemberBackBtn')?.addEventListener('click', () => resetLoginForms());
+
   el('otpContactForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
     const btn = el('otpContactSubmitBtn');
     if (btn) btn.disabled = true;
     try {
-      const payload = { houseId: state.pendingHouse || el('houseIdInput').value.trim() };
+      const payload = {
+        houseId: state.pendingHouse || el('houseIdInput').value.trim(),
+        memberId: state.pendingMemberId || undefined,
+      };
       if (state.missingEmail) payload.email = el('otpContactEmail').value.trim();
       if (state.missingPhone) payload.phone = el('otpContactPhone').value.trim();
       const data = await requestOtp(payload);
@@ -1636,9 +1736,9 @@
         showError(data.message || 'Please complete the contact details');
         return;
       }
-      showVerifyForm(data);
+      await handleOtpRequestResult(data, payload.houseId);
     } catch (err) {
-      showError(err.message || 'Could not send verification code');
+      showError(err.message || 'Could not send code');
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -1651,12 +1751,15 @@
     try {
       const data = await api('/api/rwa/otp/verify', {
         method: 'POST',
-        body: JSON.stringify({ houseId: state.pendingHouse, code: el('otpInput').value.trim() }),
+        body: JSON.stringify({
+          houseId: state.pendingHouse,
+          memberId: state.pendingMemberId || undefined,
+          code: el('otpInput').value.trim(),
+        }),
       });
       setAuthed(data);
       ensurePanelVisibility('home');
       if (data.contactUpdated) {
-        // Soft notice on home after contact verify
         const list = el('noticeList');
         if (list) {
           const note = document.createElement('p');
@@ -1683,6 +1786,105 @@
 
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => switchPanel(tab.dataset.panel));
+  });
+
+  async function loadHouseholdMembers() {
+    const block = el('householdBlock');
+    const list = el('householdMemberList');
+    const addForm = el('householdAddForm');
+    if (!block || !list) return;
+    const r = state.session?.resident;
+    if (!r || r.superAdmin || !r.houseId) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+    try {
+      const data = await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/members`);
+      const canManage = Boolean(data.canManage);
+      if (addForm) addForm.hidden = !canManage;
+      list.innerHTML = (data.members || []).map((m) => {
+        const badges = [
+          m.isPrimary ? 'Owner' : (m.relationLabel || m.relation),
+          m.viewOnly ? 'View only' : null,
+        ].filter(Boolean).join(' · ');
+        const actions = canManage && !m.isPrimary ? `
+          <div class="btn-row">
+            <label class="check compact"><input type="checkbox" class="hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''}> View only</label>
+            <button type="button" class="btn ghost compact hh-remove" data-id="${escapeHtml(m.id)}">Remove</button>
+          </div>` : (m.isPrimary ? '<p class="muted">Primary owner — EC access stays with this login only</p>' : '');
+        return `
+          <article class="household-member-card" data-id="${escapeHtml(m.id)}">
+            <strong>${escapeHtml(m.name)}</strong>
+            <span class="muted">${escapeHtml(badges)}</span>
+            <span class="muted">${escapeHtml(m.email || '—')} · ${escapeHtml(m.phone || '—')}</span>
+            ${actions}
+          </article>`;
+      }).join('') || '<p class="muted">No household members yet.</p>';
+    } catch (err) {
+      list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load household')}</p>`;
+    }
+  }
+
+  el('householdAddForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const r = state.session?.resident;
+    const status = el('householdStatus');
+    if (!r?.houseId) return;
+    if (status) status.textContent = 'Saving…';
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: el('hhName').value.trim(),
+          relation: el('hhRelation').value,
+          email: el('hhEmail').value.trim(),
+          phone: el('hhPhone').value.trim(),
+          viewOnly: Boolean(el('hhViewOnly')?.checked),
+        }),
+      });
+      el('householdAddForm').reset();
+      if (status) status.textContent = 'Delegate added.';
+      await loadHouseholdMembers();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not add member';
+    }
+  });
+
+  el('householdMemberList')?.addEventListener('change', async (event) => {
+    const box = event.target.closest('.hh-view-only');
+    if (!box) return;
+    const r = state.session?.resident;
+    const id = box.getAttribute('data-id');
+    if (!r?.houseId || !id) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/members/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ viewOnly: box.checked }),
+      });
+      await loadHouseholdMembers();
+    } catch (err) {
+      alert(err.message || 'Could not update access');
+      box.checked = !box.checked;
+    }
+  });
+
+  el('householdMemberList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.hh-remove');
+    if (!btn) return;
+    const r = state.session?.resident;
+    const id = btn.getAttribute('data-id');
+    if (!r?.houseId || !id) return;
+    if (!window.confirm('Remove this household login?')) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/members/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: '{}',
+      });
+      await loadHouseholdMembers();
+    } catch (err) {
+      alert(err.message || 'Could not remove member');
+    }
   });
 
   el('profileForm')?.addEventListener('submit', async (event) => {

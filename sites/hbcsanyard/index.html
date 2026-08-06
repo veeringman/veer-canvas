@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260806engage">
-  <script src="portal.js?v=20260806engage" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260806hh1">
+  <script src="portal.js?v=20260806hh1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -66,6 +66,11 @@
           <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
           <button type="submit" class="btn primary" id="requestOtpBtn">Continue</button>
         </form>
+        <form id="otpMemberForm" class="stack" hidden>
+          <p class="muted" id="otpMemberHint">Who is signing in for this plot?</p>
+          <div id="otpMemberList" class="member-pick-list" role="listbox" aria-label="Household members"></div>
+          <button type="button" class="btn ghost" id="otpMemberBackBtn">Use a different plot</button>
+        </form>
         <form id="otpContactForm" class="stack" hidden>
           <p class="muted" id="otpContactHint">This plot is missing contact details. Enter them to receive a login code. They are saved only after you verify the code.</p>
           <label id="otpContactEmailWrap">
@@ -78,7 +83,7 @@
           </label>
           <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
           <button type="submit" class="btn primary" id="otpContactSubmitBtn">Send verification code</button>
-          <button type="button" class="btn ghost" id="otpContactBackBtn">Use a different plot</button>
+          <button type="button" class="btn ghost" id="otpContactBackBtn">Back</button>
         </form>
         <form id="otpVerifyForm" class="stack" hidden>
           <p class="muted" id="otpHint"></p>
@@ -535,12 +540,13 @@
         </header>
         <form id="profileForm" class="stack narrow">
           <label>Plot <input id="profileHouse" disabled></label>
+          <p class="muted" id="profileMemberMeta" hidden></p>
           <label>Title
             <input id="profileTitle" name="title" placeholder="e.g. Mr / Mrs / Dr / Er" maxlength="40">
           </label>
           <label>Name <input id="profileName" name="name" required></label>
-          <label>Profession <input id="profileProfession" name="profession" placeholder="e.g. Teacher, Engineer" maxlength="80"></label>
-          <label>Employment
+          <label id="profileProfessionWrap">Profession <input id="profileProfession" name="profession" placeholder="e.g. Teacher, Engineer" maxlength="80"></label>
+          <label id="profileEmploymentWrap">Employment
             <select id="profileEmployment" name="employmentStatus">
               <option value="unknown">Not specified</option>
               <option value="working">Still working</option>
@@ -555,6 +561,31 @@
           <button type="submit" class="btn primary">Save profile</button>
           <p class="muted" id="profileStatus"></p>
         </form>
+
+        <div class="household-block" id="householdBlock" hidden>
+          <header class="panel-head">
+            <h3>Household logins</h3>
+            <p class="muted">Owner and delegates for this plot. Delegates never get EC desk access. Owners can mark a delegate as view-only.</p>
+          </header>
+          <div id="householdMemberList" class="household-member-list"></div>
+          <form id="householdAddForm" class="stack narrow" hidden>
+            <h4>Add delegate</h4>
+            <label>Name <input id="hhName" name="name" required maxlength="120"></label>
+            <label>Relation
+              <select id="hhRelation" name="relation">
+                <option value="spouse">Spouse</option>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Email <input id="hhEmail" name="email" type="email" placeholder="optional"></label>
+            <label>Phone <input id="hhPhone" name="phone" type="tel" placeholder="optional"></label>
+            <label class="check"><input type="checkbox" id="hhViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
+            <button type="submit" class="btn secondary">Add household member</button>
+            <p class="muted" id="householdStatus"></p>
+          </form>
+        </div>
       </section>
 
       <section class="panel admin-only" id="panel-admin" hidden>
