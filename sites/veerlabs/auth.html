@@ -117,16 +117,30 @@
             <div class="auth-tabs" id="mfaKindTabs" role="tablist">
               <button type="button" class="auth-tab is-active" data-mfa="totp">TOTP</button>
               <button type="button" class="auth-tab" data-mfa="hotp">HOTP</button>
+              <button type="button" class="auth-tab" data-mfa="qr" id="mfaQrTab" hidden>QR / Approve</button>
               <button type="button" class="auth-tab" data-mfa="passkey" id="mfaPasskeyTab" hidden>Passkey</button>
             </div>
 
             <div id="mfaVerifyOnly" hidden>
-              <label>6-digit code
-                <input id="mfaVerifyCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/>
-              </label>
-              <div class="editor-actions">
-                <button type="button" class="btn primary" id="confirmMfaVerify">Verify &amp; continue</button>
-                <button type="button" class="btn secondary" id="mfaVerifyPasskeyBtn" hidden>Use passkey instead</button>
+              <div id="mfaVerifyCodeBlock">
+                <label>6-digit code
+                  <input id="mfaVerifyCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"/>
+                </label>
+                <div class="editor-actions">
+                  <button type="button" class="btn primary" id="confirmMfaVerify">Verify &amp; continue</button>
+                  <button type="button" class="btn secondary" id="mfaVerifyPasskeyBtn" hidden>Use passkey instead</button>
+                </div>
+              </div>
+              <div id="mfaVerifyQrBlock" hidden>
+                <p class="field-hint">Open BuddyAuthenticator → Approvals, or scan this QR. Confirm the number matches.</p>
+                <div class="mfa-device-challenge">
+                  <img id="mfaDeviceQrImg" alt="Approve with BuddyAuthenticator" width="180" height="180" class="mfa-qr" hidden/>
+                  <p class="mfa-match-number" id="mfaMatchNumber"></p>
+                  <p class="field-hint" id="mfaDeviceStatus">Waiting for approval…</p>
+                </div>
+                <div class="editor-actions">
+                  <button type="button" class="btn secondary" id="mfaRestartQrBtn">Refresh QR</button>
+                </div>
               </div>
             </div>
 

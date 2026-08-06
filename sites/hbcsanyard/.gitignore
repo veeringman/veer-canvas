@@ -1,0 +1,12 @@
+# Runtime SQLite (regenerate with scripts/init_rwa_db.py)
+data/rwa.db
+data/rwa.db-*
+data/*.db-journal
+data/smtp.env
+smtp.env
+data/imports/*.pdf
+data/imports/*.xlsx
+data/imports/*.xls
+data/payments/
+__pycache__/
+.DS_Store

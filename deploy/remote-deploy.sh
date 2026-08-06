@@ -198,6 +198,9 @@ python3 "$IMPORT_SCRIPT" "${GITHUB_OWNER:-veeringman}" imported_projects \
   --write-public-catalog
 
 echo "Syncing site ${SITE_ID} to ${EC2_USER}@${EC2_HOST}:${WEB_ROOT} ..."
+# Runtime data/config on the server must survive rebuilds:
+# - exclude from upload so local copies never overwrite production
+# - protect (P) so --delete cannot remove them either
 rsync -az --delete \
   -e "$RSYNC_SSH" \
   --filter 'P veercanvas/' \
@@ -206,11 +209,56 @@ rsync -az --delete \
   --filter 'P engagement.json' \
   --filter 'P contact-messages.json' \
   --filter 'P visitor-access.json' \
+  --filter 'P data/rwa.db' \
+  --filter 'P data/rwa.db-*' \
+  --filter 'P data/smtp.env' \
+  --filter 'P data/*.env' \
+  --filter 'P data/imports/' \
+  --filter 'P data/imports/***' \
+  --filter 'P data/payments/' \
+  --filter 'P data/payments/***' \
+  --exclude 'data/rwa.db' \
+  --exclude 'data/rwa.db-*' \
+  --exclude 'data/smtp.env' \
+  --exclude 'data/*.env' \
+  --exclude 'data/imports/' \
+  --exclude 'data/payments/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
   "$SITE_DIR/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/"
+
+# First-deploy bootstrap only: seed DB / example env if missing on server (never overwrite).
+echo "Bootstrapping missing runtime data (ignore-existing) ..."
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
+if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/rwa.db" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/rwa.db"
+fi
+if [[ -f "$SITE_DIR/data/smtp.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/smtp.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/smtp.env.example"
+fi
+# Never push a real smtp.env from the laptop; only create from example when absent.
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_ENV'
+set -euo pipefail
+WEB_ROOT="$1"
+if [[ ! -f "$WEB_ROOT/data/smtp.env" && -f "$WEB_ROOT/data/smtp.env.example" ]]; then
+  cp "$WEB_ROOT/data/smtp.env.example" "$WEB_ROOT/data/smtp.env"
+  chmod 600 "$WEB_ROOT/data/smtp.env" || true
+  echo "Created data/smtp.env from example (edit via Super admin Settings)."
+else
+  echo "Preserved existing data/smtp.env (or no example present)."
+fi
+if [[ -f "$WEB_ROOT/data/rwa.db" ]]; then
+  echo "Preserved data/rwa.db on server."
+else
+  echo "Warning: data/rwa.db still missing — app will seed on first start if scripts available."
+fi
+REMOTE_ENV
 
 echo "Syncing VeerCanvas platform ..."
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_DIRS'
@@ -263,12 +311,18 @@ if [[ "$IS_PLATFORM" == "1" || "$IS_PLATFORM" == "true" || "$IS_OPS" == "1" || "
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/sites/"
 fi
 
-# Also keep this site's config under veercanvas/sites/<id> for inventory.
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/veercanvas/sites/$SITE_ID'"
+# Also keep this site's config + RWA scripts under veercanvas/sites/<id> for inventory/imports.
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/veercanvas/sites/$SITE_ID/scripts'"
 rsync -az -e "$RSYNC_SSH" \
   "$SITE_DIR/site.config.json" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/sites/$SITE_ID/site.config.json" \
   2>/dev/null || true
+if [[ -d "$SITE_DIR/scripts" ]]; then
+  rsync -az -e "$RSYNC_SSH" \
+    --exclude '__pycache__' \
+    "$SITE_DIR/scripts/" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/sites/$SITE_ID/scripts/"
+fi
 
 echo "Running remote site-deploy (service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}) ..."
 if ! ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \

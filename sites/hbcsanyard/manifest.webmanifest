@@ -1,0 +1,49 @@
+{
+  "id": "/",
+  "name": "HBC Sanyard RWA",
+  "short_name": "HBC Sanyard",
+  "description": "Residents Welfare Association — Housing Board Colony Sanyard. Notices, dues, directory, and household profile.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f1e6",
+  "theme_color": "#15233f",
+  "lang": "en",
+  "categories": ["lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/hbcs-sanyard-seal-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/hbcs-sanyard-seal-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sign in",
+      "short_name": "Sign in",
+      "description": "Open the resident portal login",
+      "url": "/?source=pwa#login",
+      "icons": [{ "src": "/assets/favicon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

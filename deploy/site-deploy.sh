@@ -33,7 +33,7 @@ rewrite_admin_port() {
   local file="$1"
   # Rewrite CMS admin upstreams only. Never touch VeerSetu AuthBuddy bind :18080
   # (or other non-admin ports used by /agent/ and /auth/ proxies).
-  sed -i -E "s|127\\.0\\.0\\.1:808[0-3]\\b|127.0.0.1:${ADMIN_PORT}|g" "$file"
+  sed -i -E "s|127\\.0\\.0\\.1:808[0-9]\\b|127.0.0.1:${ADMIN_PORT}|g" "$file"
 }
 
 install_nginx_config() {
@@ -259,6 +259,8 @@ Environment=VEERCANVAS_ADMIN_PREFIX=/admin
 Environment=PORT=${ADMIN_PORT}
 Environment=VEERCANVAS_ADMIN_PORT=${ADMIN_PORT}
 Environment=PATH=$WEB_ROOT/venv/bin:/usr/bin:/bin
+EnvironmentFile=-$WEB_ROOT/data/smtp.env
+EnvironmentFile=-/etc/veercanvas/${SITE_ID}.env
 ExecStart=$WEB_ROOT/venv/bin/python $ADMIN_APP
 Restart=always
 

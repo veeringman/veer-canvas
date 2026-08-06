@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HBC Sanyard RWA</title>
+  <meta name="description" content="Residents Welfare Association — Housing Board Colony Sanyard. Notices, dues, directory, and household profile.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-167.png" sizes="167x167">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-152.png" sizes="152x152">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" sizes="180x180">
+  <meta name="theme-color" content="#15233f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HBC Sanyard">
+  <meta name="application-name" content="HBC Sanyard">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260806pinorder">
+  <script src="portal.js?v=20260806pinorder" defer></script>
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <div id="gateView" class="shell gate-shell">
+    <header class="gate-brand">
+      <picture>
+        <source
+          type="image/webp"
+          srcset="assets/hbcs-sanyard-seal-240.webp 240w, assets/hbcs-sanyard-seal-480.webp 480w"
+          sizes="(max-width: 720px) 52vw, 236px"
+        >
+        <img
+          class="seal"
+          src="assets/hbcs-sanyard-seal-240.jpg"
+          srcset="assets/hbcs-sanyard-seal-240.jpg 240w, assets/hbcs-sanyard-seal-480.jpg 480w"
+          sizes="(max-width: 720px) 52vw, 236px"
+          width="236"
+          height="236"
+          alt="HIMUDA Housing Colony Sanyard"
+          decoding="async"
+          fetchpriority="high"
+        >
+      </picture>
+      <div>
+        <p class="eyebrow">Residents Welfare Association · Mandi</p>
+        <h1>HBC Sanyard</h1>
+        <p class="lede">Notices, directory, dues, and your household profile for Housing Board Colony Sanyard.</p>
+      </div>
+    </header>
+
+    <section class="gate-card" id="loginCard">
+      <div class="gate-tabs" role="tablist" aria-label="Sign-in method">
+        <button type="button" class="gate-tab is-active" data-gate="plot" id="gateTabPlot">Plot OTP</button>
+        <button type="button" class="gate-tab" data-gate="admin" id="gateTabAdmin">Super admin</button>
+      </div>
+
+      <div id="plotLoginPane">
+        <h2>Sign in with plot number</h2>
+        <p class="muted">Use your house / plot number as registered with the RWA. A one-time code is emailed when an address is on file.</p>
+        <form id="otpRequestForm" class="stack">
+          <label>
+            House / plot number
+            <input id="houseIdInput" name="houseId" autocomplete="username" placeholder="e.g. 43 or 12B(i) or B-1" required>
+          </label>
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit" class="btn primary" id="requestOtpBtn">Continue</button>
+        </form>
+        <form id="otpContactForm" class="stack" hidden>
+          <p class="muted" id="otpContactHint">This plot is missing contact details. Enter them to receive a login code. They are saved only after you verify the code.</p>
+          <label id="otpContactEmailWrap">
+            Email address
+            <input id="otpContactEmail" name="email" type="email" autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label id="otpContactPhoneWrap">
+            Mobile number
+            <input id="otpContactPhone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile">
+          </label>
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit" class="btn primary" id="otpContactSubmitBtn">Send verification code</button>
+          <button type="button" class="btn ghost" id="otpContactBackBtn">Use a different plot</button>
+        </form>
+        <form id="otpVerifyForm" class="stack" hidden>
+          <p class="muted" id="otpHint"></p>
+          <label>
+            One-time code
+            <input id="otpInput" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" required>
+          </label>
+          <button type="submit" class="btn primary" id="verifyOtpBtn">Verify &amp; enter</button>
+          <button type="button" class="btn ghost" id="restartLoginBtn">Use a different plot</button>
+        </form>
+      </div>
+
+      <div id="adminLoginPane" hidden>
+        <h2>Super admin</h2>
+        <p class="muted">Full EC desk access for portal management (contacts, notices, ledger).</p>
+        <form id="adminLoginForm" class="stack">
+          <label>
+            Username
+            <input id="adminUserInput" name="username" autocomplete="username" required>
+          </label>
+          <label>
+            Password
+            <input id="adminPassInput" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit" class="btn primary" id="adminLoginBtn">Sign in</button>
+        </form>
+      </div>
+
+      <p class="error" id="loginError" hidden></p>
+    </section>
+
+    <footer class="gate-foot muted">
+      <p id="pwaInstallHint" class="pwa-hint" hidden></p>
+      <p class="app-refresh-row">
+        <button type="button" class="btn ghost compact" id="appRefreshBtn">Refresh app</button>
+        <span id="appRefreshStatus">Checks for updates automatically.</span>
+      </p>
+      Managed on VeerCanvas · Add to Home Screen for quick access<span class="superadmin-only" id="gateCmsHint" hidden> · CMS at /admin</span>
+    </footer>
+  </div>
+
+  <div id="appView" class="shell app-shell" hidden>
+    <header class="app-top">
+      <div class="brand-mini">
+        <img class="seal-mini" src="assets/hbcs-sanyard-seal-mark.jpg" alt="" width="42" height="42" decoding="async">
+        <div>
+          <strong>HBC Sanyard</strong>
+          <span id="userChip" class="chip">—</span>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab is-active" data-panel="home">Home</button>
+        <button type="button" class="tab" data-panel="dues">Dues</button>
+        <button type="button" class="tab" data-panel="concerns">Concerns</button>
+        <button type="button" class="tab" data-panel="directory">Directory</button>
+        <button type="button" class="tab" data-panel="profile">Profile</button>
+        <button type="button" class="tab admin-only" data-panel="admin" hidden>EC desk</button>
+      </nav>
+      <a class="btn ghost compact superadmin-only" href="/admin/" title="VeerCanvas content CMS" id="cmsNavLink" hidden>CMS</a>
+      <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
+    </header>
+
+    <main class="app-main">
+      <section class="panel is-active" id="panel-home">
+        <header class="panel-head">
+          <h2>Colony board</h2>
+          <p class="muted">Pinned notices and updates from the Executive Committee.</p>
+        </header>
+        <div id="noticeList" class="notice-list"></div>
+      </section>
+
+      <section class="panel" id="panel-dues" hidden>
+        <header class="panel-head">
+          <h2>Your dues</h2>
+          <p class="muted">From the RWA subscription ledger (keyed by plot number).</p>
+        </header>
+        <div id="duesCard" class="stat-grid"></div>
+        <div id="bankCard" class="pay-card"></div>
+        <div id="adminDues" class="admin-only" hidden>
+          <header class="panel-head">
+            <h3>Full ledger</h3>
+            <p class="muted" id="ledgerSummary"></p>
+          </header>
+          <div class="ledger-toolbar">
+            <label class="ledger-search">
+              <span class="sr-only">Search ledger</span>
+              <input id="ledgerSearch" type="search" placeholder="Search plot or name…" autocomplete="off">
+            </label>
+            <p class="muted" id="ledgerEditStatus"></p>
+          </div>
+          <div class="table-wrap ledger-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Plot</th>
+                  <th>Name</th>
+                  <th>Prev total</th>
+                  <th>Prev paid</th>
+                  <th>Prev pending</th>
+                  <th>Year total</th>
+                  <th>Pending / dues</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ledgerRows"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+      <section class="panel" id="panel-concerns" hidden>
+        <header class="panel-head">
+          <h2>Colony mailbox</h2>
+          <p class="muted">Shared concerns inbox — every resident can read the full trail of issues and replies.</p>
+        </header>
+
+        <form id="grievanceForm" class="stack narrow grievance-form">
+          <h3>New concern</h3>
+          <label>
+            Category
+            <select id="grievanceCategory" name="category" required>
+              <option value="">Select category…</option>
+              <option value="dues">Dues &amp; payments</option>
+              <option value="data">Plot / resident data</option>
+              <option value="app">Portal / app / login</option>
+              <option value="maintenance">Maintenance &amp; repairs</option>
+              <option value="water">Water supply</option>
+              <option value="sanitation">Cleanliness &amp; garbage</option>
+              <option value="security">Security, gates &amp; parking</option>
+              <option value="amenities">Common areas &amp; amenities</option>
+              <option value="neighbour">Neighbour / plot matters</option>
+              <option value="committee">EC / RWA functioning</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            Subject
+            <input id="grievanceSubject" name="subject" maxlength="160" required placeholder="Short summary">
+          </label>
+          <label>
+            Details
+            <textarea id="grievanceBody" name="body" rows="4" required placeholder="Describe the concern clearly…"></textarea>
+          </label>
+          <button type="submit" class="btn primary" id="grievanceSubmitBtn">Post to mailbox</button>
+          <p class="muted" id="grievanceFormStatus"></p>
+        </form>
+
+        <div class="mailbox-toolbar">
+          <header class="panel-head">
+            <h3>Mailbox</h3>
+            <p class="muted" id="mailboxStats"></p>
+          </header>
+          <label>
+            <span class="sr-only">Status</span>
+            <select id="mailboxStatusFilter">
+              <option value="all">All statuses</option>
+              <option value="open">Open</option>
+              <option value="in_progress">In progress</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">Category</span>
+            <select id="mailboxCategoryFilter">
+              <option value="all">All categories</option>
+              <option value="dues">Dues &amp; payments</option>
+              <option value="data">Plot / resident data</option>
+              <option value="app">Portal / app / login</option>
+              <option value="maintenance">Maintenance &amp; repairs</option>
+              <option value="water">Water supply</option>
+              <option value="sanitation">Cleanliness &amp; garbage</option>
+              <option value="security">Security, gates &amp; parking</option>
+              <option value="amenities">Common areas &amp; amenities</option>
+              <option value="neighbour">Neighbour / plot matters</option>
+              <option value="committee">EC / RWA functioning</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <button type="button" class="btn ghost compact" id="mailboxRefreshBtn">Refresh</button>
+        </div>
+        <div id="mailboxList" class="grievance-list"></div>
+      </section>
+
+      <section class="panel" id="panel-directory" hidden>
+        <header class="panel-head">
+          <h2>Resident directory</h2>
+          <p class="muted">Active plots in Housing Board Colony Sanyard.</p>
+        </header>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Plot</th><th>Section</th><th>Name</th><th>Role</th></tr></thead>
+            <tbody id="directoryRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-profile" hidden>
+        <header class="panel-head">
+          <h2>Your profile</h2>
+          <p class="muted">Keep contact details current so OTP and notices reach you.</p>
+        </header>
+        <form id="profileForm" class="stack narrow">
+          <label>Plot <input id="profileHouse" disabled></label>
+          <label>Title
+            <input id="profileTitle" name="title" placeholder="e.g. Mr / Mrs / Dr / Er" maxlength="40">
+          </label>
+          <label>Name <input id="profileName" name="name" required></label>
+          <label>Profession <input id="profileProfession" name="profession" placeholder="e.g. Teacher, Engineer" maxlength="80"></label>
+          <label>Employment
+            <select id="profileEmployment" name="employmentStatus">
+              <option value="unknown">Not specified</option>
+              <option value="working">Still working</option>
+              <option value="retired">Retired</option>
+            </select>
+          </label>
+          <label class="admin-only" id="profileOfficialTitleWrap" hidden>EC official title
+            <input id="profileOfficialTitle" name="officialTitle" placeholder="e.g. President, Secretary" maxlength="80">
+          </label>
+          <label>Email <input id="profileEmail" name="email" type="email" placeholder="you@example.com"></label>
+          <label>Phone <input id="profilePhone" name="phone" type="tel" placeholder="10-digit mobile"></label>
+          <button type="submit" class="btn primary">Save profile</button>
+          <p class="muted" id="profileStatus"></p>
+        </form>
+      </section>
+
+      <section class="panel admin-only" id="panel-admin" hidden>
+        <header class="panel-head">
+          <h2>EC desk · HBC Sanyard</h2>
+          <p class="muted">Manage resident contacts, concerns, notices, payment details, and roles. Super admin assigns/suspends EC admins.<span class="superadmin-only" hidden> CMS at <a href="/admin/">/admin</a>.</span></p>
+        </header>
+
+        <div class="roster-block grievance-ec-block">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Resident concerns</h3>
+              <p class="muted" id="ecGrievanceStats">Loading concerns…</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter status</span>
+              <select id="ecGrievanceStatusFilter">
+                <option value="all">All statuses</option>
+                <option value="open" selected>Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+            </label>
+            <label class="roster-search">
+              <span class="sr-only">Filter category</span>
+              <select id="ecGrievanceCategoryFilter">
+                <option value="all">All categories</option>
+                <option value="dues">Dues &amp; payments</option>
+                <option value="data">Plot / resident data</option>
+                <option value="app">Portal / app / login</option>
+                <option value="maintenance">Maintenance &amp; repairs</option>
+                <option value="water">Water supply</option>
+                <option value="sanitation">Cleanliness &amp; garbage</option>
+                <option value="security">Security, gates &amp; parking</option>
+                <option value="amenities">Common areas &amp; amenities</option>
+                <option value="neighbour">Neighbour / plot matters</option>
+                <option value="committee">EC / RWA functioning</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="ecGrievanceRefreshBtn">Refresh</button>
+          </div>
+          <div id="ecGrievanceList" class="grievance-list"></div>
+          <p class="muted" id="ecGrievanceStatus"></p>
+        </div>
+
+        <div class="roster-block">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Payment collection</h3>
+              <p class="muted">Bank account and UPI QR shown on the dues page for residents.</p>
+            </div>
+            <button type="button" class="btn secondary compact" id="ecEditBankBtn">Edit bank &amp; UPI</button>
+          </div>
+          <div id="ecBankPreview" class="pay-card pay-card-compact"></div>
+        </div>
+
+        <div class="roster-block">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Resident contacts</h3>
+              <p class="muted" id="rosterStats">Loading roster…</p>
+            </div>
+            <div class="roster-toolbar-actions">
+              <label class="roster-search">
+                <span class="sr-only">Search</span>
+                <input id="rosterSearch" type="search" placeholder="Search plot, name, phone…" autocomplete="off">
+              </label>
+              <label class="check roster-filter" for="rosterMissingPhone">
+                <input type="checkbox" id="rosterMissingPhone">
+                <span>Missing phone</span>
+              </label>
+            </div>
+          </div>
+          <div class="table-wrap roster-wrap">
+            <table class="roster-table">
+              <thead>
+                <tr>
+                  <th>Plot</th>
+                  <th>Title</th>
+                  <th>Name</th>
+                  <th>Profession</th>
+                  <th>Job</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>EC title</th>
+                  <th>Notes</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="rosterRows"></tbody>
+            </table>
+          </div>
+          <p class="muted" id="rosterStatus"></p>
+        </div>
+
+        <div class="roster-block" style="margin-top:1.25rem">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Revision history</h3>
+              <p class="muted">EC-only audit trail of resident data changes.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter plot</span>
+              <input id="revisionHouseFilter" type="search" placeholder="Filter by plot…" autocomplete="off">
+            </label>
+            <button type="button" class="btn ghost compact" id="revisionRefreshBtn">Refresh</button>
+          </div>
+          <div class="table-wrap roster-wrap">
+            <table class="roster-table revisions-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Plot</th>
+                  <th>Changed by</th>
+                  <th>Fields</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody id="revisionRows"></tbody>
+            </table>
+          </div>
+          <p class="muted" id="revisionStatus"></p>
+        </div>
+
+        <form id="noticeForm" class="stack" style="margin-top:1.75rem">
+          <h3 id="noticeFormTitle">Publish notice</h3>
+          <input type="hidden" name="id" id="noticeEditId" value="">
+          <label>Title <input name="title" id="noticeTitleInput" required maxlength="160"></label>
+          <label>Category
+            <select name="category" id="noticeCategoryInput">
+              <option value="general">General</option>
+              <option value="payments">Payments</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="events">Events</option>
+            </select>
+          </label>
+          <label>Body
+            <textarea name="body" id="noticeBodyInput" rows="6" required placeholder="Use blank lines for paragraphs. **text** for bold."></textarea>
+          </label>
+          <label class="check"><input type="checkbox" name="pinned" id="noticePinnedInput"> Pin to top of colony board</label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="noticeSubmitBtn">Publish notice</button>
+            <button type="button" class="btn ghost" id="noticeCancelEditBtn" hidden>Cancel edit</button>
+          </div>
+          <p class="muted" id="noticeFormStatus"></p>
+        </form>
+        <div class="stack" style="margin-top:1.5rem">
+          <h3>Import ledger PDF</h3>
+          <p class="muted">Upload the HIMUDA subscription / dues PDF to refresh SQLite. Contact fields (phone/email) are preserved.</p>
+          <form id="ledgerImportForm" class="stack narrow">
+            <label>PDF file <input type="file" name="file" accept="application/pdf,.pdf" required></label>
+            <button type="submit" class="btn secondary">Import into database</button>
+            <p class="muted" id="ledgerImportStatus"></p>
+          </form>
+          <p class="muted" id="smtpStatusLine">SMTP: checking…</p>
+        </div>
+
+        <div class="settings-block superadmin-only" id="settingsBlock" hidden>
+          <h3>Platform settings</h3>
+          <p class="muted">SMTP, OTP, and super-admin credentials. Saved on the server in <code>data/smtp.env</code> and preserved across deploys.</p>
+          <form id="settingsForm" class="stack">
+            <div class="settings-grid">
+              <label>SMTP provider
+                <select name="provider" id="settingsSmtpProvider">
+                  <option value="gmail">Gmail</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>SMTP host <input name="host" id="settingsSmtpHost" placeholder="smtp.gmail.com"></label>
+              <label>SMTP port <input name="port" id="settingsSmtpPort" type="number" placeholder="587"></label>
+              <label>SMTP user <input name="user" id="settingsSmtpUser" placeholder="vij.ksh@gmail.com"></label>
+              <label>From address <input name="from" id="settingsSmtpFrom" placeholder="vij.ksh@gmail.com"></label>
+              <label>App password <input name="password" id="settingsSmtpPass" type="password" placeholder="leave blank to keep" autocomplete="new-password"></label>
+              <label>OTP TTL (seconds) <input name="otpTtl" id="settingsOtpTtl" type="number" min="60" max="3600"></label>
+              <label>Super admin username <input name="superadminUser" id="settingsSaUser"></label>
+              <label>New super admin password <input name="superadminPassword" id="settingsSaPass" type="password" placeholder="leave blank to keep" autocomplete="new-password"></label>
+            </div>
+            <button type="submit" class="btn primary" id="settingsSaveBtn">Save settings</button>
+            <p class="muted" id="settingsStatus"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <!-- Dialogs must sit outside [hidden] panels or showModal() is invisible -->
+    <dialog id="ledgerEditDialog" class="ledger-dialog">
+      <form id="ledgerEditForm" class="stack">
+        <header class="panel-head">
+          <h3 id="ledgerEditTitle">Edit ledger row</h3>
+          <p class="muted" id="ledgerEditSubtitle">Update payment figures for this plot.</p>
+        </header>
+        <input type="hidden" id="ledgerEditHouseId" name="houseId">
+        <div class="ledger-edit-grid">
+          <label>
+            Previous total (₹)
+            <input id="ledgerEditPrevTotal" name="previousTotal" type="number" step="1" required>
+          </label>
+          <label>
+            Fee year
+            <input id="ledgerEditFeeYear" name="feeYear" type="number" min="2000" max="2100" required>
+          </label>
+          <label>
+            Current year total (₹)
+            <input id="ledgerEditYearTotal" name="currentYearTotal" type="number" step="1" min="0" required>
+          </label>
+          <label>
+            Amount received (₹)
+            <input id="ledgerEditReceived" name="amountReceived" type="number" step="1" min="0" required>
+          </label>
+          <label>
+            Total due (₹)
+            <input id="ledgerEditTotalDue" name="totalDue" type="number" step="1" required>
+            <span class="field-hint">Auto-fills as previous + year; override if needed.</span>
+          </label>
+          <label>
+            Pending / dues (₹)
+            <input id="ledgerEditPending" name="pendingDues" type="number" step="1" required>
+            <span class="field-hint">Auto-fills as total due − received; override if needed.</span>
+          </label>
+          <label class="span-2">
+            Remarks
+            <input id="ledgerEditRemarks" name="remarks" type="text" maxlength="500" placeholder="Optional note">
+          </label>
+        </div>
+        <p class="muted" id="ledgerEditDerived"></p>
+        <p class="error" id="ledgerEditError" hidden></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="ledgerEditSaveBtn">Save changes</button>
+          <button type="button" class="btn ghost" id="ledgerEditCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="bankEditDialog" class="ledger-dialog">
+      <form id="bankEditForm" class="stack">
+        <header class="panel-head">
+          <h3>Payment details</h3>
+          <p class="muted">Bank account and UPI QR shown to residents on the dues page.</p>
+        </header>
+        <div class="ledger-edit-grid">
+          <label class="span-2">
+            Label
+            <input id="bankEditLabel" name="label" type="text" maxlength="80" placeholder="RWA collection">
+          </label>
+          <label class="span-2">
+            Bank name
+            <input id="bankEditBankName" name="bankName" type="text" required maxlength="120">
+          </label>
+          <label>
+            Account number
+            <input id="bankEditAccountNo" name="accountNo" type="text" required maxlength="40" autocomplete="off">
+          </label>
+          <label>
+            IFSC
+            <input id="bankEditIfsc" name="ifsc" type="text" required maxlength="20" autocomplete="off">
+          </label>
+          <label>
+            UPI ID
+            <input id="bankEditUpiId" name="upiId" type="text" maxlength="80" placeholder="rwa@bank">
+          </label>
+          <label>
+            UPI display name
+            <input id="bankEditUpiName" name="upiName" type="text" maxlength="80" placeholder="HBC Sanyard RWA">
+          </label>
+          <label class="span-2">
+            UPI QR code image
+            <input id="bankEditQrFile" name="qr" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">
+            <span class="field-hint">PNG / JPG / WebP, under 2.5 MB. Residents scan this to pay.</span>
+          </label>
+        </div>
+        <div id="bankEditQrPreview" class="bank-qr-preview" hidden></div>
+        <p class="error" id="bankEditError" hidden></p>
+        <p class="muted" id="bankEditStatus"></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="bankEditSaveBtn">Save payment details</button>
+          <button type="button" class="btn secondary" id="bankEditQrOnlyBtn">Upload QR only</button>
+          <button type="button" class="btn ghost" id="bankEditClearQrBtn">Remove QR</button>
+          <button type="button" class="btn ghost" id="bankEditCancelBtn">Close</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+</body>
+</html>

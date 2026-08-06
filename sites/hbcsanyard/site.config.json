@@ -1,0 +1,28 @@
+{
+  "id": "hbcsanyard",
+  "name": "HBC Sanyard RWA",
+  "description": "Residents Welfare Association — Housing Board Colony Sanyard. Resident portal for notices, directory, payments, and profiles.",
+  "domain": "hbcsanyard.veerlabs.solutions",
+  "aliases": [
+    "www.hbcsanyard.veerlabs.solutions"
+  ],
+  "webRoot": "/var/www/hbcsanyard.veerlabs.solutions",
+  "githubOwner": "veeringman",
+  "githubRepo": "hbcsanyard",
+  "admin": {
+    "serviceName": "veercanvas-admin-hbcsanyard",
+    "port": 8084
+  },
+  "platform": false,
+  "ops": false,
+  "status": "authoring",
+  "siteType": "dynamic",
+  "templateId": "rwa-portal",
+  "templateVersion": "1.0.0",
+  "locales": ["en"],
+  "defaultLocale": "en",
+  "repos": ["veeringman/hbcsanyard"],
+  "integrations": ["auth-otp-email", "authbuddy-planned", "payments-excel-planned"],
+  "createdAt": "2026-08-06T00:00:00Z",
+  "updatedAt": "2026-08-06T00:00:00Z"
+}

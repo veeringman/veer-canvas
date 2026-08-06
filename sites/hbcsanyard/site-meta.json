@@ -1,0 +1,22 @@
+{
+  "siteName": "HBC Sanyard RWA",
+  "brandName": "HBC Sanyard",
+  "brandTag": "RWA",
+  "eyebrow": "HIMUDA Housing Colony Sanyard",
+  "title": "Residents Welfare Association",
+  "subtitle": "Notices, directory, payments, and community updates for Housing Board Colony Sanyard.",
+  "chipPrimary": "Resident portal",
+  "chipSecondary": "Managed on VeerCanvas",
+  "platform": "VeerCanvas",
+  "favicon": "assets/favicon-192.png",
+  "brandMark": "assets/hbcs-sanyard-seal-512.png",
+  "version": "v0.1.2",
+  "lastUpdated": "2026-08-06T01:00:00Z",
+  "platformSiteId": "hbcsanyard",
+  "auth": {
+    "agentBaseUrl": "",
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "veerlabs-web",
+    "gateAllLearnMore": true
+  }
+}

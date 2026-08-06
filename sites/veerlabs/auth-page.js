@@ -310,25 +310,113 @@
     applyMfaKindUI(mfaKind);
   }
 
+  let devicePollTimer = null;
+  let deviceChallengeId = null;
+
+  function stopDevicePoll() {
+    if (devicePollTimer) {
+      clearInterval(devicePollTimer);
+      devicePollTimer = null;
+    }
+  }
+
+  function normalizeMfaMethods(methods) {
+    const out = [];
+    const seen = new Set();
+    (methods || []).forEach((raw) => {
+      const m = String(raw).toLowerCase();
+      // Consolidate number_match into the QR / Approve tab
+      const key = m === 'number_match' ? 'qr' : m;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    });
+    return out;
+  }
+
   function showMfaChallengePanel(methods, message) {
-    pendingMfaMethods = methods && methods.length ? methods.slice() : allowedEnrollKinds().filter((k) => k !== 'passkey' || true);
+    stopDevicePoll();
+    pendingMfaMethods = normalizeMfaMethods(
+      methods && methods.length ? methods : allowedEnrollKinds()
+    );
     if (message) setStatus(message);
     qs('loginForm').hidden = true;
     qs('registerForm').hidden = true;
     qs('mfaPanel').hidden = false;
     qs('mfaTitle').textContent = 'Verify authenticator';
-    qs('mfaLead').textContent = 'Enter the code from BuddyAuthenticator, or use a passkey, to finish signing in.';
+    qs('mfaLead').textContent = 'Use BuddyAuthenticator: scan the QR, approve the number, enter a code, or use a passkey.';
     qs('mfaSetupBox').hidden = true;
     qs('mfaVerifyOnly').hidden = false;
     qs('continueAfterAuth').hidden = true;
     enrollForced = true;
 
-    const prefer = pendingMfaMethods.includes('totp') ? 'totp' : pendingMfaMethods[0];
+    const prefer = pendingMfaMethods.includes('qr')
+      ? 'qr'
+      : (pendingMfaMethods.includes('totp') ? 'totp' : pendingMfaMethods[0]);
     mfaKind = prefer || 'totp';
     syncMfaKindTabs(pendingMfaMethods);
     qs('mfaVerifyPasskeyBtn').hidden = !pendingMfaMethods.includes('passkey');
     qs('mfaVerifyCode').value = '';
-    qs('mfaVerifyCode').focus();
+    applyVerifyKindUI(mfaKind);
+  }
+
+  function applyVerifyKindUI(kind) {
+    mfaKind = kind;
+    const isQr = kind === 'qr' || kind === 'number_match';
+    const isPasskey = kind === 'passkey';
+    qs('mfaVerifyCodeBlock').hidden = isQr || isPasskey;
+    qs('mfaVerifyQrBlock').hidden = !isQr;
+    if (isQr) {
+      startDeviceChallenge().catch((err) => setError(err.message || 'Could not start QR challenge'));
+    } else {
+      stopDevicePoll();
+      if (!isPasskey) qs('mfaVerifyCode').focus();
+    }
+  }
+
+  async function startDeviceChallenge() {
+    stopDevicePoll();
+    setError('');
+    qs('mfaDeviceStatus').textContent = 'Starting challenge…';
+    const username = enrollUsername
+      || (loginOptions && loginOptions.username)
+      || String(qs('loginUsername').value || '').trim();
+    const begin = await window.VeerAuth.idpPost('/auth/mfa/device_challenge/begin', {
+      purpose: 'mfa',
+      username: username || undefined,
+      client_id: clientId(),
+    });
+    deviceChallengeId = begin.challenge_id;
+    qs('mfaMatchNumber').textContent = String(begin.number).padStart(2, '0');
+    const img = qs('mfaDeviceQrImg');
+    if (begin.qr_data_uri) {
+      img.src = begin.qr_data_uri;
+      img.hidden = false;
+    } else {
+      img.hidden = true;
+    }
+    qs('mfaDeviceStatus').textContent = 'Waiting for BuddyAuthenticator approval…';
+    devicePollTimer = setInterval(() => {
+      pollDeviceChallenge().catch(() => {});
+    }, 2000);
+  }
+
+  async function pollDeviceChallenge() {
+    if (!deviceChallengeId) return;
+    const st = await window.VeerAuth.idpPost('/auth/mfa/device_challenge/status', {
+      challenge_id: deviceChallengeId,
+    });
+    if (st.status === 'approved') {
+      stopDevicePoll();
+      if (st.session_id) window.VeerAuth.saveSessionId(st.session_id);
+      qs('mfaDeviceStatus').textContent = 'Approved. Continuing…';
+      setStatus('Verified. Continuing…');
+      setTimeout(() => { window.location.href = returnTo(); }, 500);
+    } else if (st.status === 'expired') {
+      stopDevicePoll();
+      qs('mfaDeviceStatus').textContent = 'Challenge expired — tap Refresh QR.';
+    }
   }
 
   function syncMfaKindTabs(allowed) {
@@ -599,6 +687,9 @@
           b.classList.toggle('is-active', b.dataset.mfa === mfaKind);
         });
         applyMfaKindUI(mfaKind);
+        if (qs('mfaVerifyOnly') && !qs('mfaVerifyOnly').hidden) {
+          applyVerifyKindUI(mfaKind);
+        }
       });
     });
     document.querySelectorAll('input[name="regType"]').forEach((el) => {
@@ -653,6 +744,12 @@
       const user = enrollUsername || (loginOptions && loginOptions.username) || '';
       runPasskeyLogin(user).catch((err) => setError(err.message || 'Passkey failed'));
     });
+    const restartQr = qs('mfaRestartQrBtn');
+    if (restartQr) {
+      restartQr.addEventListener('click', () => {
+        startDeviceChallenge().catch((err) => setError(err.message || 'Could not refresh QR'));
+      });
+    }
 
     try {
       policy = await window.VeerAuth.getPolicy();
