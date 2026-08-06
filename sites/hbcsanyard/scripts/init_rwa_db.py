@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 7
 SUPERADMIN_HOUSE_ID = "__SUPERADMIN__"
 
 # Residential plots A (rows 1–60) then commercial plots B (61–62) from HIMUDA ledger 15-06-2026.
@@ -30,10 +30,10 @@ LEDGER_ROWS = [
     ("11", "NAVEEN K KAPOOR", 10600, 2400, 13000, 7200, "A", ""),
     ("12", "PRAVEEN KUMAR", 8800, 2400, 11200, 0, "A", ""),
     ("12A", "BISHAN CHAND SHARMA", 7200, 2400, 9600, 0, "A", ""),
-    ("12B(i)", "NAVEEN THAKUR", 10600, 2400, 13000, 0, "A", ""),
-    ("12B(ii)", "YADAV KUMAR", 10600, 2400, 13000, 0, "A", ""),
-    ("12B(iii)", "SARBJIT SINGH", 10600, 2400, 13000, 0, "A", ""),
-    ("12B(iv)", "VIKRANT THAKUR", 10600, 2400, 13000, 0, "A", ""),
+    ("12B-1", "NAVEEN THAKUR", 10600, 2400, 13000, 0, "A", ""),
+    ("12B-2", "YADAV KUMAR", 10600, 2400, 13000, 0, "A", ""),
+    ("12B-3", "SARBJIT SINGH", 10600, 2400, 13000, 0, "A", ""),
+    ("12B-4", "VIKRANT THAKUR", 10600, 2400, 13000, 0, "A", ""),
     ("14", "Ms. SATINDER KAUR", 2400, 2400, 4800, 4800, "A", ""),
     ("15", "Ms. KAUSHALYA KATOCH", 10600, 2400, 13000, 0, "A", ""),
     ("16", "SANDEEP SEN", 10600, 2400, 13000, 0, "A", ""),
@@ -94,19 +94,138 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+_ROMAN_TO_ARABIC = {
+    "I": "1",
+    "II": "2",
+    "III": "3",
+    "IV": "4",
+    "V": "5",
+    "VI": "6",
+    "VII": "7",
+    "VIII": "8",
+    "IX": "9",
+    "X": "10",
+}
+
+
 def normalize_house_id(plot: str, section: str = "A") -> str:
+    """Canonical plot id. Roman suffixes become arabic: 12B(i) → 12B-1."""
     raw = re.sub(r"\s+", "", (plot or "").strip().upper())
     if not raw:
         raise ValueError("plot required")
     # Combined plots like 33/34 → 33-34 (slash breaks URL paths)
     raw = raw.replace("/", "-")
-    # Keep roman suffixes lowercase for readability: 12B(i)
-    raw = re.sub(r"\(([IVX]+)\)", lambda m: f"({m.group(1).lower()})", raw)
+    # 12B(i) / 12B(II) → 12B-1 / 12B-2
+    def _roman_suffix(match: re.Match[str]) -> str:
+        roman = match.group(1).upper()
+        return f"-{_ROMAN_TO_ARABIC.get(roman, roman)}"
+
+    raw = re.sub(r"\(([IVX]+)\)", _roman_suffix, raw)
+    # 12B(1) typed with arabic in parens → 12B-1
+    raw = re.sub(r"\((\d+)\)", r"-\1", raw)
     if raw.startswith("B-") or section == "B":
         if raw.startswith("B-"):
             return raw
         return f"B-{raw}"
     return raw
+
+
+def migrate_roman_plot_ids(conn: sqlite3.Connection) -> int:
+    """Rename legacy 12B(i)-style house_ids to 12B-1 everywhere in the DB."""
+    rows = conn.execute("SELECT house_id, plot_no, section FROM residents").fetchall()
+    renames: list[tuple[str, str, str]] = []
+    for r in rows:
+        old = str(r["house_id"] or "")
+        if not old or old == SUPERADMIN_HOUSE_ID:
+            continue
+        try:
+            new = normalize_house_id(old, r["section"] or "A")
+        except ValueError:
+            continue
+        new_plot = normalize_house_id(str(r["plot_no"] or old), r["section"] or "A")
+        if new != old or new_plot != str(r["plot_no"] or ""):
+            renames.append((old, new, new_plot))
+
+    if not renames:
+        # Still fix any plot_no that still shows roman while house_id is already new.
+        fixed = 0
+        for r in rows:
+            old_plot = str(r["plot_no"] or "")
+            if "(" not in old_plot:
+                continue
+            try:
+                new_plot = normalize_house_id(old_plot, r["section"] or "A")
+            except ValueError:
+                continue
+            if new_plot != old_plot:
+                conn.execute(
+                    "UPDATE residents SET plot_no = ?, updated_at = ? WHERE house_id = ?",
+                    (new_plot, utc_now(), r["house_id"]),
+                )
+                fixed += 1
+        if fixed:
+            conn.commit()
+        return fixed
+
+    conn.execute("PRAGMA foreign_keys = OFF")
+    updated = 0
+    for old, new, new_plot in renames:
+        if old == new:
+            conn.execute(
+                "UPDATE residents SET plot_no = ?, updated_at = ? WHERE house_id = ?",
+                (new_plot, utc_now(), old),
+            )
+            updated += 1
+            continue
+        # Skip if target already exists (avoid UNIQUE collisions).
+        exists = conn.execute(
+            "SELECT 1 FROM residents WHERE house_id = ? COLLATE NOCASE",
+            (new,),
+        ).fetchone()
+        if exists:
+            continue
+
+        text_cols = [
+            ("payment_rows", "house_id"),
+            ("sessions", "house_id"),
+            ("otp_challenges", "house_id"),
+            ("portal_accounts", "house_id"),
+            ("notice_shares", "house_id"),
+            ("notice_shares", "shared_by"),
+            ("access_events", "house_id"),
+            ("resident_revisions", "house_id"),
+            ("resident_revisions", "changed_by_house_id"),
+            ("grievances", "house_id"),
+            ("grievances", "responded_by_house_id"),
+            ("grievance_messages", "author_house_id"),
+            ("notices", "published_by"),
+            ("info_documents", "published_by"),
+            ("colony_works", "created_by"),
+            ("colony_works", "closed_by"),
+        ]
+        for table, col in text_cols:
+            try:
+                conn.execute(
+                    f"UPDATE {table} SET {col} = ? WHERE {col} = ?",
+                    (new, old),
+                )
+            except sqlite3.OperationalError:
+                # Table/column may not exist on older DBs yet.
+                pass
+
+        conn.execute(
+            """
+            UPDATE residents
+            SET house_id = ?, plot_no = ?, updated_at = ?
+            WHERE house_id = ?
+            """,
+            (new, new_plot, utc_now(), old),
+        )
+        updated += 1
+
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.commit()
+    return updated
 
 
 def connect(db_path: pathlib.Path) -> sqlite3.Connection:
@@ -178,6 +297,98 @@ def init_schema(conn: sqlite3.Connection) -> None:
           published_by TEXT,
           status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('draft','published','archived'))
         );
+
+        CREATE TABLE IF NOT EXISTS notice_shares (
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          can_edit INTEGER NOT NULL DEFAULT 1,
+          shared_at TEXT NOT NULL,
+          shared_by TEXT,
+          PRIMARY KEY (notice_id, house_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_shares_house ON notice_shares(house_id);
+
+        CREATE TABLE IF NOT EXISTS access_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          house_id TEXT,
+          actor_name TEXT,
+          role TEXT,
+          is_superadmin INTEGER NOT NULL DEFAULT 0,
+          event_type TEXT NOT NULL DEFAULT 'api',
+          method TEXT,
+          path TEXT,
+          action TEXT NOT NULL,
+          status_code INTEGER,
+          panel TEXT,
+          detail TEXT,
+          ip TEXT,
+          user_agent TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_access_events_created ON access_events(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_access_events_house ON access_events(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_access_events_action ON access_events(action, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS info_documents (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          category TEXT NOT NULL DEFAULT 'general',
+          doc_type TEXT NOT NULL DEFAULT 'file'
+            CHECK(doc_type IN ('file','html')),
+          filename TEXT,
+          original_name TEXT,
+          mime_type TEXT,
+          size_bytes INTEGER,
+          status TEXT NOT NULL DEFAULT 'draft'
+            CHECK(status IN ('draft','published','archived')),
+          audience TEXT NOT NULL DEFAULT 'all'
+            CHECK(audience IN ('all','ec')),
+          published_at TEXT,
+          published_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_info_docs_status
+          ON info_documents(status, category, published_at DESC);
+
+        CREATE TABLE IF NOT EXISTS colony_works (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          kind TEXT NOT NULL
+            CHECK(kind IN ('maintenance','development','activity','event')),
+          category TEXT NOT NULL DEFAULT 'general',
+          summary TEXT,
+          details TEXT,
+          benefits TEXT,
+          timeline_notes TEXT,
+          milestones_json TEXT,
+          status TEXT NOT NULL DEFAULT 'planned'
+            CHECK(status IN ('planned','approved','in_progress','on_hold','completed','closed','cancelled')),
+          visibility TEXT NOT NULL DEFAULT 'published'
+            CHECK(visibility IN ('draft','published')),
+          location TEXT,
+          start_date TEXT,
+          end_date TEXT,
+          event_date TEXT,
+          estimated_cost INTEGER,
+          actual_cost INTEGER,
+          cost_notes TEXT,
+          contractor_name TEXT,
+          contractor_contact TEXT,
+          contractor_details TEXT,
+          funding_json TEXT,
+          assigned_to TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_by TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_colony_works_status
+          ON colony_works(status, kind, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_colony_works_visibility
+          ON colony_works(visibility, status, updated_at DESC);
 
         CREATE TABLE IF NOT EXISTS otp_challenges (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -280,6 +491,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_bank_account_columns(conn)
     ensure_otp_pending_columns(conn)
     ensure_grievances_table(conn)
+    ensure_info_documents_table(conn)
+    ensure_colony_works_table(conn)
+    migrate_roman_plot_ids(conn)
     ensure_superadmin_account(conn)
 
 
@@ -339,6 +553,144 @@ def ensure_notice_pin_order(conn: sqlite3.Connection) -> None:
         for idx, row in enumerate(pinned):
             conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (idx, row[0]))
         conn.commit()
+
+
+def ensure_notice_shares_table(conn: sqlite3.Connection) -> None:
+    """Draft collaboration shares (selected EC members)."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS notice_shares (
+          notice_id TEXT NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+          house_id TEXT NOT NULL,
+          can_edit INTEGER NOT NULL DEFAULT 1,
+          shared_at TEXT NOT NULL,
+          shared_by TEXT,
+          PRIMARY KEY (notice_id, house_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_notice_shares_house ON notice_shares(house_id);
+        """
+    )
+    conn.commit()
+
+
+def ensure_access_events_table(conn: sqlite3.Connection) -> None:
+    """Super-admin observability: who used which app functions."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS access_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          house_id TEXT,
+          actor_name TEXT,
+          role TEXT,
+          is_superadmin INTEGER NOT NULL DEFAULT 0,
+          event_type TEXT NOT NULL DEFAULT 'api',
+          method TEXT,
+          path TEXT,
+          action TEXT NOT NULL,
+          status_code INTEGER,
+          panel TEXT,
+          detail TEXT,
+          ip TEXT,
+          user_agent TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_access_events_created ON access_events(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_access_events_house ON access_events(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_access_events_action ON access_events(action, created_at DESC);
+        """
+    )
+    conn.commit()
+
+
+def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
+    """Information Centre: RWA documents for all members."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS info_documents (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          category TEXT NOT NULL DEFAULT 'general',
+          doc_type TEXT NOT NULL DEFAULT 'file'
+            CHECK(doc_type IN ('file','html')),
+          filename TEXT,
+          original_name TEXT,
+          mime_type TEXT,
+          size_bytes INTEGER,
+          status TEXT NOT NULL DEFAULT 'draft'
+            CHECK(status IN ('draft','published','archived')),
+          audience TEXT NOT NULL DEFAULT 'all'
+            CHECK(audience IN ('all','ec')),
+          published_at TEXT,
+          published_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_info_docs_status
+          ON info_documents(status, category, published_at DESC);
+        """
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+    if "audience" not in cols:
+        conn.execute(
+            "ALTER TABLE info_documents ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'"
+        )
+    conn.commit()
+
+
+def ensure_colony_works_table(conn: sqlite3.Connection) -> None:
+    """Works & Events: maintenance, projects, activities, events."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS colony_works (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          kind TEXT NOT NULL
+            CHECK(kind IN ('maintenance','development','activity','event')),
+          category TEXT NOT NULL DEFAULT 'general',
+          summary TEXT,
+          details TEXT,
+          benefits TEXT,
+          timeline_notes TEXT,
+          milestones_json TEXT,
+          status TEXT NOT NULL DEFAULT 'planned'
+            CHECK(status IN ('planned','approved','in_progress','on_hold','completed','closed','cancelled')),
+          visibility TEXT NOT NULL DEFAULT 'published'
+            CHECK(visibility IN ('draft','published')),
+          location TEXT,
+          start_date TEXT,
+          end_date TEXT,
+          event_date TEXT,
+          estimated_cost INTEGER,
+          actual_cost INTEGER,
+          cost_notes TEXT,
+          contractor_name TEXT,
+          contractor_contact TEXT,
+          contractor_details TEXT,
+          funding_json TEXT,
+          assigned_to TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_by TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_colony_works_status
+          ON colony_works(status, kind, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_colony_works_visibility
+          ON colony_works(visibility, status, updated_at DESC);
+        """
+    )
+    # Additive columns for DBs created before benefits/timeline fields.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(colony_works)").fetchall()}
+    for name, sql in (
+        ("benefits", "ALTER TABLE colony_works ADD COLUMN benefits TEXT"),
+        ("timeline_notes", "ALTER TABLE colony_works ADD COLUMN timeline_notes TEXT"),
+        ("milestones_json", "ALTER TABLE colony_works ADD COLUMN milestones_json TEXT"),
+    ):
+        if name not in cols:
+            conn.execute(sql)
+    conn.commit()
 
 
 def ensure_grievances_table(conn: sqlite3.Connection) -> None:
@@ -516,7 +868,7 @@ def seed_from_ledger(conn: sqlite3.Connection, *, reset: bool = False) -> dict:
               notes=excluded.notes,
               updated_at=excluded.updated_at
             """,
-            (house_id, plot, section, name, remarks or None, now, now),
+            (house_id, house_id, section, name, remarks or None, now, now),
         )
 
     # Bootstrap EC admin: Plot 43 (can be changed later via promote API).

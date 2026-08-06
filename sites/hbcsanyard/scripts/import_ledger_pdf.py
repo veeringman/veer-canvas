@@ -73,8 +73,7 @@ def parse_ledger_text(text: str) -> list[dict]:
         # PDF prints "COMMERCIAL PLOTS - B" after rows 61–62; treat those as section B.
         row_section = "B" if sno_i >= 61 else section
         plot = re.sub(r"\s+", "", plot)
-        # Normalize 12B(i) style
-        plot = plot.replace("(I)", "(i)").replace("(II)", "(ii)").replace("(III)", "(iii)").replace("(IV)", "(iv)")
+        # Legacy PDF prints 12B(i); normalize_house_id maps that to 12B-1.
         remarks = (remarks or "").strip()
         remarks = re.sub(r"^\(+|\)+$", "", remarks).strip()
         if "Already received" in remarks or "already received" in remarks.lower():
@@ -116,7 +115,7 @@ def import_rows(conn, rows: list[dict], *, source: str, as_of: str) -> dict:
             """,
             (
                 house_id,
-                row["plot"],
+                house_id,
                 row["section"],
                 row["name"],
                 prev.get("email"),

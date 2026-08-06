@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260806pinorder">
-  <script src="portal.js?v=20260806pinorder" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260806plots">
+  <script src="portal.js?v=20260806plots" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -65,7 +65,7 @@
         <form id="otpRequestForm" class="stack">
           <label>
             House / plot number
-            <input id="houseIdInput" name="houseId" autocomplete="username" placeholder="e.g. 43 or 12B(i) or B-1" required>
+            <input id="houseIdInput" name="houseId" autocomplete="username" placeholder="e.g. 43 or 12B-1 or B-1" required>
           </label>
           <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
           <button type="submit" class="btn primary" id="requestOtpBtn">Continue</button>
@@ -138,9 +138,12 @@
         <button type="button" class="tab is-active" data-panel="home">Home</button>
         <button type="button" class="tab" data-panel="dues">Dues</button>
         <button type="button" class="tab" data-panel="concerns">Concerns</button>
+        <button type="button" class="tab" data-panel="info">Information Centre</button>
+        <button type="button" class="tab" data-panel="works">Works &amp; Events</button>
         <button type="button" class="tab" data-panel="directory">Directory</button>
         <button type="button" class="tab" data-panel="profile">Profile</button>
         <button type="button" class="tab admin-only" data-panel="admin" hidden>EC desk</button>
+        <button type="button" class="tab superadmin-only" data-panel="observability" hidden>Observability</button>
       </nav>
       <a class="btn ghost compact superadmin-only" href="/admin/" title="VeerCanvas content CMS" id="cmsNavLink" hidden>CMS</a>
       <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
@@ -175,7 +178,7 @@
             <p class="muted" id="ledgerEditStatus"></p>
           </div>
           <div class="table-wrap ledger-wrap">
-            <table class="ledger-table">
+            <table class="ledger-table cardable-table">
               <thead>
                 <tr>
                   <th>Plot</th>
@@ -267,6 +270,239 @@
           <button type="button" class="btn ghost compact" id="mailboxRefreshBtn">Refresh</button>
         </div>
         <div id="mailboxList" class="grievance-list"></div>
+      </section>
+
+      <section class="panel" id="panel-info" hidden>
+        <header class="panel-head">
+          <h2>Information Centre</h2>
+          <p class="muted">RWA documents, circulars, and guides published for all members.</p>
+        </header>
+
+        <div class="mailbox-toolbar info-toolbar">
+          <label>
+            Category
+            <select id="infoCategoryFilter">
+              <option value="">All categories</option>
+            </select>
+          </label>
+          <label class="admin-only" hidden>
+            Show
+            <select id="infoStatusFilter">
+              <option value="published">Published</option>
+              <option value="draft">Drafts</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <button type="button" class="btn ghost compact" id="infoRefreshBtn">Refresh</button>
+        </div>
+
+        <div id="infoDocList" class="info-doc-list"></div>
+        <p class="muted" id="infoListStatus"></p>
+
+        <div class="roster-block admin-only info-manage" id="infoManageBlock" hidden>
+          <h3 id="infoFormTitle">Publish a document</h3>
+          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members.</p>
+          <form id="infoDocForm" class="stack">
+            <input type="hidden" id="infoEditId" value="">
+            <div class="settings-grid">
+              <label class="span-2">Title
+                <input id="infoTitleInput" name="title" required maxlength="160" placeholder="e.g. Society bye-laws 2024">
+              </label>
+              <label>Category
+                <select id="infoCategoryInput" name="category"></select>
+              </label>
+              <label>Status
+                <select id="infoStatusInput" name="status">
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </label>
+              <label>Audience
+                <select id="infoAudienceInput" name="audience">
+                  <option value="all">All members</option>
+                  <option value="ec">EC members only</option>
+                </select>
+              </label>
+              <label class="span-2">Short summary
+                <input id="infoSummaryInput" name="summary" maxlength="800" placeholder="One line shown in the list">
+              </label>
+            </div>
+
+            <fieldset class="info-source">
+              <legend>Content source</legend>
+              <label class="check">
+                <input type="radio" name="infoSource" value="file" checked>
+                <span>Upload a file (PDF, Word, Excel, PowerPoint, image, CSV…)</span>
+              </label>
+              <label class="check">
+                <input type="radio" name="infoSource" value="html">
+                <span>Create HTML content in the portal</span>
+              </label>
+            </fieldset>
+
+            <div id="infoFilePane">
+              <label>Document file
+                <input id="infoFileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.txt,.rtf,.csv,.png,.jpg,.jpeg,.webp,.gif,.html,.htm">
+                <span class="field-hint">Max 15 MB. Required for a new file document.</span>
+              </label>
+            </div>
+
+            <div id="infoHtmlPane" hidden>
+              <label>HTML body
+                <textarea id="infoHtmlInput" rows="10" placeholder="Write content here. Use headings, paragraphs, lists, and links. A page title wrapper is added automatically."></textarea>
+              </label>
+            </div>
+
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="infoSaveBtn">Publish</button>
+              <button type="button" class="btn ghost" id="infoCancelEditBtn" hidden>Cancel edit</button>
+            </div>
+            <p class="muted" id="infoFormStatus"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-works" hidden>
+        <header class="panel-head">
+          <h2>Works &amp; Events</h2>
+          <p class="muted">Maintenance, development projects, colony activities, and events — with timelines, benefits, costs, and funding.</p>
+        </header>
+
+        <div class="mailbox-toolbar works-toolbar">
+          <label>
+            Type
+            <select id="worksKindFilter">
+              <option value="">All types</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="worksStatusFilter">
+              <option value="active">Active</option>
+              <option value="">All statuses</option>
+              <option value="planned">Planned</option>
+              <option value="approved">Approved</option>
+              <option value="in_progress">In progress</option>
+              <option value="on_hold">On hold</option>
+              <option value="completed">Completed</option>
+              <option value="closed">Closed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="done">Completed / closed</option>
+            </select>
+          </label>
+          <label class="admin-only" hidden>
+            Visibility
+            <select id="worksVisibilityFilter">
+              <option value="">Published + drafts</option>
+              <option value="published">Published only</option>
+              <option value="draft">Drafts only</option>
+            </select>
+          </label>
+          <button type="button" class="btn ghost compact" id="worksRefreshBtn">Refresh</button>
+        </div>
+
+        <div id="worksList" class="works-list"></div>
+        <p class="muted" id="worksListStatus"></p>
+
+        <div class="roster-block admin-only works-manage" id="worksManageBlock" hidden>
+          <h3 id="worksFormTitle">Initiate work / event</h3>
+          <p class="muted">Track ownership, timelines, benefits, contractor, costs, and funding sources.</p>
+          <form id="worksForm" class="stack">
+            <input type="hidden" id="worksEditId" value="">
+            <div class="settings-grid">
+              <label class="span-2">Title
+                <input id="worksTitleInput" required maxlength="160" placeholder="e.g. Repair colony street lights — Phase 1">
+              </label>
+              <label>Type
+                <select id="worksKindInput" required></select>
+              </label>
+              <label>Category
+                <select id="worksCategoryInput" required></select>
+              </label>
+              <label>Status
+                <select id="worksStatusInput"></select>
+              </label>
+              <label>Visibility
+                <select id="worksVisibilityInput">
+                  <option value="published">Published to members</option>
+                  <option value="draft">Draft (EC only)</option>
+                </select>
+              </label>
+              <label class="span-2">Short summary
+                <input id="worksSummaryInput" maxlength="800" placeholder="One-line overview for the list card">
+              </label>
+              <label class="span-2">Details
+                <textarea id="worksDetailsInput" rows="4" placeholder="Scope of work, scope notes, agenda…"></textarea>
+              </label>
+              <label class="span-2">Benefits to the colony
+                <textarea id="worksBenefitsInput" rows="3" placeholder="What members gain — safety, savings, amenity, community…"></textarea>
+              </label>
+              <label>Location
+                <input id="worksLocationInput" maxlength="160" placeholder="e.g. Gate 2 / Park / Block A">
+              </label>
+              <label>Assigned to
+                <input id="worksAssignedInput" maxlength="120" placeholder="EC member / team lead">
+              </label>
+            </div>
+
+            <fieldset class="works-fieldset">
+              <legend>Timeline</legend>
+              <div class="settings-grid">
+                <label>Start date <input id="worksStartInput" type="date"></label>
+                <label>End date <input id="worksEndInput" type="date"></label>
+                <label>Event date <input id="worksEventInput" type="date"></label>
+                <label class="span-2">Timeline notes
+                  <textarea id="worksTimelineInput" rows="2" placeholder="Phases, dependencies, target milestones in narrative form"></textarea>
+                </label>
+              </div>
+              <div class="works-milestones">
+                <div class="roster-toolbar">
+                  <strong>Milestones</strong>
+                  <button type="button" class="btn ghost compact" id="worksAddMilestoneBtn">Add milestone</button>
+                </div>
+                <div id="worksMilestonesList" class="works-rows"></div>
+              </div>
+            </fieldset>
+
+            <fieldset class="works-fieldset">
+              <legend>Cost</legend>
+              <div class="settings-grid">
+                <label>Estimated (₹) <input id="worksEstCostInput" type="number" min="0" step="1" placeholder="0"></label>
+                <label>Actual (₹) <input id="worksActCostInput" type="number" min="0" step="1" placeholder="0"></label>
+                <label class="span-2">Cost notes
+                  <input id="worksCostNotesInput" maxlength="800" placeholder="Quotes, contingencies, tax…">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="works-fieldset">
+              <legend>Contractor / agency (if applicable)</legend>
+              <div class="settings-grid">
+                <label>Name <input id="worksContractorNameInput" maxlength="160"></label>
+                <label>Contact <input id="worksContractorContactInput" maxlength="160" placeholder="Phone / email"></label>
+                <label class="span-2">Details
+                  <textarea id="worksContractorDetailsInput" rows="2" placeholder="GSTIN, agreement ref, scope awarded…"></textarea>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="works-fieldset">
+              <legend>Funding sources</legend>
+              <div class="roster-toolbar">
+                <p class="muted" style="margin:0">Add each source with amount where known.</p>
+                <button type="button" class="btn ghost compact" id="worksAddFundingBtn">Add source</button>
+              </div>
+              <div id="worksFundingList" class="works-rows"></div>
+            </fieldset>
+
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="worksSaveBtn">Save</button>
+              <button type="button" class="btn secondary" id="worksCloseBtn" hidden>Mark closed</button>
+              <button type="button" class="btn ghost" id="worksCancelEditBtn" hidden>Cancel edit</button>
+            </div>
+            <p class="muted" id="worksFormStatus"></p>
+          </form>
+        </div>
       </section>
 
       <section class="panel" id="panel-directory" hidden>
@@ -385,7 +621,7 @@
             </div>
           </div>
           <div class="table-wrap roster-wrap">
-            <table class="roster-table">
+            <table class="roster-table cardable-table">
               <thead>
                 <tr>
                   <th>Plot</th>
@@ -421,7 +657,7 @@
             <button type="button" class="btn ghost compact" id="revisionRefreshBtn">Refresh</button>
           </div>
           <div class="table-wrap roster-wrap">
-            <table class="roster-table revisions-table">
+            <table class="roster-table revisions-table cardable-table">
               <thead>
                 <tr>
                   <th>When</th>
@@ -437,9 +673,21 @@
           <p class="muted" id="revisionStatus"></p>
         </div>
 
+        <div class="roster-block" id="noticeDraftsBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Draft notices</h3>
+              <p class="muted" id="noticeDraftStats">Your drafts and those shared with you.</p>
+            </div>
+            <button type="button" class="btn ghost compact" id="noticeDraftRefreshBtn">Refresh</button>
+          </div>
+          <div id="noticeDraftList" class="notice-draft-list"></div>
+        </div>
+
         <form id="noticeForm" class="stack" style="margin-top:1.75rem">
-          <h3 id="noticeFormTitle">Publish notice</h3>
+          <h3 id="noticeFormTitle">Write notice</h3>
           <input type="hidden" name="id" id="noticeEditId" value="">
+          <input type="hidden" name="editStatus" id="noticeEditStatus" value="published">
           <label>Title <input name="title" id="noticeTitleInput" required maxlength="160"></label>
           <label>Category
             <select name="category" id="noticeCategoryInput">
@@ -450,11 +698,15 @@
             </select>
           </label>
           <label>Body
-            <textarea name="body" id="noticeBodyInput" rows="6" required placeholder="Use blank lines for paragraphs. **text** for bold."></textarea>
+            <textarea name="body" id="noticeBodyInput" rows="6" required placeholder="Use blank lines for paragraphs. **text** for bold. Drafts can leave body incomplete."></textarea>
           </label>
-          <label class="check"><input type="checkbox" name="pinned" id="noticePinnedInput"> Pin to top of colony board</label>
+          <label class="check" for="noticePinnedInput">
+            <input type="checkbox" name="pinned" id="noticePinnedInput">
+            <span>Pin to top of colony board</span>
+          </label>
           <div class="btn-row">
             <button type="submit" class="btn primary" id="noticeSubmitBtn">Publish notice</button>
+            <button type="button" class="btn secondary" id="noticeDraftBtn">Save draft</button>
             <button type="button" class="btn ghost" id="noticeCancelEditBtn" hidden>Cancel edit</button>
           </div>
           <p class="muted" id="noticeFormStatus"></p>
@@ -493,6 +745,73 @@
             <button type="submit" class="btn primary" id="settingsSaveBtn">Save settings</button>
             <p class="muted" id="settingsStatus"></p>
           </form>
+        </div>
+      </section>
+
+      <section class="panel superadmin-only" id="panel-observability" hidden>
+        <header class="panel-head">
+          <h2>Observability</h2>
+          <p class="muted">Who signed in and which app functions they used. Visible only to master admin.</p>
+        </header>
+        <div class="roster-toolbar obs-toolbar">
+          <label>
+            Period
+            <select id="obsDays">
+              <option value="1">Last 24 hours</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </label>
+          <label>
+            Plot filter
+            <input id="obsHouseFilter" type="search" placeholder="e.g. 12 or __SUPERADMIN__" autocomplete="off">
+          </label>
+          <button type="button" class="btn ghost compact" id="obsRefreshBtn">Refresh</button>
+        </div>
+        <div id="obsSummary" class="stat-grid obs-summary"></div>
+        <div class="obs-columns">
+          <div class="roster-block">
+            <h3>Top functions</h3>
+            <div class="table-wrap">
+              <table class="roster-table cardable-table">
+                <thead><tr><th>Function</th><th>Count</th></tr></thead>
+                <tbody id="obsTopActions"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="roster-block">
+            <h3>Top users</h3>
+            <div class="table-wrap">
+              <table class="roster-table cardable-table">
+                <thead><tr><th>User</th><th>Role</th><th>Events</th></tr></thead>
+                <tbody id="obsTopUsers"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="roster-block" style="margin-top:1.25rem">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Activity trail</h3>
+              <p class="muted" id="obsTrailStats">API calls and panel opens.</p>
+            </div>
+          </div>
+          <div class="table-wrap roster-wrap">
+            <table class="roster-table revisions-table cardable-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Who</th>
+                  <th>Function</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="obsRecentRows"></tbody>
+            </table>
+          </div>
+          <p class="muted" id="obsStatus"></p>
         </div>
       </section>
     </main>
@@ -591,6 +910,23 @@
           <button type="button" class="btn secondary" id="bankEditQrOnlyBtn">Upload QR only</button>
           <button type="button" class="btn ghost" id="bankEditClearQrBtn">Remove QR</button>
           <button type="button" class="btn ghost" id="bankEditCancelBtn">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="draftShareDialog" class="ledger-dialog">
+      <form id="draftShareForm" class="stack">
+        <header class="panel-head">
+          <h3>Share draft</h3>
+          <p class="muted" id="draftShareSubtitle">Pick EC members and set Edit or View for each. You can change this anytime while it is a draft.</p>
+        </header>
+        <input type="hidden" id="draftShareNoticeId" value="">
+        <div id="draftShareMemberList" class="draft-share-members"></div>
+        <p class="muted">Edit (default) can change and publish. View only can read. Shares clear when published. Only the owner manages access or deletes.</p>
+        <p class="error" id="draftShareError" hidden></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="draftShareSaveBtn">Save sharing</button>
+          <button type="button" class="btn ghost" id="draftShareCancelBtn">Cancel</button>
         </div>
       </form>
     </dialog>

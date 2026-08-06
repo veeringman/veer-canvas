@@ -60,7 +60,13 @@
     const app = el('appView');
     if (gate) gate.hidden = isAuthed;
     if (app) app.hidden = !isAuthed;
-    if (!isAuthed) return;
+
+    if (!isAuthed) {
+      document.querySelectorAll('.admin-only, .superadmin-only').forEach((node) => {
+        node.hidden = true;
+      });
+      return;
+    }
 
     const r = session.resident;
     const chip = el('userChip');
@@ -71,10 +77,26 @@
       chip.textContent = `${label} · ${r.name}${titleBit}${tag}`;
     }
 
+    // Role chrome only — never unhide .panel sections here (that made EC desk
+    // stack under Home). Panel visibility is owned by switchPanel().
     document.querySelectorAll('.admin-only').forEach((node) => {
+      if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
+        if (!isEcAdmin(r)) {
+          node.hidden = true;
+          node.classList.remove('is-active');
+        }
+        return;
+      }
       node.hidden = !isEcAdmin(r);
     });
     document.querySelectorAll('.superadmin-only').forEach((node) => {
+      if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
+        if (!isSuperAdmin(r)) {
+          node.hidden = true;
+          node.classList.remove('is-active');
+        }
+        return;
+      }
       node.hidden = !isSuperAdmin(r);
     });
 
@@ -91,11 +113,23 @@
     if (el('profilePhone')) el('profilePhone').value = r.phone || '';
   }
 
+  function activePanelName() {
+    return document.querySelector('.tab.is-active')?.dataset?.panel || 'home';
+  }
+
+  function ensurePanelVisibility(preferred) {
+    let name = preferred || activePanelName() || 'home';
+    if (name === 'admin' && !isEcAdmin()) name = 'home';
+    if (name === 'observability' && !isSuperAdmin()) name = 'home';
+    switchPanel(name);
+  }
+
   async function refreshSession() {
     const data = await api('/api/rwa/session');
     if (data.authenticated) {
+      const preferred = activePanelName();
       setAuthed(data);
-      await loadHome();
+      ensurePanelVisibility(preferred);
     } else {
       setAuthed(null);
     }
@@ -122,41 +156,72 @@
     }).join('');
   }
 
+  const WELCOME_NOTICE_ID = 'n_welcome';
+  const RECENT_NOTICE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function isRecentNotice(n) {
+    const raw = n?.publishedAt;
+    if (!raw) return false;
+    const ts = Date.parse(raw);
+    if (Number.isNaN(ts)) return false;
+    return (Date.now() - ts) <= RECENT_NOTICE_MS;
+  }
+
+  function isWelcomeNotice(n) {
+    return Boolean(n?.fixedTop) || n?.id === WELCOME_NOTICE_ID;
+  }
+
   function renderNoticeCard(n, { canMoveUp = false, canMoveDown = false } = {}) {
     const date = (n.publishedAt || '').slice(0, 10);
-    const moveActions = (isEcAdmin() && n.pinned) ? `
+    const welcome = isWelcomeNotice(n);
+    const recent = isRecentNotice(n);
+    const moveActions = (isEcAdmin() && n.pinned && !welcome) ? `
         <button type="button" class="btn ghost compact notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up">↑ Up</button>
         <button type="button" class="btn ghost compact notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down">↓ Down</button>` : '';
+    const pinDelete = welcome
+      ? ''
+      : `
+        <button type="button" class="btn ghost compact notice-pin" data-id="${escapeHtml(n.id)}" data-pinned="${n.pinned ? '1' : '0'}">${n.pinned ? 'Unpin' : 'Pin'}</button>
+        <button type="button" class="btn ghost compact notice-delete" data-id="${escapeHtml(n.id)}">Delete</button>`;
     const actions = isEcAdmin() ? `
       <div class="notice-actions">
         ${moveActions}
         <button type="button" class="btn ghost compact notice-edit" data-id="${escapeHtml(n.id)}">Edit</button>
-        <button type="button" class="btn ghost compact notice-pin" data-id="${escapeHtml(n.id)}" data-pinned="${n.pinned ? '1' : '0'}">${n.pinned ? 'Unpin' : 'Pin'}</button>
-        <button type="button" class="btn ghost compact notice-delete" data-id="${escapeHtml(n.id)}">Delete</button>
+        ${pinDelete}
       </div>` : '';
+    const badges = [
+      welcome ? '<span class="notice-welcome-badge">Welcome</span>' : '',
+      recent ? '<span class="notice-new-badge">New</span>' : '',
+      (n.pinned && !welcome) ? '<span class="notice-pin-badge">Pinned</span>' : '',
+    ].filter(Boolean).join('');
     return `
-      <article class="notice ${n.pinned ? 'is-pinned' : ''}" data-id="${escapeHtml(n.id)}">
+      <article class="notice ${n.pinned ? 'is-pinned' : ''} ${welcome ? 'is-welcome' : ''} ${recent ? 'is-recent' : ''}" data-id="${escapeHtml(n.id)}">
         <div class="notice-head">
           <h3 class="notice-title">${escapeHtml(n.title)}</h3>
-          ${n.pinned ? '<span class="notice-pin-badge">Pinned</span>' : ''}
+          ${badges ? `<div class="notice-badges">${badges}</div>` : ''}
         </div>
-        <div class="meta">${escapeHtml(n.category || 'general')}${date ? ` · ${escapeHtml(date)}` : ''}</div>
+        <div class="meta">${escapeHtml(n.category || 'general')}${date ? ` · ${escapeHtml(date)}` : ''}${recent ? ' · past week' : ''}</div>
         <div class="notice-body">${formatNoticeBody(n.body)}</div>
         ${actions}
       </article>`;
   }
 
   let noticesCache = [];
+  let draftsCache = [];
+  let ecMembersCache = null;
 
   async function loadHome() {
     const notices = await api('/api/rwa/notices');
     const list = el('noticeList');
     if (!list) return;
-    noticesCache = notices.notices || [];
-    const pinnedIds = noticesCache.filter((n) => n.pinned).map((n) => n.id);
+    noticesCache = (notices.notices || []).filter((n) => (n.status || 'published') === 'published');
+    // Reorderable pinned notices exclude the fixed welcome notice.
+    const pinnedIds = noticesCache
+      .filter((n) => n.pinned && !isWelcomeNotice(n))
+      .map((n) => n.id);
     list.innerHTML = noticesCache.length
       ? noticesCache.map((n) => {
-          const pIdx = n.pinned ? pinnedIds.indexOf(n.id) : -1;
+          const pIdx = (n.pinned && !isWelcomeNotice(n)) ? pinnedIds.indexOf(n.id) : -1;
           return renderNoticeCard(n, {
             canMoveUp: pIdx > 0,
             canMoveDown: pIdx >= 0 && pIdx < pinnedIds.length - 1,
@@ -165,14 +230,226 @@
       : '<p class="muted">No notices yet.</p>';
   }
 
+  function draftShareSummary(n) {
+    const shares = n.sharedWith || [];
+    if (n.sharedWithMe) {
+      return n.canEdit
+        ? 'Shared with you · edit until published'
+        : 'Shared with you · view only';
+    }
+    if (!shares.length) return n.isOwner ? 'Private to you' : '';
+    const editors = shares.filter((s) => s.canEdit).length;
+    const viewers = shares.length - editors;
+    const names = shares.map((s) => {
+      const label = s.label || s.name || s.houseId;
+      return `${label} (${s.canEdit ? 'edit' : 'view'})`;
+    }).slice(0, 2);
+    const more = shares.length > 2 ? ` +${shares.length - 2}` : '';
+    const mix = viewers
+      ? `${editors} edit · ${viewers} view`
+      : `${editors} can edit`;
+    return `Shared with ${names.join(', ')}${more} · ${mix}`;
+  }
+
+  function renderDraftList() {
+    const box = el('noticeDraftList');
+    const stats = el('noticeDraftStats');
+    if (!box) return;
+    if (!draftsCache.length) {
+      box.innerHTML = '<p class="muted">No drafts yet. Save a draft, or wait for another EC member to share one with you.</p>';
+      if (stats) stats.textContent = 'Your drafts and those shared with you.';
+      return;
+    }
+    if (stats) {
+      stats.textContent = `${draftsCache.length} draft${draftsCache.length === 1 ? '' : 's'} · share as edit (default) or view only`;
+    }
+    box.innerHTML = draftsCache.map((n) => {
+      const excerpt = String(n.body || '').trim() || 'No body yet.';
+      const short = excerpt.length > 160 ? `${excerpt.slice(0, 157)}…` : excerpt;
+      const when = (n.publishedAt || '').slice(0, 16).replace('T', ' ');
+      const canEdit = n.canEdit !== false;
+      const isOwner = Boolean(n.isOwner);
+      const shareLine = draftShareSummary(n);
+      const badges = [
+        '<span class="notice-draft-badge">Draft</span>',
+        n.sharedWithMe ? '<span class="notice-draft-badge">Shared with you</span>' : '',
+        !canEdit ? '<span class="notice-draft-badge">View only</span>' : '',
+      ].filter(Boolean).join('');
+      const actions = [];
+      if (canEdit) {
+        actions.push(`<button type="button" class="btn secondary compact notice-draft-edit" data-id="${escapeHtml(n.id)}">Continue editing</button>`);
+        actions.push(`<button type="button" class="btn primary compact notice-draft-publish" data-id="${escapeHtml(n.id)}">Publish</button>`);
+      } else {
+        actions.push(`<button type="button" class="btn secondary compact notice-draft-edit" data-id="${escapeHtml(n.id)}">View draft</button>`);
+      }
+      if (isOwner) {
+        actions.push(`<button type="button" class="btn ghost compact notice-draft-share" data-id="${escapeHtml(n.id)}">Share</button>`);
+        actions.push(`<button type="button" class="btn ghost compact notice-draft-delete" data-id="${escapeHtml(n.id)}">Delete</button>`);
+      }
+      return `
+        <article class="notice-draft-card${canEdit ? '' : ' is-view-only'}" data-id="${escapeHtml(n.id)}">
+          <div class="notice-badges">${badges}</div>
+          <h4>${escapeHtml(n.title || 'Untitled draft')}</h4>
+          <p class="meta">${escapeHtml(n.category || 'general')}${when ? ` · saved ${escapeHtml(when)}` : ''}</p>
+          ${shareLine ? `<p class="draft-share-line">${escapeHtml(shareLine)}</p>` : ''}
+          <p class="draft-excerpt">${escapeHtml(short)}</p>
+          <div class="btn-row">${actions.join('')}</div>
+        </article>`;
+    }).join('');
+  }
+
+  async function loadNoticeDrafts() {
+    if (!isEcAdmin()) return;
+    const data = await api('/api/rwa/notices?status=draft');
+    draftsCache = data.notices || [];
+    renderDraftList();
+  }
+
+  async function loadEcMembers() {
+    if (ecMembersCache) return ecMembersCache;
+    const data = await api('/api/rwa/ec-members');
+    ecMembersCache = data.members || [];
+    return ecMembersCache;
+  }
+
+  function closeDraftShareDialog() {
+    const dialog = el('draftShareDialog');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  }
+
+  function syncShareRowState(row) {
+    if (!row) return;
+    const checked = row.querySelector('input[name="shareHouse"]')?.checked === true;
+    const access = row.querySelector('select[name="shareAccess"]');
+    row.classList.toggle('is-selected', checked);
+    if (access) access.disabled = !checked;
+  }
+
+  async function openDraftShareDialog(notice) {
+    if (!notice?.id) return;
+    const dialog = el('draftShareDialog');
+    const list = el('draftShareMemberList');
+    const err = el('draftShareError');
+    if (!dialog || !list) return;
+    if (err) {
+      err.hidden = true;
+      err.textContent = '';
+    }
+    if (el('draftShareNoticeId')) el('draftShareNoticeId').value = notice.id;
+    if (el('draftShareSubtitle')) {
+      el('draftShareSubtitle').textContent =
+        `Share “${notice.title || 'Untitled draft'}” — set Edit or View per member (change anytime).`;
+    }
+    const shares = notice.sharedWith || [];
+    const accessByHouse = new Map(shares.map((s) => [s.houseId, s.canEdit !== false]));
+    list.innerHTML = '<p class="muted">Loading EC members…</p>';
+    showDialog(dialog);
+    try {
+      const members = await loadEcMembers();
+      if (!members.length) {
+        list.innerHTML = '<p class="muted">No other EC members on the roster yet.</p>';
+        return;
+      }
+      list.innerHTML = members.map((m) => {
+        const selected = accessByHouse.has(m.houseId);
+        const canEdit = selected ? accessByHouse.get(m.houseId) : true;
+        return `
+          <div class="draft-share-row${selected ? ' is-selected' : ''}" data-house="${escapeHtml(m.houseId)}">
+            <input type="checkbox" name="shareHouse" value="${escapeHtml(m.houseId)}"${selected ? ' checked' : ''}>
+            <span class="share-member-text">
+              ${escapeHtml(m.label || m.name || m.houseId)}
+              <span class="share-member-meta">${escapeHtml(m.houseId)}</span>
+            </span>
+            <select name="shareAccess" class="share-access"${selected ? '' : ' disabled'}>
+              <option value="edit"${canEdit ? ' selected' : ''}>Edit</option>
+              <option value="view"${canEdit ? '' : ' selected'}>View only</option>
+            </select>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      list.innerHTML = `<p class="error">${escapeHtml(e.message || 'Could not load members')}</p>`;
+    }
+  }
+
+  async function saveDraftShares(event) {
+    event.preventDefault();
+    const noticeId = String(el('draftShareNoticeId')?.value || '').trim();
+    const err = el('draftShareError');
+    const saveBtn = el('draftShareSaveBtn');
+    if (!noticeId) return;
+    const shares = Array.from(document.querySelectorAll('#draftShareMemberList .draft-share-row'))
+      .filter((row) => row.querySelector('input[name="shareHouse"]')?.checked)
+      .map((row) => ({
+        houseId: row.querySelector('input[name="shareHouse"]').value,
+        canEdit: row.querySelector('select[name="shareAccess"]')?.value !== 'view',
+      }));
+    if (err) {
+      err.hidden = true;
+      err.textContent = '';
+    }
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}/shares`, {
+        method: 'PUT',
+        body: JSON.stringify({ shares }),
+      });
+      closeDraftShareDialog();
+      await loadNoticeDrafts();
+    } catch (e) {
+      if (err) {
+        err.hidden = false;
+        err.textContent = e.message || 'Could not update sharing';
+      } else {
+        alert(e.message || 'Could not update sharing');
+      }
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function syncNoticeFormMode(notice) {
+    const isDraft = (notice?.status || el('noticeEditStatus')?.value) === 'draft';
+    const editing = Boolean(notice?.id || el('noticeEditId')?.value);
+    const canEdit = notice ? notice.canEdit !== false : true;
+    if (el('noticeEditStatus')) el('noticeEditStatus').value = notice?.status || (isDraft ? 'draft' : 'published');
+    if (el('noticeFormTitle')) {
+      el('noticeFormTitle').textContent = editing
+        ? (isDraft ? (canEdit ? 'Edit draft' : 'View draft') : 'Update notice')
+        : 'Write notice';
+    }
+    if (el('noticeSubmitBtn')) {
+      el('noticeSubmitBtn').textContent = isDraft || !editing ? 'Publish notice' : 'Save changes';
+      el('noticeSubmitBtn').hidden = !canEdit;
+    }
+    if (el('noticeDraftBtn')) {
+      el('noticeDraftBtn').textContent = isDraft || !editing ? 'Save draft' : 'Save as draft';
+      el('noticeDraftBtn').hidden = isWelcomeNotice(notice) || !canEdit;
+    }
+    if (el('noticeCancelEditBtn')) el('noticeCancelEditBtn').hidden = !editing;
+    if (el('noticeBodyInput')) el('noticeBodyInput').required = !isDraft;
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput'].forEach((id) => {
+      const field = el(id);
+      if (field) field.disabled = editing && !canEdit;
+    });
+  }
+
   function resetNoticeForm() {
     const form = el('noticeForm');
     if (!form) return;
     form.reset();
     if (el('noticeEditId')) el('noticeEditId').value = '';
-    if (el('noticeFormTitle')) el('noticeFormTitle').textContent = 'Publish notice';
-    if (el('noticeSubmitBtn')) el('noticeSubmitBtn').textContent = 'Publish notice';
-    if (el('noticeCancelEditBtn')) el('noticeCancelEditBtn').hidden = true;
+    if (el('noticeEditStatus')) el('noticeEditStatus').value = 'published';
+    if (el('noticePinnedInput')) el('noticePinnedInput').disabled = false;
+    const pinLabel = el('noticePinnedInput')?.closest('label');
+    if (pinLabel) pinLabel.title = '';
+    if (el('noticeBodyInput')) el('noticeBodyInput').required = true;
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput'].forEach((id) => {
+      const field = el(id);
+      if (field) field.disabled = false;
+    });
+    syncNoticeFormMode(null);
     if (el('noticeFormStatus')) el('noticeFormStatus').textContent = '';
   }
 
@@ -180,15 +457,94 @@
     if (!notice) return;
     switchPanel('admin');
     if (el('noticeEditId')) el('noticeEditId').value = notice.id || '';
+    if (el('noticeEditStatus')) el('noticeEditStatus').value = notice.status || 'published';
     if (el('noticeTitleInput')) el('noticeTitleInput').value = notice.title || '';
     if (el('noticeBodyInput')) el('noticeBodyInput').value = notice.body || '';
     if (el('noticeCategoryInput')) el('noticeCategoryInput').value = notice.category || 'general';
-    if (el('noticePinnedInput')) el('noticePinnedInput').checked = Boolean(notice.pinned);
-    if (el('noticeFormTitle')) el('noticeFormTitle').textContent = 'Update notice';
-    if (el('noticeSubmitBtn')) el('noticeSubmitBtn').textContent = 'Save changes';
-    if (el('noticeCancelEditBtn')) el('noticeCancelEditBtn').hidden = false;
-    if (el('noticeFormStatus')) el('noticeFormStatus').textContent = `Editing ${notice.id}`;
+    if (el('noticePinnedInput')) {
+      el('noticePinnedInput').checked = Boolean(notice.pinned);
+      el('noticePinnedInput').disabled = isWelcomeNotice(notice) || notice.status === 'draft' || notice.canEdit === false;
+    }
+    const pinLabel = el('noticePinnedInput')?.closest('label');
+    if (pinLabel) {
+      pinLabel.title = isWelcomeNotice(notice)
+        ? 'Welcome notice stays fixed at the top of the board'
+        : (notice.status === 'draft' ? 'Pin applies when you publish' : '');
+    }
+    syncNoticeFormMode(notice);
+    if (el('noticeFormStatus')) {
+      if (notice.status === 'draft' && notice.canEdit === false) {
+        el('noticeFormStatus').textContent = 'View only — ask the owner for edit access.';
+      } else if (notice.status === 'draft') {
+        el('noticeFormStatus').textContent = notice.sharedWithMe
+          ? `Editing shared draft ${notice.id}`
+          : `Editing draft ${notice.id}`;
+      } else {
+        el('noticeFormStatus').textContent = `Editing ${notice.id}`;
+      }
+    }
     el('noticeForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function saveNotice({ asDraft = false } = {}) {
+    const form = el('noticeForm');
+    if (!form) return;
+    const noticeId = String(el('noticeEditId')?.value || '').trim();
+    const title = String(el('noticeTitleInput')?.value || '').trim();
+    const body = String(el('noticeBodyInput')?.value || '').trim();
+    const statusLine = el('noticeFormStatus');
+    const publishBtn = el('noticeSubmitBtn');
+    const draftBtn = el('noticeDraftBtn');
+
+    if (asDraft) {
+      if (!title) {
+        if (statusLine) statusLine.textContent = 'Add a title to save a draft.';
+        el('noticeTitleInput')?.focus();
+        return;
+      }
+    } else if (!form.reportValidity()) {
+      return;
+    }
+
+    if (publishBtn) publishBtn.disabled = true;
+    if (draftBtn) draftBtn.disabled = true;
+    if (statusLine) statusLine.textContent = asDraft ? 'Saving draft…' : (noticeId ? 'Saving…' : 'Publishing…');
+
+    try {
+      const payload = {
+        title,
+        body,
+        category: el('noticeCategoryInput')?.value || 'general',
+        pinned: !asDraft && el('noticePinnedInput')?.checked === true,
+        status: asDraft ? 'draft' : 'published',
+      };
+      if (noticeId) {
+        await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await api('/api/rwa/notices', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+      resetNoticeForm();
+      await loadNoticeDrafts().catch(console.error);
+      if (asDraft) {
+        if (statusLine) statusLine.textContent = 'Draft saved. Continue anytime from the list above.';
+        switchPanel('admin');
+      } else {
+        await loadHome();
+        switchPanel('home');
+      }
+    } catch (err) {
+      if (statusLine) statusLine.textContent = err.message || (asDraft ? 'Draft save failed' : 'Publish failed');
+      else alert(err.message || 'Save failed');
+    } finally {
+      if (publishBtn) publishBtn.disabled = false;
+      if (draftBtn) draftBtn.disabled = false;
+    }
   }
 
   async function loadDues() {
@@ -216,7 +572,6 @@
 
     if (isEcAdmin()) {
       await loadLedger();
-      el('adminDues').hidden = false;
     }
   }
 
@@ -439,19 +794,19 @@
       return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
     });
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="muted">No matching ledger rows.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="8" class="muted">No matching ledger rows.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map((r) => `
       <tr data-house="${escapeHtml(r.houseId)}">
-        <td><code>${escapeHtml(r.houseId)}</code></td>
-        <td>${escapeHtml(r.name || '')}</td>
-        <td>${inr(r.previousTotal ?? r.balancePrev)}</td>
-        <td>${inr(r.previousPaid ?? 0)}</td>
-        <td>${inr(r.previousPending ?? r.balancePrev)}</td>
-        <td>${inr(r.currentYearTotal ?? r.feeAmount)}</td>
-        <td>${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
-        <td><button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button></td>
+        <td data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
+        <td data-label="Name">${escapeHtml(r.name || '')}</td>
+        <td data-label="Prev total">${inr(r.previousTotal ?? r.balancePrev)}</td>
+        <td data-label="Prev paid">${inr(r.previousPaid ?? 0)}</td>
+        <td data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
+        <td data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
+        <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
+        <td data-label="Actions" class="row-actions"><button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button></td>
       </tr>`).join('');
   }
 
@@ -609,26 +964,347 @@
       </tr>`).join('');
   }
 
+  let infoCategoriesCache = [];
+  let infoDocsCache = [];
+
+  function formatBytes(n) {
+    const num = Number(n) || 0;
+    if (num < 1024) return `${num} B`;
+    if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+    return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function fillInfoCategorySelects(categories) {
+    infoCategoriesCache = categories || [];
+    const filter = el('infoCategoryFilter');
+    const formSel = el('infoCategoryInput');
+    const opts = infoCategoriesCache.map((c) =>
+      `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`
+    ).join('');
+    if (filter) {
+      const cur = filter.value;
+      filter.innerHTML = `<option value="">All categories</option>${opts}`;
+      filter.value = cur;
+    }
+    if (formSel) {
+      const cur = formSel.value || 'general';
+      formSel.innerHTML = opts || '<option value="general">General</option>';
+      formSel.value = cur;
+    }
+  }
+
+  function syncInfoSourcePanes() {
+    const source = document.querySelector('input[name="infoSource"]:checked')?.value || 'file';
+    if (el('infoFilePane')) el('infoFilePane').hidden = source !== 'file';
+    if (el('infoHtmlPane')) el('infoHtmlPane').hidden = source !== 'html';
+    if (el('infoFileInput')) el('infoFileInput').required = false;
+  }
+
+  function resetInfoForm() {
+    const form = el('infoDocForm');
+    if (!form) return;
+    form.reset();
+    if (el('infoEditId')) el('infoEditId').value = '';
+    if (el('infoStatusInput')) el('infoStatusInput').value = 'published';
+    if (el('infoAudienceInput')) el('infoAudienceInput').value = 'all';
+    if (el('infoFormTitle')) el('infoFormTitle').textContent = 'Publish a document';
+    if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Publish';
+    if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = true;
+    if (el('infoFormStatus')) el('infoFormStatus').textContent = '';
+    const fileRadio = document.querySelector('input[name="infoSource"][value="file"]');
+    if (fileRadio) fileRadio.checked = true;
+    syncInfoSourcePanes();
+  }
+
+  function startInfoEdit(doc) {
+    if (!doc || !isEcAdmin()) return;
+    if (el('infoEditId')) el('infoEditId').value = doc.id || '';
+    if (el('infoTitleInput')) el('infoTitleInput').value = doc.title || '';
+    if (el('infoSummaryInput')) el('infoSummaryInput').value = doc.summary || '';
+    if (el('infoCategoryInput')) el('infoCategoryInput').value = doc.category || 'general';
+    if (el('infoStatusInput')) el('infoStatusInput').value = doc.status || 'draft';
+    if (el('infoAudienceInput')) el('infoAudienceInput').value = doc.audience || 'all';
+    const htmlRadio = document.querySelector('input[name="infoSource"][value="html"]');
+    const fileRadio = document.querySelector('input[name="infoSource"][value="file"]');
+    if (doc.docType === 'html' && htmlRadio) htmlRadio.checked = true;
+    else if (fileRadio) fileRadio.checked = true;
+    syncInfoSourcePanes();
+    if (el('infoHtmlInput') && doc.docType !== 'html') el('infoHtmlInput').value = '';
+    if (el('infoFormTitle')) el('infoFormTitle').textContent = 'Update document';
+    if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Save changes';
+    if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = false;
+    if (el('infoFormStatus')) {
+      el('infoFormStatus').textContent = doc.docType === 'html'
+        ? 'Editing HTML document — paste updated HTML body to replace content, or leave blank and only change metadata.'
+        : `Editing ${doc.originalName || doc.id} — choose a new file only if replacing the upload.`;
+    }
+    el('infoManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function confirmInfoPublish(title, audience) {
+    if (audience === 'ec') {
+      return window.confirm(
+        `Are you sure you want to publish “${title}” to EC members only?\n\nRegular residents will not see this document.`
+      );
+    }
+    return window.confirm(
+      `Are you sure you want to publish “${title}” to ALL members?\n\nThis will be visible to every signed-in resident.`
+    );
+  }
+
+  function renderInfoDocs() {
+    const box = el('infoDocList');
+    const status = el('infoListStatus');
+    if (!box) return;
+    if (!infoDocsCache.length) {
+      box.innerHTML = '<p class="muted">No documents yet. EC can publish circulars, bye-laws, forms, and guides here.</p>';
+      if (status) status.textContent = '';
+      return;
+    }
+    if (status) {
+      status.textContent = `${infoDocsCache.length} document${infoDocsCache.length === 1 ? '' : 's'}`;
+    }
+    box.innerHTML = infoDocsCache.map((d) => {
+      const when = String(d.publishedAt || d.updatedAt || '').slice(0, 10);
+      const badges = [
+        `<span class="info-doc-badge">${escapeHtml(d.categoryLabel || d.category || 'general')}</span>`,
+        `<span class="info-doc-badge ${d.docType === 'html' ? 'is-html' : 'is-file'}">${d.docType === 'html' ? 'HTML' : 'File'}</span>`,
+        d.status === 'published'
+          ? `<span class="info-doc-badge ${d.audience === 'ec' ? 'is-ec' : 'is-all'}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : 'All members'))}</span>`
+          : '',
+        d.status === 'draft' ? '<span class="info-doc-badge is-draft">Draft</span>' : '',
+      ].filter(Boolean).join('');
+      const metaBits = [
+        d.originalName || '',
+        d.sizeBytes ? formatBytes(d.sizeBytes) : '',
+        when || '',
+      ].filter(Boolean).join(' · ');
+      const actions = [
+        `<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`,
+      ];
+      if (isEcAdmin()) {
+        actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">Edit</button>`);
+        if (d.status !== 'published') {
+          actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
+          actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
+        } else {
+          actions.push(`<button type="button" class="btn ghost compact info-doc-unpublish" data-id="${escapeHtml(d.id)}">Unpublish</button>`);
+        }
+        actions.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
+      }
+      return `
+        <article class="info-doc-card" data-id="${escapeHtml(d.id)}">
+          <div>${badges}</div>
+          <h3>${escapeHtml(d.title || 'Untitled')}</h3>
+          <p class="meta">${escapeHtml(metaBits)}</p>
+          ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
+          <div class="btn-row">${actions.join('')}</div>
+        </article>`;
+    }).join('');
+  }
+
+  async function loadInfoCentre() {
+    if (el('infoManageBlock')) el('infoManageBlock').hidden = !isEcAdmin();
+    const status = isEcAdmin()
+      ? (el('infoStatusFilter')?.value || 'published')
+      : 'published';
+    const category = el('infoCategoryFilter')?.value || '';
+    const qs = new URLSearchParams({ status });
+    if (category) qs.set('category', category);
+    const data = await api(`/api/rwa/info-centre?${qs.toString()}`);
+    fillInfoCategorySelects(data.categories || []);
+    infoDocsCache = data.documents || [];
+    renderInfoDocs();
+  }
+
+  async function openInfoDocument(doc) {
+    if (!doc?.id) return;
+    const token = state.session?.token || '';
+    const url = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file`;
+    // Authenticated open: fetch blob then open object URL (headers not sent on plain window.open).
+    const res = await fetch(url, {
+      credentials: 'same-origin',
+      headers: token ? { 'X-RWA-Token': token } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText || 'Could not open document');
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const win = window.open(objectUrl, '_blank', 'noopener');
+    if (!win) {
+      // Popup blocked — force download via temporary link
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = doc.originalName || 'document';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }
+
+  async function saveInfoDocument(event) {
+    event.preventDefault();
+    if (!isEcAdmin()) return;
+    const statusLine = el('infoFormStatus');
+    const saveBtn = el('infoSaveBtn');
+    const title = String(el('infoTitleInput')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title required.';
+      return;
+    }
+    const source = document.querySelector('input[name="infoSource"]:checked')?.value || 'file';
+    const editId = String(el('infoEditId')?.value || '').trim();
+    const statusVal = el('infoStatusInput')?.value || 'published';
+    const audienceVal = el('infoAudienceInput')?.value || 'all';
+    if (statusVal === 'published') {
+      if (!confirmInfoPublish(title, audienceVal)) return;
+    }
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      let doc;
+      if (source === 'html') {
+        const htmlBody = String(el('infoHtmlInput')?.value || '').trim();
+        if (!htmlBody && !editId) {
+          if (statusLine) statusLine.textContent = 'Write HTML content, or switch to file upload.';
+          return;
+        }
+        const payload = {
+          title,
+          summary: el('infoSummaryInput')?.value.trim() || '',
+          category: el('infoCategoryInput')?.value || 'general',
+          status: statusVal,
+          audience: audienceVal,
+          docType: 'html',
+        };
+        if (htmlBody) payload.htmlBody = htmlBody;
+        if (editId) {
+          doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          })).document;
+        } else {
+          doc = (await api('/api/rwa/info-centre', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          })).document;
+        }
+      } else {
+        const file = el('infoFileInput')?.files?.[0];
+        if (!file && !editId) {
+          if (statusLine) statusLine.textContent = 'Choose a file to upload.';
+          return;
+        }
+        if (file) {
+          const body = new FormData();
+          body.append('file', file);
+          body.append('title', title);
+          body.append('summary', el('infoSummaryInput')?.value.trim() || '');
+          body.append('category', el('infoCategoryInput')?.value || 'general');
+          body.append('status', statusVal);
+          body.append('audience', audienceVal);
+          body.append('docType', 'file');
+          if (editId) body.append('id', editId);
+          const headers = {};
+          if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+          const path = editId
+            ? `/api/rwa/info-centre/${encodeURIComponent(editId)}`
+            : '/api/rwa/info-centre';
+          const res = await fetch(path, {
+            method: editId ? 'PATCH' : 'POST',
+            credentials: 'same-origin',
+            headers,
+            body,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || res.statusText || 'Upload failed');
+          doc = data.document;
+        } else {
+          // Metadata-only update
+          doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              title,
+              summary: el('infoSummaryInput')?.value.trim() || '',
+              category: el('infoCategoryInput')?.value || 'general',
+              status: statusVal,
+              audience: audienceVal,
+            }),
+          })).document;
+        }
+      }
+      resetInfoForm();
+      if (statusLine) {
+        statusLine.textContent = doc?.status === 'published'
+          ? (doc.audience === 'ec' ? 'Published to EC only.' : 'Published to all members.')
+          : 'Saved as draft.';
+      }
+      await loadInfoCentre();
+    } catch (err) {
+      if (statusLine) statusLine.textContent = err.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function trackPanel(name) {
+    if (!state.session?.token || !name) return;
+    // Fire-and-forget; do not block navigation if logging fails.
+    api('/api/rwa/observability/event', {
+      method: 'POST',
+      body: JSON.stringify({ panel: name }),
+    }).catch(() => {});
+  }
+
   function switchPanel(name) {
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('is-active', t.dataset.panel === name));
+    if (name === 'admin' && !isEcAdmin()) name = 'home';
+    if (name === 'observability' && !isSuperAdmin()) name = 'home';
+    document.querySelectorAll('.tab').forEach((t) => {
+      const isTab = t.dataset.panel === name;
+      t.classList.toggle('is-active', isTab);
+      t.setAttribute('aria-selected', isTab ? 'true' : 'false');
+    });
     document.querySelectorAll('.panel').forEach((p) => {
       const on = p.id === `panel-${name}`;
       p.hidden = !on;
       p.classList.toggle('is-active', on);
     });
+    // Nested EC ledger block belongs to Dues only
+    if (el('adminDues')) {
+      el('adminDues').hidden = !(name === 'dues' && isEcAdmin());
+    }
+    trackPanel(name);
     if (name === 'home') loadHome().catch(console.error);
     if (name === 'dues') loadDues().catch((e) => { el('duesCard').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
     if (name === 'concerns') loadMailbox().catch((e) => {
       if (el('mailboxList')) el('mailboxList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
     if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`; });
+    if (name === 'info') loadInfoCentre().catch((e) => {
+      if (el('infoDocList')) el('infoDocList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    });
+    if (name === 'works') loadWorks().catch((e) => {
+      if (el('worksList')) el('worksList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    });
     if (name === 'admin') {
       loadSmtpStatus();
+      loadNoticeDrafts().catch((e) => {
+        if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
+      });
       loadBankDetails().catch((e) => { if (el('ecBankPreview')) el('ecBankPreview').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
       loadEcGrievances().catch((e) => { if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = e.message || 'Concerns failed'; });
       loadRoster().catch((e) => { if (el('rosterStatus')) el('rosterStatus').textContent = e.message || 'Roster failed'; });
       loadRevisions().catch((e) => { if (el('revisionStatus')) el('revisionStatus').textContent = e.message || 'History failed'; });
       if (isSuperAdmin()) loadSettings().catch((e) => { if (el('settingsStatus')) el('settingsStatus').textContent = e.message || 'Settings failed'; });
+    }
+    if (name === 'observability' && isSuperAdmin()) {
+      loadObservability().catch((e) => {
+        if (el('obsStatus')) el('obsStatus').textContent = e.message || 'Observability failed';
+      });
     }
   }
 
@@ -658,8 +1334,7 @@
       });
       el('adminPassInput').value = '';
       setAuthed(data);
-      await loadHome();
-      switchPanel('admin');
+      ensurePanelVisibility('admin');
     } catch (err) {
       showError(err.message || 'Sign-in failed');
     } finally {
@@ -778,7 +1453,7 @@
         body: JSON.stringify({ houseId: state.pendingHouse, code: el('otpInput').value.trim() }),
       });
       setAuthed(data);
-      await loadHome();
+      ensurePanelVisibility('home');
       if (data.contactUpdated) {
         // Soft notice on home after contact verify
         const list = el('noticeList');
@@ -831,6 +1506,7 @@
       });
       state.session.resident = data.resident;
       setAuthed(state.session);
+      ensurePanelVisibility(activePanelName());
       status.textContent = 'Saved.';
     } catch (err) {
       status.textContent = err.message || 'Save failed';
@@ -839,43 +1515,96 @@
 
   el('noticeForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const fd = new FormData(form);
-    const noticeId = String(fd.get('id') || '').trim();
-    const status = el('noticeFormStatus');
-    const btn = el('noticeSubmitBtn');
-    if (status) status.textContent = noticeId ? 'Saving…' : 'Publishing…';
-    if (btn) btn.disabled = true;
-    try {
-      const payload = {
-        title: fd.get('title'),
-        body: fd.get('body'),
-        category: fd.get('category'),
-        pinned: fd.get('pinned') === 'on',
-      };
-      if (noticeId) {
-        await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await api('/api/rwa/notices', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-      }
-      resetNoticeForm();
-      await loadHome();
-      switchPanel('home');
-    } catch (err) {
-      if (status) status.textContent = err.message || 'Publish failed';
-      else alert(err.message || 'Publish failed');
-    } finally {
-      if (btn) btn.disabled = false;
-    }
+    await saveNotice({ asDraft: false });
+  });
+
+  el('noticeDraftBtn')?.addEventListener('click', async () => {
+    await saveNotice({ asDraft: true });
   });
 
   el('noticeCancelEditBtn')?.addEventListener('click', () => resetNoticeForm());
+  el('noticeDraftRefreshBtn')?.addEventListener('click', () => loadNoticeDrafts().catch(console.error));
+  el('draftShareForm')?.addEventListener('submit', saveDraftShares);
+  el('draftShareCancelBtn')?.addEventListener('click', () => closeDraftShareDialog());
+  el('draftShareMemberList')?.addEventListener('change', (event) => {
+    const row = event.target.closest('.draft-share-row');
+    if (!row) return;
+    if (event.target.name === 'shareHouse') syncShareRowState(row);
+  });
+
+  el('noticeDraftList')?.addEventListener('click', async (event) => {
+    const editBtn = event.target.closest('.notice-draft-edit');
+    const pubBtn = event.target.closest('.notice-draft-publish');
+    const delBtn = event.target.closest('.notice-draft-delete');
+    const shareBtn = event.target.closest('.notice-draft-share');
+    if (!isEcAdmin()) return;
+
+    if (editBtn) {
+      const notice = draftsCache.find((n) => n.id === editBtn.getAttribute('data-id'));
+      if (notice) startNoticeEdit(notice);
+      return;
+    }
+
+    if (shareBtn) {
+      const notice = draftsCache.find((n) => n.id === shareBtn.getAttribute('data-id'));
+      if (notice) openDraftShareDialog(notice).catch((e) => alert(e.message || 'Share failed'));
+      return;
+    }
+
+    if (pubBtn) {
+      const id = pubBtn.getAttribute('data-id');
+      const notice = draftsCache.find((n) => n.id === id);
+      if (!notice) return;
+      if (notice.canEdit === false) {
+        alert('View only — ask the owner for edit access.');
+        return;
+      }
+      if (!String(notice.body || '').trim() || String(notice.body || '').trim().length < 3) {
+        startNoticeEdit(notice);
+        if (el('noticeFormStatus')) el('noticeFormStatus').textContent = 'Finish the body, then publish.';
+        return;
+      }
+      if (!window.confirm(`Publish “${notice.title}” to the colony board?`)) return;
+      pubBtn.disabled = true;
+      try {
+        await api(`/api/rwa/notices/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: notice.title,
+            body: notice.body,
+            category: notice.category,
+            pinned: false,
+            status: 'published',
+          }),
+        });
+        await loadNoticeDrafts();
+        await loadHome();
+        switchPanel('home');
+      } catch (err) {
+        alert(err.message || 'Publish failed');
+        pubBtn.disabled = false;
+      }
+      return;
+    }
+
+    if (delBtn) {
+      const id = delBtn.getAttribute('data-id');
+      const notice = draftsCache.find((n) => n.id === id);
+      if (!notice?.isOwner) {
+        alert('Only the draft owner can delete this draft.');
+        return;
+      }
+      if (!window.confirm(`Delete draft “${notice?.title || id}”?`)) return;
+      delBtn.disabled = true;
+      try {
+        await api(`/api/rwa/notices/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
+        await loadNoticeDrafts();
+      } catch (err) {
+        alert(err.message || 'Delete failed');
+        delBtn.disabled = false;
+      }
+    }
+  });
 
   el('noticeList')?.addEventListener('click', async (event) => {
     const editBtn = event.target.closest('.notice-edit');
@@ -1142,6 +1871,78 @@
   el('mailboxRefreshBtn')?.addEventListener('click', () => loadMailbox().catch(console.error));
   el('mailboxStatusFilter')?.addEventListener('change', () => loadMailbox().catch(console.error));
   el('mailboxCategoryFilter')?.addEventListener('change', () => loadMailbox().catch(console.error));
+
+  el('infoRefreshBtn')?.addEventListener('click', () => loadInfoCentre().catch(console.error));
+  el('infoCategoryFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
+  el('infoStatusFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
+  el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
+  el('infoCancelEditBtn')?.addEventListener('click', () => resetInfoForm());
+  document.querySelectorAll('input[name="infoSource"]').forEach((input) => {
+    input.addEventListener('change', syncInfoSourcePanes);
+  });
+  el('infoDocList')?.addEventListener('click', async (event) => {
+    const openBtn = event.target.closest('.info-doc-open');
+    const editBtn = event.target.closest('.info-doc-edit');
+    const pubBtn = event.target.closest('.info-doc-publish');
+    const unpubBtn = event.target.closest('.info-doc-unpublish');
+    const delBtn = event.target.closest('.info-doc-delete');
+    const id = (openBtn || editBtn || pubBtn || unpubBtn || delBtn)?.getAttribute('data-id');
+    const doc = infoDocsCache.find((d) => d.id === id);
+    if (!id || !doc) return;
+
+    if (openBtn) {
+      openBtn.disabled = true;
+      try {
+        await openInfoDocument(doc);
+      } catch (err) {
+        alert(err.message || 'Could not open document');
+      } finally {
+        openBtn.disabled = false;
+      }
+      return;
+    }
+    if (!isEcAdmin()) return;
+    if (editBtn) {
+      startInfoEdit(doc);
+      return;
+    }
+    if (pubBtn || unpubBtn) {
+      const next = pubBtn ? 'published' : 'draft';
+      const btn = pubBtn || unpubBtn;
+      if (pubBtn) {
+        const audience = pubBtn.getAttribute('data-audience') || doc.audience || 'all';
+        if (!confirmInfoPublish(doc.title || id, audience)) return;
+      } else if (!window.confirm(`Unpublish “${doc.title}”? It will become a draft.`)) {
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const body = { status: next };
+        if (pubBtn) body.audience = pubBtn.getAttribute('data-audience') || doc.audience || 'all';
+        await api(`/api/rwa/info-centre/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+        await loadInfoCentre();
+      } catch (err) {
+        alert(err.message || 'Update failed');
+        btn.disabled = false;
+      }
+      return;
+    }
+    if (delBtn) {
+      if (!window.confirm(`Delete “${doc.title}”? This cannot be undone.`)) return;
+      delBtn.disabled = true;
+      try {
+        await api(`/api/rwa/info-centre/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
+        await loadInfoCentre();
+      } catch (err) {
+        alert(err.message || 'Delete failed');
+        delBtn.disabled = false;
+      }
+    }
+  });
+
   el('ecGrievanceRefreshBtn')?.addEventListener('click', () => loadEcGrievances().catch(console.error));
   el('ecGrievanceStatusFilter')?.addEventListener('change', () => loadEcGrievances().catch(console.error));
   el('ecGrievanceCategoryFilter')?.addEventListener('change', () => loadEcGrievances().catch(console.error));
@@ -1195,7 +1996,7 @@
     const rows = rosterCache.filter((r) => rosterMatches(r, q, missingOnly));
     const superOnly = isSuperAdmin();
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="12" class="muted">No matching residents.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="12" class="muted">No matching residents.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map((r) => {
@@ -1204,34 +2005,34 @@
       const statusNote = (!superOnly && r.role === 'admin') ? ' title="Only super admin can suspend EC admins"' : '';
       return `
       <tr data-house="${escapeHtml(r.houseId)}" class="${r.phone ? '' : 'is-missing-phone'}">
-        <td class="plot-cell">${escapeHtml(r.houseId)}<div class="muted" style="font-weight:500;font-size:0.7rem">${escapeHtml(r.section || '')}</div></td>
-        <td><input name="title" value="${escapeHtml(r.title || '')}" placeholder="Mr/Mrs/Dr" aria-label="Title ${escapeHtml(r.houseId)}"></td>
-        <td><input name="name" value="${escapeHtml(r.name || '')}" aria-label="Name ${escapeHtml(r.houseId)}"></td>
-        <td><input name="profession" value="${escapeHtml(r.profession || '')}" placeholder="Profession" aria-label="Profession ${escapeHtml(r.houseId)}"></td>
-        <td>
+        <td class="plot-cell" data-label="Plot">${escapeHtml(r.houseId)}<div class="muted plot-section">${escapeHtml(r.section || '')}</div></td>
+        <td data-label="Title"><input name="title" value="${escapeHtml(r.title || '')}" placeholder="Mr/Mrs/Dr" aria-label="Title ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Name"><input name="name" value="${escapeHtml(r.name || '')}" aria-label="Name ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Profession"><input name="profession" value="${escapeHtml(r.profession || '')}" placeholder="Profession" aria-label="Profession ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Job">
           <select name="employmentStatus" aria-label="Employment ${escapeHtml(r.houseId)}">
             <option value="unknown"${(r.employmentStatus || 'unknown') === 'unknown' ? ' selected' : ''}>—</option>
             <option value="working"${r.employmentStatus === 'working' ? ' selected' : ''}>Working</option>
             <option value="retired"${r.employmentStatus === 'retired' ? ' selected' : ''}>Retired</option>
           </select>
         </td>
-        <td><input name="phone" type="tel" inputmode="tel" placeholder="mobile" value="${escapeHtml(r.phone || '')}" aria-label="Phone ${escapeHtml(r.houseId)}"></td>
-        <td><input name="email" type="email" placeholder="email" value="${escapeHtml(r.email || '')}" aria-label="Email ${escapeHtml(r.houseId)}"></td>
-        <td><input name="officialTitle" value="${escapeHtml(r.officialTitle || '')}" placeholder="EC title" aria-label="Official title ${escapeHtml(r.houseId)}"></td>
-        <td><input name="notes" value="${escapeHtml(r.notes || '')}" placeholder="notes" aria-label="Notes ${escapeHtml(r.houseId)}"></td>
-        <td>
+        <td data-label="Phone"><input name="phone" type="tel" inputmode="tel" placeholder="mobile" value="${escapeHtml(r.phone || '')}" aria-label="Phone ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Email"><input name="email" type="email" placeholder="email" value="${escapeHtml(r.email || '')}" aria-label="Email ${escapeHtml(r.houseId)}"></td>
+        <td data-label="EC title"><input name="officialTitle" value="${escapeHtml(r.officialTitle || '')}" placeholder="EC title" aria-label="Official title ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Notes"><input name="notes" value="${escapeHtml(r.notes || '')}" placeholder="notes" aria-label="Notes ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Role">
           <select name="role" aria-label="Role ${escapeHtml(r.houseId)}"${roleDisabled}>
             <option value="resident"${r.role === 'resident' ? ' selected' : ''}>Resident</option>
             <option value="admin"${r.role === 'admin' ? ' selected' : ''}>EC admin</option>
           </select>
         </td>
-        <td>
+        <td data-label="Status">
           <select name="status" aria-label="Status ${escapeHtml(r.houseId)}"${statusDisabled}${statusNote}>
             <option value="active"${(r.status || 'active') === 'active' ? ' selected' : ''}>Active</option>
             <option value="inactive"${r.status === 'inactive' ? ' selected' : ''}>Suspended</option>
           </select>
         </td>
-        <td>
+        <td data-label="Actions" class="row-actions">
           <button type="button" class="btn secondary compact roster-save" data-house="${escapeHtml(r.houseId)}">Save</button>
           <div class="row-status"></div>
         </td>
@@ -1342,17 +2143,17 @@
     const rows = data.revisions || [];
     if (!tbody) return;
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">No revisions yet.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="5" class="muted">No revisions yet.</td></tr>';
       if (el('revisionStatus')) el('revisionStatus').textContent = '';
       return;
     }
     tbody.innerHTML = rows.map((rev) => `
       <tr>
-        <td>${escapeHtml((rev.changedAt || '').replace('T', ' ').replace('Z', ''))}</td>
-        <td><code>${escapeHtml(rev.houseId)}</code></td>
-        <td>${escapeHtml(rev.changedByName || rev.changedByHouseId || 'system')}<div class="muted" style="font-size:0.7rem">${escapeHtml(rev.source || '')}</div></td>
-        <td>${escapeHtml((rev.fields || []).join(', ') || '—')}</td>
-        <td class="muted">${escapeHtml(fieldDiffSummary(rev))}</td>
+        <td data-label="When">${escapeHtml((rev.changedAt || '').replace('T', ' ').replace('Z', ''))}</td>
+        <td data-label="Plot"><code>${escapeHtml(rev.houseId)}</code></td>
+        <td data-label="Changed by">${escapeHtml(rev.changedByName || rev.changedByHouseId || 'system')}<div class="muted plot-section">${escapeHtml(rev.source || '')}</div></td>
+        <td data-label="Fields">${escapeHtml((rev.fields || []).join(', ') || '—')}</td>
+        <td data-label="Summary" class="revision-summary muted">${escapeHtml(fieldDiffSummary(rev))}</td>
       </tr>`).join('');
     if (el('revisionStatus')) el('revisionStatus').textContent = `${rows.length} recent change(s)`;
   }
@@ -1398,6 +2199,95 @@
         : `Not fully configured · edit and save (${s.envFile || 'data/smtp.env'})`;
     }
   }
+
+  async function loadObservability() {
+    if (!isSuperAdmin()) return;
+    const status = el('obsStatus');
+    if (status) status.textContent = 'Loading…';
+    const days = el('obsDays')?.value || '7';
+    const houseId = String(el('obsHouseFilter')?.value || '').trim();
+    const qs = new URLSearchParams({ days, limit: '250' });
+    if (houseId) qs.set('houseId', houseId);
+    const data = await api(`/api/rwa/observability?${qs.toString()}`);
+    const summary = data.summary || {};
+    if (el('obsSummary')) {
+      el('obsSummary').innerHTML = `
+        <div class="stat"><span>Total events</span><strong>${summary.totalEvents ?? 0}</strong></div>
+        <div class="stat"><span>Unique users</span><strong>${summary.uniqueUsers ?? 0}</strong></div>
+        <div class="stat"><span>Sign-ins</span><strong>${summary.logins ?? 0}</strong></div>
+        <div class="stat"><span>Panel opens</span><strong>${summary.panelViews ?? 0}</strong></div>
+        <div class="stat"><span>API calls</span><strong>${summary.apiCalls ?? 0}</strong></div>`;
+    }
+    const byDay = data.byDay || [];
+    const maxDay = Math.max(1, ...byDay.map((d) => d.count || 0));
+    // Inject sparkline above summary if present
+    let spark = el('obsSpark');
+    if (!spark && el('obsSummary')) {
+      spark = document.createElement('div');
+      spark.id = 'obsSpark';
+      spark.className = 'obs-day-bar';
+      el('obsSummary').before(spark);
+    }
+    if (spark) {
+      spark.innerHTML = byDay.length
+        ? byDay.map((d) => {
+            const h = Math.max(6, Math.round(((d.count || 0) / maxDay) * 64));
+            return `<div class="bar" style="height:${h}px" title="${escapeHtml(d.day)}: ${d.count}"></div>`;
+          }).join('')
+        : '<p class="muted">No activity in this period yet — use the portal to start collecting events.</p>';
+    }
+    if (el('obsTopActions')) {
+      el('obsTopActions').innerHTML = (data.topActions || []).length
+        ? data.topActions.map((a) => `
+            <tr>
+              <td data-label="Function">${escapeHtml(a.action)}</td>
+              <td data-label="Count">${a.count}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="2">No function usage yet.</td></tr>';
+    }
+    if (el('obsTopUsers')) {
+      el('obsTopUsers').innerHTML = (data.topUsers || []).length
+        ? data.topUsers.map((u) => `
+            <tr>
+              <td data-label="User"><code>${escapeHtml(u.houseId)}</code> ${escapeHtml(u.name || '')}</td>
+              <td data-label="Role">${escapeHtml(u.role || '')}</td>
+              <td data-label="Events">${u.count}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="3">No users in this period.</td></tr>';
+    }
+    if (el('obsTrailStats')) {
+      el('obsTrailStats').textContent = `${(data.recent || []).length} recent events · since ${(data.since || '').slice(0, 10)}`;
+    }
+    if (el('obsRecentRows')) {
+      el('obsRecentRows').innerHTML = (data.recent || []).length
+        ? data.recent.map((e) => {
+            const when = String(e.createdAt || '').slice(0, 19).replace('T', ' ');
+            const who = e.superAdmin
+              ? `admin · ${escapeHtml(e.name || 'Super admin')}`
+              : `<code>${escapeHtml(e.houseId || '—')}</code> ${escapeHtml(e.name || '')}`;
+            return `
+              <tr>
+                <td data-label="When">${escapeHtml(when)}</td>
+                <td data-label="Who">${who}</td>
+                <td data-label="Function">${escapeHtml(e.action || '')}</td>
+                <td data-label="Type">${escapeHtml(e.eventType || '')}</td>
+                <td data-label="Status">${e.statusCode ?? ''}</td>
+              </tr>`;
+          }).join('')
+        : '<tr><td colspan="5">No events yet.</td></tr>';
+    }
+    if (status) status.textContent = '';
+  }
+
+  el('obsRefreshBtn')?.addEventListener('click', () => loadObservability().catch(console.error));
+  el('obsDays')?.addEventListener('change', () => loadObservability().catch(console.error));
+  el('obsHouseFilter')?.addEventListener('change', () => loadObservability().catch(console.error));
+  el('obsHouseFilter')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      loadObservability().catch(console.error);
+    }
+  });
 
   el('settingsForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();

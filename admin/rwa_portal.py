@@ -45,6 +45,11 @@ from init_rwa_db import (  # noqa: E402
     ensure_db,
     ensure_grievances_table,
     ensure_notice_pin_order,
+    ensure_notice_shares_table,
+    ensure_access_events_table,
+    ensure_info_documents_table,
+    ensure_colony_works_table,
+    migrate_roman_plot_ids,
     ensure_otp_pending_columns,
     ensure_resident_profile_columns,
     ensure_superadmin_account,
@@ -56,7 +61,8 @@ from init_rwa_db import (  # noqa: E402
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
 SESSION_TTL_SECONDS = int(os.environ.get("RWA_SESSION_TTL", str(7 * 24 * 3600)))
-HOUSE_RE = re.compile(r"^[A-Za-z0-9/()_-]{1,20}$")
+WELCOME_NOTICE_ID = "n_welcome"
+HOUSE_RE = re.compile(r"^[A-Za-z0-9/_()-]{1,20}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -302,7 +308,12 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_bank_account_columns(conn)
         ensure_otp_pending_columns(conn)
         ensure_notice_pin_order(conn)
+        ensure_notice_shares_table(conn)
+        ensure_access_events_table(conn)
         ensure_grievances_table(conn)
+        ensure_info_documents_table(conn)
+        ensure_colony_works_table(conn)
+        migrate_roman_plot_ids(conn)
         ensure_superadmin_account(conn)
     return conn
 
@@ -347,6 +358,28 @@ def find_resident(conn: sqlite3.Connection, house_id: str, *, include_inactive: 
             row = conn.execute(
                 f"SELECT * FROM residents WHERE house_id = ? COLLATE NOCASE{status_clause}",
                 (alt,),
+            ).fetchone()
+            if row:
+                return row_to_dict(row)
+    # Accept legacy roman suffix 12B(i) if somehow still present in DB
+    if "(" in legacy and ")" in legacy:
+        row = conn.execute(
+            f"SELECT * FROM residents WHERE house_id = ? COLLATE NOCASE{status_clause}",
+            (legacy,),
+        ).fetchone()
+        if row:
+            return row_to_dict(row)
+        # lowercase roman variant historically stored
+        lower_roman = re.sub(
+            r"\(([IVX]+)\)",
+            lambda m: f"({m.group(1).lower()})",
+            legacy,
+            flags=re.I,
+        )
+        if lower_roman != legacy:
+            row = conn.execute(
+                f"SELECT * FROM residents WHERE house_id = ? COLLATE NOCASE{status_clause}",
+                (lower_roman,),
             ).fetchone()
             if row:
                 return row_to_dict(row)
@@ -1135,6 +1168,895 @@ def clear_bank_qr(conn: sqlite3.Connection, site_root: pathlib.Path) -> dict:
     return get_primary_bank(conn)
 
 
+# --- Information Centre -----------------------------------------------------
+
+INFO_DOC_CATEGORIES = (
+    ("bylaws", "Bylaws & rules"),
+    ("circulars", "Circulars"),
+    ("minutes", "Meeting minutes"),
+    ("forms", "Forms"),
+    ("policies", "Policies"),
+    ("guidelines", "Guidelines"),
+    ("financial", "Accounts & finance"),
+    ("general", "General"),
+)
+
+INFO_DOC_MIME = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".txt": "text/plain",
+    ".rtf": "application/rtf",
+    ".csv": "text/csv",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".html": "text/html",
+    ".htm": "text/html",
+}
+
+INFO_INLINE_EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".html", ".htm", ".txt"}
+INFO_MAX_BYTES = 15_000_000  # 15 MB
+
+
+def info_centre_categories() -> list[dict]:
+    return [{"id": cid, "label": label} for cid, label in INFO_DOC_CATEGORIES]
+
+
+def info_centre_dir(site_root: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(site_root) / "data" / "info-centre"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def info_doc_dir(site_root: pathlib.Path, doc_id: str) -> pathlib.Path:
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "", (doc_id or "").strip())
+    if not safe:
+        raise ValueError("Invalid document id")
+    path = info_centre_dir(site_root) / safe
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def info_doc_file_path(site_root: pathlib.Path, doc_id: str, filename: str | None) -> pathlib.Path | None:
+    if not filename:
+        return None
+    name = pathlib.Path(str(filename)).name
+    if name != str(filename) or ".." in name or "/" in name or "\\" in name:
+        return None
+    path = info_doc_dir(site_root, doc_id) / name
+    return path if path.is_file() else None
+
+
+def _info_category(raw: str | None) -> str:
+    key = (raw or "general").strip().lower()
+    allowed = {c[0] for c in INFO_DOC_CATEGORIES}
+    return key if key in allowed else "general"
+
+
+def _info_audience(raw: str | None) -> str:
+    key = (raw or "all").strip().lower()
+    return key if key in {"all", "ec"} else "all"
+
+
+def _info_public(r: sqlite3.Row | dict) -> dict:
+    if hasattr(r, "keys"):
+        data = {k: r[k] for k in r.keys()}
+    else:
+        data = dict(r)
+    cat = data.get("category") or "general"
+    label = next((lbl for cid, lbl in INFO_DOC_CATEGORIES if cid == cat), cat)
+    audience = _info_audience(data.get("audience"))
+    return {
+        "id": data.get("id"),
+        "title": data.get("title") or "",
+        "summary": data.get("summary") or "",
+        "category": cat,
+        "categoryLabel": label,
+        "docType": data.get("doc_type") or "file",
+        "filename": data.get("filename"),
+        "originalName": data.get("original_name") or data.get("filename") or "",
+        "mimeType": data.get("mime_type") or "",
+        "sizeBytes": int(data.get("size_bytes") or 0),
+        "status": data.get("status") or "draft",
+        "audience": audience,
+        "audienceLabel": "EC only" if audience == "ec" else "All members",
+        "publishedAt": data.get("published_at"),
+        "publishedBy": data.get("published_by"),
+        "createdAt": data.get("created_at"),
+        "updatedAt": data.get("updated_at"),
+        "hasFile": bool(data.get("filename")),
+    }
+
+
+def list_info_documents(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = "published",
+    category: str | None = None,
+    as_admin: bool = False,
+) -> list[dict]:
+    ensure_info_documents_table(conn)
+    status_key = (status or "published").strip().lower()
+    clauses: list[str] = []
+    params: list[Any] = []
+    if status_key == "all":
+        if not as_admin:
+            clauses.append("status = 'published'")
+    elif status_key in {"draft", "published", "archived"}:
+        if status_key != "published" and not as_admin:
+            raise ValueError("Admin access required for drafts")
+        clauses.append("status = ?")
+        params.append(status_key)
+    else:
+        raise ValueError("Invalid status filter")
+    if not as_admin:
+        # Residents only see colony-wide published docs (not EC-only).
+        clauses.append("(audience IS NULL OR audience = 'all' OR audience = '')")
+    if category:
+        clauses.append("category = ?")
+        params.append(_info_category(category))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"""
+        SELECT * FROM info_documents
+        {where}
+        ORDER BY
+          CASE status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+          COALESCE(published_at, updated_at) DESC,
+          id DESC
+        """,
+        params,
+    ).fetchall()
+    return [_info_public(r) for r in rows]
+
+
+def get_info_document(
+    conn: sqlite3.Connection,
+    doc_id: str,
+    *,
+    as_admin: bool = False,
+) -> dict | None:
+    ensure_info_documents_table(conn)
+    row = conn.execute("SELECT * FROM info_documents WHERE id = ?", (doc_id,)).fetchone()
+    if not row:
+        return None
+    if (row["status"] or "") != "published" and not as_admin:
+        return None
+    audience = _info_audience(row["audience"] if "audience" in row.keys() else "all")
+    if audience == "ec" and not as_admin:
+        return None
+    return _info_public(row)
+
+
+def _sanitize_upload_name(name: str) -> str:
+    base = pathlib.Path(name or "document").name
+    base = re.sub(r"[^\w.\- ()]+", "_", base).strip("._ ")
+    return (base or "document")[:120]
+
+
+def _wrap_html_document(title: str, body_html: str) -> str:
+    safe_title = (title or "Document").replace("<", "&lt;").replace(">", "&gt;")
+    # Allow simple authored HTML; wrap in a readable page shell.
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n<head>\n'
+        '<meta charset="utf-8">\n'
+        f"<title>{safe_title}</title>\n"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        "<style>\n"
+        "body{font-family:Georgia,'Times New Roman',serif;line-height:1.55;max-width:42rem;"
+        "margin:2rem auto;padding:0 1.25rem;color:#1a2332;background:#f7f4ef;}\n"
+        "h1,h2,h3{font-family:'Segoe UI',system-ui,sans-serif;color:#0f2744;}\n"
+        "img{max-width:100%;height:auto;} a{color:#1d4ed8;}\n"
+        "table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ccc;padding:.4rem .55rem;}\n"
+        "</style>\n</head>\n<body>\n"
+        f"<h1>{safe_title}</h1>\n"
+        f"{body_html}\n"
+        "</body>\n</html>\n"
+    )
+
+
+def upsert_info_document(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    payload: dict,
+    *,
+    publisher: str | None,
+    file_storage=None,
+) -> dict:
+    ensure_info_documents_table(conn)
+    doc_id = (payload.get("id") or f"info_{secrets.token_hex(6)}").strip()
+    existing = conn.execute("SELECT * FROM info_documents WHERE id = ?", (doc_id,)).fetchone()
+
+    title = payload.get("title") if "title" in payload else (existing["title"] if existing else None)
+    title = str(title or "").strip()
+    if len(title) < 2:
+        raise ValueError("Title required")
+
+    summary = payload.get("summary") if "summary" in payload else (existing["summary"] if existing else "")
+    summary = str(summary or "").strip()[:800]
+    category = _info_category(
+        payload.get("category") if "category" in payload else (existing["category"] if existing else "general")
+    )
+
+    status = (
+        payload.get("status")
+        if "status" in payload
+        else (existing["status"] if existing else "draft")
+    )
+    status = str(status or "draft").strip().lower()
+    if status not in {"draft", "published", "archived"}:
+        raise ValueError("Invalid status")
+
+    if "audience" in payload:
+        audience = _info_audience(payload.get("audience"))
+    elif existing and "audience" in existing.keys():
+        audience = _info_audience(existing["audience"])
+    else:
+        audience = "all"
+
+    doc_type = None
+    if "docType" in payload or "doc_type" in payload:
+        doc_type = payload.get("docType") or payload.get("doc_type")
+    elif existing:
+        doc_type = existing["doc_type"]
+    html_body = payload.get("htmlBody") if "htmlBody" in payload else None
+    if "html_body" in payload and html_body is None:
+        html_body = payload.get("html_body")
+    if not doc_type:
+        doc_type = "html" if html_body is not None else "file"
+    doc_type = str(doc_type or "file").strip().lower()
+    if doc_type not in {"file", "html"}:
+        raise ValueError("docType must be file or html")
+
+    now = utc_now()
+    filename = existing["filename"] if existing else None
+    original_name = existing["original_name"] if existing else None
+    mime_type = existing["mime_type"] if existing else None
+    size_bytes = int(existing["size_bytes"] or 0) if existing else 0
+
+    if doc_type == "html" and html_body is not None:
+        body = str(html_body).strip()
+        if len(body) < 3:
+            raise ValueError("HTML content required")
+        if len(body.encode("utf-8")) > INFO_MAX_BYTES:
+            raise ValueError("HTML content must be under 15 MB")
+        wrapped = _wrap_html_document(title, body)
+        data = wrapped.encode("utf-8")
+        filename = "content.html"
+        original_name = f"{_sanitize_upload_name(title)}.html"
+        mime_type = "text/html"
+        size_bytes = len(data)
+        dest_dir = info_doc_dir(site_root, doc_id)
+        for old in dest_dir.iterdir():
+            if old.is_file():
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        (dest_dir / filename).write_bytes(data)
+    elif file_storage is not None and getattr(file_storage, "filename", None):
+        original = _sanitize_upload_name(file_storage.filename)
+        ext = pathlib.Path(original).suffix.lower()
+        if ext not in INFO_DOC_MIME:
+            raise ValueError(
+                "Unsupported file type. Use PDF, Word, Excel, PowerPoint, images, CSV, TXT, or HTML."
+            )
+        data = file_storage.read()
+        if not data:
+            raise ValueError("Empty upload")
+        if len(data) > INFO_MAX_BYTES:
+            raise ValueError("File must be under 15 MB")
+        filename = f"doc{ext}"
+        original_name = original
+        mime_type = INFO_DOC_MIME[ext]
+        size_bytes = len(data)
+        doc_type = "html" if ext in {".html", ".htm"} else "file"
+        dest_dir = info_doc_dir(site_root, doc_id)
+        for old in dest_dir.iterdir():
+            if old.is_file():
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        (dest_dir / filename).write_bytes(data)
+    elif not existing:
+        if doc_type == "html":
+            raise ValueError("HTML content required")
+        raise ValueError("Upload a document file, or create HTML content")
+
+    if status == "published" and not filename:
+        raise ValueError("Add a file or HTML content before publishing")
+
+    was_pub = bool(existing and (existing["status"] or "") == "published")
+    if status == "published" and (not was_pub or not existing):
+        published_at = now
+    else:
+        published_at = existing["published_at"] if existing else None
+        if status == "published" and not published_at:
+            published_at = now
+        if status != "published":
+            published_at = published_at  # keep history if republishing later
+    published_by = (existing["published_by"] if existing and existing["published_by"] else None) or publisher
+
+    created_at = existing["created_at"] if existing else now
+    conn.execute(
+        """
+        INSERT INTO info_documents(
+          id, title, summary, category, doc_type, filename, original_name, mime_type,
+          size_bytes, status, audience, published_at, published_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title,
+          summary=excluded.summary,
+          category=excluded.category,
+          doc_type=excluded.doc_type,
+          filename=excluded.filename,
+          original_name=excluded.original_name,
+          mime_type=excluded.mime_type,
+          size_bytes=excluded.size_bytes,
+          status=excluded.status,
+          audience=excluded.audience,
+          published_at=excluded.published_at,
+          published_by=excluded.published_by,
+          updated_at=excluded.updated_at
+        """,
+        (
+            doc_id,
+            title,
+            summary,
+            category,
+            doc_type,
+            filename,
+            original_name,
+            mime_type,
+            size_bytes,
+            status,
+            audience,
+            published_at,
+            published_by,
+            created_at,
+            now,
+        ),
+    )
+    conn.commit()
+    return get_info_document(conn, doc_id, as_admin=True) or {"id": doc_id}
+
+
+def delete_info_document(conn: sqlite3.Connection, site_root: pathlib.Path, doc_id: str) -> None:
+    ensure_info_documents_table(conn)
+    nid = (doc_id or "").strip()
+    if not nid:
+        raise ValueError("document id required")
+    row = conn.execute("SELECT id FROM info_documents WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        raise ValueError("Document not found")
+    cur = conn.execute("DELETE FROM info_documents WHERE id = ?", (nid,))
+    conn.commit()
+    if cur.rowcount < 1:
+        raise ValueError("Document not found")
+    # Remove files
+    try:
+        dest = info_centre_dir(site_root) / re.sub(r"[^a-zA-Z0-9_-]", "", nid)
+        if dest.is_dir():
+            for f in dest.iterdir():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+            try:
+                dest.rmdir()
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
+def info_doc_should_inline(mime_type: str | None, filename: str | None) -> bool:
+    ext = pathlib.Path(filename or "").suffix.lower()
+    if ext in INFO_INLINE_EXTS:
+        return True
+    mt = (mime_type or "").lower()
+    return mt.startswith("image/") or mt in {"application/pdf", "text/html", "text/plain"}
+
+
+# --- Works & Events ---------------------------------------------------------
+
+WORK_KINDS = (
+    ("maintenance", "Maintenance"),
+    ("development", "Development project"),
+    ("activity", "Activity"),
+    ("event", "Event"),
+)
+
+WORK_CATEGORIES: dict[str, tuple[tuple[str, str], ...]] = {
+    "maintenance": (
+        ("water", "Water supply / tanks"),
+        ("roads", "Roads & drains"),
+        ("electrical", "Electrical / lighting"),
+        ("sanitation", "Sanitation & garbage"),
+        ("buildings", "Buildings & structures"),
+        ("parks", "Parks & greenery"),
+        ("security", "Security & gates"),
+        ("other", "Other maintenance"),
+    ),
+    "development": (
+        ("infrastructure", "Infrastructure"),
+        ("amenities", "Amenities"),
+        ("landscaping", "Landscaping"),
+        ("digital", "IT / digital"),
+        ("other", "Other development"),
+    ),
+    "activity": (
+        ("cultural", "Cultural"),
+        ("sports", "Sports"),
+        ("welfare", "Welfare"),
+        ("cleanliness", "Cleanliness drive"),
+        ("awareness", "Awareness / training"),
+        ("other", "Other activity"),
+    ),
+    "event": (
+        ("meeting", "Meeting / AGM"),
+        ("festival", "Festival / celebration"),
+        ("sports_day", "Sports day"),
+        ("workshop", "Workshop"),
+        ("other", "Other event"),
+    ),
+}
+
+WORK_STATUSES = (
+    ("planned", "Planned"),
+    ("approved", "Approved"),
+    ("in_progress", "In progress"),
+    ("on_hold", "On hold"),
+    ("completed", "Completed"),
+    ("closed", "Closed"),
+    ("cancelled", "Cancelled"),
+)
+
+FUNDING_SOURCES = (
+    ("rwa_fund", "RWA fund"),
+    ("member_contribution", "Member contribution"),
+    ("himuda", "HIMUDA / govt"),
+    ("grant", "Grant"),
+    ("donation", "Donation"),
+    ("sponsor", "Sponsor"),
+    ("other", "Other"),
+)
+
+
+def works_meta() -> dict:
+    return {
+        "kinds": [{"id": k, "label": lbl} for k, lbl in WORK_KINDS],
+        "categories": {
+            kind: [{"id": c, "label": lbl} for c, lbl in cats]
+            for kind, cats in WORK_CATEGORIES.items()
+        },
+        "statuses": [{"id": s, "label": lbl} for s, lbl in WORK_STATUSES],
+        "fundingSources": [{"id": s, "label": lbl} for s, lbl in FUNDING_SOURCES],
+    }
+
+
+def _work_kind(raw: str | None) -> str:
+    key = (raw or "").strip().lower()
+    allowed = {k for k, _ in WORK_KINDS}
+    if key not in allowed:
+        raise ValueError("kind must be maintenance, development, activity, or event")
+    return key
+
+
+def _work_category(kind: str, raw: str | None) -> str:
+    key = (raw or "other").strip().lower() or "other"
+    allowed = {c for c, _ in WORK_CATEGORIES.get(kind, ())}
+    return key if key in allowed else "other"
+
+
+def _work_status(raw: str | None) -> str:
+    key = (raw or "planned").strip().lower()
+    allowed = {s for s, _ in WORK_STATUSES}
+    if key not in allowed:
+        raise ValueError("Invalid status")
+    return key
+
+
+def _optional_rupees(value, *, field: str) -> int | None:
+    if value is None or value == "":
+        return None
+    return _as_int_rupees(value, field=field, allow_negative=False)
+
+
+def _parse_funding(raw) -> list[dict]:
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("funding must be valid JSON") from exc
+    if not isinstance(raw, list):
+        raise ValueError("funding must be a list")
+    source_ids = {s for s, _ in FUNDING_SOURCES}
+    source_labels = dict(FUNDING_SOURCES)
+    out: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source") or item.get("sourceId") or "other").strip().lower()
+        if source not in source_ids:
+            source = "other"
+        amount = item.get("amount")
+        amount_i = _optional_rupees(amount, field="funding amount") if amount not in (None, "") else None
+        notes = str(item.get("notes") or "").strip()[:240]
+        label = str(item.get("label") or source_labels.get(source) or source)
+        if amount_i is None and not notes and source == "other" and not item.get("label"):
+            continue
+        out.append({
+            "source": source,
+            "label": label[:80],
+            "amount": amount_i,
+            "notes": notes,
+        })
+    return out[:20]
+
+
+def _parse_milestones(raw) -> list[dict]:
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("milestones must be valid JSON") from exc
+    if not isinstance(raw, list):
+        raise ValueError("milestones must be a list")
+    out: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("label") or "").strip()[:160]
+        if not title:
+            continue
+        out.append({
+            "date": str(item.get("date") or "").strip()[:20] or None,
+            "title": title,
+            "done": bool(item.get("done")),
+        })
+    return out[:30]
+
+
+def _work_public(r: sqlite3.Row | dict) -> dict:
+    if hasattr(r, "keys"):
+        data = {k: r[k] for k in r.keys()}
+    else:
+        data = dict(r)
+    kind = data.get("kind") or "maintenance"
+    cat = data.get("category") or "other"
+    status = data.get("status") or "planned"
+    kind_label = next((lbl for k, lbl in WORK_KINDS if k == kind), kind)
+    cat_label = next((lbl for c, lbl in WORK_CATEGORIES.get(kind, ()) if c == cat), cat)
+    status_label = next((lbl for s, lbl in WORK_STATUSES if s == status), status)
+    try:
+        funding = _parse_funding(data.get("funding_json") or "[]")
+    except ValueError:
+        funding = []
+    try:
+        milestones = _parse_milestones(data.get("milestones_json") or "[]")
+    except ValueError:
+        milestones = []
+    est = data.get("estimated_cost")
+    act = data.get("actual_cost")
+    funding_total = sum(int(f["amount"]) for f in funding if f.get("amount") is not None)
+    return {
+        "id": data.get("id"),
+        "title": data.get("title") or "",
+        "kind": kind,
+        "kindLabel": kind_label,
+        "category": cat,
+        "categoryLabel": cat_label,
+        "summary": data.get("summary") or "",
+        "details": data.get("details") or "",
+        "benefits": data.get("benefits") or "",
+        "timelineNotes": data.get("timeline_notes") or "",
+        "milestones": milestones,
+        "status": status,
+        "statusLabel": status_label,
+        "visibility": data.get("visibility") or "published",
+        "location": data.get("location") or "",
+        "startDate": data.get("start_date") or "",
+        "endDate": data.get("end_date") or "",
+        "eventDate": data.get("event_date") or "",
+        "estimatedCost": int(est) if est is not None else None,
+        "actualCost": int(act) if act is not None else None,
+        "costNotes": data.get("cost_notes") or "",
+        "contractorName": data.get("contractor_name") or "",
+        "contractorContact": data.get("contractor_contact") or "",
+        "contractorDetails": data.get("contractor_details") or "",
+        "funding": funding,
+        "fundingTotal": funding_total,
+        "assignedTo": data.get("assigned_to") or "",
+        "createdBy": data.get("created_by") or "",
+        "createdAt": data.get("created_at"),
+        "updatedAt": data.get("updated_at"),
+        "closedAt": data.get("closed_at"),
+        "closedBy": data.get("closed_by") or "",
+    }
+
+
+def list_colony_works(
+    conn: sqlite3.Connection,
+    *,
+    kind: str | None = None,
+    status: str | None = None,
+    visibility: str | None = None,
+    as_admin: bool = False,
+) -> list[dict]:
+    ensure_colony_works_table(conn)
+    clauses: list[str] = []
+    params: list[Any] = []
+    if not as_admin:
+        clauses.append("visibility = 'published'")
+        clauses.append("status != 'cancelled'")
+    elif visibility in {"draft", "published"}:
+        clauses.append("visibility = ?")
+        params.append(visibility)
+    if kind:
+        clauses.append("kind = ?")
+        params.append(_work_kind(kind))
+    if status:
+        if status == "active":
+            clauses.append("status IN ('planned','approved','in_progress','on_hold')")
+        elif status == "done":
+            clauses.append("status IN ('completed','closed')")
+        else:
+            clauses.append("status = ?")
+            params.append(_work_status(status))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"""
+        SELECT * FROM colony_works
+        {where}
+        ORDER BY
+          CASE status
+            WHEN 'in_progress' THEN 0
+            WHEN 'approved' THEN 1
+            WHEN 'planned' THEN 2
+            WHEN 'on_hold' THEN 3
+            WHEN 'completed' THEN 4
+            WHEN 'closed' THEN 5
+            ELSE 6
+          END,
+          COALESCE(event_date, start_date, updated_at) DESC,
+          id DESC
+        """,
+        params,
+    ).fetchall()
+    return [_work_public(r) for r in rows]
+
+
+def get_colony_work(
+    conn: sqlite3.Connection,
+    work_id: str,
+    *,
+    as_admin: bool = False,
+) -> dict | None:
+    ensure_colony_works_table(conn)
+    row = conn.execute("SELECT * FROM colony_works WHERE id = ?", (work_id,)).fetchone()
+    if not row:
+        return None
+    if not as_admin and (row["visibility"] or "") != "published":
+        return None
+    return _work_public(row)
+
+
+def upsert_colony_work(
+    conn: sqlite3.Connection,
+    payload: dict,
+    *,
+    actor: dict | None = None,
+) -> dict:
+    ensure_colony_works_table(conn)
+    work_id = (payload.get("id") or f"w_{secrets.token_hex(6)}").strip()
+    existing = conn.execute("SELECT * FROM colony_works WHERE id = ?", (work_id,)).fetchone()
+
+    title = payload.get("title") if "title" in payload else (existing["title"] if existing else "")
+    title = str(title or "").strip()
+    if len(title) < 2:
+        raise ValueError("Title required")
+
+    if "kind" in payload or not existing:
+        kind = _work_kind(payload.get("kind") or (existing["kind"] if existing else None))
+    else:
+        kind = existing["kind"]
+
+    category = _work_category(
+        kind,
+        payload.get("category") if "category" in payload else (existing["category"] if existing else "other"),
+    )
+    status = _work_status(
+        payload.get("status") if "status" in payload else (existing["status"] if existing else "planned")
+    )
+    visibility = (
+        payload.get("visibility")
+        if "visibility" in payload
+        else (existing["visibility"] if existing else "published")
+    )
+    visibility = str(visibility or "published").strip().lower()
+    if visibility not in {"draft", "published"}:
+        raise ValueError("visibility must be draft or published")
+
+    def pick(field: str, col: str | None = None, default: str = "") -> str:
+        col = col or field
+        if field in payload or _snake(field) in payload:
+            val = payload.get(field, payload.get(_snake(field)))
+            return str(val or "").strip()
+        if existing:
+            return str(existing[col] or "")
+        return default
+
+    def _snake(name: str) -> str:
+        out = []
+        for ch in name:
+            if ch.isupper():
+                out.append("_")
+                out.append(ch.lower())
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    summary = pick("summary")[:800]
+    details = pick("details")[:8000]
+    benefits = pick("benefits")[:4000]
+    timeline_notes = pick("timelineNotes", "timeline_notes")[:4000]
+    location = pick("location")[:160]
+    start_date = pick("startDate", "start_date")[:20]
+    end_date = pick("endDate", "end_date")[:20]
+    event_date = pick("eventDate", "event_date")[:20]
+    cost_notes = pick("costNotes", "cost_notes")[:800]
+    contractor_name = pick("contractorName", "contractor_name")[:160]
+    contractor_contact = pick("contractorContact", "contractor_contact")[:160]
+    contractor_details = pick("contractorDetails", "contractor_details")[:800]
+    assigned_to = pick("assignedTo", "assigned_to")[:120]
+
+    if "estimatedCost" in payload or "estimated_cost" in payload:
+        estimated_cost = _optional_rupees(
+            payload.get("estimatedCost", payload.get("estimated_cost")),
+            field="estimatedCost",
+        )
+    else:
+        estimated_cost = existing["estimated_cost"] if existing else None
+
+    if "actualCost" in payload or "actual_cost" in payload:
+        actual_cost = _optional_rupees(
+            payload.get("actualCost", payload.get("actual_cost")),
+            field="actualCost",
+        )
+    else:
+        actual_cost = existing["actual_cost"] if existing else None
+
+    if "funding" in payload or "funding_json" in payload:
+        funding = _parse_funding(payload.get("funding", payload.get("funding_json")))
+    elif existing and existing["funding_json"]:
+        funding = _parse_funding(existing["funding_json"])
+    else:
+        funding = []
+
+    if "milestones" in payload or "milestones_json" in payload:
+        milestones = _parse_milestones(payload.get("milestones", payload.get("milestones_json")))
+    elif existing and existing["milestones_json"]:
+        milestones = _parse_milestones(existing["milestones_json"])
+    else:
+        milestones = []
+
+    now = utc_now()
+    actor_house = ""
+    if actor:
+        actor_house = str(actor.get("houseId") or actor.get("house_id") or "")
+    created_by = (existing["created_by"] if existing and existing["created_by"] else None) or actor_house or None
+    created_at = existing["created_at"] if existing else now
+
+    was_closed = bool(existing and (existing["status"] or "") in {"closed", "completed"})
+    closing_now = status in {"closed", "completed"} and not was_closed
+    if closing_now:
+        closed_at = now
+        closed_by = actor_house or None
+    elif status in {"closed", "completed"} and existing:
+        closed_at = existing["closed_at"]
+        closed_by = existing["closed_by"]
+    else:
+        closed_at = None
+        closed_by = None
+
+    conn.execute(
+        """
+        INSERT INTO colony_works(
+          id, title, kind, category, summary, details, benefits, timeline_notes, milestones_json,
+          status, visibility, location, start_date, end_date, event_date,
+          estimated_cost, actual_cost, cost_notes,
+          contractor_name, contractor_contact, contractor_details, funding_json,
+          assigned_to, created_by, created_at, updated_at, closed_at, closed_by
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title,
+          kind=excluded.kind,
+          category=excluded.category,
+          summary=excluded.summary,
+          details=excluded.details,
+          benefits=excluded.benefits,
+          timeline_notes=excluded.timeline_notes,
+          milestones_json=excluded.milestones_json,
+          status=excluded.status,
+          visibility=excluded.visibility,
+          location=excluded.location,
+          start_date=excluded.start_date,
+          end_date=excluded.end_date,
+          event_date=excluded.event_date,
+          estimated_cost=excluded.estimated_cost,
+          actual_cost=excluded.actual_cost,
+          cost_notes=excluded.cost_notes,
+          contractor_name=excluded.contractor_name,
+          contractor_contact=excluded.contractor_contact,
+          contractor_details=excluded.contractor_details,
+          funding_json=excluded.funding_json,
+          assigned_to=excluded.assigned_to,
+          updated_at=excluded.updated_at,
+          closed_at=excluded.closed_at,
+          closed_by=excluded.closed_by
+        """,
+        (
+            work_id,
+            title,
+            kind,
+            category,
+            summary,
+            details,
+            benefits,
+            timeline_notes,
+            json.dumps(milestones),
+            status,
+            visibility,
+            location,
+            start_date or None,
+            end_date or None,
+            event_date or None,
+            estimated_cost,
+            actual_cost,
+            cost_notes,
+            contractor_name,
+            contractor_contact,
+            contractor_details,
+            json.dumps(funding),
+            assigned_to,
+            created_by,
+            created_at,
+            now,
+            closed_at,
+            closed_by,
+        ),
+    )
+    conn.commit()
+    return get_colony_work(conn, work_id, as_admin=True) or {"id": work_id}
+
+
+def delete_colony_work(conn: sqlite3.Connection, work_id: str) -> None:
+    ensure_colony_works_table(conn)
+    wid = (work_id or "").strip()
+    if not wid:
+        raise ValueError("work id required")
+    cur = conn.execute("DELETE FROM colony_works WHERE id = ?", (wid,))
+    conn.commit()
+    if cur.rowcount < 1:
+        raise ValueError("Work item not found")
+
+
 def _as_int_rupees(value, *, field: str, allow_negative: bool = True) -> int:
     if value is None or value == "":
         raise ValueError(f"{field} is required")
@@ -1580,55 +2502,315 @@ def respond_grievance(
     return _fetch_grievance(conn, gid, include_contacts=True)
 
 
-def list_notices(conn: sqlite3.Connection, *, include_drafts: bool = False) -> list[dict]:
-    ensure_notice_pin_order(conn)
-    order_sql = "ORDER BY pinned DESC, pin_order ASC, published_at DESC"
-    if include_drafts:
-        rows = conn.execute(f"SELECT * FROM notices {order_sql}").fetchall()
+def list_ec_members(conn: sqlite3.Connection) -> list[dict]:
+    """Active Executive Committee members (for draft sharing)."""
+    rows = conn.execute(
+        """
+        SELECT house_id, plot_no, name, official_title, role
+        FROM residents
+        WHERE role = 'admin' AND status = 'active' AND house_id != ?
+        ORDER BY
+          CASE WHEN official_title IS NULL OR official_title = '' THEN 1 ELSE 0 END,
+          official_title COLLATE NOCASE,
+          name COLLATE NOCASE
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    return [
+        {
+            "houseId": r["house_id"],
+            "plotNo": r["plot_no"],
+            "name": r["name"] or r["house_id"],
+            "officialTitle": r["official_title"] or "",
+            "label": (
+                f"{r['official_title']} · {r['name']}"
+                if r["official_title"]
+                else f"{r['name']} ({r['house_id']})"
+            ),
+        }
+        for r in rows
+    ]
+
+
+def _share_rows(conn: sqlite3.Connection, notice_id: str) -> list[sqlite3.Row]:
+    ensure_notice_shares_table(conn)
+    return conn.execute(
+        """
+        SELECT s.house_id, s.can_edit, s.shared_at, s.shared_by,
+               r.name, r.official_title
+        FROM notice_shares s
+        LEFT JOIN residents r ON r.house_id = s.house_id
+        WHERE s.notice_id = ?
+        ORDER BY r.official_title COLLATE NOCASE, r.name COLLATE NOCASE, s.house_id
+        """,
+        (notice_id,),
+    ).fetchall()
+
+
+def _notice_shares_public(conn: sqlite3.Connection, notice_id: str) -> list[dict]:
+    return [
+        {
+            "houseId": r["house_id"],
+            "canEdit": bool(r["can_edit"]),
+            "sharedAt": r["shared_at"],
+            "sharedBy": r["shared_by"],
+            "name": r["name"] or r["house_id"],
+            "officialTitle": r["official_title"] or "",
+            "label": (
+                f"{r['official_title']} · {r['name']}"
+                if r["official_title"]
+                else (r["name"] or r["house_id"])
+            ),
+        }
+        for r in _share_rows(conn, notice_id)
+    ]
+
+
+def _viewer_house(viewer: dict | None) -> str:
+    if not viewer:
+        return ""
+    return str(viewer.get("houseId") or viewer.get("house_id") or "").strip()
+
+
+def _is_notice_owner(notice_row: sqlite3.Row | dict, viewer: dict | None) -> bool:
+    if not viewer:
+        return False
+    if bool(viewer.get("superAdmin")) or is_superadmin_resident(viewer):
+        return True
+    owner = ""
+    if hasattr(notice_row, "keys"):
+        owner = str(notice_row["published_by"] or "")
     else:
+        owner = str(notice_row.get("published_by") or notice_row.get("publishedBy") or "")
+    # Legacy drafts without an author: any EC may manage until ownership is set.
+    if not owner:
+        return viewer.get("role") == "admin"
+    return owner == _viewer_house(viewer)
+
+
+def _share_access(conn: sqlite3.Connection, notice_id: str, viewer: dict | None) -> dict | None:
+    house = _viewer_house(viewer)
+    if not house:
+        return None
+    ensure_notice_shares_table(conn)
+    row = conn.execute(
+        "SELECT can_edit FROM notice_shares WHERE notice_id = ? AND house_id = ?",
+        (notice_id, house),
+    ).fetchone()
+    if not row:
+        return None
+    return {"canEdit": bool(row["can_edit"])}
+
+
+def can_view_draft(conn: sqlite3.Connection, notice_row: sqlite3.Row | dict, viewer: dict | None) -> bool:
+    if not viewer:
+        return False
+    if _is_notice_owner(notice_row, viewer):
+        return True
+    # Legacy drafts with no owner remain visible to all EC until claimed/shared.
+    owner = ""
+    if hasattr(notice_row, "keys"):
+        owner = str(notice_row["published_by"] or "")
+    else:
+        owner = str(notice_row.get("published_by") or notice_row.get("publishedBy") or "")
+    if not owner and viewer.get("role") == "admin":
+        return True
+    nid = notice_row["id"] if hasattr(notice_row, "keys") else notice_row.get("id")
+    return _share_access(conn, nid, viewer) is not None
+
+
+def can_edit_draft(conn: sqlite3.Connection, notice_row: sqlite3.Row | dict, viewer: dict | None) -> bool:
+    """Owner, or a shared member with edit access, may edit/publish until live."""
+    if not viewer:
+        return False
+    if _is_notice_owner(notice_row, viewer):
+        return True
+    nid = notice_row["id"] if hasattr(notice_row, "keys") else notice_row.get("id")
+    access = _share_access(conn, nid, viewer)
+    return bool(access and access.get("canEdit"))
+
+def list_notices(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = "published",
+    viewer: dict | None = None,
+) -> list[dict]:
+    """List notices. status: published (default), draft, archived, or all."""
+    ensure_notice_pin_order(conn)
+    ensure_notice_shares_table(conn)
+    # Welcome notice is always first among published; drafts sort by updated/published date.
+    order_sql = (
+        "ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, "
+        "pinned DESC, pin_order ASC, published_at DESC"
+    )
+    status_key = (status or "published").strip().lower()
+    if status_key == "all":
+        rows = conn.execute(f"SELECT * FROM notices {order_sql}", (WELCOME_NOTICE_ID,)).fetchall()
+    elif status_key in {"draft", "published", "archived"}:
         rows = conn.execute(
-            f"SELECT * FROM notices WHERE status = 'published' {order_sql}"
+            f"SELECT * FROM notices WHERE status = ? {order_sql}",
+            (status_key, WELCOME_NOTICE_ID),
         ).fetchall()
-    return [_notice_public(r) for r in rows]
+    else:
+        raise ValueError("Invalid notice status filter")
+
+    out = []
+    for r in rows:
+        if (r["status"] or "") == "draft" and not can_view_draft(conn, r, viewer):
+            continue
+        out.append(_notice_public(conn, r, viewer=viewer))
+    return out
 
 
-def _notice_public(r: sqlite3.Row | dict) -> dict:
+def _notice_public(
+    conn: sqlite3.Connection | None,
+    r: sqlite3.Row | dict,
+    *,
+    viewer: dict | None = None,
+) -> dict:
     if hasattr(r, "keys"):
         data = {k: r[k] for k in r.keys()}
     else:
         data = dict(r)
+    notice_id = data.get("id")
+    status = data.get("status") or "published"
+    shares = (
+        _notice_shares_public(conn, notice_id)
+        if conn is not None and status == "draft"
+        else []
+    )
+    is_owner = _is_notice_owner(data, viewer) if viewer else False
+    share_access = (
+        _share_access(conn, notice_id, viewer) if conn is not None and viewer else None
+    )
+    can_edit = (
+        bool(is_owner or (share_access and share_access.get("canEdit")))
+        if status == "draft"
+        else True
+    )
     return {
-        "id": data.get("id"),
+        "id": notice_id,
         "title": data.get("title") or "",
         "body": data.get("body") or "",
         "category": data.get("category") or "general",
         "pinned": bool(data.get("pinned")),
         "pinOrder": int(data.get("pin_order") or data.get("pinOrder") or 0),
+        "fixedTop": notice_id == WELCOME_NOTICE_ID,
         "publishedAt": data.get("published_at") or data.get("publishedAt"),
         "publishedBy": data.get("published_by") or data.get("publishedBy"),
-        "status": data.get("status") or "published",
+        "status": status,
+        "sharedWith": shares,
+        "isOwner": is_owner,
+        "canEdit": can_edit,
+        "sharedWithMe": bool(share_access) and not is_owner,
     }
 
-
-def get_notice(conn: sqlite3.Connection, notice_id: str) -> dict | None:
+def get_notice(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    *,
+    viewer: dict | None = None,
+) -> dict | None:
     ensure_notice_pin_order(conn)
+    ensure_notice_shares_table(conn)
     row = conn.execute("SELECT * FROM notices WHERE id = ?", (notice_id,)).fetchone()
-    return _notice_public(row) if row else None
+    if not row:
+        return None
+    if (row["status"] or "") == "draft" and viewer is not None and not can_view_draft(conn, row, viewer):
+        return None
+    return _notice_public(conn, row, viewer=viewer)
 
+
+def set_notice_shares(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    shares: list,
+    *,
+    actor: dict | None = None,
+) -> dict:
+    """Replace draft share list. Each entry: houseId + canEdit (default True).
+
+    Owner can change who is shared and each member's view/edit access anytime
+    while the notice remains a draft.
+    """
+    ensure_notice_shares_table(conn)
+    nid = (notice_id or "").strip()
+    row = conn.execute("SELECT * FROM notices WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        raise ValueError("Notice not found")
+    if (row["status"] or "") != "draft":
+        raise ValueError("Only drafts can be shared")
+    if not _is_notice_owner(row, actor):
+        raise ValueError("Only the draft owner can manage sharing")
+
+    ec_ids = {m["houseId"] for m in list_ec_members(conn)}
+    actor_house = _viewer_house(actor)
+    cleaned: list[tuple[str, bool]] = []
+    seen: set[str] = set()
+
+    for raw in shares or []:
+        if isinstance(raw, dict):
+            hid = str(raw.get("houseId") or raw.get("house_id") or "").strip()
+            can_edit = bool(raw.get("canEdit", raw.get("can_edit", True)))
+        else:
+            hid = str(raw or "").strip()
+            can_edit = True
+        if not hid:
+            continue
+        try:
+            hid = normalize_house_id(hid)
+        except ValueError:
+            pass
+        if hid == actor_house or hid in seen:
+            continue
+        if hid not in ec_ids:
+            raise ValueError(f"Not an active EC member: {hid}")
+        seen.add(hid)
+        cleaned.append((hid, can_edit))
+
+    now = utc_now()
+    shared_by = actor_house or None
+    conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (nid,))
+    for hid, can_edit in cleaned:
+        conn.execute(
+            """
+            INSERT INTO notice_shares(notice_id, house_id, can_edit, shared_at, shared_by)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (nid, hid, 1 if can_edit else 0, now, shared_by),
+        )
+    conn.commit()
+    return get_notice(conn, nid, viewer=actor) or {"id": nid}
 
 def _next_pin_order(conn: sqlite3.Connection) -> int:
-    row = conn.execute(
-        "SELECT COALESCE(MAX(pin_order), -1) FROM notices WHERE pinned = 1"
+    welcome = conn.execute(
+        "SELECT 1 FROM notices WHERE id = ? AND pinned = 1",
+        (WELCOME_NOTICE_ID,),
     ).fetchone()
-    return int(row[0] if row else -1) + 1
+    row = conn.execute(
+        "SELECT COALESCE(MAX(pin_order), 0) FROM notices WHERE pinned = 1 AND id != ?",
+        (WELCOME_NOTICE_ID,),
+    ).fetchone()
+    base = 0 if welcome else -1
+    return max(int(row[0] if row else base), base) + 1
 
 
 def _reindex_pinned(conn: sqlite3.Connection) -> None:
-    rows = conn.execute(
-        "SELECT id FROM notices WHERE pinned = 1 ORDER BY pin_order ASC, published_at DESC, id ASC"
+    welcome = conn.execute(
+        "SELECT id FROM notices WHERE id = ? AND pinned = 1",
+        (WELCOME_NOTICE_ID,),
+    ).fetchone()
+    others = conn.execute(
+        """
+        SELECT id FROM notices
+        WHERE pinned = 1 AND id != ?
+        ORDER BY pin_order ASC, published_at DESC, id ASC
+        """,
+        (WELCOME_NOTICE_ID,),
     ).fetchall()
-    for idx, row in enumerate(rows):
-        conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (idx, row["id"]))
+    ids = ([welcome["id"]] if welcome else []) + [r["id"] for r in others]
+    for idx, row_id in enumerate(ids):
+        conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (idx, row_id))
 
 
 def move_pinned_notice(conn: sqlite3.Connection, notice_id: str, direction: str) -> dict:
@@ -1638,6 +2820,8 @@ def move_pinned_notice(conn: sqlite3.Connection, notice_id: str, direction: str)
     direction = (direction or "").strip().lower()
     if direction not in {"up", "down"}:
         raise ValueError("move must be 'up' or 'down'")
+    if nid == WELCOME_NOTICE_ID:
+        raise ValueError("Welcome notice stays fixed at the top")
     row = conn.execute("SELECT * FROM notices WHERE id = ?", (nid,)).fetchone()
     if not row:
         raise ValueError("Notice not found")
@@ -1645,7 +2829,12 @@ def move_pinned_notice(conn: sqlite3.Connection, notice_id: str, direction: str)
         raise ValueError("Only pinned notices can be reordered")
 
     pinned = conn.execute(
-        "SELECT id FROM notices WHERE pinned = 1 ORDER BY pin_order ASC, published_at DESC, id ASC"
+        """
+        SELECT id FROM notices
+        WHERE pinned = 1 AND id != ?
+        ORDER BY pin_order ASC, published_at DESC, id ASC
+        """,
+        (WELCOME_NOTICE_ID,),
     ).fetchall()
     ids = [r["id"] for r in pinned]
     try:
@@ -1657,46 +2846,102 @@ def move_pinned_notice(conn: sqlite3.Connection, notice_id: str, direction: str)
         return get_notice(conn, nid) or {"id": nid}
 
     ids[idx], ids[swap_with] = ids[swap_with], ids[idx]
-    for order, item_id in enumerate(ids):
-        conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (order, item_id))
+    start = 1 if conn.execute(
+        "SELECT 1 FROM notices WHERE id = ? AND pinned = 1",
+        (WELCOME_NOTICE_ID,),
+    ).fetchone() else 0
+    if start == 1:
+        conn.execute(
+            "UPDATE notices SET pin_order = 0 WHERE id = ?",
+            (WELCOME_NOTICE_ID,),
+        )
+    for offset, item_id in enumerate(ids):
+        conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (start + offset, item_id))
     conn.commit()
     return get_notice(conn, nid) or {"id": nid}
 
 
-def upsert_notice(conn: sqlite3.Connection, payload: dict, publisher: str | None) -> dict:
+def upsert_notice(
+    conn: sqlite3.Connection,
+    payload: dict,
+    publisher: str | None,
+    *,
+    actor: dict | None = None,
+) -> dict:
     ensure_notice_pin_order(conn)
+    ensure_notice_shares_table(conn)
     notice_id = (payload.get("id") or f"n_{secrets.token_hex(6)}").strip()
     existing = conn.execute("SELECT * FROM notices WHERE id = ?", (notice_id,)).fetchone()
-    title = (payload.get("title") or (existing["title"] if existing else "") or "").strip()
-    body = (payload.get("body") or (existing["body"] if existing else "") or "").strip()
-    if len(title) < 3 or len(body) < 3:
-        raise ValueError("title and body required")
 
-    was_pinned = bool(existing and int(existing["pinned"] or 0))
-    if "pinned" in payload:
-        pinned = 1 if payload.get("pinned") else 0
-    elif existing:
-        pinned = int(existing["pinned"] or 0)
-    else:
-        pinned = 0
+    if existing and (existing["status"] or "") == "draft":
+        if not can_edit_draft(conn, existing, actor):
+            raise ValueError("You do not have permission to edit this draft")
+    elif existing is None and (payload.get("status") or "published") == "draft":
+        # Creating a draft — any EC is fine (caller already checked admin).
+        pass
 
-    if pinned:
-        if "pinOrder" in payload or "pin_order" in payload:
-            pin_order = int(payload.get("pinOrder", payload.get("pin_order")) or 0)
-        elif was_pinned and existing is not None:
-            pin_order = int(existing["pin_order"] or 0)
-        else:
-            pin_order = _next_pin_order(conn)
-    else:
-        pin_order = 0
+    title = (payload.get("title") if "title" in payload else None)
+    if title is None:
+        title = (existing["title"] if existing else "") or ""
+    title = str(title).strip()
+    body = (payload.get("body") if "body" in payload else None)
+    if body is None:
+        body = (existing["body"] if existing else "") or ""
+    body = str(body).strip()
 
-    category = (payload.get("category") or (existing["category"] if existing else None) or "general").strip()[:40]
     status = (payload.get("status") or (existing["status"] if existing else None) or "published").strip()
     if status not in {"draft", "published", "archived"}:
         raise ValueError("Invalid notice status")
+    if notice_id == WELCOME_NOTICE_ID and status != "published":
+        raise ValueError("Welcome notice must stay published")
 
-    published_at = payload.get("publishedAt") or (existing["published_at"] if existing else None) or utc_now()
-    published_by = publisher or (existing["published_by"] if existing else None)
+    if status == "draft":
+        if len(title) < 1:
+            raise ValueError("Draft needs a title")
+        # Incomplete drafts may have an empty body.
+    elif len(title) < 3 or len(body) < 3:
+        raise ValueError("title and body required to publish")
+
+    was_pinned = bool(existing and int(existing["pinned"] or 0))
+    was_draft = bool(existing and (existing["status"] or "") == "draft")
+    if notice_id == WELCOME_NOTICE_ID:
+        # Welcome notice stays pinned at the top of the colony board.
+        pinned = 1
+        pin_order = 0
+    elif status == "draft":
+        # Drafts stay off the public board pin list until published.
+        pinned = 0
+        pin_order = 0
+    else:
+        if "pinned" in payload:
+            pinned = 1 if payload.get("pinned") else 0
+        elif existing:
+            pinned = int(existing["pinned"] or 0)
+        else:
+            pinned = 0
+
+        if pinned:
+            if "pinOrder" in payload or "pin_order" in payload:
+                pin_order = int(payload.get("pinOrder", payload.get("pin_order")) or 0)
+            elif was_pinned and existing is not None and not was_draft:
+                pin_order = int(existing["pin_order"] or 0)
+            else:
+                pin_order = _next_pin_order(conn)
+        else:
+            pin_order = 0
+
+    category = (payload.get("category") or (existing["category"] if existing else None) or "general").strip()[:40]
+
+    # Fresh publish timestamp when leaving draft (or creating published).
+    if status == "published" and (was_draft or not existing):
+        published_at = utc_now()
+    else:
+        published_at = payload.get("publishedAt") or (existing["published_at"] if existing else None) or utc_now()
+    # Keep original author as owner (needed for draft sharing ACL).
+    if existing and existing["published_by"]:
+        published_by = existing["published_by"]
+    else:
+        published_by = publisher or None
 
     conn.execute(
         """
@@ -1712,27 +2957,324 @@ def upsert_notice(conn: sqlite3.Connection, payload: dict, publisher: str | None
           published_by=excluded.published_by,
           status=excluded.status
         """,
-        (notice_id, title, body, category, pinned, pin_order, published_at, published_by, status),
+        (notice_id, title, body or "", category, pinned, pin_order, published_at, published_by, status),
     )
-    if was_pinned and not pinned:
+    if status == "published" and was_draft:
+        conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (notice_id,))
+    if notice_id == WELCOME_NOTICE_ID or (was_pinned and not pinned) or (was_draft and status == "published" and pinned):
         _reindex_pinned(conn)
     conn.commit()
-    return get_notice(conn, notice_id) or {"id": notice_id}
+    return get_notice(conn, notice_id, viewer=actor) or {"id": notice_id}
 
 
-def delete_notice(conn: sqlite3.Connection, notice_id: str) -> None:
+def delete_notice(
+    conn: sqlite3.Connection,
+    notice_id: str,
+    *,
+    actor: dict | None = None,
+) -> None:
     ensure_notice_pin_order(conn)
+    ensure_notice_shares_table(conn)
     nid = (notice_id or "").strip()
     if not nid:
         raise ValueError("notice id required")
-    row = conn.execute("SELECT pinned FROM notices WHERE id = ?", (nid,)).fetchone()
+    if nid == WELCOME_NOTICE_ID:
+        raise ValueError("Welcome notice cannot be deleted")
+    row = conn.execute("SELECT * FROM notices WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        raise ValueError("Notice not found")
+    if (row["status"] or "") == "draft" and not _is_notice_owner(row, actor):
+        raise ValueError("Only the draft owner can delete this draft")
+    was_pinned = bool(int(row["pinned"] or 0))
+    conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (nid,))
     cur = conn.execute("DELETE FROM notices WHERE id = ?", (nid,))
     if cur.rowcount < 1:
         conn.commit()
         raise ValueError("Notice not found")
-    if row and int(row["pinned"] or 0):
+    if was_pinned:
         _reindex_pinned(conn)
     conn.commit()
+
+
+# --- Super-admin observability (access / function usage) --------------------
+
+_ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^POST /api/rwa/login$"), "Super admin login"),
+    (re.compile(r"^POST /api/rwa/logout$"), "Sign out"),
+    (re.compile(r"^POST /api/rwa/otp/request$"), "Request OTP"),
+    (re.compile(r"^POST /api/rwa/otp/verify$"), "Verify OTP / sign in"),
+    (re.compile(r"^GET /api/rwa/session$"), "Session check"),
+    (re.compile(r"^GET /api/rwa/notices$"), "View notices"),
+    (re.compile(r"^POST /api/rwa/notices$"), "Create notice"),
+    (re.compile(r"^PATCH /api/rwa/notices/[^/]+$"), "Update notice"),
+    (re.compile(r"^DELETE /api/rwa/notices/[^/]+$"), "Delete notice"),
+    (re.compile(r"^PUT /api/rwa/notices/[^/]+/shares$"), "Share draft"),
+    (re.compile(r"^GET /api/rwa/notices/[^/]+/shares$"), "View draft shares"),
+    (re.compile(r"^GET /api/rwa/ec-members$"), "List EC members"),
+    (re.compile(r"^GET /api/rwa/grievances"), "View concerns"),
+    (re.compile(r"^POST /api/rwa/grievances$"), "Submit concern"),
+    (re.compile(r"^POST /api/rwa/grievances/[^/]+/messages$"), "Reply to concern"),
+    (re.compile(r"^PATCH /api/rwa/grievances/[^/]+$"), "Update concern status"),
+    (re.compile(r"^GET /api/rwa/directory$"), "View directory"),
+    (re.compile(r"^GET /api/rwa/residents/revisions$"), "View revision history"),
+    (re.compile(r"^GET /api/rwa/residents$"), "View roster"),
+    (re.compile(r"^PATCH /api/rwa/residents/[^/]+$"), "Update resident"),
+    (re.compile(r"^POST /api/rwa/residents/[^/]+/promote$"), "Promote / demote EC"),
+    (re.compile(r"^GET /api/rwa/payments/me$"), "View own dues"),
+    (re.compile(r"^GET /api/rwa/payments$"), "View ledger"),
+    (re.compile(r"^PATCH /api/rwa/payments/[^/]+$"), "Edit ledger row"),
+    (re.compile(r"^GET /api/rwa/bank"), "View bank details"),
+    (re.compile(r"^PUT /api/rwa/bank"), "Update bank details"),
+    (re.compile(r"^POST /api/rwa/bank"), "Update bank / QR"),
+    (re.compile(r"^PATCH /api/rwa/profile$"), "Update profile"),
+    (re.compile(r"^GET /api/rwa/profile$"), "View profile"),
+    (re.compile(r"^GET /api/rwa/smtp/status$"), "SMTP status"),
+    (re.compile(r"^GET /api/rwa/settings$"), "View settings"),
+    (re.compile(r"^(PUT|PATCH) /api/rwa/settings$"), "Save settings"),
+    (re.compile(r"^POST /api/rwa/ledger/import$"), "Import ledger PDF"),
+    (re.compile(r"^GET /api/rwa/info-centre$"), "Browse Information Centre"),
+    (re.compile(r"^POST /api/rwa/info-centre$"), "Create Information Centre doc"),
+    (re.compile(r"^PATCH /api/rwa/info-centre/[^/]+$"), "Update Information Centre doc"),
+    (re.compile(r"^DELETE /api/rwa/info-centre/[^/]+$"), "Delete Information Centre doc"),
+    (re.compile(r"^GET /api/rwa/info-centre/[^/]+/file$"), "Open Information Centre file"),
+    (re.compile(r"^GET /api/rwa/works$"), "Browse Works & Events"),
+    (re.compile(r"^POST /api/rwa/works$"), "Create Works & Events item"),
+    (re.compile(r"^PATCH /api/rwa/works/[^/]+$"), "Update Works & Events item"),
+    (re.compile(r"^DELETE /api/rwa/works/[^/]+$"), "Delete Works & Events item"),
+]
+
+_PANEL_LABELS = {
+    "home": "Open Home (colony board)",
+    "dues": "Open Dues",
+    "concerns": "Open Concerns",
+    "directory": "Open Directory",
+    "profile": "Open Profile",
+    "admin": "Open EC desk",
+    "info": "Open Information Centre",
+    "works": "Open Works & Events",
+    "observability": "Open Observability",
+}
+
+# High-frequency GETs we skip to keep the log useful.
+_ACCESS_SKIP_GET_PATHS = {
+    "/api/rwa/session",
+    "/api/rwa/smtp/status",
+}
+
+
+def access_action_label(method: str, path: str, *, panel: str | None = None) -> str:
+    if panel:
+        return _PANEL_LABELS.get(panel, f"Open panel · {panel}")
+    key = f"{(method or 'GET').upper()} {(path or '').split('?', 1)[0]}"
+    for pattern, label in _ACCESS_ACTION_RULES:
+        if pattern.match(key):
+            return label
+    short = (path or "").replace("/api/rwa/", "").strip("/") or "rwa"
+    return f"{(method or 'GET').upper()} {short}"
+
+
+def should_log_rwa_request(method: str, path: str) -> bool:
+    path = (path or "").split("?", 1)[0]
+    if not path.startswith("/api/rwa/"):
+        return False
+    if path.startswith("/api/rwa/observability"):
+        return False
+    method_u = (method or "GET").upper()
+    if method_u == "GET" and path in _ACCESS_SKIP_GET_PATHS:
+        return False
+    return True
+
+
+def record_access_event(
+    conn: sqlite3.Connection,
+    *,
+    actor: dict | None = None,
+    event_type: str = "api",
+    method: str | None = None,
+    path: str | None = None,
+    action: str | None = None,
+    status_code: int | None = None,
+    panel: str | None = None,
+    detail: str | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    ensure_access_events_table(conn)
+    house_id = None
+    actor_name = None
+    role = None
+    is_sa = 0
+    if actor:
+        house_id = str(actor.get("houseId") or actor.get("house_id") or "") or None
+        actor_name = str(actor.get("name") or "") or None
+        role = str(actor.get("role") or "") or None
+        is_sa = 1 if (actor.get("superAdmin") or is_superadmin_resident(actor)) else 0
+    label = (action or "").strip() or access_action_label(method or "GET", path or "", panel=panel)
+    conn.execute(
+        """
+        INSERT INTO access_events(
+          created_at, house_id, actor_name, role, is_superadmin,
+          event_type, method, path, action, status_code, panel, detail, ip, user_agent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            utc_now(),
+            house_id,
+            actor_name,
+            role,
+            is_sa,
+            (event_type or "api")[:40],
+            (method or "")[:12] or None,
+            (path or "")[:240] or None,
+            label[:160],
+            status_code,
+            (panel or "")[:40] or None,
+            (detail or "")[:500] or None,
+            (ip or "")[:80] or None,
+            (user_agent or "")[:240] or None,
+        ),
+    )
+    # Soft retention: drop oldest beyond ~30k rows.
+    count = conn.execute("SELECT COUNT(*) FROM access_events").fetchone()[0]
+    if count and int(count) > 30000:
+        conn.execute(
+            """
+            DELETE FROM access_events WHERE id IN (
+              SELECT id FROM access_events ORDER BY id ASC LIMIT ?
+            )
+            """,
+            (int(count) - 25000,),
+        )
+    conn.commit()
+
+
+def observability_dashboard(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 7,
+    limit: int = 200,
+    house_id: str | None = None,
+) -> dict:
+    ensure_access_events_table(conn)
+    days = max(1, min(int(days or 7), 90))
+    limit = max(20, min(int(limit or 200), 500))
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+    where = ["created_at >= ?"]
+    params: list[Any] = [since]
+    if house_id:
+        where.append("house_id = ? COLLATE NOCASE")
+        params.append(normalize_house_id(house_id) if house_id != SUPERADMIN_HOUSE_ID else house_id)
+    where_sql = " AND ".join(where)
+
+    total = conn.execute(f"SELECT COUNT(*) FROM access_events WHERE {where_sql}", params).fetchone()[0]
+    unique_users = conn.execute(
+        f"SELECT COUNT(DISTINCT house_id) FROM access_events WHERE {where_sql} AND house_id IS NOT NULL AND house_id != ''",
+        params,
+    ).fetchone()[0]
+    logins = conn.execute(
+        f"""
+        SELECT COUNT(*) FROM access_events
+        WHERE {where_sql} AND action IN ('Super admin login', 'Verify OTP / sign in')
+        """,
+        params,
+    ).fetchone()[0]
+    panel_views = conn.execute(
+        f"SELECT COUNT(*) FROM access_events WHERE {where_sql} AND event_type = 'panel'",
+        params,
+    ).fetchone()[0]
+    api_calls = conn.execute(
+        f"SELECT COUNT(*) FROM access_events WHERE {where_sql} AND event_type = 'api'",
+        params,
+    ).fetchone()[0]
+
+    top_actions = [
+        {"action": r["action"], "count": r["c"]}
+        for r in conn.execute(
+            f"""
+            SELECT action, COUNT(*) AS c FROM access_events
+            WHERE {where_sql}
+            GROUP BY action
+            ORDER BY c DESC
+            LIMIT 12
+            """,
+            params,
+        ).fetchall()
+    ]
+    top_users = [
+        {
+            "houseId": r["house_id"],
+            "name": r["actor_name"] or r["house_id"],
+            "role": r["role"] or "",
+            "count": r["c"],
+        }
+        for r in conn.execute(
+            f"""
+            SELECT house_id, MAX(actor_name) AS actor_name, MAX(role) AS role, COUNT(*) AS c
+            FROM access_events
+            WHERE {where_sql} AND house_id IS NOT NULL AND house_id != ''
+            GROUP BY house_id
+            ORDER BY c DESC
+            LIMIT 12
+            """,
+            params,
+        ).fetchall()
+    ]
+    recent = [
+        {
+            "id": r["id"],
+            "createdAt": r["created_at"],
+            "houseId": r["house_id"] or "",
+            "name": r["actor_name"] or (r["house_id"] or "anonymous"),
+            "role": r["role"] or "",
+            "superAdmin": bool(r["is_superadmin"]),
+            "eventType": r["event_type"],
+            "method": r["method"] or "",
+            "path": r["path"] or "",
+            "action": r["action"],
+            "statusCode": r["status_code"],
+            "panel": r["panel"] or "",
+            "ip": r["ip"] or "",
+        }
+        for r in conn.execute(
+            f"""
+            SELECT * FROM access_events
+            WHERE {where_sql}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+    ]
+    by_day = [
+        {"day": r["d"], "count": r["c"]}
+        for r in conn.execute(
+            f"""
+            SELECT substr(created_at, 1, 10) AS d, COUNT(*) AS c
+            FROM access_events
+            WHERE {where_sql}
+            GROUP BY d
+            ORDER BY d ASC
+            """,
+            params,
+        ).fetchall()
+    ]
+
+    return {
+        "days": days,
+        "since": since,
+        "summary": {
+            "totalEvents": int(total or 0),
+            "uniqueUsers": int(unique_users or 0),
+            "logins": int(logins or 0),
+            "panelViews": int(panel_views or 0),
+            "apiCalls": int(api_calls or 0),
+        },
+        "topActions": top_actions,
+        "topUsers": top_users,
+        "byDay": by_day,
+        "recent": recent,
+    }
 
 
 def update_profile(

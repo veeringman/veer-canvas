@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlparse
 
-from flask import Flask, jsonify, redirect, render_template_string, request, send_from_directory, session, url_for
+from flask import Flask, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session, url_for
 import sqlite3
 
 APP_DIR = pathlib.Path(__file__).resolve().parent
@@ -2751,6 +2751,98 @@ def _rwa_conn():
     return rwa_portal.open_rwa(SITE_ROOT)
 
 
+@app.after_request
+def _rwa_log_access(response):
+    """Record RWA API usage for the master-admin observability dashboard."""
+    try:
+        path = request.path or ""
+        method = request.method or "GET"
+        if not rwa_portal.should_log_rwa_request(method, path):
+            return response
+        # Avoid logging binary/file noise and huge bodies; path + status is enough.
+        conn = _rwa_conn()
+        try:
+            sess = rwa_portal.session_from_token(conn, _rwa_token())
+            actor = sess["resident"] if sess else None
+            # Anonymous OTP/login attempts still get logged (house unknown).
+            rwa_portal.record_access_event(
+                conn,
+                actor=actor,
+                event_type="api",
+                method=method,
+                path=path,
+                status_code=response.status_code,
+                ip=request.headers.get("X-Forwarded-For", request.remote_addr or "")[:80],
+                user_agent=(request.headers.get("User-Agent") or "")[:240],
+            )
+        finally:
+            conn.close()
+    except Exception:
+        # Never break the response because of logging.
+        pass
+    return response
+
+
+@app.route("/api/rwa/observability", methods=["GET"])
+def api_rwa_observability():
+    """Master admin: who used the app and which functions."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not sess["resident"].get("superAdmin"):
+            return jsonify({"ok": False, "error": "Super admin access required"}), 403
+        days = request.args.get("days", 7)
+        limit = request.args.get("limit", 200)
+        house = (request.args.get("houseId") or "").strip() or None
+        try:
+            days_i = int(days)
+        except (TypeError, ValueError):
+            days_i = 7
+        try:
+            limit_i = int(limit)
+        except (TypeError, ValueError):
+            limit_i = 200
+        data = rwa_portal.observability_dashboard(conn, days=days_i, limit=limit_i, house_id=house)
+        return jsonify({"ok": True, **data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/observability/event", methods=["POST"])
+def api_rwa_observability_event():
+    """Client panel / UI navigation breadcrumbs (signed-in users)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        panel = str(payload.get("panel") or "").strip().lower()[:40]
+        if not panel:
+            return jsonify({"ok": False, "error": "panel required"}), 400
+        detail = str(payload.get("detail") or "").strip()[:500] or None
+        rwa_portal.record_access_event(
+            conn,
+            actor=sess["resident"],
+            event_type="panel",
+            method="UI",
+            path=f"/panel/{panel}",
+            action=rwa_portal.access_action_label("UI", "", panel=panel),
+            status_code=200,
+            panel=panel,
+            detail=detail,
+            ip=request.headers.get("X-Forwarded-For", request.remote_addr or "")[:80],
+            user_agent=(request.headers.get("User-Agent") or "")[:240],
+        )
+        return jsonify({"ok": True})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/session", methods=["GET"])
 def api_rwa_session():
     conn = _rwa_conn()
@@ -2924,8 +3016,30 @@ def api_rwa_notices():
     conn = _rwa_conn()
     try:
         sess = rwa_portal.session_from_token(conn, _rwa_token())
-        include_drafts = bool(sess and sess["resident"].get("role") == "admin")
-        return jsonify({"ok": True, "notices": rwa_portal.list_notices(conn, include_drafts=include_drafts)})
+        status = (request.args.get("status") or "published").strip().lower()
+        # Public board is always published. Drafts/all require EC.
+        if status != "published":
+            if not sess or sess["resident"].get("role") != "admin":
+                return jsonify({"ok": False, "error": "Admin access required"}), 403
+        viewer = sess["resident"] if sess else None
+        return jsonify({"ok": True, "notices": rwa_portal.list_notices(conn, status=status, viewer=viewer)})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/ec-members", methods=["GET"])
+def api_rwa_ec_members():
+    """EC roster for draft sharing pickers."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or sess["resident"].get("role") != "admin":
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        me = sess["resident"].get("houseId")
+        members = [m for m in rwa_portal.list_ec_members(conn) if m["houseId"] != me]
+        return jsonify({"ok": True, "members": members})
     finally:
         conn.close()
 
@@ -2938,7 +3052,12 @@ def api_rwa_notices_write():
         if not sess or sess["resident"].get("role") != "admin":
             return jsonify({"ok": False, "error": "Admin access required"}), 403
         payload = request.get_json(force=True, silent=True) or {}
-        notice = rwa_portal.upsert_notice(conn, payload, sess["resident"].get("houseId"))
+        notice = rwa_portal.upsert_notice(
+            conn,
+            payload,
+            sess["resident"].get("houseId"),
+            actor=sess["resident"],
+        )
         return jsonify({"ok": True, "notice": notice})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
@@ -2954,16 +3073,56 @@ def api_rwa_notice_item(notice_id: str):
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess or sess["resident"].get("role") != "admin":
             return jsonify({"ok": False, "error": "Admin access required"}), 403
+        actor = sess["resident"]
         if request.method == "DELETE":
-            rwa_portal.delete_notice(conn, notice_id)
+            rwa_portal.delete_notice(conn, notice_id, actor=actor)
             return jsonify({"ok": True, "deleted": notice_id})
         payload = request.get_json(force=True, silent=True) or {}
         move = (payload.get("move") or "").strip().lower()
         if move:
             notice = rwa_portal.move_pinned_notice(conn, notice_id, move)
-            return jsonify({"ok": True, "notice": notice, "notices": rwa_portal.list_notices(conn, include_drafts=True)})
+            return jsonify({"ok": True, "notice": notice, "notices": rwa_portal.list_notices(conn, status="published", viewer=actor)})
         payload["id"] = notice_id
-        notice = rwa_portal.upsert_notice(conn, payload, sess["resident"].get("houseId"))
+        notice = rwa_portal.upsert_notice(conn, payload, actor.get("houseId"), actor=actor)
+        return jsonify({"ok": True, "notice": notice})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notices/<notice_id>/shares", methods=["GET", "PUT"])
+def api_rwa_notice_shares(notice_id: str):
+    """Owner: list or replace who a draft is shared with (per-member view/edit)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or sess["resident"].get("role") != "admin":
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        actor = sess["resident"]
+        if request.method == "GET":
+            notice = rwa_portal.get_notice(conn, notice_id, viewer=actor)
+            if not notice:
+                return jsonify({"ok": False, "error": "Notice not found"}), 404
+            return jsonify({"ok": True, "notice": notice, "sharedWith": notice.get("sharedWith") or []})
+        payload = request.get_json(force=True, silent=True) or {}
+        shares = payload.get("shares")
+        if shares is None:
+            # Legacy: houseIds + optional global canEdit (defaults to edit).
+            house_ids = payload.get("houseIds") or payload.get("sharedWith") or []
+            default_edit = bool(payload.get("canEdit", True))
+            if isinstance(house_ids, dict):
+                house_ids = list(house_ids.keys())
+            shares = []
+            for item in house_ids:
+                if isinstance(item, dict):
+                    shares.append({
+                        "houseId": item.get("houseId") or item.get("house_id"),
+                        "canEdit": bool(item.get("canEdit", item.get("can_edit", default_edit))),
+                    })
+                else:
+                    shares.append({"houseId": item, "canEdit": default_edit})
+        notice = rwa_portal.set_notice_shares(conn, notice_id, shares, actor=actor)
         return jsonify({"ok": True, "notice": notice})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
@@ -3251,6 +3410,224 @@ def api_rwa_bank_qr():
         upload = request.files.get("qr") or request.files.get("file") or request.files.get("image")
         bank = rwa_portal.save_bank_qr(conn, SITE_ROOT, file_storage=upload)
         return jsonify({"ok": True, "bank": bank})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/info-centre/categories", methods=["GET"])
+def api_rwa_info_categories():
+    return jsonify({"ok": True, "categories": rwa_portal.info_centre_categories()})
+
+
+@app.route("/api/rwa/info-centre", methods=["GET", "POST"])
+def api_rwa_info_centre():
+    """List / create Information Centre documents."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = sess["resident"].get("role") == "admin"
+
+        if request.method == "GET":
+            status = (request.args.get("status") or "published").strip().lower()
+            if status != "published" and not is_admin:
+                return jsonify({"ok": False, "error": "Admin access required"}), 403
+            category = (request.args.get("category") or "").strip() or None
+            docs = rwa_portal.list_info_documents(
+                conn, status=status, category=category, as_admin=is_admin
+            )
+            return jsonify({
+                "ok": True,
+                "documents": docs,
+                "categories": rwa_portal.info_centre_categories(),
+            })
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+
+        # Multipart (file upload) or JSON (HTML content)
+        upload = request.files.get("file") or request.files.get("document")
+        if upload is not None:
+            payload = {
+                "title": request.form.get("title"),
+                "summary": request.form.get("summary"),
+                "category": request.form.get("category"),
+                "status": request.form.get("status") or "published",
+                "audience": request.form.get("audience") or "all",
+                "docType": request.form.get("docType") or "file",
+                "id": request.form.get("id") or None,
+            }
+        else:
+            payload = request.get_json(force=True, silent=True) or {}
+            upload = None
+
+        doc = rwa_portal.upsert_info_document(
+            conn,
+            SITE_ROOT,
+            payload,
+            publisher=sess["resident"].get("houseId"),
+            file_storage=upload,
+        )
+        return jsonify({"ok": True, "document": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/info-centre/<doc_id>", methods=["GET", "PATCH", "DELETE"])
+def api_rwa_info_centre_item(doc_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = sess["resident"].get("role") == "admin"
+
+        if request.method == "GET":
+            doc = rwa_portal.get_info_document(conn, doc_id, as_admin=is_admin)
+            if not doc:
+                return jsonify({"ok": False, "error": "Document not found"}), 404
+            return jsonify({"ok": True, "document": doc})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+
+        if request.method == "DELETE":
+            rwa_portal.delete_info_document(conn, SITE_ROOT, doc_id)
+            return jsonify({"ok": True, "deleted": doc_id})
+
+        upload = request.files.get("file") or request.files.get("document")
+        if upload is not None:
+            payload = {
+                "id": doc_id,
+                "title": request.form.get("title"),
+                "summary": request.form.get("summary"),
+                "category": request.form.get("category"),
+                "status": request.form.get("status"),
+                "audience": request.form.get("audience"),
+                "docType": request.form.get("docType"),
+            }
+            # Drop empty keys so upsert keeps existing values
+            payload = {k: v for k, v in payload.items() if v is not None and str(v).strip() != ""}
+            payload["id"] = doc_id
+        else:
+            payload = request.get_json(force=True, silent=True) or {}
+            payload["id"] = doc_id
+            upload = None
+
+        doc = rwa_portal.upsert_info_document(
+            conn,
+            SITE_ROOT,
+            payload,
+            publisher=sess["resident"].get("houseId"),
+            file_storage=upload,
+        )
+        return jsonify({"ok": True, "document": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/info-centre/<doc_id>/file", methods=["GET"])
+def api_rwa_info_centre_file(doc_id: str):
+    """Download or open a published (or EC-visible) document file."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = sess["resident"].get("role") == "admin"
+        doc = rwa_portal.get_info_document(conn, doc_id, as_admin=is_admin)
+        if not doc or not doc.get("filename"):
+            return jsonify({"ok": False, "error": "Document not found"}), 404
+        path = rwa_portal.info_doc_file_path(SITE_ROOT, doc_id, doc.get("filename"))
+        if not path:
+            return jsonify({"ok": False, "error": "File missing on server"}), 404
+        download_name = doc.get("originalName") or path.name
+        as_attachment = not rwa_portal.info_doc_should_inline(doc.get("mimeType"), doc.get("filename"))
+        return send_file(
+            path,
+            mimetype=doc.get("mimeType") or None,
+            as_attachment=as_attachment,
+            download_name=download_name,
+            max_age=120,
+        )
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/works/meta", methods=["GET"])
+def api_rwa_works_meta():
+    return jsonify({"ok": True, **rwa_portal.works_meta()})
+
+
+@app.route("/api/rwa/works", methods=["GET", "POST"])
+def api_rwa_works():
+    """List / create Works & Events items."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = sess["resident"].get("role") == "admin"
+
+        if request.method == "GET":
+            kind = (request.args.get("kind") or "").strip() or None
+            status = (request.args.get("status") or "").strip() or None
+            visibility = (request.args.get("visibility") or "").strip() or None
+            if visibility == "draft" and not is_admin:
+                return jsonify({"ok": False, "error": "Admin access required"}), 403
+            works = rwa_portal.list_colony_works(
+                conn,
+                kind=kind,
+                status=status,
+                visibility=visibility,
+                as_admin=is_admin,
+            )
+            return jsonify({"ok": True, "works": works, **rwa_portal.works_meta()})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        work = rwa_portal.upsert_colony_work(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "work": work})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/works/<work_id>", methods=["GET", "PATCH", "DELETE"])
+def api_rwa_works_item(work_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = sess["resident"].get("role") == "admin"
+
+        if request.method == "GET":
+            work = rwa_portal.get_colony_work(conn, work_id, as_admin=is_admin)
+            if not work:
+                return jsonify({"ok": False, "error": "Not found"}), 404
+            return jsonify({"ok": True, "work": work})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+
+        if request.method == "DELETE":
+            rwa_portal.delete_colony_work(conn, work_id)
+            return jsonify({"ok": True, "deleted": work_id})
+
+        payload = request.get_json(force=True, silent=True) or {}
+        payload["id"] = work_id
+        work = rwa_portal.upsert_colony_work(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "work": work})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

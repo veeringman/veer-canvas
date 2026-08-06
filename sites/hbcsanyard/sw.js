@@ -1,12 +1,12 @@
 /* HBC Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v9-pinorder';
+const CACHE = 'hbc-sanyard-v19-plots';
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/apple-touch-icon.png',
-  '/portal.css?v=20260806pinorder',
-  '/portal.js?v=20260806pinorder',
+  '/portal.css?v=20260806plots',
+  '/portal.js?v=20260806plots',
   '/assets/favicon-192.png',
   '/assets/apple-touch-icon.png',
   '/assets/hbcs-sanyard-seal-240.webp',
