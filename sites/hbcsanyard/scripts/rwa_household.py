@@ -24,6 +24,56 @@ RELATION_LABELS = {
 }
 
 
+def photo_fields_for_member(member_id: str | None, filename: str | None) -> dict:
+    mid = (member_id or "").strip()
+    fn = (filename or "").strip()
+    if mid and fn:
+        return {
+            "memberId": mid,
+            "hasPhoto": True,
+            "photoUrl": f"/api/rwa/profile/photo/{mid}",
+        }
+    return {"memberId": mid or None, "hasPhoto": False, "photoUrl": ""}
+
+
+def primary_member_photo_map(conn: sqlite3.Connection) -> dict[str, dict]:
+    """house_id -> photo fields for the primary household member."""
+    ensure_household_members_table(conn)
+    rows = conn.execute(
+        """
+        SELECT house_id, id, photo_filename
+        FROM household_members
+        WHERE status = 'active' AND is_primary = 1
+        """
+    ).fetchall()
+    return {
+        str(r["house_id"]): photo_fields_for_member(r["id"], r["photo_filename"])
+        for r in rows
+    }
+
+
+def member_photo_map(conn: sqlite3.Connection, member_ids: list[str] | None = None) -> dict[str, dict]:
+    """member_id -> photo fields."""
+    ensure_household_members_table(conn)
+    if member_ids is not None:
+        ids = [str(m).strip() for m in member_ids if str(m or "").strip()]
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = conn.execute(
+            f"SELECT id, photo_filename FROM household_members WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, photo_filename FROM household_members WHERE status = 'active'"
+        ).fetchall()
+    return {
+        str(r["id"]): photo_fields_for_member(r["id"], r["photo_filename"])
+        for r in rows
+    }
+
+
 def _row_dict(row: sqlite3.Row | dict | None) -> dict:
     if row is None:
         return {}
@@ -92,6 +142,13 @@ def public_member(m: dict | sqlite3.Row | None, *, include_contacts: bool = True
         out["emailMasked"] = mask_email(data.get("email"))
         out["hasEmail"] = bool(str(data.get("email") or "").strip())
         out["hasPhone"] = bool(str(data.get("phone") or "").strip())
+    photo = (data.get("photo_filename") or data.get("photoFilename") or "").strip()
+    out["hasPhoto"] = bool(photo)
+    out["photoFilename"] = photo or None
+    if photo and out.get("id"):
+        out["photoUrl"] = f"/api/rwa/profile/photo/{out['id']}"
+    else:
+        out["photoUrl"] = ""
     return out
 
 
@@ -195,19 +252,20 @@ def login_members_public(conn: sqlite3.Connection, house_id: str) -> list[dict]:
 
 
 def actor_can_use_ec_desk(actor: dict | None) -> bool:
-    """Only primary owners (or super admin) of an EC plot may use EC desk.
-
-    Delegates on an EC household always get resident access at most.
-    """
-    if not actor:
-        return False
-    if actor.get("superAdmin"):
-        return True
-    if actor.get("viewOnly"):
-        return False
-    if not actor.get("isPrimary"):
-        return False
-    return actor.get("role") == "admin"
+    """Primary owners with EC Admin role or any granted entitlement (or super admin)."""
+    try:
+        import rwa_entitlements as ents
+        return ents.actor_can_open_ec_desk(actor)
+    except Exception:
+        if not actor:
+            return False
+        if actor.get("superAdmin"):
+            return True
+        if actor.get("viewOnly"):
+            return False
+        if not actor.get("isPrimary"):
+            return False
+        return actor.get("role") == "admin"
 
 
 def can_actor_manage_household(actor: dict | None, house_id: str) -> bool:
@@ -215,14 +273,18 @@ def can_actor_manage_household(actor: dict | None, house_id: str) -> bool:
         return False
     if actor.get("superAdmin"):
         return True
-    # EC desk users (primary owners of EC plots) may manage any household roster.
-    if actor_can_use_ec_desk(actor):
-        return True
-    if (actor.get("houseId") or actor.get("house_id")) != house_id:
-        return False
     if actor.get("viewOnly"):
         return False
-    return bool(actor.get("canManageHousehold") or actor.get("canManage") or actor.get("isPrimary"))
+    actor_house = actor.get("houseId") or actor.get("house_id")
+    if actor_house == house_id:
+        return bool(actor.get("canManageHousehold") or actor.get("canManage") or actor.get("isPrimary"))
+    # Cross-plot: EC Admins only (add/manage delegates for any resident).
+    try:
+        import rwa_entitlements as ents
+
+        return ents.is_ec_admin(actor) and actor.get("isPrimary") is not False
+    except Exception:
+        return (actor.get("role") or "") == "admin" and actor.get("isPrimary") is not False
 
 
 def actor_is_view_only(actor: dict | None) -> bool:

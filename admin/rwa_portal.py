@@ -55,6 +55,9 @@ from init_rwa_db import (  # noqa: E402
     ensure_otp_pending_columns,
     ensure_resident_profile_columns,
     ensure_superadmin_account,
+    ensure_entitlements_schema,
+    ensure_report_templates_table,
+    ensure_bilingual_content_columns,
     hash_otp,
     normalize_house_id,
     utc_now,
@@ -62,6 +65,7 @@ from init_rwa_db import (  # noqa: E402
 )
 
 import rwa_household as household  # noqa: E402
+import rwa_entitlements as entitlements  # noqa: E402
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
 SESSION_TTL_SECONDS = int(os.environ.get("RWA_SESSION_TTL", str(7 * 24 * 3600)))
@@ -159,6 +163,216 @@ _SETTINGS_KEYS = (
     "RWA_SUPERADMIN_USER",
 )
 
+_OPS_ENV_KEYS = (
+    "BACKUP_ALERT_TO",
+    "OPS_VITALS_ENABLED",
+    "BACKUP_RETAIN_DAYS",
+    "DISK_MIN_PCT",
+    "ACCESS_EVENTS_DAYS",
+    "DISK_WARN_PCT",
+    "DISK_CRIT_PCT",
+    "MEM_WARN_PCT",
+    "MEM_CRIT_PCT",
+    "LOAD_WARN_RATIO",
+    "LOAD_CRIT_RATIO",
+    "BACKUP_MAX_AGE_H",
+    "ALERT_COOLDOWN_WARN",
+    "ALERT_COOLDOWN_CRIT",
+)
+
+_OPS_DEFAULTS: dict[str, object] = {
+    "alertTo": "",
+    "vitalsEnabled": True,
+    "backupRetainDays": 14,
+    "backupDiskMinPct": 15,
+    "accessEventsDays": 90,
+    "diskWarnPct": 20,
+    "diskCritPct": 10,
+    "memWarnPct": 15,
+    "memCritPct": 8,
+    "loadWarnRatio": 1.5,
+    "loadCritRatio": 2.5,
+    "backupMaxAgeHours": 28,
+    "alertCooldownWarnHours": 6,
+    "alertCooldownCritHours": 1,
+}
+
+
+def _read_env_map(path: pathlib.Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not path.is_file():
+        return out
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        out[key.strip()] = value.strip().strip("'").strip('"')
+    return out
+
+
+def _env_truthy(val: str | None) -> bool:
+    return str(val or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def read_ops_settings(site_root: pathlib.Path) -> dict:
+    env = _read_env_map(_smtp_env_path(site_root))
+    smtp_from = env.get("RWA_SMTP_FROM") or env.get("RWA_SMTP_USER") or ""
+    alert_to = env.get("BACKUP_ALERT_TO") or env.get("RWA_OPS_ALERT_TO") or smtp_from
+    return {
+        "alertTo": alert_to,
+        "vitalsEnabled": _env_truthy(env.get("OPS_VITALS_ENABLED", "1")),
+        "backupRetainDays": int(env.get("BACKUP_RETAIN_DAYS") or _OPS_DEFAULTS["backupRetainDays"]),
+        "backupDiskMinPct": int(env.get("DISK_MIN_PCT") or _OPS_DEFAULTS["backupDiskMinPct"]),
+        "accessEventsDays": int(env.get("ACCESS_EVENTS_DAYS") or _OPS_DEFAULTS["accessEventsDays"]),
+        "diskWarnPct": int(env.get("DISK_WARN_PCT") or _OPS_DEFAULTS["diskWarnPct"]),
+        "diskCritPct": int(env.get("DISK_CRIT_PCT") or _OPS_DEFAULTS["diskCritPct"]),
+        "memWarnPct": int(env.get("MEM_WARN_PCT") or _OPS_DEFAULTS["memWarnPct"]),
+        "memCritPct": int(env.get("MEM_CRIT_PCT") or _OPS_DEFAULTS["memCritPct"]),
+        "loadWarnRatio": float(env.get("LOAD_WARN_RATIO") or _OPS_DEFAULTS["loadWarnRatio"]),
+        "loadCritRatio": float(env.get("LOAD_CRIT_RATIO") or _OPS_DEFAULTS["loadCritRatio"]),
+        "backupMaxAgeHours": int(env.get("BACKUP_MAX_AGE_H") or _OPS_DEFAULTS["backupMaxAgeHours"]),
+        "alertCooldownWarnHours": int(
+            (int(env.get("ALERT_COOLDOWN_WARN") or 21600)) / 3600
+        ),
+        "alertCooldownCritHours": int(
+            (int(env.get("ALERT_COOLDOWN_CRIT") or 3600)) / 3600
+        ),
+    }
+
+
+def _ops_settings_to_env(ops: dict) -> dict[str, str]:
+    def _int(key: str, default: int) -> str:
+        try:
+            return str(int(ops.get(key, default)))
+        except (TypeError, ValueError):
+            return str(default)
+
+    def _float(key: str, default: float) -> str:
+        try:
+            return str(float(ops.get(key, default)))
+        except (TypeError, ValueError):
+            return str(default)
+
+    warn_h = int(ops.get("alertCooldownWarnHours") or _OPS_DEFAULTS["alertCooldownWarnHours"])
+    crit_h = int(ops.get("alertCooldownCritHours") or _OPS_DEFAULTS["alertCooldownCritHours"])
+    enabled = ops.get("vitalsEnabled", True)
+    return {
+        "BACKUP_ALERT_TO": str(ops.get("alertTo") or "").strip(),
+        "OPS_VITALS_ENABLED": "1" if enabled else "0",
+        "BACKUP_RETAIN_DAYS": _int("backupRetainDays", 14),
+        "DISK_MIN_PCT": _int("backupDiskMinPct", 15),
+        "ACCESS_EVENTS_DAYS": _int("accessEventsDays", 90),
+        "DISK_WARN_PCT": _int("diskWarnPct", 20),
+        "DISK_CRIT_PCT": _int("diskCritPct", 10),
+        "MEM_WARN_PCT": _int("memWarnPct", 15),
+        "MEM_CRIT_PCT": _int("memCritPct", 8),
+        "LOAD_WARN_RATIO": _float("loadWarnRatio", 1.5),
+        "LOAD_CRIT_RATIO": _float("loadCritRatio", 2.5),
+        "BACKUP_MAX_AGE_H": _int("backupMaxAgeHours", 28),
+        "ALERT_COOLDOWN_WARN": str(max(1, warn_h) * 3600),
+        "ALERT_COOLDOWN_CRIT": str(max(1, crit_h) * 3600),
+    }
+
+
+def send_ops_alert(site_root: pathlib.Path, subject: str, body: str) -> dict:
+    """Send an ops email using site SMTP settings."""
+    load_smtp_config(site_root)
+    ops = read_ops_settings(site_root)
+    cfg = load_smtp_config(site_root)
+    to = (ops.get("alertTo") or cfg.get("from") or cfg.get("user") or "").strip()
+    if not cfg.get("configured") or not to:
+        raise ValueError("SMTP or alert recipient not configured")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = cfg["from"]
+    msg["To"] = to
+    msg.set_content(body)
+    with smtplib.SMTP(cfg["host"], cfg["port"], timeout=25) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(cfg["user"], cfg["password"])
+        smtp.send_message(msg)
+    return {"sent": True, "to": to}
+
+
+def read_ops_status(site_root: pathlib.Path, *, site_id: str | None = None) -> dict:
+    """Snapshot for super-admin console (live + last cron writes)."""
+    import shutil
+
+    sid = (site_id or os.environ.get("VEERCANVAS_SITE_ID") or site_root.name.split(".")[0] or "site").strip()
+    status_path = site_root / "data" / "ops-status.json"
+    stored: dict = {}
+    if status_path.is_file():
+        try:
+            stored = json.loads(status_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            stored = {}
+
+    disk = shutil.disk_usage(site_root)
+    disk_free_pct = round((disk.free / disk.total) * 100) if disk.total else 0
+
+    mem_available_pct = None
+    load_ratio = None
+    mem_path = pathlib.Path("/proc/meminfo")
+    if mem_path.is_file():
+        info = {}
+        for raw in mem_path.read_text(encoding="utf-8").splitlines():
+            parts = raw.split(":")
+            if len(parts) == 2:
+                info[parts[0].strip()] = int(parts[1].strip().split()[0])
+        total = info.get("MemTotal") or 0
+        avail = info.get("MemAvailable") or info.get("MemFree") or 0
+        if total:
+            mem_available_pct = round((avail / total) * 100)
+    load_path = pathlib.Path("/proc/loadavg")
+    if load_path.is_file():
+        load1 = float(load_path.read_text().split()[0])
+        cpus = os.cpu_count() or 1
+        load_ratio = round(load1 / max(1, cpus), 2)
+
+    service_name = os.environ.get("VEERCANVAS_SERVICE_NAME") or ""
+    cfg_path = site_root / "veercanvas" / "sites" / sid / "site.config.json"
+    if not service_name and cfg_path.is_file():
+        try:
+            service_name = ((json.loads(cfg_path.read_text(encoding="utf-8")).get("admin") or {}).get("serviceName") or "")
+        except json.JSONDecodeError:
+            service_name = ""
+
+    def _service_active(name: str) -> bool | None:
+        if not name:
+            return None
+        try:
+            import subprocess
+
+            res = subprocess.run(
+                ["systemctl", "is-active", name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            return res.stdout.strip() == "active"
+        except OSError:
+            return None
+
+    ops = read_ops_settings(site_root)
+    return {
+        "siteId": sid,
+        "ops": ops,
+        "live": {
+            "diskFreePct": disk_free_pct,
+            "memAvailablePct": mem_available_pct,
+            "loadRatio": load_ratio,
+            "adminServiceActive": _service_active(f"{service_name}.service" if service_name and not service_name.endswith(".service") else service_name),
+            "nginxActive": _service_active("nginx"),
+        },
+        "lastBackup": stored.get("lastBackup"),
+        "lastVitals": stored.get("lastVitals"),
+        "statusFile": str(status_path),
+    }
+
 
 def _smtp_env_path(site_root: pathlib.Path) -> pathlib.Path:
     return site_root / "data" / "smtp.env"
@@ -181,6 +395,7 @@ def read_platform_settings(site_root: pathlib.Path) -> dict:
         "otpTtl": status["otpTtl"],
         "superadminUser": (os.environ.get("RWA_SUPERADMIN_USER") or "admin").strip() or "admin",
         "envFile": status["envFile"],
+        "ops": read_ops_settings(site_root),
     }
 
 
@@ -211,6 +426,10 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
     if payload.get("superadminUser"):
         mapping["RWA_SUPERADMIN_USER"] = str(payload["superadminUser"]).strip().lower()
 
+    ops_payload = payload.get("ops") if isinstance(payload.get("ops"), dict) else {}
+    if ops_payload:
+        mapping.update(_ops_settings_to_env(ops_payload))
+
     new_pass = str(smtp.get("password") or payload.get("smtpPassword") or "").strip()
     if new_pass:
         mapping["RWA_SMTP_PASS"] = new_pass
@@ -219,7 +438,7 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
 
     # Preserve unrelated keys
     for key, value in existing.items():
-        if key not in mapping and key.startswith("RWA_"):
+        if key not in mapping and (key.startswith("RWA_") or key in _OPS_ENV_KEYS):
             mapping[key] = value
 
     lines = [
@@ -232,8 +451,13 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
             lines.append(f"{key}={mapping[key]}")
     if mapping.get("RWA_SMTP_PASS"):
         lines.append(f"RWA_SMTP_PASS={mapping['RWA_SMTP_PASS']}")
+    lines.append("")
+    lines.append("# Ops: backups, vitals alerts (managed via Super admin → Settings)")
+    for key in _OPS_ENV_KEYS:
+        if key in mapping:
+            lines.append(f"{key}={mapping[key]}")
     for key, value in sorted(mapping.items()):
-        if key in _SETTINGS_KEYS or key == "RWA_SMTP_PASS":
+        if key in _SETTINGS_KEYS or key in _OPS_ENV_KEYS or key == "RWA_SMTP_PASS":
             continue
         lines.append(f"{key}={value}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -319,6 +543,9 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
         ensure_colony_works_table(conn)
+        ensure_entitlements_schema(conn)
+        ensure_report_templates_table(conn)
+        ensure_bilingual_content_columns(conn)
         migrate_roman_plot_ids(conn)
         ensure_superadmin_account(conn)
     return conn
@@ -704,7 +931,7 @@ def session_from_token(conn: sqlite3.Connection, token: str | None) -> dict | No
     return {
         "token": token,
         "expiresAt": row["expires_at"],
-        "resident": public_resident(resident, member=member),
+        "resident": public_actor(conn, resident, member=member),
     }
 
 
@@ -718,6 +945,10 @@ def destroy_session(conn: sqlite3.Connection, token: str | None) -> None:
 def public_resident(r: dict, member: dict | None = None) -> dict:
     super_admin = str(r.get("house_id") or "") == SUPERADMIN_HOUSE_ID
     household_name = r.get("name") or ""
+    is_ob = bool(int(r.get("is_office_bearer") or 0)) or bool(str(r.get("official_title") or "").strip()) or (
+        (r.get("role") or "") == "admin"
+    ) or super_admin
+    is_mem = bool(int(r.get("is_ec_member") or 0)) or is_ob or super_admin
     out = {
         "houseId": r.get("house_id"),
         "plotNo": r.get("plot_no"),
@@ -740,6 +971,12 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         "isPrimary": True,
         "canManageHousehold": True,
         "viewOnly": False,
+        "isEcMember": is_mem,
+        "isOfficeBearer": is_ob,
+        "isEcAdmin": (r.get("role") or "") == "admin" or super_admin,
+        "entitlements": [],
+        "hasPhoto": False,
+        "photoUrl": "",
     }
     if member and not super_admin:
         pub = household.public_member(member, include_contacts=True)
@@ -753,17 +990,24 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         out["isPrimary"] = bool(pub.get("isPrimary"))
         out["canManageHousehold"] = bool(pub.get("canManage") or pub.get("isPrimary")) and not bool(pub.get("viewOnly"))
         out["viewOnly"] = bool(pub.get("viewOnly"))
+        out["hasPhoto"] = bool(pub.get("hasPhoto"))
+        out["photoUrl"] = pub.get("photoUrl") or ""
         plot_is_ec = (r.get("role") or "") == "admin"
         out["plotIsEc"] = plot_is_ec
-        # EC seat is plot-level, but only the primary owner may act as EC admin.
-        # Delegates (including full-access spouses) get resident access at most.
         if not out["isPrimary"] and out["role"] == "admin":
             out["role"] = "resident"
+            out["isEcAdmin"] = False
         if out["viewOnly"]:
             out["role"] = "resident"
+            out["isEcAdmin"] = False
             out["canManageHousehold"] = False
             out["officialTitle"] = ""
     return out
+
+
+def public_actor(conn: sqlite3.Connection, r: dict, member: dict | None = None) -> dict:
+    """public_resident plus effective entitlements."""
+    return entitlements.enrich_actor(conn, public_resident(r, member=member))
 
 
 def normalize_phone(raw: str | None) -> str | None:
@@ -926,10 +1170,12 @@ def mask_phone(phone: str | None) -> str:
 
 
 def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> list[dict]:
+    entitlements.ensure_ready(conn)
     if include_contacts:
         rows = conn.execute(
             """
-            SELECT house_id, plot_no, section, name, title, profession, employment_status, official_title, role, email, phone, notes, status
+            SELECT house_id, plot_no, section, name, title, profession, employment_status,
+                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
             FROM residents
             WHERE house_id != ?
             ORDER BY section,
@@ -941,7 +1187,8 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
     else:
         rows = conn.execute(
             """
-            SELECT house_id, plot_no, section, name, title, profession, employment_status, official_title, role, email, phone, notes, status
+            SELECT house_id, plot_no, section, name, title, profession, employment_status,
+                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
             FROM residents
             WHERE status = 'active' AND house_id != ?
             ORDER BY section,
@@ -950,8 +1197,13 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             """,
             (SUPERADMIN_HOUSE_ID,),
         ).fetchall()
+    photos = primary_member_photo_map(conn)
     out = []
     for r in rows:
+        is_ec = (r["role"] or "") == "admin"
+        is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(r["official_title"] or "") or is_ec
+        is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
+        photo = photos.get(r["house_id"]) or photo_fields_for_member(None, None)
         item = {
             "houseId": r["house_id"],
             "plotNo": r["plot_no"],
@@ -959,6 +1211,12 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             "name": r["name"],
             "role": r["role"],
             "officialTitle": r["official_title"] or "",
+            "isEcMember": is_mem,
+            "isOfficeBearer": is_ob,
+            "isEcAdmin": is_ec,
+            "hasPhoto": photo["hasPhoto"],
+            "photoUrl": photo["photoUrl"],
+            "primaryMemberId": photo.get("memberId"),
         }
         if include_contacts:
             item["title"] = r["title"] or ""
@@ -971,6 +1229,11 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             item["status"] = r["status"] or "active"
             item["hasPhone"] = bool(r["phone"])
             item["hasEmail"] = bool(r["email"])
+            item["entitlements"] = (
+                sorted(entitlements.EC_ADMIN_ENTITLEMENTS)
+                if is_ec
+                else (entitlements.load_grants(conn, r["house_id"]) if is_mem else [])
+            )
         out.append(item)
     return out
 
@@ -1157,6 +1420,174 @@ def bank_qr_dir(site_root: pathlib.Path) -> pathlib.Path:
     return path
 
 
+PROFILE_PHOTO_SIZE = 280
+PROFILE_PHOTO_QUALITY = 72
+PROFILE_PHOTO_MAX_UPLOAD = 8_000_000  # 8 MB pre-crop upload
+
+
+def photo_fields_for_member(member_id: str | None, filename: str | None) -> dict:
+    return household.photo_fields_for_member(member_id, filename)
+
+
+def primary_member_photo_map(conn: sqlite3.Connection) -> dict[str, dict]:
+    return household.primary_member_photo_map(conn)
+
+
+def member_photo_map(conn: sqlite3.Connection, member_ids: list[str] | None = None) -> dict[str, dict]:
+    return household.member_photo_map(conn, member_ids)
+
+
+def profile_photo_dir(site_root: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(site_root) / "data" / "profile-photos"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def profile_photo_path(site_root: pathlib.Path, filename: str | None) -> pathlib.Path | None:
+    if not filename:
+        return None
+    name = pathlib.Path(str(filename)).name
+    if name != str(filename) or ".." in name or "/" in name or "\\" in name:
+        return None
+    if not re.fullmatch(r"photo_[A-Za-z0-9_-]+\.webp", name):
+        return None
+    path = profile_photo_dir(site_root) / name
+    return path if path.is_file() else None
+
+
+def _optimize_profile_photo_bytes(raw: bytes) -> bytes:
+    """Square-ish crop already done client-side; re-encode light WebP for phones."""
+    try:
+        from PIL import Image
+    except ImportError as exc:  # pragma: no cover
+        raise ValueError("Image processing unavailable on server") from exc
+    from io import BytesIO
+
+    try:
+        img = Image.open(BytesIO(raw))
+        img.load()
+    except Exception as exc:
+        raise ValueError("Could not read image") from exc
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA") if "A" in img.getbands() else img.convert("RGB")
+    # Center-crop to square then resize
+    w, h = img.size
+    if w <= 0 or h <= 0:
+        raise ValueError("Invalid image size")
+    side = min(w, h)
+    left = (w - side) // 2
+    top = (h - side) // 2
+    img = img.crop((left, top, left + side, top + side))
+    resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+    if side > PROFILE_PHOTO_SIZE:
+        img = img.resize((PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE), resample)
+    elif side < PROFILE_PHOTO_SIZE:
+        img = img.resize((PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE), resample)
+    if img.mode == "RGBA":
+        background = Image.new("RGB", img.size, (246, 241, 230))
+        background.paste(img, mask=img.split()[-1])
+        img = background
+    else:
+        img = img.convert("RGB")
+    out = BytesIO()
+    img.save(out, format="WEBP", quality=PROFILE_PHOTO_QUALITY, method=6)
+    data = out.getvalue()
+    if len(data) > 120_000:
+        # Second pass more aggressive
+        out = BytesIO()
+        img.save(out, format="WEBP", quality=58, method=6)
+        data = out.getvalue()
+    if not data:
+        raise ValueError("Could not encode photo")
+    return data
+
+
+def save_member_photo(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    member_id: str,
+    *,
+    file_storage,
+    actor: dict | None = None,
+) -> dict:
+    ensure_household_members_table(conn)
+    mid = (member_id or "").strip()
+    member = household.get_member(conn, mid)
+    if not member:
+        raise ValueError("Member not found")
+    actor = actor or {}
+    actor_mid = actor.get("memberId") or actor.get("member_id")
+    same_self = actor_mid and actor_mid == mid
+    managing = household.can_actor_manage_household(actor, member.get("house_id") or "")
+    if not same_self and not managing and not actor.get("superAdmin"):
+        raise ValueError("Not allowed to update this photo")
+    if household.actor_is_view_only(actor) and not same_self:
+        raise ValueError("View-only access cannot change photos")
+    if file_storage is None or not getattr(file_storage, "filename", None):
+        raise ValueError("Photo file required")
+    raw = file_storage.read()
+    if not raw:
+        raise ValueError("Empty upload")
+    if len(raw) > PROFILE_PHOTO_MAX_UPLOAD:
+        raise ValueError("Photo must be under 8 MB")
+    optimized = _optimize_profile_photo_bytes(raw)
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", mid)[:48] or secrets.token_hex(4)
+    filename = f"photo_{safe_id}.webp"
+    dest_dir = profile_photo_dir(site_root)
+    dest = dest_dir / filename
+    old_name = (member.get("photo_filename") or "").strip()
+    dest.write_bytes(optimized)
+    if old_name and old_name != filename:
+        old_path = profile_photo_path(site_root, old_name)
+        if old_path and old_path != dest:
+            try:
+                old_path.unlink()
+            except OSError:
+                pass
+    now = utc_now()
+    conn.execute(
+        "UPDATE household_members SET photo_filename = ?, updated_at = ? WHERE id = ?",
+        (filename, now, mid),
+    )
+    conn.commit()
+    return household.public_member(household.get_member(conn, mid), include_contacts=True)
+
+
+def clear_member_photo(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    member_id: str,
+    *,
+    actor: dict | None = None,
+) -> dict:
+    ensure_household_members_table(conn)
+    mid = (member_id or "").strip()
+    member = household.get_member(conn, mid)
+    if not member:
+        raise ValueError("Member not found")
+    actor = actor or {}
+    actor_mid = actor.get("memberId") or actor.get("member_id")
+    same_self = actor_mid and actor_mid == mid
+    managing = household.can_actor_manage_household(actor, member.get("house_id") or "")
+    if not same_self and not managing and not actor.get("superAdmin"):
+        raise ValueError("Not allowed to remove this photo")
+    old_name = (member.get("photo_filename") or "").strip()
+    if old_name:
+        path = profile_photo_path(site_root, old_name)
+        if path:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    now = utc_now()
+    conn.execute(
+        "UPDATE household_members SET photo_filename = NULL, updated_at = ? WHERE id = ?",
+        (now, mid),
+    )
+    conn.commit()
+    return household.public_member(household.get_member(conn, mid), include_contacts=True)
+
+
 def bank_qr_path(site_root: pathlib.Path, filename: str | None) -> pathlib.Path | None:
     if not filename:
         return None
@@ -1341,7 +1772,9 @@ def _info_public(r: sqlite3.Row | dict) -> dict:
     return {
         "id": data.get("id"),
         "title": data.get("title") or "",
+        "titleHi": data.get("title_hi") or data.get("titleHi") or "",
         "summary": data.get("summary") or "",
+        "summaryHi": data.get("summary_hi") or data.get("summaryHi") or "",
         "category": cat,
         "categoryLabel": label,
         "docType": data.get("doc_type") or "file",
@@ -1357,6 +1790,7 @@ def _info_public(r: sqlite3.Row | dict) -> dict:
         "createdAt": data.get("created_at"),
         "updatedAt": data.get("updated_at"),
         "hasFile": bool(data.get("filename")),
+        "hasHtmlHi": bool(int(data.get("has_html_hi") or data.get("hasHtmlHi") or 0)),
     }
 
 
@@ -1457,6 +1891,7 @@ def upsert_info_document(
     file_storage=None,
 ) -> dict:
     ensure_info_documents_table(conn)
+    ensure_bilingual_content_columns(conn)
     doc_id = (payload.get("id") or f"info_{secrets.token_hex(6)}").strip()
     existing = conn.execute("SELECT * FROM info_documents WHERE id = ?", (doc_id,)).fetchone()
 
@@ -1470,6 +1905,21 @@ def upsert_info_document(
     category = _info_category(
         payload.get("category") if "category" in payload else (existing["category"] if existing else "general")
     )
+
+    def _pick_hi(field: str, camel: str, *, max_len: int | None = None) -> str | None:
+        if camel in payload or field in payload:
+            raw = payload.get(camel, payload.get(field))
+            text = str(raw or "").strip()
+            if max_len is not None:
+                text = text[:max_len]
+            return text
+        if existing and field in existing.keys():
+            return existing[field] or ""
+        return ""
+
+    title_hi = _pick_hi("title_hi", "titleHi", max_len=160) or ""
+    summary_hi = _pick_hi("summary_hi", "summaryHi", max_len=800) or ""
+    has_html_hi = int(existing["has_html_hi"] or 0) if existing and "has_html_hi" in existing.keys() else 0
 
     status = (
         payload.get("status")
@@ -1520,14 +1970,43 @@ def upsert_info_document(
         mime_type = "text/html"
         size_bytes = len(data)
         dest_dir = info_doc_dir(site_root, doc_id)
+        # Keep content_hi.html when replacing English HTML.
         for old in dest_dir.iterdir():
-            if old.is_file():
+            if old.is_file() and old.name != "content_hi.html":
                 try:
                     old.unlink()
                 except OSError:
                     pass
         (dest_dir / filename).write_bytes(data)
-    elif file_storage is not None and getattr(file_storage, "filename", None):
+
+    html_body_hi = None
+    if "htmlBodyHi" in payload or "html_body_hi" in payload:
+        html_body_hi = payload.get("htmlBodyHi", payload.get("html_body_hi"))
+    if doc_type == "html" and html_body_hi is not None:
+        hi_text = str(html_body_hi).strip()
+        dest_dir = info_doc_dir(site_root, doc_id)
+        hi_path = dest_dir / "content_hi.html"
+        if hi_text:
+            if len(hi_text.encode("utf-8")) > INFO_MAX_BYTES:
+                raise ValueError("Hindi HTML content must be under 15 MB")
+            wrapped_hi = _wrap_html_document(title_hi or title, hi_text)
+            hi_path.write_bytes(wrapped_hi.encode("utf-8"))
+            has_html_hi = 1
+        else:
+            try:
+                if hi_path.is_file():
+                    hi_path.unlink()
+            except OSError:
+                pass
+            has_html_hi = 0
+    elif doc_type == "html":
+        # Preserve existing Hindi HTML file flag.
+        dest_dir = info_doc_dir(site_root, doc_id)
+        has_html_hi = 1 if (dest_dir / "content_hi.html").is_file() else has_html_hi
+    elif doc_type != "html":
+        has_html_hi = 0
+
+    if file_storage is not None and getattr(file_storage, "filename", None):
         original = _sanitize_upload_name(file_storage.filename)
         ext = pathlib.Path(original).suffix.lower()
         if ext not in INFO_DOC_MIME:
@@ -1552,7 +2031,8 @@ def upsert_info_document(
                 except OSError:
                     pass
         (dest_dir / filename).write_bytes(data)
-    elif not existing:
+        has_html_hi = 0
+    elif not existing and not filename:
         if doc_type == "html":
             raise ValueError("HTML content required")
         raise ValueError("Upload a document file, or create HTML content")
@@ -1576,8 +2056,9 @@ def upsert_info_document(
         """
         INSERT INTO info_documents(
           id, title, summary, category, doc_type, filename, original_name, mime_type,
-          size_bytes, status, audience, published_at, published_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          size_bytes, status, audience, published_at, published_by, created_at, updated_at,
+          title_hi, summary_hi, has_html_hi
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           summary=excluded.summary,
@@ -1591,7 +2072,10 @@ def upsert_info_document(
           audience=excluded.audience,
           published_at=excluded.published_at,
           published_by=excluded.published_by,
-          updated_at=excluded.updated_at
+          updated_at=excluded.updated_at,
+          title_hi=excluded.title_hi,
+          summary_hi=excluded.summary_hi,
+          has_html_hi=excluded.has_html_hi
         """,
         (
             doc_id,
@@ -1609,6 +2093,9 @@ def upsert_info_document(
             published_by,
             created_at,
             now,
+            title_hi,
+            summary_hi,
+            has_html_hi,
         ),
     )
     conn.commit()
@@ -2286,18 +2773,21 @@ def grievance_categories() -> list[dict]:
     return [{"id": k, "label": v} for k, v in GRIEVANCE_CATEGORIES.items()]
 
 
-def _grievance_public(row: sqlite3.Row | dict, *, include_contacts: bool = False) -> dict:
+def _grievance_public(row: sqlite3.Row | dict, *, include_contacts: bool = False, photo: dict | None = None) -> dict:
     if hasattr(row, "keys"):
         data = {k: row[k] for k in row.keys()}
     else:
         data = dict(row)
+    photo = photo or photo_fields_for_member(None, None)
     item = {
         "id": data.get("id"),
         "houseId": data.get("house_id") or data.get("houseId"),
         "category": data.get("category") or "other",
         "categoryLabel": GRIEVANCE_CATEGORIES.get(data.get("category") or "other", "Other"),
         "subject": data.get("subject") or "",
+        "subjectHi": data.get("subject_hi") or data.get("subjectHi") or "",
         "body": data.get("body") or "",
+        "bodyHi": data.get("body_hi") or data.get("bodyHi") or "",
         "status": data.get("status") or "open",
         "createdAt": data.get("created_at") or data.get("createdAt"),
         "updatedAt": data.get("updated_at") or data.get("updatedAt"),
@@ -2309,6 +2799,9 @@ def _grievance_public(row: sqlite3.Row | dict, *, include_contacts: bool = False
         "section": data.get("section") or "",
         "plotNo": data.get("plot_no") or data.get("plotNo") or "",
         "messages": [],
+        "hasPhoto": photo.get("hasPhoto", False),
+        "photoUrl": photo.get("photoUrl") or "",
+        "primaryMemberId": photo.get("memberId"),
     }
     if include_contacts:
         item["phone"] = data.get("phone") or ""
@@ -2316,7 +2809,7 @@ def _grievance_public(row: sqlite3.Row | dict, *, include_contacts: bool = False
     return item
 
 
-def _list_grievance_messages(conn: sqlite3.Connection, grievance_id: str) -> list[dict]:
+def _list_grievance_messages(conn: sqlite3.Connection, grievance_id: str, *, photos: dict | None = None) -> list[dict]:
     rows = conn.execute(
         """
         SELECT * FROM grievance_messages
@@ -2325,6 +2818,7 @@ def _list_grievance_messages(conn: sqlite3.Connection, grievance_id: str) -> lis
         """,
         (grievance_id,),
     ).fetchall()
+    photos = photos if photos is not None else primary_member_photo_map(conn)
     return [
         {
             "id": r["id"],
@@ -2333,7 +2827,9 @@ def _list_grievance_messages(conn: sqlite3.Connection, grievance_id: str) -> lis
             "authorName": r["author_name"] or "",
             "authorRole": r["author_role"] or "resident",
             "body": r["body"] or "",
+            "bodyHi": (r["body_hi"] if "body_hi" in r.keys() else "") or "",
             "createdAt": r["created_at"],
+            **(photos.get(r["author_house_id"] or "") or photo_fields_for_member(None, None)),
         }
         for r in rows
     ]
@@ -2351,13 +2847,19 @@ def _fetch_grievance(conn: sqlite3.Connection, grievance_id: str, *, include_con
     ).fetchone()
     if not joined:
         raise ValueError("Concern not found")
-    item = _grievance_public(joined, include_contacts=include_contacts)
-    item["messages"] = _list_grievance_messages(conn, grievance_id)
+    photos = primary_member_photo_map(conn)
+    item = _grievance_public(
+        joined,
+        include_contacts=include_contacts,
+        photo=photos.get(joined["house_id"]),
+    )
+    item["messages"] = _list_grievance_messages(conn, grievance_id, photos=photos)
     return item
 
 
 def create_grievance(conn: sqlite3.Connection, house_id: str, payload: dict) -> dict:
     ensure_grievances_table(conn)
+    ensure_bilingual_content_columns(conn)
     hid = normalize_house_id(house_id)
     resident = find_resident(conn, hid)
     if not resident:
@@ -2370,6 +2872,8 @@ def create_grievance(conn: sqlite3.Connection, house_id: str, payload: dict) -> 
         raise ValueError("Choose a valid category")
     subject = str(payload.get("subject") or "").strip()
     body = str(payload.get("body") or payload.get("message") or "").strip()
+    subject_hi = str(payload.get("subjectHi") or payload.get("subject_hi") or "").strip()[:160]
+    body_hi = str(payload.get("bodyHi") or payload.get("body_hi") or "").strip()[:4000]
     if len(subject) < 4:
         raise ValueError("Subject is too short")
     if len(body) < 8:
@@ -2385,18 +2889,18 @@ def create_grievance(conn: sqlite3.Connection, house_id: str, payload: dict) -> 
     conn.execute(
         """
         INSERT INTO grievances(
-          id, house_id, category, subject, body, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
+          id, house_id, category, subject, body, status, created_at, updated_at, subject_hi, body_hi
+        ) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
         """,
-        (gid, resident["house_id"], category, subject, body, now, now),
+        (gid, resident["house_id"], category, subject, body, now, now, subject_hi or None, body_hi or None),
     )
     conn.execute(
         """
         INSERT INTO grievance_messages(
-          id, grievance_id, author_house_id, author_name, author_role, body, created_at
-        ) VALUES (?, ?, ?, ?, 'resident', ?, ?)
+          id, grievance_id, author_house_id, author_name, author_role, body, created_at, body_hi
+        ) VALUES (?, ?, ?, ?, 'resident', ?, ?, ?)
         """,
-        (mid, gid, resident["house_id"], resident.get("name") or resident["house_id"], body, now),
+        (mid, gid, resident["house_id"], resident.get("name") or resident["house_id"], body, now, body_hi or None),
     )
     conn.commit()
     return _fetch_grievance(conn, gid)
@@ -2441,10 +2945,15 @@ def list_grievances(
         """,
         (*args, lim),
     ).fetchall()
+    photos = primary_member_photo_map(conn)
     items = []
     for r in rows:
-        item = _grievance_public(r, include_contacts=include_contacts)
-        item["messages"] = _list_grievance_messages(conn, r["id"])
+        item = _grievance_public(
+            r,
+            include_contacts=include_contacts,
+            photo=photos.get(r["house_id"]),
+        )
+        item["messages"] = _list_grievance_messages(conn, r["id"], photos=photos)
         items.append(item)
     return items
 
@@ -2479,6 +2988,7 @@ def add_grievance_message(
 ) -> dict:
     """Append a mailbox reply. Any signed-in resident/EC can post on the shared thread."""
     ensure_grievances_table(conn)
+    ensure_bilingual_content_columns(conn)
     gid = str(grievance_id or "").strip()
     row = conn.execute("SELECT * FROM grievances WHERE id = ?", (gid,)).fetchone()
     if not row:
@@ -2491,6 +3001,7 @@ def add_grievance_message(
         raise ValueError("Message is too short")
     if len(body) > 4000:
         body = body[:4000]
+    body_hi = str(payload.get("bodyHi") or payload.get("body_hi") or "").strip()[:4000] or None
 
     is_ec = (actor.get("role") == "admin") or bool(actor.get("superAdmin"))
     author_role = "ec" if is_ec else "resident"
@@ -2501,10 +3012,10 @@ def add_grievance_message(
     conn.execute(
         """
         INSERT INTO grievance_messages(
-          id, grievance_id, author_house_id, author_name, author_role, body, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          id, grievance_id, author_house_id, author_name, author_role, body, created_at, body_hi
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (mid, gid, author_house, author_name, author_role, body, now),
+        (mid, gid, author_house, author_name, author_role, body, now, body_hi),
     )
 
     status = str(payload.get("status") or "").strip().lower()
@@ -2564,7 +3075,11 @@ def respond_grievance(
         return add_grievance_message(
             conn,
             grievance_id,
-            {"body": response, "status": status or None},
+            {
+                "body": response,
+                "bodyHi": payload.get("bodyHi") or payload.get("body_hi") or payload.get("responseHi"),
+                "status": status or None,
+            },
             actor,
         )
     # Status-only update
@@ -2599,6 +3114,7 @@ def list_ec_members(conn: sqlite3.Connection) -> list[dict]:
         """,
         (SUPERADMIN_HOUSE_ID,),
     ).fetchall()
+    photos = primary_member_photo_map(conn)
     return [
         {
             "houseId": r["house_id"],
@@ -2610,6 +3126,7 @@ def list_ec_members(conn: sqlite3.Connection) -> list[dict]:
                 if r["official_title"]
                 else f"{r['name']} ({r['house_id']})"
             ),
+            **(photos.get(r["house_id"]) or photo_fields_for_member(None, None)),
         }
         for r in rows
     ]
@@ -2818,7 +3335,9 @@ def _notice_public(
     return {
         "id": notice_id,
         "title": data.get("title") or "",
+        "titleHi": data.get("title_hi") or data.get("titleHi") or "",
         "body": data.get("body") or "",
+        "bodyHi": data.get("body_hi") or data.get("bodyHi") or "",
         "category": data.get("category") or "general",
         "pinned": bool(data.get("pinned")),
         "pinOrder": int(data.get("pin_order") or data.get("pinOrder") or 0),
@@ -2846,24 +3365,34 @@ def list_notice_comments(conn: sqlite3.Connection, notice_id: str) -> list[dict]
         raise ValueError("Notice not found")
     rows = conn.execute(
         """
-        SELECT id, notice_id, house_id, author_name, body, created_at
+        SELECT id, notice_id, house_id, member_id, author_name, body, created_at
         FROM notice_comments
         WHERE notice_id = ? AND status = 'active'
         ORDER BY created_at ASC, id ASC
         """,
         (nid,),
     ).fetchall()
-    return [
-        {
+    member_ids = [r["member_id"] for r in rows if r["member_id"]]
+    photos_by_member = member_photo_map(conn, member_ids)
+    photos_by_house = primary_member_photo_map(conn)
+    out = []
+    for r in rows:
+        mid = r["member_id"] or ""
+        photo = photos_by_member.get(mid) if mid else None
+        if not photo or not photo.get("hasPhoto"):
+            photo = photos_by_house.get(r["house_id"] or "") or photo_fields_for_member(mid, None)
+        out.append({
             "id": r["id"],
             "noticeId": r["notice_id"],
             "houseId": r["house_id"],
+            "memberId": mid or None,
             "authorName": r["author_name"] or r["house_id"],
             "body": r["body"] or "",
             "createdAt": r["created_at"],
-        }
-        for r in rows
-    ]
+            "hasPhoto": photo.get("hasPhoto", False),
+            "photoUrl": photo.get("photoUrl") or "",
+        })
+    return out
 
 
 def toggle_notice_like(
@@ -3175,6 +3704,7 @@ def upsert_notice(
 ) -> dict:
     ensure_notice_pin_order(conn)
     ensure_notice_shares_table(conn)
+    ensure_bilingual_content_columns(conn)
     notice_id = (payload.get("id") or f"n_{secrets.token_hex(6)}").strip()
     existing = conn.execute("SELECT * FROM notices WHERE id = ?", (notice_id,)).fetchone()
 
@@ -3193,6 +3723,16 @@ def upsert_notice(
     if body is None:
         body = (existing["body"] if existing else "") or ""
     body = str(body).strip()
+
+    def _pick_notice_hi(snake: str, camel: str) -> str:
+        if camel in payload or snake in payload:
+            return str(payload.get(camel, payload.get(snake)) or "").strip()
+        if existing and snake in existing.keys():
+            return (existing[snake] or "")
+        return ""
+
+    title_hi = _pick_notice_hi("title_hi", "titleHi")
+    body_hi = _pick_notice_hi("body_hi", "bodyHi")
 
     status = (payload.get("status") or (existing["status"] if existing else None) or "published").strip()
     if status not in {"draft", "published", "archived"}:
@@ -3250,8 +3790,8 @@ def upsert_notice(
 
     conn.execute(
         """
-        INSERT INTO notices(id, title, body, category, pinned, pin_order, published_at, published_by, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO notices(id, title, body, category, pinned, pin_order, published_at, published_by, status, title_hi, body_hi)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           body=excluded.body,
@@ -3260,9 +3800,11 @@ def upsert_notice(
           pin_order=excluded.pin_order,
           published_at=excluded.published_at,
           published_by=excluded.published_by,
-          status=excluded.status
+          status=excluded.status,
+          title_hi=excluded.title_hi,
+          body_hi=excluded.body_hi
         """,
-        (notice_id, title, body or "", category, pinned, pin_order, published_at, published_by, status),
+        (notice_id, title, body or "", category, pinned, pin_order, published_at, published_by, status, title_hi or None, body_hi or None),
     )
     if status == "published" and was_draft:
         conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (notice_id,))
@@ -3657,16 +4199,76 @@ def update_profile(
             raise ValueError("Only EC / super admin can set official title")
         official_title = str(payload.get("officialTitle", payload.get("official_title")) or "").strip()[:80] or None
 
+    can_manage_roles = actor_is_super or entitlements.actor_has(actor, "sensitive_ops") or entitlements.actor_has(actor, "manage_roles")
+    is_office_bearer = bool(int(resident.get("is_office_bearer") or 0)) or bool(
+        str(resident.get("official_title") or "").strip()
+    ) or (resident.get("role") == "admin")
+    is_ec_member = bool(int(resident.get("is_ec_member") or 0)) or is_office_bearer or (
+        resident.get("role") == "admin"
+    )
+
+    if "isEcMember" in payload or "ecMember" in payload:
+        if not can_manage_roles:
+            raise ValueError("manage_roles entitlement required")
+        want_mem = bool(payload.get("isEcMember", payload.get("ecMember")))
+        if want_mem:
+            is_ec_member = True
+        else:
+            # Removing EC membership also clears OB / admin (with guards)
+            if (resident.get("role") == "admin" or payload.get("role") == "admin") and entitlements.count_ec_admins(conn) <= 1:
+                raise ValueError("Cannot remove the last EC Admin from EC membership")
+            is_ec_member = False
+            is_office_bearer = False
+            if "role" not in payload:
+                payload = {**payload, "role": "resident"}
+            if "isOfficeBearer" not in payload and "officeBearer" not in payload:
+                payload = {**payload, "isOfficeBearer": False}
+
+    if "isOfficeBearer" in payload or "officeBearer" in payload:
+        if not can_manage_roles:
+            raise ValueError("manage_roles entitlement required")
+        want_ob = bool(payload.get("isOfficeBearer", payload.get("officeBearer")))
+        if want_ob:
+            if not official_title:
+                raise ValueError("Official title is required for office bearers")
+            is_office_bearer = True
+            is_ec_member = True
+        else:
+            if (resident.get("role") == "admin" or payload.get("role") == "admin") and entitlements.count_ec_admins(conn) <= 1:
+                raise ValueError("Cannot remove the last EC Admin from office bearer status")
+            is_office_bearer = False
+            if "role" not in payload:
+                payload = {**payload, "role": "resident"}
+            # Stay EC member unless explicitly cleared
+
+    # Setting a title implies office bearer (+ EC member) when managed via roles
+    if official_title and can_manage_roles and (
+        "officialTitle" in payload or "official_title" in payload
+    ):
+        is_office_bearer = True
+        is_ec_member = True
+
     role = resident.get("role")
     if "role" in payload and payload.get("role") in {"admin", "resident"}:
         new_role = payload["role"]
         if new_role != role:
-            if not actor_is_super:
-                raise ValueError("Only super admin can assign or remove EC admin role")
+            if not can_manage_roles:
+                raise ValueError("manage_roles entitlement required to change EC Admin role")
+            if new_role == "admin":
+                if not is_office_bearer and not official_title:
+                    raise ValueError("Only office bearers can be elevated to EC Admin")
+                is_office_bearer = True
+                is_ec_member = True
+            else:
+                if entitlements.count_ec_admins(conn) <= 1 and role == "admin":
+                    raise ValueError("Cannot demote the last EC Admin")
             role = new_role
-            if role == "resident":
-                # Leaving EC: keep official_title for history unless cleared explicitly
-                pass
+
+    if role == "admin":
+        is_office_bearer = True
+        is_ec_member = True
+    if is_office_bearer:
+        is_ec_member = True
 
     notes = resident.get("notes")
     if as_admin and "notes" in payload:
@@ -3676,23 +4278,18 @@ def update_profile(
     if "status" in payload and payload.get("status") in {"active", "inactive"}:
         new_status = payload["status"]
         if new_status != status:
-            # Suspend / reinstate EC admins is super-admin only
             if (resident.get("role") == "admin" or role == "admin") and not actor_is_super:
                 raise ValueError("Only super admin can suspend or reinstate EC admins")
             if not as_admin and not actor_is_super:
                 raise ValueError("Admin access required to change status")
             status = new_status
 
-    if role != "admin":
-        # Official title is EC-facing; optional clear when demoted unless payload keeps it
-        if "officialTitle" not in payload and "official_title" not in payload and role == "resident":
-            pass
-
+    entitlements.ensure_ready(conn)
     conn.execute(
         """
         UPDATE residents SET
           email=?, phone=?, name=?, title=?, profession=?, employment_status=?,
-          official_title=?, role=?, notes=?, status=?, updated_at=?
+          official_title=?, is_ec_member=?, is_office_bearer=?, role=?, notes=?, status=?, updated_at=?
         WHERE house_id=?
         """,
         (
@@ -3703,6 +4300,8 @@ def update_profile(
             profession,
             employment,
             official_title,
+            1 if is_ec_member else 0,
+            1 if is_office_bearer else 0,
             role,
             notes,
             status,
@@ -3710,6 +4309,26 @@ def update_profile(
             resident["house_id"],
         ),
     )
+
+    if role == "admin":
+        conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (resident["house_id"],))
+    elif not is_ec_member:
+        conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (resident["house_id"],))
+
+    # One-off entitlement grants for EC members / office bearers (not EC admins)
+    if "entitlements" in payload and isinstance(payload.get("entitlements"), list):
+        if not can_manage_roles:
+            raise ValueError("manage_roles entitlement required")
+        if role == "admin":
+            pass
+        else:
+            entitlements.set_grants(
+                conn,
+                resident["house_id"],
+                payload["entitlements"],
+                granted_by=actor.get("houseId"),
+                commit=False,
+            )
 
     after = {
         "houseId": resident["house_id"],
@@ -3720,6 +4339,8 @@ def update_profile(
         "profession": profession or "",
         "employmentStatus": employment,
         "officialTitle": official_title or "",
+        "isEcMember": is_ec_member,
+        "isOfficeBearer": is_office_bearer,
         "email": email or "",
         "phone": phone or "",
         "role": role,
@@ -3739,9 +4360,12 @@ def update_profile(
     refreshed = find_resident(conn, house_id, include_inactive=True) or {**resident, **{
         "name": name, "email": email, "phone": phone, "title": title,
         "profession": profession, "employment_status": employment,
-        "official_title": official_title, "role": role, "notes": notes, "status": status,
+        "official_title": official_title,
+        "is_ec_member": 1 if is_ec_member else 0,
+        "is_office_bearer": 1 if is_office_bearer else 0,
+        "role": role, "notes": notes, "status": status,
     }}
-    return public_resident(refreshed)
+    return public_actor(conn, refreshed)
 
 
 def create_session_for_resident(
@@ -3769,7 +4393,7 @@ def create_session_for_resident(
     return {
         "token": token,
         "expiresAt": expires_at,
-        "resident": public_resident(resident, member=member),
+        "resident": public_actor(conn, resident, member=member),
     }
 
 

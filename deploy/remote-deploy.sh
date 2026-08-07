@@ -217,12 +217,18 @@ rsync -az --delete \
   --filter 'P data/imports/***' \
   --filter 'P data/payments/' \
   --filter 'P data/payments/***' \
+  --filter 'P data/profile-photos/' \
+  --filter 'P data/profile-photos/***' \
+  --filter 'P data/info-centre/' \
+  --filter 'P data/info-centre/***' \
   --exclude 'data/rwa.db' \
   --exclude 'data/rwa.db-*' \
   --exclude 'data/smtp.env' \
   --exclude 'data/*.env' \
   --exclude 'data/imports/' \
   --exclude 'data/payments/' \
+  --exclude 'data/profile-photos/' \
+  --exclude 'data/info-centre/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
@@ -231,7 +237,7 @@ rsync -az --delete \
 
 # First-deploy bootstrap only: seed DB / example env if missing on server (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/info-centre' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \

@@ -1,0 +1,10 @@
+/var/log/veercanvas/*.log {
+  weekly
+  missingok
+  rotate 8
+  compress
+  delaycompress
+  notifempty
+  create 0640 root adm
+  sharedscripts
+}

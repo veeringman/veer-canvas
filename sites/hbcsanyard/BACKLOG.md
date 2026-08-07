@@ -10,6 +10,8 @@ Last updated: 2026-08-07
 
 Export printable PDFs from the portal / EC desk:
 
+- [x] **Pending dues report** — customizable columns; all / filtered / selected plots; letterhead + office bearers (EC)
+- [x] **Report catalog + custom + saved templates** — select report type; custom dataset/columns; save/reuse templates
 - [ ] **Plot dues statement** — one plot: balance, year dues, payments, remarks
 - [ ] **Colony dues summary** — all plots: pending / paid / totals (EC)
 - [ ] **Notices archive** — date range of published notices
@@ -56,12 +58,12 @@ Prefer A4, RWA letterhead styling consistent with `documents/` print pads.
 
 ## Ops / reliability
 
-- [ ] **Scheduled data backups** — regular interval dumps of `rwa.db` (+ optional uploads folder / smtp.env secrets policy)
+- [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (14-day retention). See `deploy/OPS-BACKUP.md`
 - [ ] **Google Drive upload** — push encrypted or dated backup snapshots to a Drive folder (service account or OAuth; retain N days/weeks)
-- [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging
-- [ ] **Log / event stream rollover** — rotate app/nginx/systemd logs; size + time based retention
-- [ ] **Observability event pruning** — archive or purge old `access_events` (and similar streams) on a schedule; keep hot window for EC/super-admin dashboards
-- [ ] **Backup & rollover alerts** — email/notify super admin on backup failure or disk pressure
+- [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging *(on-box restore steps in OPS-BACKUP.md)*
+- [x] **Log / event stream rollover** — journald 200M/14d + nginx logrotate 14d + backup log rotate
+- [x] **Observability event pruning** — purge `access_events` older than 90 days with each backup run
+- [x] **Backup & rollover alerts** — email via `smtp.env` (`BACKUP_ALERT_TO`) on backup failure or disk pressure
 
 ## Security & abuse protection
 
@@ -96,8 +98,8 @@ Take the HBC Sanyard resident portal beyond one colony — configurable product 
 
 ## Suggested priority (when starting next)
 
-1. PDF report exports (dues statement + colony summary)
-2. Security hardening (rate limits, headers, DoS shields) + scheduled backups → Drive + log/event rollover
+1. More PDF reports (plot statement, colony summary, concerns)
+2. Security hardening (rate limits, headers, DoS shields) + Phase 2 Drive backups + restore drill
 3. Platformization spike — extract tenant config + `rwa-portal` site template (white-label path)
 4. Maintenance consent votes
 5. Dues receipt vault

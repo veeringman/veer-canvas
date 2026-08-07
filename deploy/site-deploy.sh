@@ -295,5 +295,13 @@ ensure_tls
 echo "[4/4] Reload nginx"
 nginx -t
 systemctl reload nginx
+
+if [[ -n "${SITE_ID}" ]]; then
+  echo "[ops] Installing Phase-1 backup + log retention for ${SITE_ID}"
+  SITE_ID="$SITE_ID" WEB_ROOT="$WEB_ROOT" DOMAIN="$DOMAIN" \
+    VEERCANVAS_SERVICE_NAME="$SERVICE_NAME" \
+    bash "${SCRIPT_DIR}/install-ops.sh" || echo "warning: install-ops failed (non-fatal)" >&2
+fi
+
 echo "Site: https://$DOMAIN/ (or http if cert pending)"
 echo "Admin: https://$DOMAIN/admin/"

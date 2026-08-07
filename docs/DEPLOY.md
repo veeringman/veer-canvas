@@ -33,8 +33,11 @@ Before first deploy of a new host, point DNS (`A`/`AAAA`) at the EC2 IP so TLS c
 | Script | Role |
 |--------|------|
 | [`deploy/remote-deploy.sh`](../deploy/remote-deploy.sh) | Local → SSH/rsync → invoke remote site-deploy |
-| [`deploy/site-deploy.sh`](../deploy/site-deploy.sh) | On host: nginx + systemd for that site |
+| [`deploy/site-deploy.sh`](../deploy/site-deploy.sh) | On host: nginx + systemd + Phase-1 ops install |
+| [`deploy/backup-site.sh`](../deploy/backup-site.sh) | Daily on-box SQLite / uploads / config backup |
+| [`deploy/install-ops.sh`](../deploy/install-ops.sh) | Cron, journald retention, logrotate |
 | [`deploy/lib/site-env.sh`](../deploy/lib/site-env.sh) | Shared path/config resolution |
+| [`deploy/OPS-BACKUP.md`](../deploy/OPS-BACKUP.md) | Backup + restore runbook (Phase 1) |
 
 ## Environment
 

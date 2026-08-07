@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260806hh1">
-  <script src="portal.js?v=20260806hh1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260807ops1">
+  <script src="portal.js?v=20260807ops1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -133,7 +133,15 @@
           <img class="seal-mini" src="assets/hbcs-sanyard-seal-mark.jpg" alt="" width="42" height="42" decoding="async">
           <div class="brand-mini-text">
             <strong>HBC Sanyard</strong>
-            <span id="userChip" class="chip">—</span>
+            <span class="user-chip-row">
+              <span class="chip-avatar" id="userChipAvatar" aria-hidden="true">
+                <img id="userChipAvatarImg" alt="" hidden>
+                <span class="chip-avatar-placeholder" id="userChipAvatarPlaceholder">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5.8 18.8c1.5-2.6 3.4-3.9 6.2-3.9s4.7 1.3 6.2 3.9"/></svg>
+                </span>
+              </span>
+              <span id="userChip" class="chip">—</span>
+            </span>
           </div>
         </div>
         <div class="app-top-actions">
@@ -166,11 +174,29 @@
 
     <main class="app-main">
       <section class="panel is-active" id="panel-home">
-        <header class="panel-head">
-          <h2>Colony board</h2>
-          <p class="muted">Pinned notices and updates from the Executive Committee.</p>
+        <header class="panel-head panel-head-lang">
+          <div class="panel-head-copy">
+            <h2>Colony board</h2>
+            <p class="muted">Pinned notices and updates from the Executive Committee.</p>
+          </div>
+          <div class="lang-toggle" data-lang-section="notices" role="group" aria-label="Notice language">
+            <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
+            <button type="button" class="lang-btn" data-lang="hi" title="हिन्दी" aria-pressed="false"><span class="lang-glyph" aria-hidden="true">अ</span><span class="lang-label">हिं</span></button>
+          </div>
         </header>
-        <div id="noticeList" class="notice-list"></div>
+        <div class="lang-section-wrap" data-lang-section="notices">
+          <div id="noticeList" class="notice-list"></div>
+          <div class="lang-overlay" id="noticesLangOverlay" hidden>
+            <div class="lang-overlay-scrim" data-lang-close="notices" aria-hidden="true"></div>
+            <div class="lang-overlay-panel" role="dialog" aria-label="Hindi notices">
+              <header class="lang-overlay-head">
+                <h3>सूचनाएँ · Hindi</h3>
+                <button type="button" class="btn ghost compact" data-lang-close="notices">Close · बंद करें</button>
+              </header>
+              <div class="lang-overlay-body" id="noticesLangOverlayBody"></div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="panel-dues" hidden>
@@ -214,13 +240,26 @@
       </section>
 
       <section class="panel" id="panel-concerns" hidden>
-        <header class="panel-head">
-          <h2>Colony mailbox</h2>
-          <p class="muted">Shared concerns inbox — every resident can read the full trail of issues and replies.</p>
+        <header class="panel-head panel-head-lang">
+          <div class="panel-head-copy">
+            <h2>Colony mailbox</h2>
+            <p class="muted">Shared concerns inbox — every resident can read the full trail of issues and replies.</p>
+          </div>
+          <div class="lang-toggle" data-lang-section="concerns" role="group" aria-label="Mailbox language">
+            <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
+            <button type="button" class="lang-btn" data-lang="hi" title="हिन्दी" aria-pressed="false"><span class="lang-glyph" aria-hidden="true">अ</span><span class="lang-label">हिं</span></button>
+          </div>
         </header>
 
+        <div class="lang-section-wrap" data-lang-section="concerns">
         <form id="grievanceForm" class="stack narrow grievance-form">
-          <h3>New concern</h3>
+          <div class="form-lang-row">
+            <h3>New concern</h3>
+            <div class="author-lang-toggle" data-author-form="grievance" role="group" aria-label="Writing language">
+              <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
+              <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
+            </div>
+          </div>
           <label>
             Category
             <select id="grievanceCategory" name="category" required>
@@ -238,14 +277,26 @@
               <option value="other">Other</option>
             </select>
           </label>
-          <label>
-            Subject
-            <input id="grievanceSubject" name="subject" maxlength="160" required placeholder="Short summary">
-          </label>
-          <label>
-            Details
-            <textarea id="grievanceBody" name="body" rows="4" required placeholder="Describe the concern clearly…"></textarea>
-          </label>
+          <div data-author-pane="grievance" data-lang="en">
+            <label>
+              Subject
+              <input id="grievanceSubject" name="subject" maxlength="160" required placeholder="Short summary">
+            </label>
+            <label>
+              Details
+              <textarea id="grievanceBody" name="body" rows="4" required placeholder="Describe the concern clearly…"></textarea>
+            </label>
+          </div>
+          <div data-author-pane="grievance" data-lang="hi" hidden>
+            <label>
+              विषय (Hindi)
+              <input id="grievanceSubjectHi" name="subjectHi" maxlength="160" placeholder="संक्षिप्त विषय">
+            </label>
+            <label>
+              विवरण (Hindi)
+              <textarea id="grievanceBodyHi" name="bodyHi" rows="4" placeholder="चिंता का विवरण हिंदी में…"></textarea>
+            </label>
+          </div>
           <button type="submit" class="btn primary" id="grievanceSubmitBtn">Post to mailbox</button>
           <p class="muted" id="grievanceFormStatus"></p>
         </form>
@@ -285,14 +336,32 @@
           <button type="button" class="btn ghost compact" id="mailboxRefreshBtn">Refresh</button>
         </div>
         <div id="mailboxList" class="grievance-list"></div>
+          <div class="lang-overlay" id="concernsLangOverlay" hidden>
+            <div class="lang-overlay-scrim" data-lang-close="concerns" aria-hidden="true"></div>
+            <div class="lang-overlay-panel" role="dialog" aria-label="Hindi mailbox">
+              <header class="lang-overlay-head">
+                <h3>डाकपेटी · Hindi</h3>
+                <button type="button" class="btn ghost compact" data-lang-close="concerns">Close · बंद करें</button>
+              </header>
+              <div class="lang-overlay-body" id="concernsLangOverlayBody"></div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="panel-info" hidden>
-        <header class="panel-head">
-          <h2>Information Centre</h2>
-          <p class="muted">RWA documents, circulars, and guides published for all members.</p>
+        <header class="panel-head panel-head-lang">
+          <div class="panel-head-copy">
+            <h2>Information Centre</h2>
+            <p class="muted">RWA documents, circulars, and guides published for all members.</p>
+          </div>
+          <div class="lang-toggle" data-lang-section="info" role="group" aria-label="Info language">
+            <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
+            <button type="button" class="lang-btn" data-lang="hi" title="हिन्दी" aria-pressed="false"><span class="lang-glyph" aria-hidden="true">अ</span><span class="lang-label">हिं</span></button>
+          </div>
         </header>
 
+        <div class="lang-section-wrap" data-lang-section="info">
         <div class="mailbox-toolbar info-toolbar">
           <label>
             Category
@@ -314,14 +383,23 @@
         <div id="infoDocList" class="info-doc-list"></div>
         <p class="muted" id="infoListStatus"></p>
 
-        <div class="roster-block admin-only info-manage" id="infoManageBlock" hidden>
-          <h3 id="infoFormTitle">Publish a document</h3>
-          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members.</p>
+        <div class="roster-block admin-only info-manage" id="infoManageBlock" data-entitlement="manage_info" hidden>
+          <div class="form-lang-row">
+            <h3 id="infoFormTitle">Publish a document</h3>
+            <div class="author-lang-toggle" data-author-form="info" role="group" aria-label="Writing language">
+              <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
+              <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
+            </div>
+          </div>
+          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members. Hindi applies to titles/summaries and in-portal HTML only.</p>
           <form id="infoDocForm" class="stack">
             <input type="hidden" id="infoEditId" value="">
             <div class="settings-grid">
-              <label class="span-2">Title
+              <label class="span-2" data-author-pane="info" data-lang="en">Title
                 <input id="infoTitleInput" name="title" required maxlength="160" placeholder="e.g. Society bye-laws 2024">
+              </label>
+              <label class="span-2" data-author-pane="info" data-lang="hi" hidden>शीर्षक (Hindi)
+                <input id="infoTitleHiInput" name="titleHi" maxlength="160" placeholder="हिंदी शीर्षक">
               </label>
               <label>Category
                 <select id="infoCategoryInput" name="category"></select>
@@ -338,8 +416,11 @@
                   <option value="ec">EC members only</option>
                 </select>
               </label>
-              <label class="span-2">Short summary
+              <label class="span-2" data-author-pane="info" data-lang="en">Short summary
                 <input id="infoSummaryInput" name="summary" maxlength="800" placeholder="One line shown in the list">
+              </label>
+              <label class="span-2" data-author-pane="info" data-lang="hi" hidden>संक्षिप्त सार (Hindi)
+                <input id="infoSummaryHiInput" name="summaryHi" maxlength="800" placeholder="सूची में दिखने वाली एक पंक्ति">
               </label>
             </div>
 
@@ -363,8 +444,11 @@
             </div>
 
             <div id="infoHtmlPane" hidden>
-              <label>HTML body
+              <label data-author-pane="info" data-lang="en">HTML body (English)
                 <textarea id="infoHtmlInput" rows="10" placeholder="Write content here. Use headings, paragraphs, lists, and links. A page title wrapper is added automatically."></textarea>
+              </label>
+              <label data-author-pane="info" data-lang="hi" hidden>HTML body (Hindi)
+                <textarea id="infoHtmlHiInput" rows="10" placeholder="हिंदी में HTML सामग्री लिखें…"></textarea>
               </label>
             </div>
 
@@ -374,6 +458,17 @@
             </div>
             <p class="muted" id="infoFormStatus"></p>
           </form>
+        </div>
+          <div class="lang-overlay" id="infoLangOverlay" hidden>
+            <div class="lang-overlay-scrim" data-lang-close="info" aria-hidden="true"></div>
+            <div class="lang-overlay-panel" role="dialog" aria-label="Hindi information centre">
+              <header class="lang-overlay-head">
+                <h3>सूचना केंद्र · Hindi</h3>
+                <button type="button" class="btn ghost compact" data-lang-close="info">Close · बंद करें</button>
+              </header>
+              <div class="lang-overlay-body" id="infoLangOverlayBody"></div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -419,7 +514,7 @@
         <div id="worksList" class="works-list"></div>
         <p class="muted" id="worksListStatus"></p>
 
-        <div class="roster-block admin-only works-manage" id="worksManageBlock" hidden>
+        <div class="roster-block admin-only works-manage" id="worksManageBlock" data-entitlement="manage_works" hidden>
           <h3 id="worksFormTitle">Initiate work / event</h3>
           <p class="muted">Track ownership, timelines, benefits, contractor, costs, and funding sources.</p>
           <form id="worksForm" class="stack">
@@ -538,6 +633,28 @@
           <h2>Your profile</h2>
           <p class="muted">Keep contact details current so OTP and notices reach you.</p>
         </header>
+
+        <div class="profile-photo-block" id="profilePhotoBlock">
+          <div class="profile-avatar-wrap">
+            <div class="profile-avatar" id="profileAvatar" aria-hidden="true">
+              <img id="profileAvatarImg" alt="" hidden>
+              <span class="profile-avatar-placeholder" id="profileAvatarPlaceholder">
+                <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="8" r="3.5"/>
+                  <path d="M5.5 19.5c1.8-3.2 4-4.8 6.5-4.8s4.7 1.6 6.5 4.8"/>
+                </svg>
+              </span>
+            </div>
+            <div class="profile-photo-actions">
+              <button type="button" class="btn secondary compact" id="profilePhotoPickBtn">Upload photo</button>
+              <button type="button" class="btn ghost compact" id="profilePhotoRemoveBtn" hidden>Remove</button>
+              <input type="file" id="profilePhotoFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
+              <p class="muted" id="profilePhotoStatus"></p>
+            </div>
+          </div>
+          <p class="muted profile-photo-hint">Square crop · saved light for phones. Drag and zoom to adjust before applying.</p>
+        </div>
+
         <form id="profileForm" class="stack narrow">
           <label>Plot <input id="profileHouse" disabled></label>
           <p class="muted" id="profileMemberMeta" hidden></p>
@@ -589,12 +706,21 @@
       </section>
 
       <section class="panel admin-only" id="panel-admin" hidden>
-        <header class="panel-head">
-          <h2>EC desk · HBC Sanyard</h2>
-          <p class="muted">Manage resident contacts, concerns, notices, payment details, and roles. Super admin assigns/suspends EC admins.<span class="superadmin-only" hidden> CMS at <a href="/admin/">/admin</a>.</span></p>
+        <header class="panel-head ec-desk-head">
+          <div class="ec-desk-head-mark" aria-hidden="true"></div>
+          <div class="ec-desk-head-copy">
+            <div class="ec-desk-head-top">
+              <p class="eyebrow">Executive Committee</p>
+              <span class="ec-desk-role-chip" id="ecDeskRoleChip" hidden></span>
+            </div>
+            <h2>EC desk</h2>
+            <p class="ec-desk-colony">HBC Sanyard · Residents Welfare Association</p>
+            <p class="ec-desk-motto" id="ecDeskMotto">With great power comes great responsibility.</p>
+            <p class="muted ec-desk-lede">Manage colony operations by entitlement. EC Admins have full access; office bearers and EC members may receive a subset.<span class="superadmin-only" hidden> CMS at <a href="/admin/">/admin</a>.</span></p>
+          </div>
         </header>
 
-        <div class="roster-block grievance-ec-block">
+        <div class="roster-block grievance-ec-block" data-entitlement="manage_concerns">
           <div class="roster-toolbar">
             <div>
               <h3>Resident concerns</h3>
@@ -633,7 +759,7 @@
           <p class="muted" id="ecGrievanceStatus"></p>
         </div>
 
-        <div class="roster-block">
+        <div class="roster-block" data-entitlement="manage_bank">
           <div class="roster-toolbar">
             <div>
               <h3>Payment collection</h3>
@@ -644,7 +770,38 @@
           <div id="ecBankPreview" class="pay-card pay-card-compact"></div>
         </div>
 
-        <div class="roster-block">
+        <div class="roster-block" id="ecDelegateBlock" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Add delegate</h3>
+              <p class="muted">Add a household login for any plot. Name and relation only — no email or phone here; the delegate can add contacts later on their profile.</p>
+            </div>
+          </div>
+          <form id="ecDelegateForm" class="stack narrow ec-delegate-form">
+            <label>Plot
+              <input id="ecDelegateHouse" list="ecDelegateHouseList" name="houseId" required placeholder="e.g. 43 or 12B-1" autocomplete="off">
+              <datalist id="ecDelegateHouseList"></datalist>
+            </label>
+            <label>Delegate name <input id="ecDelegateName" name="name" required maxlength="120" autocomplete="off"></label>
+            <label>Relation
+              <select id="ecDelegateRelation" name="relation">
+                <option value="spouse">Spouse</option>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="other" selected>Other</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="ecDelegateViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary">Add delegate</button>
+              <button type="button" class="btn ghost" id="ecDelegateLoadBtn">Show household</button>
+            </div>
+            <p class="muted" id="ecDelegateStatus"></p>
+          </form>
+          <div id="ecDelegateMemberList" class="household-member-list"></div>
+        </div>
+
+        <div class="roster-block" data-entitlement="manage_roster">
           <div class="roster-toolbar">
             <div>
               <h3>Resident contacts</h3>
@@ -685,36 +842,7 @@
           <p class="muted" id="rosterStatus"></p>
         </div>
 
-        <div class="roster-block" style="margin-top:1.25rem">
-          <div class="roster-toolbar">
-            <div>
-              <h3>Revision history</h3>
-              <p class="muted">EC-only audit trail of resident data changes.</p>
-            </div>
-            <label class="roster-search">
-              <span class="sr-only">Filter plot</span>
-              <input id="revisionHouseFilter" type="search" placeholder="Filter by plot…" autocomplete="off">
-            </label>
-            <button type="button" class="btn ghost compact" id="revisionRefreshBtn">Refresh</button>
-          </div>
-          <div class="table-wrap roster-wrap">
-            <table class="roster-table revisions-table cardable-table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Plot</th>
-                  <th>Changed by</th>
-                  <th>Fields</th>
-                  <th>Summary</th>
-                </tr>
-              </thead>
-              <tbody id="revisionRows"></tbody>
-            </table>
-          </div>
-          <p class="muted" id="revisionStatus"></p>
-        </div>
-
-        <div class="roster-block" id="noticeDraftsBlock">
+        <div class="roster-block" id="noticeDraftsBlock" data-entitlement="manage_notices">
           <div class="roster-toolbar">
             <div>
               <h3>Draft notices</h3>
@@ -725,11 +853,28 @@
           <div id="noticeDraftList" class="notice-draft-list"></div>
         </div>
 
-        <form id="noticeForm" class="stack" style="margin-top:1.75rem">
-          <h3 id="noticeFormTitle">Write notice</h3>
+        <form id="noticeForm" class="stack" style="margin-top:1.75rem" data-entitlement="manage_notices">
+          <div class="form-lang-row">
+            <h3 id="noticeFormTitle">Write notice</h3>
+            <div class="author-lang-toggle" data-author-form="notice" role="group" aria-label="Writing language">
+              <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
+              <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
+            </div>
+          </div>
           <input type="hidden" name="id" id="noticeEditId" value="">
           <input type="hidden" name="editStatus" id="noticeEditStatus" value="published">
-          <label>Title <input name="title" id="noticeTitleInput" required maxlength="160"></label>
+          <div data-author-pane="notice" data-lang="en">
+            <label>Title <input name="title" id="noticeTitleInput" required maxlength="160"></label>
+            <label>Body
+              <textarea name="body" id="noticeBodyInput" rows="6" required placeholder="Use blank lines for paragraphs. **text** for bold. Drafts can leave body incomplete."></textarea>
+            </label>
+          </div>
+          <div data-author-pane="notice" data-lang="hi" hidden>
+            <label>शीर्षक (Hindi) <input name="titleHi" id="noticeTitleHiInput" maxlength="160" placeholder="हिंदी शीर्षक"></label>
+            <label>विवरण (Hindi)
+              <textarea name="bodyHi" id="noticeBodyHiInput" rows="6" placeholder="हिंदी में सूचना लिखें…"></textarea>
+            </label>
+          </div>
           <label>Category
             <select name="category" id="noticeCategoryInput">
               <option value="general">General</option>
@@ -737,9 +882,6 @@
               <option value="maintenance">Maintenance</option>
               <option value="events">Events</option>
             </select>
-          </label>
-          <label>Body
-            <textarea name="body" id="noticeBodyInput" rows="6" required placeholder="Use blank lines for paragraphs. **text** for bold. Drafts can leave body incomplete."></textarea>
           </label>
           <label class="check" for="noticePinnedInput">
             <input type="checkbox" name="pinned" id="noticePinnedInput">
@@ -752,16 +894,138 @@
           </div>
           <p class="muted" id="noticeFormStatus"></p>
         </form>
-        <div class="stack" style="margin-top:1.5rem">
-          <h3>Import ledger PDF</h3>
-          <p class="muted">Upload the HIMUDA subscription / dues PDF to refresh SQLite. Contact fields (phone/email) are preserved.</p>
-          <form id="ledgerImportForm" class="stack narrow">
-            <label>PDF file <input type="file" name="file" accept="application/pdf,.pdf" required></label>
-            <button type="submit" class="btn secondary">Import into database</button>
-            <p class="muted" id="ledgerImportStatus"></p>
+
+        <div class="stack report-section" style="margin-top:1.5rem" data-entitlement="generate_reports" id="reportsBlock">
+          <h3>Reports</h3>
+          <p class="muted">Choose a built-in report, a saved template, or build a custom report and save it.</p>
+          <form id="reportForm" class="stack report-form">
+            <label>Report
+              <select id="reportTypeSelect" name="reportId"></select>
+            </label>
+            <div id="reportCustomControls" class="stack" hidden>
+              <label>Dataset
+                <select id="reportDatasetSelect">
+                  <option value="dues">Dues / ledger</option>
+                  <option value="directory">Resident directory</option>
+                  <option value="concerns">Resident concerns</option>
+                </select>
+              </label>
+              <label>Template name (to save)
+                <input type="text" id="reportTemplateName" maxlength="120" placeholder="e.g. Section A pending dues" autocomplete="off">
+              </label>
+            </div>
+            <fieldset class="report-fields">
+              <legend>Columns</legend>
+              <div class="report-field-grid" id="reportFields"></div>
+            </fieldset>
+            <div class="report-filters settings-grid" id="reportFilters">
+              <label>Section
+                <select id="reportSection" name="section">
+                  <option value="all">All sections</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                </select>
+              </label>
+              <label>Search
+                <input type="search" id="reportSearch" name="search" placeholder="plot / name…" autocomplete="off">
+              </label>
+              <label class="span-2" id="reportPlotsWrap">Selected plots (optional)
+                <input type="text" id="reportPlots" name="houseIds" placeholder="e.g. 12, 23, 50" autocomplete="off">
+              </label>
+              <label class="check span-2" for="reportPendingOnly" id="reportPendingOnlyWrap">
+                <input type="checkbox" id="reportPendingOnly" name="pendingOnly" checked>
+                <span>Pending only (dues)</span>
+              </label>
+              <label id="reportConcernStatusWrap" hidden>Concern status
+                <select id="reportConcernStatus">
+                  <option value="open" selected>Open</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="reportDownloadBtn">Download PDF</button>
+              <button type="button" class="btn secondary" id="reportSaveTemplateBtn" hidden>Save template</button>
+              <button type="button" class="btn ghost" id="reportDeleteTemplateBtn" hidden>Delete template</button>
+              <button type="button" class="btn ghost" id="reportDefaultsBtn">Reset columns</button>
+            </div>
+            <p class="muted" id="reportStatus"></p>
           </form>
-          <p class="muted" id="smtpStatusLine">SMTP: checking…</p>
         </div>
+
+        <details class="sensitive-ops" id="sensitiveOpsBlock" data-entitlement="sensitive_ops" hidden>
+          <summary>
+            <strong>Sensitive ops</strong>
+            <span class="muted"> — Roles &amp; entitlements, revision history, ledger import (EC Admin only)</span>
+          </summary>
+
+          <div class="roster-block" id="rolesEntitlementsBlock" style="margin-top:1rem">
+            <div class="roster-toolbar">
+              <div>
+                <h3>Roles &amp; entitlements</h3>
+                <p class="muted">EC Member → Office Bearer → EC Admin. Members and bearers can receive one-off entitlements; EC Admins have all access.</p>
+              </div>
+              <button type="button" class="btn ghost compact" id="rolesRefreshBtn">Refresh</button>
+            </div>
+            <div class="settings-grid" style="margin-bottom:1rem">
+              <label>Plot
+                <input id="rolesDesignatePlot" type="text" placeholder="e.g. 23" autocomplete="off">
+              </label>
+              <label>Official title (for office bearer)
+                <input id="rolesDesignateTitle" type="text" placeholder="e.g. Treasurer" maxlength="80" autocomplete="off">
+              </label>
+              <div class="btn-row span-2">
+                <button type="button" class="btn secondary" id="rolesDesignateMemberBtn">Add EC Member</button>
+                <button type="button" class="btn secondary" id="rolesDesignateBtn">Designate Office Bearer</button>
+              </div>
+            </div>
+            <div id="rolesMembersList" class="roles-members-list"></div>
+            <p class="muted" id="rolesStatus"></p>
+          </div>
+
+          <div class="roster-block" style="margin-top:1.25rem">
+            <div class="roster-toolbar">
+              <div>
+                <h3>Revision history</h3>
+                <p class="muted">Audit trail of resident data changes.</p>
+              </div>
+              <label class="roster-search">
+                <span class="sr-only">Filter plot</span>
+                <input id="revisionHouseFilter" type="search" placeholder="Filter by plot…" autocomplete="off">
+              </label>
+              <button type="button" class="btn ghost compact" id="revisionRefreshBtn">Refresh</button>
+            </div>
+            <div class="table-wrap roster-wrap">
+              <table class="roster-table revisions-table cardable-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Plot</th>
+                    <th>Changed by</th>
+                    <th>Fields</th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody id="revisionRows"></tbody>
+              </table>
+            </div>
+            <p class="muted" id="revisionStatus"></p>
+          </div>
+          <div class="stack" style="margin-top:1.25rem">
+            <h3>Import ledger PDF</h3>
+            <p class="muted">Upload the HIMUDA subscription / dues PDF to refresh SQLite. Contact fields (phone/email) are preserved.</p>
+            <form id="ledgerImportForm" class="stack narrow">
+              <label>PDF file <input type="file" name="file" accept="application/pdf,.pdf" required></label>
+              <button type="submit" class="btn secondary">Import into database</button>
+              <p class="muted" id="ledgerImportStatus"></p>
+            </form>
+          </div>
+        </details>
+
+        <p class="muted" id="smtpStatusLine" style="margin-top:1.25rem">SMTP: checking…</p>
 
         <div class="settings-block superadmin-only" id="settingsBlock" hidden>
           <h3>Platform settings</h3>
@@ -788,6 +1052,32 @@
             </div>
             <p class="muted" id="settingsStatus"></p>
           </form>
+
+          <div class="settings-block ops-settings-block" style="margin-top:1.5rem">
+            <h3>Backups &amp; server vitals</h3>
+            <p class="muted">Daily on-box backups (02:30) and vitals checks (every 15 min). Alerts use SMTP above. Saved in <code>data/smtp.env</code> with platform settings.</p>
+            <div id="opsStatusPanel" class="ops-status-panel muted">Loading server status…</div>
+            <form id="opsSettingsForm" class="stack" style="margin-top:0.85rem">
+              <div class="settings-grid">
+                <label>Alert email <input type="email" id="opsAlertTo" placeholder="defaults to From address"></label>
+                <label class="check"><input type="checkbox" id="opsVitalsEnabled" checked> Enable vitals monitoring (15 min)</label>
+                <label>Backup retention (days) <input type="number" id="opsBackupRetainDays" min="3" max="90" value="14"></label>
+                <label>Backup min disk free % <input type="number" id="opsBackupDiskMinPct" min="5" max="50" value="15"></label>
+                <label>Event history (days) <input type="number" id="opsAccessEventsDays" min="30" max="365" value="90"></label>
+                <label>Disk warn / crit % free <span class="inline-pair"><input type="number" id="opsDiskWarnPct" min="5" max="40" value="20"> <input type="number" id="opsDiskCritPct" min="3" max="25" value="10"></span></label>
+                <label>Memory warn / crit % avail <span class="inline-pair"><input type="number" id="opsMemWarnPct" min="5" max="30" value="15"> <input type="number" id="opsMemCritPct" min="3" max="20" value="8"></span></label>
+                <label>Load warn / crit (× CPUs) <span class="inline-pair"><input type="number" id="opsLoadWarnRatio" min="0.5" max="5" step="0.1" value="1.5"> <input type="number" id="opsLoadCritRatio" min="1" max="8" step="0.1" value="2.5"></span></label>
+                <label>Max backup age (hours) <input type="number" id="opsBackupMaxAgeHours" min="6" max="168" value="28"></label>
+                <label>Alert repeat warn / crit (hours) <span class="inline-pair"><input type="number" id="opsAlertCooldownWarnH" min="1" max="48" value="6"> <input type="number" id="opsAlertCooldownCritH" min="1" max="24" value="1"></span></label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn secondary" id="opsSettingsSaveBtn">Save ops settings</button>
+                <button type="button" class="btn ghost" id="opsTestAlertBtn">Send test alert</button>
+                <button type="button" class="btn ghost" id="opsRefreshStatusBtn">Refresh status</button>
+              </div>
+              <p class="muted" id="opsSettingsStatus"></p>
+            </form>
+          </div>
         </div>
       </section>
 
@@ -970,6 +1260,30 @@
         <div class="btn-row">
           <button type="submit" class="btn primary" id="draftShareSaveBtn">Save sharing</button>
           <button type="button" class="btn ghost" id="draftShareCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="photoCropDialog" class="ledger-dialog photo-crop-dialog">
+      <form id="photoCropForm" class="stack" method="dialog">
+        <header class="panel-head">
+          <h3>Adjust photo</h3>
+          <p class="muted">Drag to reposition · use zoom to fill the circle · Apply saves a light square crop.</p>
+        </header>
+        <div class="photo-crop-stage" id="photoCropStage">
+          <div class="photo-crop-viewport" id="photoCropViewport">
+            <img id="photoCropImg" alt="" draggable="false">
+            <div class="photo-crop-mask" aria-hidden="true"></div>
+          </div>
+        </div>
+        <label class="photo-crop-zoom">
+          Zoom
+          <input type="range" id="photoCropZoom" min="1" max="3" step="0.01" value="1">
+        </label>
+        <p class="error" id="photoCropError" hidden></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="photoCropApplyBtn">Apply &amp; save</button>
+          <button type="button" class="btn ghost" id="photoCropCancelBtn">Cancel</button>
         </div>
       </form>
     </dialog>

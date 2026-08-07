@@ -49,18 +49,583 @@
     return Boolean(r?.superAdmin);
   }
 
+  function hasEntitlement(key, r = state.session?.resident) {
+    if (!r) return false;
+    if (isSuperAdmin(r)) return true;
+    if (r.viewOnly || r.isPrimary === false) return false;
+    const ents = r.entitlements;
+    if (Array.isArray(ents) && ents.length) return ents.includes(key);
+    // Fallback for older sessions: EC admin role implies all
+    return r.role === 'admin' && Boolean(r.isPrimary !== false);
+  }
+
   function isEcAdmin(r = state.session?.resident) {
-    // Delegates never get EC desk — role is already stripped server-side for non-primary.
-    return r?.role === 'admin' && Boolean(r?.isPrimary !== false || r?.superAdmin);
+    if (!r) return false;
+    if (isSuperAdmin(r)) return true;
+    if (r.viewOnly || r.isPrimary === false) return false;
+    if (typeof r.isEcAdmin === 'boolean') return r.isEcAdmin;
+    return r.role === 'admin';
+  }
+
+  function canOpenEcDesk(r = state.session?.resident) {
+    if (!r) return false;
+    if (isSuperAdmin(r)) return true;
+    if (r.viewOnly || r.isPrimary === false) return false;
+    if (isEcAdmin(r)) return true;
+    const ents = r.entitlements;
+    return Array.isArray(ents) && ents.length > 0;
+  }
+
+  function applyEntitlementVisibility() {
+    document.querySelectorAll('[data-entitlement]').forEach((node) => {
+      const key = node.getAttribute('data-entitlement');
+      const allowed = hasEntitlement(key);
+      node.hidden = !allowed;
+    });
+    const delegateBlock = el('ecDelegateBlock');
+    if (delegateBlock) delegateBlock.hidden = !isEcAdmin();
   }
 
   function isViewOnly(r = state.session?.resident) {
     return Boolean(r?.viewOnly) && !isSuperAdmin(r);
   }
 
+  async function loadAuthImage(imgEl, placeholderEl, photoUrl) {
+    if (!imgEl) return;
+    if (!photoUrl) {
+      imgEl.hidden = true;
+      imgEl.removeAttribute('src');
+      if (placeholderEl) placeholderEl.hidden = false;
+      return;
+    }
+    try {
+      const token = state.session?.token || '';
+      const res = await fetch(`${photoUrl}?t=${Date.now()}`, {
+        credentials: 'same-origin',
+        headers: token ? { 'X-RWA-Token': token } : {},
+      });
+      if (!res.ok) throw new Error('no photo');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const prev = imgEl.dataset.objectUrl;
+      if (prev) URL.revokeObjectURL(prev);
+      imgEl.dataset.objectUrl = objectUrl;
+      imgEl.src = objectUrl;
+      imgEl.hidden = false;
+      if (placeholderEl) placeholderEl.hidden = true;
+    } catch (_) {
+      imgEl.hidden = true;
+      imgEl.removeAttribute('src');
+      if (placeholderEl) placeholderEl.hidden = false;
+    }
+  }
+
+  function renderUserAvatars(r = state.session?.resident) {
+    const url = r?.photoUrl || '';
+    loadAuthImage(el('userChipAvatarImg'), el('userChipAvatarPlaceholder'), url).catch(() => {});
+    loadAuthImage(el('profileAvatarImg'), el('profileAvatarPlaceholder'), url).catch(() => {});
+    const removeBtn = el('profilePhotoRemoveBtn');
+    if (removeBtn) removeBtn.hidden = !url || Boolean(r?.superAdmin) || isViewOnly(r);
+    const pickBtn = el('profilePhotoPickBtn');
+    if (pickBtn) {
+      pickBtn.disabled = Boolean(r?.superAdmin) || isViewOnly(r) || !r?.memberId;
+      pickBtn.textContent = url ? 'Change photo' : 'Upload photo';
+    }
+    const block = el('profilePhotoBlock');
+    if (block) block.hidden = Boolean(r?.superAdmin) || !r?.memberId;
+  }
+
+  const photoCrop = {
+    objectUrl: '',
+    naturalW: 0,
+    naturalH: 0,
+    scale: 1,
+    minScale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  };
+
+  function photoCropViewportSize() {
+    const vp = el('photoCropViewport');
+    const w = vp?.clientWidth || 0;
+    return w > 0 ? w : 280;
+  }
+
+  function applyPhotoCropTransform() {
+    const img = el('photoCropImg');
+    if (!img || !photoCrop.naturalW) return;
+    const size = photoCropViewportSize();
+    const drawW = photoCrop.naturalW * photoCrop.scale;
+    const drawH = photoCrop.naturalH * photoCrop.scale;
+    const maxX = Math.max(0, (drawW - size) / 2);
+    const maxY = Math.max(0, (drawH - size) / 2);
+    photoCrop.offsetX = Math.max(-maxX, Math.min(maxX, photoCrop.offsetX));
+    photoCrop.offsetY = Math.max(-maxY, Math.min(maxY, photoCrop.offsetY));
+    img.style.width = `${drawW}px`;
+    img.style.height = `${drawH}px`;
+    img.style.transform = `translate(-50%, -50%) translate(${photoCrop.offsetX}px, ${photoCrop.offsetY}px)`;
+  }
+
+  function initPhotoCropFromImage() {
+    const img = el('photoCropImg');
+    if (!img?.naturalWidth) return;
+    photoCrop.naturalW = img.naturalWidth;
+    photoCrop.naturalH = img.naturalHeight;
+    const size = photoCropViewportSize();
+    photoCrop.minScale = Math.max(size / photoCrop.naturalW, size / photoCrop.naturalH);
+    if (!Number.isFinite(photoCrop.minScale) || photoCrop.minScale <= 0) {
+      photoCrop.minScale = 1;
+    }
+    photoCrop.scale = photoCrop.minScale;
+    photoCrop.offsetX = 0;
+    photoCrop.offsetY = 0;
+    const zoom = el('photoCropZoom');
+    if (zoom) {
+      zoom.min = String(photoCrop.minScale);
+      zoom.max = String(photoCrop.minScale * 3);
+      zoom.step = '0.01';
+      zoom.value = String(photoCrop.scale);
+    }
+    applyPhotoCropTransform();
+  }
+
+  function closePhotoCrop() {
+    const dialog = el('photoCropDialog');
+    if (dialog?.open) dialog.close();
+    if (photoCrop.objectUrl) {
+      URL.revokeObjectURL(photoCrop.objectUrl);
+      photoCrop.objectUrl = '';
+    }
+    const img = el('photoCropImg');
+    if (img) {
+      img.onload = null;
+      img.onerror = null;
+      img.removeAttribute('src');
+      img.removeAttribute('style');
+    }
+    photoCrop.naturalW = 0;
+    photoCrop.naturalH = 0;
+    photoCrop.scale = 1;
+    photoCrop.minScale = 1;
+    photoCrop.offsetX = 0;
+    photoCrop.offsetY = 0;
+    photoCrop.dragging = false;
+    if (el('profilePhotoFile')) el('profilePhotoFile').value = '';
+    if (el('photoCropError')) {
+      el('photoCropError').hidden = true;
+      el('photoCropError').textContent = '';
+    }
+  }
+
+  function openPhotoCrop(file) {
+    if (!file) return;
+    const type = String(file.type || '').toLowerCase();
+    const name = String(file.name || '').toLowerCase();
+    const looksImage = type.startsWith('image/')
+      || /\.(jpe?g|png|webp|gif|heic|heif)$/.test(name);
+    if (!looksImage) {
+      if (el('profilePhotoStatus')) el('profilePhotoStatus').textContent = 'Choose a JPG, PNG, or WebP image.';
+      return;
+    }
+    if (file.size > 8_000_000) {
+      if (el('profilePhotoStatus')) el('profilePhotoStatus').textContent = 'Image must be under 8 MB.';
+      return;
+    }
+    closePhotoCrop();
+    const objectUrl = URL.createObjectURL(file);
+    photoCrop.objectUrl = objectUrl;
+    const img = el('photoCropImg');
+    const dialog = el('photoCropDialog');
+    if (!img || !dialog) return;
+
+    const reveal = () => {
+      // Dialog must be open before measuring — closed dialogs report clientWidth 0.
+      if (typeof dialog.showModal === 'function') {
+        if (!dialog.open) dialog.showModal();
+      } else {
+        dialog.setAttribute('open', '');
+      }
+      requestAnimationFrame(() => {
+        initPhotoCropFromImage();
+        requestAnimationFrame(() => initPhotoCropFromImage());
+      });
+    };
+
+    img.onload = () => reveal();
+    img.onerror = () => {
+      closePhotoCrop();
+      if (el('profilePhotoStatus')) {
+        el('profilePhotoStatus').textContent = 'Could not read that image. Try JPG or PNG.';
+      }
+    };
+    img.src = objectUrl;
+    if (img.complete && img.naturalWidth) reveal();
+  }
+
+  function exportCroppedPhotoBlob() {
+    return new Promise((resolve, reject) => {
+      const img = el('photoCropImg');
+      if (!img?.complete || !photoCrop.naturalW) {
+        reject(new Error('Image not ready'));
+        return;
+      }
+      const outSize = 320;
+      const size = photoCropViewportSize();
+      const drawW = photoCrop.naturalW * photoCrop.scale;
+      const drawH = photoCrop.naturalH * photoCrop.scale;
+      // Image center in viewport coords is (size/2 + offset)
+      const srcCenterX = (size / 2 - photoCrop.offsetX) / photoCrop.scale;
+      const srcCenterY = (size / 2 - photoCrop.offsetY) / photoCrop.scale;
+      const srcSide = size / photoCrop.scale;
+      const sx = srcCenterX - srcSide / 2;
+      const sy = srcCenterY - srcSide / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = outSize;
+      canvas.height = outSize;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#f6f1e6';
+      ctx.fillRect(0, 0, outSize, outSize);
+      ctx.drawImage(img, sx, sy, srcSide, srcSide, 0, 0, outSize, outSize);
+      canvas.toBlob((blob) => {
+        if (!blob) reject(new Error('Could not encode photo'));
+        else resolve(blob);
+      }, 'image/jpeg', 0.82);
+    });
+  }
+
+  async function uploadProfilePhotoBlob(blob) {
+    const status = el('profilePhotoStatus');
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    const body = new FormData();
+    body.append('photo', blob, 'profile.jpg');
+    const res = await fetch('/api/rwa/profile/photo', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText || 'Upload failed');
+    if (data.resident) {
+      state.session.resident = data.resident;
+      setAuthed(state.session);
+    }
+    if (status) status.textContent = 'Photo saved.';
+  }
+
+  const AVATAR_PLACEHOLDER_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.8 18.8c1.5-2.6 3.4-3.9 6.2-3.9s4.7 1.3 6.2 3.9"/></svg>`;
+
+  function personAvatarHtml(person = {}, { size = 'sm', className = '' } = {}) {
+    const url = person.photoUrl || '';
+    const cls = ['person-avatar', size === 'md' ? 'is-md' : (size === 'lg' ? 'is-lg' : 'is-sm'), className].filter(Boolean).join(' ');
+    const attrs = url ? ` data-photo-url="${escapeHtml(url)}"` : '';
+    return `<span class="${cls}"${attrs} aria-hidden="true"><span class="person-avatar-fallback">${AVATAR_PLACEHOLDER_SVG}</span></span>`;
+  }
+
+  function hhAvatarHtml(m) {
+    return personAvatarHtml(m, { size: 'md', className: 'hh-avatar' });
+  }
+
+  async function hydrateAvatars(root = document) {
+    if (!root?.querySelectorAll) return;
+    const nodes = root.querySelectorAll('.person-avatar[data-photo-url], .hh-avatar[data-photo-url]');
+    for (const node of nodes) {
+      if (node.querySelector('img')) continue;
+      const url = node.getAttribute('data-photo-url');
+      if (!url) continue;
+      try {
+        const token = state.session?.token || '';
+        const res = await fetch(`${url}?t=${Date.now()}`, {
+          credentials: 'same-origin',
+          headers: token ? { 'X-RWA-Token': token } : {},
+        });
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        node.innerHTML = `<img src="${objectUrl}" alt="">`;
+      } catch (_) { /* keep placeholder */ }
+    }
+  }
+
+  async function hydrateHhAvatars(root) {
+    return hydrateAvatars(root);
+  }
+
   function canManageHousehold(r = state.session?.resident) {
     return Boolean(r?.canManageHousehold || r?.isPrimary) && !isViewOnly(r);
   }
+
+  const sectionLang = { notices: 'en', concerns: 'en', info: 'en' };
+  let mailboxCache = [];
+  const translateMem = new Map();
+
+  function translateCacheKey(text, source, target) {
+    return `${source}|${target}|${String(text || '').trim()}`;
+  }
+
+  async function translateTexts(texts, { source = 'en', target = 'hi' } = {}) {
+    const list = (texts || []).map((t) => String(t || ''));
+    const out = new Array(list.length).fill('');
+    const pendingIdx = [];
+    const pendingTexts = [];
+    list.forEach((text, i) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        out[i] = '';
+        return;
+      }
+      if (source === target) {
+        out[i] = trimmed;
+        return;
+      }
+      const key = translateCacheKey(trimmed, source, target);
+      if (translateMem.has(key)) {
+        out[i] = translateMem.get(key);
+        return;
+      }
+      pendingIdx.push(i);
+      pendingTexts.push(trimmed);
+    });
+    if (!pendingTexts.length) return out;
+    // Batch in chunks of 20
+    for (let offset = 0; offset < pendingTexts.length; offset += 20) {
+      const slice = pendingTexts.slice(offset, offset + 20);
+      const data = await api('/api/rwa/translate', {
+        method: 'POST',
+        body: JSON.stringify({ texts: slice, source, target }),
+      });
+      const translations = data.translations || [];
+      slice.forEach((src, j) => {
+        const translated = String(translations[j] || '').trim();
+        const idx = pendingIdx[offset + j];
+        if (translated) {
+          translateMem.set(translateCacheKey(src, source, target), translated);
+          out[idx] = translated;
+        } else {
+          out[idx] = '';
+        }
+      });
+    }
+    return out;
+  }
+
+  async function hiOrAuto(en, hi) {
+    const saved = String(hi || '').trim();
+    if (saved) return { text: saved, auto: false };
+    const src = String(en || '').trim();
+    if (!src) return { text: '', auto: false };
+    try {
+      const [t] = await translateTexts([src], { source: 'en', target: 'hi' });
+      if (t) return { text: t, auto: true };
+    } catch (_) { /* fall through */ }
+    return { text: src, auto: false, failed: true };
+  }
+
+  function setAuthorFormLang(formKey, lang) {
+    const next = lang === 'hi' ? 'hi' : 'en';
+    document.querySelectorAll(`.author-lang-toggle[data-author-form="${formKey}"] .lang-btn`).forEach((btn) => {
+      const active = btn.getAttribute('data-author-lang') === next;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.querySelectorAll(`[data-author-pane="${formKey}"]`).forEach((pane) => {
+      pane.hidden = pane.getAttribute('data-lang') !== next;
+    });
+    if (next === 'hi') {
+      autofillAuthorFromEnglish(formKey).catch(() => {});
+    }
+  }
+
+  async function autofillAuthorFromEnglish(formKey) {
+    const pairs = [];
+    if (formKey === 'notice') {
+      pairs.push(['noticeTitleInput', 'noticeTitleHiInput'], ['noticeBodyInput', 'noticeBodyHiInput']);
+    } else if (formKey === 'grievance') {
+      pairs.push(['grievanceSubject', 'grievanceSubjectHi'], ['grievanceBody', 'grievanceBodyHi']);
+    } else if (formKey === 'info') {
+      pairs.push(
+        ['infoTitleInput', 'infoTitleHiInput'],
+        ['infoSummaryInput', 'infoSummaryHiInput'],
+        ['infoHtmlInput', 'infoHtmlHiInput'],
+      );
+    } else if (formKey.startsWith('reply-')) {
+      const form = document.querySelector(`.mailbox-reply .author-lang-toggle[data-author-form="${formKey}"]`)?.closest('form');
+      if (!form) return;
+      const en = form.querySelector('textarea[name="body"]');
+      const hi = form.querySelector('textarea[name="bodyHi"]');
+      if (en && hi && !String(hi.value || '').trim() && String(en.value || '').trim()) {
+        const [t] = await translateTexts([en.value], { source: 'en', target: 'hi' });
+        if (t) hi.value = t;
+      }
+      return;
+    }
+    const need = [];
+    pairs.forEach(([enId, hiId]) => {
+      const enEl = el(enId);
+      const hiEl = el(hiId);
+      if (!enEl || !hiEl) return;
+      if (String(hiEl.value || '').trim()) return;
+      if (!String(enEl.value || '').trim()) return;
+      need.push({ enEl, hiEl, text: enEl.value });
+    });
+    if (!need.length) return;
+    const translated = await translateTexts(need.map((n) => n.text), { source: 'en', target: 'hi' });
+    need.forEach((n, i) => {
+      if (translated[i] && !String(n.hiEl.value || '').trim()) n.hiEl.value = translated[i];
+    });
+  }
+
+  function pickText(en, hi, lang) {
+    if (lang === 'hi') return String(hi || '').trim() || '';
+    return String(en || '').trim() || '';
+  }
+
+  function autoBadge(auto) {
+    return auto ? '<span class="lang-auto-badge" title="Machine translation">स्वतः · Auto</span>' : '';
+  }
+
+  async function renderNoticesOverlay() {
+    const box = el('noticesLangOverlayBody');
+    if (!box) return;
+    if (!noticesCache.length) {
+      box.innerHTML = '<p class="lang-overlay-empty">कोई सूचना नहीं · No notices yet.</p>';
+      return;
+    }
+    box.innerHTML = '<p class="muted">अनुवाद हो रहा है… Translating…</p>';
+    const cards = [];
+    for (const n of noticesCache) {
+      const title = await hiOrAuto(n.title, n.titleHi);
+      const body = await hiOrAuto(n.body, n.bodyHi);
+      const failed = title.failed && body.failed;
+      cards.push(`
+        <article class="lang-overlay-card">
+          <h4>${escapeHtml(title.text || n.title || 'Untitled')} ${autoBadge(title.auto || body.auto)}</h4>
+          <span class="meta">${escapeHtml(n.category || 'general')}${(n.publishedAt || '').slice(0, 10) ? ` · ${escapeHtml((n.publishedAt || '').slice(0, 10))}` : ''}</span>
+          ${failed
+            ? '<p class="lang-missing">अनुवाद उपलब्ध नहीं · Could not auto-translate.</p>'
+            : `<div class="body">${formatNoticeBody(body.text || n.body || '')}</div>`}
+        </article>`);
+    }
+    if (sectionLang.notices === 'hi') box.innerHTML = cards.join('');
+  }
+
+  async function renderConcernsOverlay() {
+    const box = el('concernsLangOverlayBody');
+    if (!box) return;
+    if (!mailboxCache.length) {
+      box.innerHTML = '<p class="lang-overlay-empty">कोई चिंता नहीं · No concerns yet.</p>';
+      return;
+    }
+    box.innerHTML = '<p class="muted">अनुवाद हो रहा है… Translating…</p>';
+    const cards = [];
+    for (const g of mailboxCache) {
+      const subject = await hiOrAuto(g.subject, g.subjectHi);
+      const msgBits = [];
+      let anyAuto = subject.auto;
+      for (const m of (g.messages || [])) {
+        const body = await hiOrAuto(m.body, m.bodyHi);
+        anyAuto = anyAuto || body.auto;
+        msgBits.push(`<p><strong>${escapeHtml(m.authorName || (m.authorRole === 'ec' ? 'EC' : 'Resident'))}:</strong> ${escapeHtml(body.text || m.body || '')}${body.auto ? ' <span class="lang-auto-badge">स्वतः</span>' : ''}</p>`);
+      }
+      cards.push(`
+        <article class="lang-overlay-card">
+          <h4>${escapeHtml(subject.text || g.subject || '')} ${autoBadge(anyAuto)}</h4>
+          <span class="meta">${escapeHtml(g.categoryLabel || g.category || '')} · plot ${escapeHtml(g.houseId || '')}</span>
+          <div class="body">${msgBits.join('') || '<p class="lang-missing">No messages.</p>'}</div>
+        </article>`);
+    }
+    if (sectionLang.concerns === 'hi') box.innerHTML = cards.join('');
+  }
+
+  async function renderInfoOverlay() {
+    const box = el('infoLangOverlayBody');
+    if (!box) return;
+    if (!infoDocsCache.length) {
+      box.innerHTML = '<p class="lang-overlay-empty">कोई दस्तावेज़ नहीं · No documents yet.</p>';
+      return;
+    }
+    box.innerHTML = '<p class="muted">अनुवाद हो रहा है… Translating…</p>';
+    const cards = [];
+    for (const d of infoDocsCache) {
+      const title = await hiOrAuto(d.title, d.titleHi);
+      const summary = await hiOrAuto(d.summary, d.summaryHi);
+      const openBtn = d.docType === 'html' && d.hasHtmlHi
+        ? `<button type="button" class="btn primary compact info-doc-open-hi" data-id="${escapeHtml(d.id)}">Open Hindi HTML</button>`
+        : (d.docType === 'html'
+          ? `<button type="button" class="btn secondary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open English HTML</button>`
+          : `<button type="button" class="btn secondary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open file</button>`);
+      cards.push(`
+        <article class="lang-overlay-card">
+          <h4>${escapeHtml(title.text || d.title || 'Untitled')} ${autoBadge(title.auto || summary.auto)}</h4>
+          <span class="meta">${escapeHtml(d.categoryLabel || d.category || '')}${d.docType === 'html' ? ' · HTML' : ' · File'}</span>
+          ${summary.text ? `<p class="body">${escapeHtml(summary.text)}</p>` : ''}
+          <div class="btn-row" style="margin-top:0.5rem">${openBtn}</div>
+        </article>`);
+    }
+    if (sectionLang.info === 'hi') box.innerHTML = cards.join('');
+  }
+
+  function setSectionLang(section, lang) {
+    const next = lang === 'hi' ? 'hi' : 'en';
+    sectionLang[section] = next;
+    document.querySelectorAll(`.lang-toggle[data-lang-section="${section}"] .lang-btn`).forEach((btn) => {
+      const active = btn.getAttribute('data-lang') === next;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const overlayId = section === 'notices'
+      ? 'noticesLangOverlay'
+      : (section === 'concerns' ? 'concernsLangOverlay' : 'infoLangOverlay');
+    const overlay = el(overlayId);
+    if (!overlay) return;
+    if (next === 'hi') {
+      overlay.hidden = false;
+      const run = section === 'notices'
+        ? renderNoticesOverlay()
+        : (section === 'concerns' ? renderConcernsOverlay() : renderInfoOverlay());
+      run.catch((err) => {
+        const body = overlay.querySelector('.lang-overlay-body');
+        if (body) body.innerHTML = `<p class="error">${escapeHtml(err.message || 'Translation failed')}</p>`;
+      });
+    } else {
+      overlay.hidden = true;
+    }
+  }
+
+  document.addEventListener('click', (event) => {
+    const langBtn = event.target.closest?.('.lang-toggle .lang-btn');
+    if (langBtn) {
+      const section = langBtn.closest('.lang-toggle')?.getAttribute('data-lang-section');
+      const lang = langBtn.getAttribute('data-lang');
+      if (section && lang) setSectionLang(section, lang);
+      return;
+    }
+    const closeBtn = event.target.closest?.('[data-lang-close]');
+    if (closeBtn) {
+      const section = closeBtn.getAttribute('data-lang-close');
+      if (section) setSectionLang(section, 'en');
+      return;
+    }
+    const authorBtn = event.target.closest?.('.author-lang-toggle .lang-btn');
+    if (authorBtn) {
+      const formKey = authorBtn.closest('.author-lang-toggle')?.getAttribute('data-author-form');
+      const lang = authorBtn.getAttribute('data-author-lang');
+      if (formKey && lang) setAuthorFormLang(formKey, lang);
+      return;
+    }
+    const openHi = event.target.closest?.('.info-doc-open-hi');
+    if (openHi) {
+      const id = openHi.getAttribute('data-id');
+      const doc = infoDocsCache.find((d) => d.id === id);
+      if (doc) openInfoDocument(doc, { lang: 'hi' }).catch((err) => alert(err.message || 'Open failed'));
+    }
+  });
 
   const MOBILE_MQ = window.matchMedia('(max-width: 900px)');
 
@@ -197,19 +762,33 @@
       const titleBit = (r.officialTitle && r.role === 'admin') ? ` (${r.officialTitle})` : '';
       chip.textContent = `${label} · ${r.name}${titleBit}${tag}`;
     }
+    renderUserAvatars(r);
+    const deskChip = el('ecDeskRoleChip');
+    if (deskChip) {
+      if (canOpenEcDesk(r)) {
+        const parts = [committeeRoleLabel(r)];
+        if (r.officialTitle) parts.push(r.officialTitle);
+        deskChip.textContent = parts.join(' · ');
+        deskChip.hidden = false;
+      } else {
+        deskChip.textContent = '';
+        deskChip.hidden = true;
+      }
+    }
 
     // Role chrome only — never unhide .panel sections here (that made EC desk
     // stack under Home). Panel visibility is owned by switchPanel().
     document.querySelectorAll('.admin-only').forEach((node) => {
       if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
-        if (!isEcAdmin(r)) {
+        if (!canOpenEcDesk(r)) {
           node.hidden = true;
           node.classList.remove('is-active');
         }
         return;
       }
-      node.hidden = !isEcAdmin(r);
+      node.hidden = !canOpenEcDesk(r);
     });
+    applyEntitlementVisibility();
     document.querySelectorAll('.superadmin-only').forEach((node) => {
       if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
         if (!isSuperAdmin(r)) {
@@ -275,7 +854,7 @@
 
   function ensurePanelVisibility(preferred) {
     let name = preferred || activePanelName() || 'home';
-    if (name === 'admin' && !isEcAdmin()) name = 'home';
+    if (name === 'admin' && !canOpenEcDesk()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
     switchPanel(name);
@@ -337,7 +916,7 @@
     const liked = Boolean(n.likedByMe);
     const viewOnly = isViewOnly();
     const engageDisabled = viewOnly ? ' disabled title="View-only access"' : '';
-    const moveActions = (isEcAdmin() && n.pinned && !welcome) ? `
+    const moveActions = (hasEntitlement('manage_notices') && n.pinned && !welcome) ? `
         <button type="button" class="btn ghost compact notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up">↑ Up</button>
         <button type="button" class="btn ghost compact notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down">↓ Down</button>` : '';
     const pinDelete = welcome
@@ -345,7 +924,7 @@
       : `
         <button type="button" class="btn ghost compact notice-pin" data-id="${escapeHtml(n.id)}" data-pinned="${n.pinned ? '1' : '0'}">${n.pinned ? 'Unpin' : 'Pin'}</button>
         <button type="button" class="btn ghost compact notice-delete" data-id="${escapeHtml(n.id)}">Delete</button>`;
-    const actions = isEcAdmin() ? `
+    const actions = hasEntitlement('manage_notices') ? `
       <div class="notice-actions">
         ${moveActions}
         <button type="button" class="btn ghost compact notice-edit" data-id="${escapeHtml(n.id)}">Edit</button>
@@ -424,6 +1003,7 @@
         }).join('')
       : '<p class="muted">No notices yet.</p>';
     refreshMobileListUi();
+    if (sectionLang.notices === 'hi') renderNoticesOverlay();
   }
 
   function draftShareSummary(n) {
@@ -503,7 +1083,7 @@
   }
 
   async function loadNoticeDrafts() {
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('manage_notices')) return;
     const data = await api('/api/rwa/notices?status=draft');
     draftsCache = data.notices || [];
     renderDraftList();
@@ -562,6 +1142,7 @@
         return `
           <div class="draft-share-row${selected ? ' is-selected' : ''}" data-house="${escapeHtml(m.houseId)}">
             <input type="checkbox" name="shareHouse" value="${escapeHtml(m.houseId)}"${selected ? ' checked' : ''}>
+            ${personAvatarHtml(m)}
             <span class="share-member-text">
               ${escapeHtml(m.label || m.name || m.houseId)}
               <span class="share-member-meta">${escapeHtml(m.houseId)}</span>
@@ -572,6 +1153,7 @@
             </select>
           </div>`;
       }).join('');
+      await hydrateAvatars(list);
     } catch (e) {
       list.innerHTML = `<p class="error">${escapeHtml(e.message || 'Could not load members')}</p>`;
     }
@@ -654,6 +1236,9 @@
       if (field) field.disabled = false;
     });
     syncNoticeFormMode(null);
+    setAuthorFormLang('notice', 'en');
+    if (el('noticeTitleHiInput')) el('noticeTitleHiInput').value = '';
+    if (el('noticeBodyHiInput')) el('noticeBodyHiInput').value = '';
     if (el('noticeFormStatus')) el('noticeFormStatus').textContent = '';
   }
 
@@ -664,7 +1249,10 @@
     if (el('noticeEditStatus')) el('noticeEditStatus').value = notice.status || 'published';
     if (el('noticeTitleInput')) el('noticeTitleInput').value = notice.title || '';
     if (el('noticeBodyInput')) el('noticeBodyInput').value = notice.body || '';
+    if (el('noticeTitleHiInput')) el('noticeTitleHiInput').value = notice.titleHi || '';
+    if (el('noticeBodyHiInput')) el('noticeBodyHiInput').value = notice.bodyHi || '';
     if (el('noticeCategoryInput')) el('noticeCategoryInput').value = notice.category || 'general';
+    setAuthorFormLang('notice', 'en');
     if (el('noticePinnedInput')) {
       el('noticePinnedInput').checked = Boolean(notice.pinned);
       el('noticePinnedInput').disabled = isWelcomeNotice(notice) || notice.status === 'draft' || notice.canEdit === false;
@@ -696,6 +1284,8 @@
     const noticeId = String(el('noticeEditId')?.value || '').trim();
     const title = String(el('noticeTitleInput')?.value || '').trim();
     const body = String(el('noticeBodyInput')?.value || '').trim();
+    const titleHi = String(el('noticeTitleHiInput')?.value || '').trim();
+    const bodyHi = String(el('noticeBodyHiInput')?.value || '').trim();
     const statusLine = el('noticeFormStatus');
     const publishBtn = el('noticeSubmitBtn');
     const draftBtn = el('noticeDraftBtn');
@@ -703,10 +1293,12 @@
     if (asDraft) {
       if (!title) {
         if (statusLine) statusLine.textContent = 'Add a title to save a draft.';
+        setAuthorFormLang('notice', 'en');
         el('noticeTitleInput')?.focus();
         return;
       }
     } else if (!form.reportValidity()) {
+      setAuthorFormLang('notice', 'en');
       return;
     }
 
@@ -718,6 +1310,8 @@
       const payload = {
         title,
         body,
+        titleHi,
+        bodyHi,
         category: el('noticeCategoryInput')?.value || 'general',
         pinned: !asDraft && el('noticePinnedInput')?.checked === true,
         status: asDraft ? 'draft' : 'published',
@@ -917,7 +1511,7 @@
       let bank = data.bank;
       if (file) bank = await uploadBankQr(file);
       renderEcBankPreview(bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: isEcAdmin() });
+      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank') });
       fillBankEditForm(bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'Saved.';
     } catch (err) {
@@ -956,7 +1550,7 @@
     try {
       const bank = await uploadBankQr(file);
       renderEcBankPreview(bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: isEcAdmin() });
+      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank') });
       fillBankEditForm(bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'QR uploaded.';
     } catch (err) {
@@ -971,7 +1565,7 @@
     try {
       const data = await api('/api/rwa/bank/qr', { method: 'DELETE', body: '{}' });
       renderEcBankPreview(data.bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), data.bank, { showEdit: isEcAdmin() });
+      if (el('bankCard')) renderPayCard(el('bankCard'), data.bank, { showEdit: hasEntitlement('manage_bank') });
       fillBankEditForm(data.bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'QR removed.';
     } catch (err) {
@@ -1159,15 +1753,28 @@
     closeBankEdit();
   });
 
+  function committeeRoleLabel(r) {
+    if (!r) return 'Resident';
+    if (r.role === 'admin' || r.isEcAdmin) return 'EC Admin';
+    if (r.isOfficeBearer) return 'Office Bearer';
+    if (r.isEcMember) return 'EC Member';
+    return 'Resident';
+  }
+
   async function loadDirectory() {
     const data = await api('/api/rwa/directory');
-    el('directoryRows').innerHTML = (data.residents || []).map((r) => `
+    el('directoryRows').innerHTML = (data.residents || []).map((r) => {
+      const roleLabel = committeeRoleLabel(r);
+      const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
+      return `
       <tr>
-        <td><code>${escapeHtml(r.houseId)}</code></td>
-        <td>${escapeHtml(r.section)}</td>
-        <td>${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.role)}${r.role === 'admin' && r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : ''}</td>
-      </tr>`).join('');
+        <td data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
+        <td data-label="Section">${escapeHtml(r.section)}</td>
+        <td data-label="Name" class="person-cell">${personAvatarHtml(r)} <span>${escapeHtml(r.name)}</span></td>
+        <td data-label="Role">${escapeHtml(roleLabel)}${titleBit}</td>
+      </tr>`;
+    }).join('');
+    await hydrateAvatars(el('directoryRows'));
   }
 
   let infoCategoriesCache = [];
@@ -1219,14 +1826,20 @@
     if (el('infoFormStatus')) el('infoFormStatus').textContent = '';
     const fileRadio = document.querySelector('input[name="infoSource"][value="file"]');
     if (fileRadio) fileRadio.checked = true;
+    if (el('infoTitleHiInput')) el('infoTitleHiInput').value = '';
+    if (el('infoSummaryHiInput')) el('infoSummaryHiInput').value = '';
+    if (el('infoHtmlHiInput')) el('infoHtmlHiInput').value = '';
+    setAuthorFormLang('info', 'en');
     syncInfoSourcePanes();
   }
 
   function startInfoEdit(doc) {
-    if (!doc || !isEcAdmin()) return;
+    if (!doc || !hasEntitlement('manage_info')) return;
     if (el('infoEditId')) el('infoEditId').value = doc.id || '';
     if (el('infoTitleInput')) el('infoTitleInput').value = doc.title || '';
+    if (el('infoTitleHiInput')) el('infoTitleHiInput').value = doc.titleHi || '';
     if (el('infoSummaryInput')) el('infoSummaryInput').value = doc.summary || '';
+    if (el('infoSummaryHiInput')) el('infoSummaryHiInput').value = doc.summaryHi || '';
     if (el('infoCategoryInput')) el('infoCategoryInput').value = doc.category || 'general';
     if (el('infoStatusInput')) el('infoStatusInput').value = doc.status || 'draft';
     if (el('infoAudienceInput')) el('infoAudienceInput').value = doc.audience || 'all';
@@ -1236,13 +1849,15 @@
     else if (fileRadio) fileRadio.checked = true;
     syncInfoSourcePanes();
     if (el('infoHtmlInput') && doc.docType !== 'html') el('infoHtmlInput').value = '';
+    if (el('infoHtmlHiInput') && doc.docType !== 'html') el('infoHtmlHiInput').value = '';
+    setAuthorFormLang('info', 'en');
     if (el('infoFormTitle')) el('infoFormTitle').textContent = 'Update document';
     if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Save changes';
     if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = false;
     if (el('infoFormStatus')) {
       el('infoFormStatus').textContent = doc.docType === 'html'
-        ? 'Editing HTML document — paste updated HTML body to replace content, or leave blank and only change metadata.'
-        : `Editing ${doc.originalName || doc.id} — choose a new file only if replacing the upload.`;
+        ? 'Editing HTML document — switch EN/हिं for bilingual content. Leave HTML blank to keep existing.'
+        : `Editing ${doc.originalName || doc.id} — Hindi title/summary optional; file uploads stay single-language.`;
     }
     el('infoManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -1318,8 +1933,8 @@
   }
 
   async function loadInfoCentre() {
-    if (el('infoManageBlock')) el('infoManageBlock').hidden = !isEcAdmin();
-    const status = isEcAdmin()
+    if (el('infoManageBlock')) el('infoManageBlock').hidden = !hasEntitlement('manage_info');
+    const status = hasEntitlement('manage_info')
       ? (el('infoStatusFilter')?.value || 'published')
       : 'published';
     const category = el('infoCategoryFilter')?.value || '';
@@ -1329,12 +1944,14 @@
     fillInfoCategorySelects(data.categories || []);
     infoDocsCache = data.documents || [];
     renderInfoDocs();
+    if (sectionLang.info === 'hi') renderInfoOverlay();
   }
 
-  async function openInfoDocument(doc) {
+  async function openInfoDocument(doc, { lang = 'en' } = {}) {
     if (!doc?.id) return;
     const token = state.session?.token || '';
-    const url = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file`;
+    const qs = lang === 'hi' ? '?lang=hi' : '';
+    const url = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file${qs}`;
     // Authenticated open: fetch blob then open object URL (headers not sent on plain window.open).
     const res = await fetch(url, {
       credentials: 'same-origin',
@@ -1389,13 +2006,20 @@
         }
         const payload = {
           title,
+          titleHi: el('infoTitleHiInput')?.value.trim() || '',
           summary: el('infoSummaryInput')?.value.trim() || '',
+          summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
           category: el('infoCategoryInput')?.value || 'general',
           status: statusVal,
           audience: audienceVal,
           docType: 'html',
         };
         if (htmlBody) payload.htmlBody = htmlBody;
+        const htmlBodyHi = String(el('infoHtmlHiInput')?.value || '').trim();
+        if (htmlBodyHi || el('infoHtmlHiInput')?.value === '') {
+          // Always send when Hindi pane was used / cleared on edit intent.
+          if (htmlBodyHi || editId) payload.htmlBodyHi = htmlBodyHi;
+        }
         if (editId) {
           doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
             method: 'PATCH',
@@ -1418,6 +2042,8 @@
           body.append('file', file);
           body.append('title', title);
           body.append('summary', el('infoSummaryInput')?.value.trim() || '');
+          body.append('titleHi', el('infoTitleHiInput')?.value.trim() || '');
+          body.append('summaryHi', el('infoSummaryHiInput')?.value.trim() || '');
           body.append('category', el('infoCategoryInput')?.value || 'general');
           body.append('status', statusVal);
           body.append('audience', audienceVal);
@@ -1443,7 +2069,9 @@
             method: 'PATCH',
             body: JSON.stringify({
               title,
+              titleHi: el('infoTitleHiInput')?.value.trim() || '',
               summary: el('infoSummaryInput')?.value.trim() || '',
+              summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
               category: el('infoCategoryInput')?.value || 'general',
               status: statusVal,
               audience: audienceVal,
@@ -1486,7 +2114,7 @@
   }
 
   function switchPanel(name) {
-    if (name === 'admin' && !isEcAdmin()) name = 'home';
+    if (name === 'admin' && !canOpenEcDesk()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
     document.querySelectorAll('.tab').forEach((t) => {
@@ -1501,7 +2129,7 @@
     });
     // Nested EC ledger block belongs to Dues only (not for super admin)
     if (el('adminDues')) {
-      el('adminDues').hidden = !(name === 'dues' && isEcAdmin() && !isSuperAdmin());
+      el('adminDues').hidden = !(name === 'dues' && hasEntitlement('manage_dues') && !isSuperAdmin());
     }
     scrollActiveTabIntoView();
     updateAppTopOffset();
@@ -1521,14 +2149,29 @@
     });
     if (name === 'admin') {
       prepareMobileSections();
+      applyEntitlementVisibility();
       loadSmtpStatus();
-      loadNoticeDrafts().catch((e) => {
-        if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
-      });
-      loadBankDetails().catch((e) => { if (el('ecBankPreview')) el('ecBankPreview').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
-      loadEcGrievances().catch((e) => { if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = e.message || 'Concerns failed'; });
-      loadRoster().catch((e) => { if (el('rosterStatus')) el('rosterStatus').textContent = e.message || 'Roster failed'; });
-      loadRevisions().catch((e) => { if (el('revisionStatus')) el('revisionStatus').textContent = e.message || 'History failed'; });
+      initReportsForm().catch(() => {});
+      if (hasEntitlement('manage_notices')) {
+        loadNoticeDrafts().catch((e) => {
+          if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
+        });
+      }
+      if (hasEntitlement('manage_bank')) {
+        loadBankDetails().catch((e) => { if (el('ecBankPreview')) el('ecBankPreview').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
+      }
+      if (hasEntitlement('manage_concerns')) {
+        loadEcGrievances().catch((e) => { if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = e.message || 'Concerns failed'; });
+      }
+      if (hasEntitlement('manage_roster')) {
+        loadRoster().catch((e) => { if (el('rosterStatus')) el('rosterStatus').textContent = e.message || 'Roster failed'; });
+      } else if (isEcAdmin()) {
+        populateEcDelegateHouseList().catch(() => {});
+      }
+      if (hasEntitlement('sensitive_ops')) {
+        loadRolesPanel().catch(() => {});
+        loadRevisions().catch((e) => { if (el('revisionStatus')) el('revisionStatus').textContent = e.message || 'History failed'; });
+      }
       if (isSuperAdmin()) loadSettings().catch((e) => { if (el('settingsStatus')) el('settingsStatus').textContent = e.message || 'Settings failed'; });
     }
     if (name === 'observability' && isSuperAdmin()) {
@@ -1614,8 +2257,11 @@
     const list = el('otpMemberList');
     list.innerHTML = (data.members || []).map((m) => `
       <button type="button" class="member-pick-btn" data-member-id="${escapeHtml(m.id)}">
-        <strong>${escapeHtml(m.name || 'Member')}</strong>
-        <span class="muted">${escapeHtml(m.relationLabel || m.relation || '')}${m.viewOnly ? ' · view only' : ''}${m.emailMasked ? ` · ${escapeHtml(m.emailMasked)}` : ''}</span>
+        ${personAvatarHtml({ ...m, photoUrl: '' }, { size: 'md' })}
+        <span class="member-pick-text">
+          <strong>${escapeHtml(m.name || 'Member')}</strong>
+          <span class="muted">${escapeHtml(m.relationLabel || m.relation || '')}${m.viewOnly ? ' · view only' : ''}${m.emailMasked ? ` · ${escapeHtml(m.emailMasked)}` : ''}</span>
+        </span>
       </button>
     `).join('');
   }
@@ -1815,12 +2461,14 @@
           </div>` : (m.isPrimary ? '<p class="muted">Primary owner — EC access stays with this login only</p>' : '');
         return `
           <article class="household-member-card" data-id="${escapeHtml(m.id)}">
+            ${hhAvatarHtml(m)}
             <strong>${escapeHtml(m.name)}</strong>
             <span class="muted">${escapeHtml(badges)}</span>
             <span class="muted">${escapeHtml(m.email || '—')} · ${escapeHtml(m.phone || '—')}</span>
             ${actions}
           </article>`;
       }).join('') || '<p class="muted">No household members yet.</p>';
+      await hydrateHhAvatars(list);
     } catch (err) {
       list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load household')}</p>`;
     }
@@ -1913,6 +2561,101 @@
       status.textContent = 'Saved.';
     } catch (err) {
       status.textContent = err.message || 'Save failed';
+    }
+  });
+
+  el('profilePhotoPickBtn')?.addEventListener('click', () => {
+    if (isViewOnly() || !state.session?.resident?.memberId) return;
+    el('profilePhotoFile')?.click();
+  });
+  el('profilePhotoFile')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) openPhotoCrop(file);
+  });
+  el('profilePhotoRemoveBtn')?.addEventListener('click', async () => {
+    if (!window.confirm('Remove your profile photo?')) return;
+    const status = el('profilePhotoStatus');
+    if (status) status.textContent = 'Removing…';
+    try {
+      const headers = {};
+      if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+      const res = await fetch('/api/rwa/profile/photo', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      if (data.resident) {
+        state.session.resident = data.resident;
+        setAuthed(state.session);
+      }
+      if (status) status.textContent = 'Photo removed.';
+      await loadHouseholdMembers().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not remove photo';
+    }
+  });
+
+  el('photoCropZoom')?.addEventListener('input', () => {
+    photoCrop.scale = Number(el('photoCropZoom').value) || photoCrop.minScale;
+    applyPhotoCropTransform();
+  });
+
+  (function bindPhotoCropDrag() {
+    const vp = el('photoCropViewport');
+    if (!vp) return;
+    const onMove = (clientX, clientY) => {
+      if (!photoCrop.dragging) return;
+      photoCrop.offsetX = photoCrop.originX + (clientX - photoCrop.startX);
+      photoCrop.offsetY = photoCrop.originY + (clientY - photoCrop.startY);
+      applyPhotoCropTransform();
+    };
+    vp.addEventListener('pointerdown', (event) => {
+      photoCrop.dragging = true;
+      vp.classList.add('is-dragging');
+      photoCrop.startX = event.clientX;
+      photoCrop.startY = event.clientY;
+      photoCrop.originX = photoCrop.offsetX;
+      photoCrop.originY = photoCrop.offsetY;
+      vp.setPointerCapture?.(event.pointerId);
+    });
+    vp.addEventListener('pointermove', (event) => onMove(event.clientX, event.clientY));
+    const endDrag = () => {
+      photoCrop.dragging = false;
+      vp.classList.remove('is-dragging');
+    };
+    vp.addEventListener('pointerup', endDrag);
+    vp.addEventListener('pointercancel', endDrag);
+  })();
+
+  el('photoCropCancelBtn')?.addEventListener('click', () => closePhotoCrop());
+  el('photoCropDialog')?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closePhotoCrop();
+  });
+  el('photoCropForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errEl = el('photoCropError');
+    const btn = el('photoCropApplyBtn');
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = '';
+    }
+    if (btn) btn.disabled = true;
+    try {
+      const blob = await exportCroppedPhotoBlob();
+      if (el('profilePhotoStatus')) el('profilePhotoStatus').textContent = 'Uploading…';
+      await uploadProfilePhotoBlob(blob);
+      closePhotoCrop();
+      await loadHouseholdMembers().catch(() => {});
+    } catch (err) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = err.message || 'Could not save photo';
+      }
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 
@@ -2043,6 +2786,7 @@
       return `
         <div class="notice-comment" data-comment-id="${escapeHtml(c.id)}">
           <div class="notice-comment-head">
+            ${personAvatarHtml(c)}
             <strong>${escapeHtml(c.authorName || c.houseId || 'Resident')}</strong>
             <span class="muted">${escapeHtml(when)}</span>
             ${canDelete ? `<button type="button" class="btn ghost compact notice-comment-delete" data-comment-id="${escapeHtml(c.id)}" title="Remove">Remove</button>` : ''}
@@ -2059,6 +2803,7 @@
     try {
       const data = await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}/comments`);
       list.innerHTML = renderNoticeCommentsList(data.comments || []);
+      await hydrateAvatars(list);
       updateNoticeEngageUi(noticeId, data);
     } catch (err) {
       list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load comments')}</p>`;
@@ -2244,23 +2989,34 @@
     return `<div class="msg-trail">${items.map((m) => `
       <article class="msg-bubble ${m.authorRole === 'ec' ? 'is-ec' : 'is-resident'}">
         <header>
+          ${personAvatarHtml(m)}
           <strong>${escapeHtml(m.authorName || (m.authorRole === 'ec' ? 'EC' : 'Resident'))}</strong>
           <span>${m.authorRole === 'ec' ? 'EC' : 'Resident'}${m.authorHouseId ? ` · plot ${escapeHtml(m.authorHouseId)}` : ''}</span>
           <time>${escapeHtml(formatWhen(m.createdAt))}</time>
         </header>
         <p>${escapeHtml(m.body)}</p>
+        ${m.bodyHi ? `<p class="muted" lang="hi">${escapeHtml(m.bodyHi)}</p>` : ''}
       </article>`).join('')}</div>`;
   }
 
   function renderMailboxCard(g, { ecMode = false } = {}) {
     const closed = g.status === 'closed';
+    const replyId = `reply-${escapeHtml(g.id)}`;
     const replyBox = closed
       ? '<p class="muted">Thread closed.</p>'
       : `
         <form class="mailbox-reply" data-id="${escapeHtml(g.id)}">
-          <label>
+          <div class="author-lang-toggle" data-author-form="${replyId}" role="group" aria-label="Reply language">
+            <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
+            <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
+          </div>
+          <label data-author-pane="${replyId}" data-lang="en">
             <span class="sr-only">Reply</span>
             <textarea name="body" rows="2" required placeholder="${ecMode ? 'EC reply…' : 'Add a reply…'}"></textarea>
+          </label>
+          <label data-author-pane="${replyId}" data-lang="hi" hidden>
+            <span class="sr-only">Hindi reply</span>
+            <textarea name="bodyHi" rows="2" placeholder="हिंदी में जवाब…"></textarea>
           </label>
           ${ecMode ? `
             <label class="mailbox-status-pick">
@@ -2282,6 +3038,7 @@
         <button type="button" class="mobile-fold-head" aria-expanded="false">
           <span class="mobile-fold-head-main">
             <span class="grievance-card-head">
+              ${personAvatarHtml(g, { size: 'md' })}
               <span class="grievance-card-title">${escapeHtml(g.subject)}</span>
               <span class="grievance-badge is-${escapeHtml(g.status)}">${escapeHtml(statusLabel(g.status))}</span>
             </span>
@@ -2291,6 +3048,7 @@
               ${g.name ? ` · ${escapeHtml(g.name)}` : ''}
               · ${escapeHtml(formatWhen(g.updatedAt || g.createdAt))}
               · ${(g.messages || []).length} message${(g.messages || []).length === 1 ? '' : 's'}
+              ${g.subjectHi ? ' · हिं' : ''}
             </span>
           </span>
           <span class="mobile-fold-chevron" aria-hidden="true"></span>
@@ -2316,17 +3074,21 @@
         `${stats.total || 0} threads · ${stats.open || 0} open · ${stats.inProgress || 0} in progress · ${stats.resolved || 0} resolved`;
     }
     const rows = data.grievances || [];
+    mailboxCache = rows;
     if (!list) return;
     if (!rows.length) {
       list.innerHTML = '<p class="muted">No concerns in the mailbox yet. Post the first one above.</p>';
+      if (sectionLang.concerns === 'hi') renderConcernsOverlay();
       return;
     }
     list.innerHTML = rows.map((g) => renderMailboxCard(g, { ecMode: isEcAdmin() })).join('');
     refreshMobileListUi();
+    await hydrateAvatars(list);
+    if (sectionLang.concerns === 'hi') renderConcernsOverlay();
   }
 
   async function loadEcGrievances() {
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('manage_concerns')) return;
     const status = el('ecGrievanceStatusFilter')?.value || 'open';
     const category = el('ecGrievanceCategoryFilter')?.value || 'all';
     const qs = new URLSearchParams();
@@ -2348,11 +3110,13 @@
     list.innerHTML = rows.map((g) => renderMailboxCard(g, { ecMode: true })).join('');
     if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = '';
     refreshMobileListUi();
+    await hydrateAvatars(list);
   }
 
   async function submitMailboxReply(form) {
     const id = form.getAttribute('data-id');
     const body = form.querySelector('textarea[name="body"]')?.value.trim() || '';
+    const bodyHi = form.querySelector('textarea[name="bodyHi"]')?.value.trim() || '';
     const status = form.querySelector('select[name="status"]')?.value;
     const statusEl = form.querySelector('.row-status');
     const btn = form.querySelector('button[type="submit"]');
@@ -2363,12 +3127,12 @@
     }
     if (btn) btn.disabled = true;
     try {
-      const payload = { body };
+      const payload = { body, bodyHi };
       if (status) payload.status = status;
       if (isEcAdmin()) {
         await api(`/api/rwa/grievances/${encodeURIComponent(id)}`, {
           method: 'PATCH',
-          body: JSON.stringify({ response: body, status: status || 'in_progress' }),
+          body: JSON.stringify({ response: body, bodyHi, status: status || 'in_progress' }),
         });
       } else {
         await api(`/api/rwa/grievances/${encodeURIComponent(id)}/messages`, {
@@ -2377,6 +3141,8 @@
         });
       }
       form.querySelector('textarea[name="body"]').value = '';
+      const hiBox = form.querySelector('textarea[name="bodyHi"]');
+      if (hiBox) hiBox.value = '';
       await loadMailbox();
       if (isEcAdmin()) await loadEcGrievances().catch(() => {});
     } catch (err) {
@@ -2399,14 +3165,18 @@
           category: el('grievanceCategory').value,
           subject: el('grievanceSubject').value.trim(),
           body: el('grievanceBody').value.trim(),
+          subjectHi: el('grievanceSubjectHi')?.value.trim() || '',
+          bodyHi: el('grievanceBodyHi')?.value.trim() || '',
         }),
       });
       el('grievanceForm').reset();
+      setAuthorFormLang('grievance', 'en');
       if (status) status.textContent = 'Posted to the colony mailbox.';
       await loadMailbox();
       if (isEcAdmin()) await loadEcGrievances().catch(() => {});
     } catch (err) {
       if (status) status.textContent = err.message || 'Could not post';
+      setAuthorFormLang('grievance', 'en');
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -2503,11 +3273,387 @@
   el('ecGrievanceStatusFilter')?.addEventListener('change', () => loadEcGrievances().catch(console.error));
   el('ecGrievanceCategoryFilter')?.addEventListener('change', () => loadEcGrievances().catch(console.error));
 
+  let reportMeta = { reports: [], datasets: {} };
+  let reportFieldDefs = [];
+
+  function currentReportDef() {
+    const id = el('reportTypeSelect')?.value || 'pending-dues';
+    return (reportMeta.reports || []).find((r) => r.id === id) || null;
+  }
+
+  function renderReportFields(defs, selectedIds) {
+    const box = el('reportFields');
+    if (!box) return;
+    reportFieldDefs = defs || [];
+    const defaults = reportFieldDefs.filter((f) => f.default).map((f) => f.id);
+    const selected = new Set(selectedIds || defaults);
+    box.innerHTML = reportFieldDefs.map((f) => {
+      const checked = selected.has(f.id) || f.id === 'sno';
+      const disabled = f.id === 'sno' ? ' disabled' : '';
+      return `<label class="check"><input type="checkbox" name="field" value="${escapeHtml(f.id)}"${checked ? ' checked' : ''}${disabled}> <span>${escapeHtml(f.label)}</span></label>`;
+    }).join('');
+  }
+
+  function selectedReportFieldIds() {
+    return Array.from(document.querySelectorAll('#reportFields input[name="field"]:checked')).map((i) => i.value);
+  }
+
+  function syncReportUi() {
+    const def = currentReportDef();
+    const isCustom = def?.kind === 'custom' || def?.id === 'custom';
+    const isTemplate = def?.kind === 'template';
+    if (el('reportCustomControls')) el('reportCustomControls').hidden = !(isCustom || isTemplate);
+    if (el('reportSaveTemplateBtn')) el('reportSaveTemplateBtn').hidden = !(isCustom || isTemplate);
+    if (el('reportDeleteTemplateBtn')) el('reportDeleteTemplateBtn').hidden = !isTemplate;
+    let dataset = 'dues';
+    let fields = null;
+    let filters = {};
+    if (isCustom) {
+      dataset = el('reportDatasetSelect')?.value || 'dues';
+      const ds = reportMeta.datasets?.[dataset];
+      fields = ds?.fields || [];
+      filters = ds?.defaultFilters || {};
+    } else if (isTemplate) {
+      dataset = def.dataset || 'dues';
+      if (el('reportDatasetSelect')) el('reportDatasetSelect').value = dataset;
+      const ds = reportMeta.datasets?.[dataset];
+      const catalog = ds?.fields || [];
+      const selected = def.fields || [];
+      fields = catalog.length ? catalog : selected.map((id) => ({ id, label: id, default: true }));
+      filters = def.defaultFilters || {};
+      renderReportFields(fields, Array.isArray(selected) && selected.length && typeof selected[0] === 'string' ? selected : selected.map((f) => f.id || f));
+    } else {
+      dataset = def?.dataset || 'dues';
+      fields = def?.fields || reportMeta.datasets?.dues?.fields || [];
+      filters = def?.defaultFilters || {};
+      renderReportFields(fields, (fields || []).filter((f) => f.default).map((f) => f.id));
+    }
+    if (isCustom) {
+      const ds = reportMeta.datasets?.[dataset];
+      renderReportFields(ds?.fields || [], (ds?.fields || []).filter((f) => f.default).map((f) => f.id));
+      filters = ds?.defaultFilters || {};
+    }
+    if (el('reportSection') && filters.section) el('reportSection').value = filters.section;
+    if (el('reportSearch') && filters.search != null) el('reportSearch').value = filters.search || '';
+    if (el('reportPendingOnly')) el('reportPendingOnly').checked = filters.pendingOnly !== false;
+    if (el('reportPlots') && Array.isArray(filters.houseIds)) el('reportPlots').value = filters.houseIds.join(', ');
+    if (el('reportConcernStatus') && filters.status) el('reportConcernStatus').value = filters.status;
+    const duesLike = dataset === 'dues';
+    const concernsLike = dataset === 'concerns';
+    if (el('reportPendingOnlyWrap')) el('reportPendingOnlyWrap').hidden = !duesLike;
+    if (el('reportPlotsWrap')) el('reportPlotsWrap').hidden = concernsLike;
+    if (el('reportConcernStatusWrap')) el('reportConcernStatusWrap').hidden = !concernsLike;
+  }
+
+  async function initReportsForm() {
+    if (!el('reportForm') || !hasEntitlement('generate_reports')) return;
+    try {
+      reportMeta = await api('/api/rwa/reports/meta');
+    } catch (_e) {
+      reportMeta = { reports: [{ id: 'pending-dues', title: 'Pending Dues Report', kind: 'builtin', fields: [] }], datasets: {} };
+    }
+    const select = el('reportTypeSelect');
+    if (select) {
+      select.innerHTML = (reportMeta.reports || []).map((r) =>
+        `<option value="${escapeHtml(r.id)}">${escapeHtml(r.title)}</option>`
+      ).join('');
+    }
+    syncReportUi();
+  }
+
+  function buildReportPayload() {
+    const def = currentReportDef();
+    const reportId = def?.id || 'pending-dues';
+    const isCustom = def?.kind === 'custom' || reportId === 'custom';
+    const isTemplate = def?.kind === 'template';
+    const dataset = isCustom || isTemplate
+      ? (el('reportDatasetSelect')?.value || def?.dataset || 'dues')
+      : (def?.dataset || 'dues');
+    const plotsRaw = (el('reportPlots')?.value || '').trim();
+    const houseIds = plotsRaw ? plotsRaw.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean) : [];
+    const filters = {
+      section: el('reportSection')?.value || 'all',
+      search: (el('reportSearch')?.value || '').trim(),
+      houseIds,
+      pendingOnly: Boolean(el('reportPendingOnly')?.checked),
+      status: el('reportConcernStatus')?.value || 'open',
+    };
+    return {
+      reportId,
+      dataset,
+      fields: selectedReportFieldIds(),
+      filters,
+      title: def?.title || undefined,
+    };
+  }
+
+  async function downloadReportPdf(payload) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    const res = await fetch('/api/rwa/reports/generate', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const ctype = res.headers.get('content-type') || '';
+    if (!res.ok) {
+      const data = ctype.includes('json') ? await res.json().catch(() => ({})) : {};
+      throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.href = url;
+    a.download = `report-${stamp}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  el('reportTypeSelect')?.addEventListener('change', () => syncReportUi());
+  el('reportDatasetSelect')?.addEventListener('change', () => syncReportUi());
+  el('reportDefaultsBtn')?.addEventListener('click', () => {
+    const def = currentReportDef();
+    const dataset = el('reportDatasetSelect')?.value || def?.dataset || 'dues';
+    const fields = def?.kind === 'custom'
+      ? (reportMeta.datasets?.[dataset]?.fields || [])
+      : (def?.fields || []);
+    renderReportFields(fields, fields.filter((f) => f.default).map((f) => f.id));
+    if (el('reportStatus')) el('reportStatus').textContent = 'Columns reset to defaults.';
+  });
+
+  el('reportForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('reportStatus');
+    const btn = el('reportDownloadBtn');
+    if (status) status.textContent = 'Generating PDF…';
+    if (btn) btn.disabled = true;
+    try {
+      await downloadReportPdf(buildReportPayload());
+      if (status) status.textContent = 'PDF downloaded.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Report failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('reportSaveTemplateBtn')?.addEventListener('click', async () => {
+    const status = el('reportStatus');
+    const name = (el('reportTemplateName')?.value || '').trim();
+    if (!name) {
+      if (status) status.textContent = 'Enter a template name to save.';
+      return;
+    }
+    const payload = buildReportPayload();
+    const def = currentReportDef();
+    const body = {
+      name,
+      dataset: payload.dataset,
+      fields: payload.fields,
+      filters: payload.filters,
+    };
+    if (def?.kind === 'template' && def.templateId) body.id = def.templateId;
+    try {
+      await api('/api/rwa/reports/templates', { method: 'POST', body: JSON.stringify(body) });
+      if (status) status.textContent = 'Template saved.';
+      await initReportsForm();
+      if (el('reportTypeSelect') && body.id) {
+        el('reportTypeSelect').value = `template:${body.id}`;
+      } else {
+        // select newest matching name
+        const opt = Array.from(el('reportTypeSelect')?.options || []).find((o) => o.textContent === name);
+        if (opt) el('reportTypeSelect').value = opt.value;
+      }
+      syncReportUi();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save template';
+    }
+  });
+
+  el('reportDeleteTemplateBtn')?.addEventListener('click', async () => {
+    const def = currentReportDef();
+    if (def?.kind !== 'template' || !def.templateId) return;
+    if (!window.confirm(`Delete template “${def.title}”?`)) return;
+    try {
+      await api(`/api/rwa/reports/templates/${encodeURIComponent(def.templateId)}`, { method: 'DELETE', body: '{}' });
+      if (el('reportStatus')) el('reportStatus').textContent = 'Template deleted.';
+      await initReportsForm();
+    } catch (err) {
+      if (el('reportStatus')) el('reportStatus').textContent = err.message || 'Delete failed';
+    }
+  });
+
+  let entitlementCatalog = [];
+
+  async function loadRolesPanel() {
+    const box = el('rolesMembersList');
+    if (!box || !hasEntitlement('sensitive_ops')) return;
+    try {
+      const [meta, data] = await Promise.all([
+        api('/api/rwa/entitlements/meta'),
+        api('/api/rwa/roles'),
+      ]);
+      entitlementCatalog = (meta.grantable || []).map((id) => {
+        const def = (meta.entitlements || []).find((e) => e.id === id);
+        return def || { id, label: id };
+      });
+      const members = data.members || [];
+      if (!members.length) {
+        box.innerHTML = '<p class="muted">No EC members yet. Add an EC Member or designate an Office Bearer above.</p>';
+        return;
+      }
+      box.innerHTML = members.map((m) => {
+        const grants = new Set(m.entitlements || []);
+        const roleBits = [
+          m.isEcAdmin ? 'EC Admin' : null,
+          m.isOfficeBearer ? 'Office Bearer' : null,
+          m.isEcMember ? 'EC Member' : null,
+        ].filter(Boolean);
+        const canGrant = m.isEcMember && !m.isEcAdmin;
+        const canElevate = m.isOfficeBearer && !m.isEcAdmin;
+        const checks = entitlementCatalog.map((e) => {
+          const disabled = m.isEcAdmin ? ' disabled' : '';
+          const checked = m.isEcAdmin || grants.has(e.id) ? ' checked' : '';
+          return `<label class="check"><input type="checkbox" data-ent="${escapeHtml(e.id)}"${checked}${disabled}> <span>${escapeHtml(e.label)}</span></label>`;
+        }).join('');
+        return `<div class="roles-member-card" data-house="${escapeHtml(m.houseId)}">
+          <div class="roles-member-head">
+            ${personAvatarHtml(m, { size: 'md' })}
+            <div class="roles-member-text">
+              <strong>${escapeHtml(m.plotNo)}</strong> · ${escapeHtml(m.name)}
+              <span class="muted">${escapeHtml(m.officialTitle || '')}${m.officialTitle ? ' · ' : ''}${escapeHtml(roleBits.join(' · '))}</span>
+            </div>
+          </div>
+          ${canGrant || m.isEcAdmin ? `<div class="report-field-grid">${checks}</div>` : '<p class="muted">No entitlements yet — save grants below after selecting.</p><div class="report-field-grid">' + checks + '</div>'}
+          <div class="btn-row">
+            ${m.isEcAdmin
+              ? `<button type="button" class="btn ghost compact roles-demote" data-house="${escapeHtml(m.houseId)}">Demote from EC Admin</button>`
+              : `${canElevate ? `<button type="button" class="btn secondary compact roles-elevate" data-house="${escapeHtml(m.houseId)}">Elevate to EC Admin</button>` : ''}
+                 ${!m.isOfficeBearer ? `<button type="button" class="btn ghost compact roles-make-ob" data-house="${escapeHtml(m.houseId)}">Make Office Bearer</button>` : ''}
+                 <button type="button" class="btn ghost compact roles-save-grants" data-house="${escapeHtml(m.houseId)}">Save entitlements</button>`}
+            <button type="button" class="btn ghost compact roles-remove-member" data-house="${escapeHtml(m.houseId)}">Remove from EC</button>
+          </div>
+        </div>`;
+      }).join('');
+      await hydrateAvatars(box);
+      if (el('rolesStatus')) el('rolesStatus').textContent = `${members.length} EC member(s)`;
+    } catch (err) {
+      box.innerHTML = `<p class="error">${escapeHtml(err.message || 'Failed to load roles')}</p>`;
+    }
+  }
+
+  el('rolesRefreshBtn')?.addEventListener('click', () => loadRolesPanel().catch(console.error));
+  el('rolesDesignateMemberBtn')?.addEventListener('click', async () => {
+    const plot = (el('rolesDesignatePlot')?.value || '').trim();
+    const status = el('rolesStatus');
+    if (!plot) {
+      if (status) status.textContent = 'Plot is required.';
+      return;
+    }
+    try {
+      await api(`/api/rwa/residents/${encodeURIComponent(plot)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isEcMember: true }),
+      });
+      if (status) status.textContent = `Added ${plot} as EC Member.`;
+      el('rolesDesignatePlot').value = '';
+      await loadRolesPanel();
+      if (hasEntitlement('manage_roster')) await loadRoster().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Add member failed';
+    }
+  });
+  el('rolesDesignateBtn')?.addEventListener('click', async () => {
+    const plot = (el('rolesDesignatePlot')?.value || '').trim();
+    const title = (el('rolesDesignateTitle')?.value || '').trim();
+    const status = el('rolesStatus');
+    if (!plot || !title) {
+      if (status) status.textContent = 'Plot and official title are required for office bearers.';
+      return;
+    }
+    try {
+      await api(`/api/rwa/residents/${encodeURIComponent(plot)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isEcMember: true, isOfficeBearer: true, officialTitle: title }),
+      });
+      if (status) status.textContent = `Designated ${plot} as office bearer.`;
+      el('rolesDesignatePlot').value = '';
+      el('rolesDesignateTitle').value = '';
+      await loadRolesPanel();
+      if (hasEntitlement('manage_roster')) await loadRoster().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Designate failed';
+    }
+  });
+
+  el('rolesMembersList')?.addEventListener('click', async (event) => {
+    const elevate = event.target.closest('.roles-elevate');
+    const demote = event.target.closest('.roles-demote');
+    const save = event.target.closest('.roles-save-grants');
+    const remove = event.target.closest('.roles-remove-member');
+    const makeOb = event.target.closest('.roles-make-ob');
+    const status = el('rolesStatus');
+    const btn = elevate || demote || save || remove || makeOb;
+    if (!btn) return;
+    const houseId = btn.getAttribute('data-house');
+    const card = btn.closest('.roles-member-card');
+    try {
+      if (elevate) {
+        await api(`/api/rwa/residents/${encodeURIComponent(houseId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role: 'admin', isOfficeBearer: true, isEcMember: true }),
+        });
+        if (status) status.textContent = `Elevated ${houseId} to EC Admin.`;
+      } else if (demote) {
+        if (!window.confirm(`Demote plot ${houseId} from EC Admin? They remain an office bearer / EC member.`)) return;
+        await api(`/api/rwa/residents/${encodeURIComponent(houseId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role: 'resident', isOfficeBearer: true, isEcMember: true }),
+        });
+        if (status) status.textContent = `Demoted ${houseId}.`;
+      } else if (makeOb) {
+        const title = window.prompt(`Official title for plot ${houseId}?`, '') || '';
+        if (!title.trim()) {
+          if (status) status.textContent = 'Official title required.';
+          return;
+        }
+        await api(`/api/rwa/residents/${encodeURIComponent(houseId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isEcMember: true, isOfficeBearer: true, officialTitle: title.trim() }),
+        });
+        if (status) status.textContent = `Made ${houseId} an office bearer.`;
+      } else if (save) {
+        const ents = Array.from(card.querySelectorAll('input[data-ent]:checked')).map((i) => i.getAttribute('data-ent'));
+        await api(`/api/rwa/residents/${encodeURIComponent(houseId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ entitlements: ents, isEcMember: true }),
+        });
+        if (status) status.textContent = `Saved entitlements for ${houseId}.`;
+      } else if (remove) {
+        if (!window.confirm(`Remove ${houseId} from EC (member / bearer / admin)?`)) return;
+        await api(`/api/rwa/residents/${encodeURIComponent(houseId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isEcMember: false, isOfficeBearer: false, role: 'resident' }),
+        });
+        if (status) status.textContent = `Removed ${houseId} from EC.`;
+      }
+      await loadRolesPanel();
+      if (hasEntitlement('manage_roster')) await loadRoster().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Update failed';
+    }
+  });
+
   el('ledgerImportForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const status = el('ledgerImportStatus');
     const fileInput = event.currentTarget.querySelector('input[type="file"]');
     if (!fileInput?.files?.length) return;
+    if (!window.confirm('Import this ledger PDF? This refreshes dues for the whole colony.')) return;
     status.textContent = 'Importing…';
     try {
       const body = new FormData();
@@ -2540,7 +3686,7 @@
   function rosterMatches(r, q, missingOnly) {
     if (missingOnly && r.phone) return false;
     if (!q) return true;
-    const hay = `${r.houseId} ${r.plotNo} ${r.title || ''} ${r.name} ${r.profession || ''} ${r.phone || ''} ${r.email || ''} ${r.officialTitle || ''} ${r.role}`.toLowerCase();
+    const hay = `${r.houseId} ${r.plotNo} ${r.title || ''} ${r.name} ${r.profession || ''} ${r.phone || ''} ${r.email || ''} ${r.officialTitle || ''} ${r.role} ${committeeRoleLabel(r)}`.toLowerCase();
     return hay.includes(q);
   }
 
@@ -2560,9 +3706,13 @@
       const roleDisabled = superOnly ? '' : ' disabled';
       const statusDisabled = (superOnly || r.role !== 'admin') ? '' : ' disabled';
       const statusNote = (!superOnly && r.role === 'admin') ? ' title="Only super admin can suspend EC admins"' : '';
+      const roleLabel = committeeRoleLabel(r);
+      const residentOptionLabel = r.role === 'admin'
+        ? 'Resident'
+        : (r.isOfficeBearer ? 'Office Bearer' : (r.isEcMember ? 'EC Member' : 'Resident'));
       return `
       <tr data-house="${escapeHtml(r.houseId)}" class="${r.phone ? '' : 'is-missing-phone'}">
-        <td class="plot-cell" data-label="Plot">${escapeHtml(r.houseId)}<div class="muted plot-section">${escapeHtml(r.section || '')}</div></td>
+        <td class="plot-cell" data-label="Plot"><span class="person-cell">${personAvatarHtml(r)}<span><code>${escapeHtml(r.houseId)}</code><div class="muted plot-section">${escapeHtml(r.section || '')}</div></span></span></td>
         <td data-label="Title"><input name="title" value="${escapeHtml(r.title || '')}" placeholder="Mr/Mrs/Dr" aria-label="Title ${escapeHtml(r.houseId)}"></td>
         <td data-label="Name"><input name="name" value="${escapeHtml(r.name || '')}" aria-label="Name ${escapeHtml(r.houseId)}"></td>
         <td data-label="Profession"><input name="profession" value="${escapeHtml(r.profession || '')}" placeholder="Profession" aria-label="Profession ${escapeHtml(r.houseId)}"></td>
@@ -2578,9 +3728,9 @@
         <td data-label="EC title"><input name="officialTitle" value="${escapeHtml(r.officialTitle || '')}" placeholder="EC title" aria-label="Official title ${escapeHtml(r.houseId)}"></td>
         <td data-label="Notes"><input name="notes" value="${escapeHtml(r.notes || '')}" placeholder="notes" aria-label="Notes ${escapeHtml(r.houseId)}"></td>
         <td data-label="Role">
-          <select name="role" aria-label="Role ${escapeHtml(r.houseId)}"${roleDisabled}>
-            <option value="resident"${r.role === 'resident' ? ' selected' : ''}>Resident</option>
-            <option value="admin"${r.role === 'admin' ? ' selected' : ''}>EC admin</option>
+          <select name="role" aria-label="Role ${escapeHtml(r.houseId)}"${roleDisabled} title="${escapeHtml(roleLabel)}">
+            <option value="resident"${r.role !== 'admin' ? ' selected' : ''}>${escapeHtml(residentOptionLabel)}</option>
+            <option value="admin"${r.role === 'admin' ? ' selected' : ''}>EC Admin</option>
           </select>
         </td>
         <td data-label="Status">
@@ -2596,18 +3746,170 @@
       </tr>`;
     }).join('');
     refreshMobileListUi();
+    hydrateAvatars(tbody).catch(() => {});
   }
 
   async function loadRoster() {
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('manage_roster') && !hasEntitlement('sensitive_ops') && !isEcAdmin()) return;
     const data = await api('/api/rwa/residents');
     rosterCache = data.residents || [];
     renderRosterStats(data.stats);
     renderRosterRows();
+    populateEcDelegateHouseListFromCache();
     if (el('rosterStatus')) el('rosterStatus').textContent = isSuperAdmin()
       ? 'Super admin: you can assign, remove, or suspend EC admins.'
       : 'EC: edit resident details. Role / EC suspend requires Super admin.';
   }
+
+  function populateEcDelegateHouseListFromCache() {
+    const list = el('ecDelegateHouseList');
+    if (!list) return;
+    const rows = rosterCache.length
+      ? rosterCache
+      : [];
+    list.innerHTML = rows.map((r) =>
+      `<option value="${escapeHtml(r.houseId)}">${escapeHtml(r.houseId)} — ${escapeHtml(r.name || '')}</option>`
+    ).join('');
+  }
+
+  async function populateEcDelegateHouseList() {
+    if (!isEcAdmin()) return;
+    if (rosterCache.length) {
+      populateEcDelegateHouseListFromCache();
+      return;
+    }
+    try {
+      const data = await api('/api/rwa/directory');
+      const list = el('ecDelegateHouseList');
+      if (!list) return;
+      list.innerHTML = (data.residents || []).map((r) =>
+        `<option value="${escapeHtml(r.houseId)}">${escapeHtml(r.houseId)} — ${escapeHtml(r.name || '')}</option>`
+      ).join('');
+    } catch (_) { /* ignore */ }
+  }
+
+  function ecDelegateHouseId() {
+    return (el('ecDelegateHouse')?.value || '').trim();
+  }
+
+  function renderEcDelegateMembers(data) {
+    const list = el('ecDelegateMemberList');
+    if (!list) return;
+    const canManage = Boolean(data?.canManage);
+    const houseLabel = data?.houseId || ecDelegateHouseId();
+    const ownerName = data?.householdName ? ` · ${data.householdName}` : '';
+    list.innerHTML = `
+      <p class="muted">Household for <code>${escapeHtml(houseLabel)}</code>${escapeHtml(ownerName)}</p>
+      ${(data.members || []).map((m) => {
+        const badges = [
+          m.isPrimary ? 'Owner' : (m.relationLabel || m.relation),
+          m.viewOnly ? 'View only' : null,
+        ].filter(Boolean).join(' · ');
+        const actions = canManage && !m.isPrimary ? `
+          <div class="btn-row">
+            <label class="check compact"><input type="checkbox" class="ec-hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''}> View only</label>
+            <button type="button" class="btn ghost compact ec-hh-remove" data-id="${escapeHtml(m.id)}">Remove</button>
+          </div>` : (m.isPrimary ? '<p class="muted">Primary owner</p>' : '');
+        return `
+          <article class="household-member-card" data-id="${escapeHtml(m.id)}">
+            ${hhAvatarHtml(m)}
+            <strong>${escapeHtml(m.name)}</strong>
+            <span class="muted">${escapeHtml(badges)}</span>
+            ${actions}
+          </article>`;
+      }).join('') || '<p class="muted">No household members yet.</p>'}`;
+    hydrateAvatars(list).catch(() => {});
+  }
+
+  async function loadEcDelegateHousehold() {
+    const hid = ecDelegateHouseId();
+    const status = el('ecDelegateStatus');
+    const list = el('ecDelegateMemberList');
+    if (!hid) {
+      if (list) list.innerHTML = '';
+      return;
+    }
+    if (status) status.textContent = 'Loading household…';
+    try {
+      const data = await api(`/api/rwa/household/${encodeURIComponent(hid)}/members`);
+      data.houseId = hid;
+      renderEcDelegateMembers(data);
+      if (status) status.textContent = '';
+    } catch (err) {
+      if (list) list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load household')}</p>`;
+      if (status) status.textContent = err.message || 'Could not load household';
+    }
+  }
+
+  el('ecDelegateLoadBtn')?.addEventListener('click', () => {
+    loadEcDelegateHousehold().catch(console.error);
+  });
+
+  el('ecDelegateHouse')?.addEventListener('change', () => {
+    loadEcDelegateHousehold().catch(console.error);
+  });
+
+  el('ecDelegateForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!isEcAdmin()) return;
+    const hid = ecDelegateHouseId();
+    const status = el('ecDelegateStatus');
+    const name = (el('ecDelegateName')?.value || '').trim();
+    if (!hid || !name) return;
+    if (status) status.textContent = 'Adding…';
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          relation: el('ecDelegateRelation')?.value || 'other',
+          viewOnly: Boolean(el('ecDelegateViewOnly')?.checked),
+        }),
+      });
+      if (el('ecDelegateName')) el('ecDelegateName').value = '';
+      if (el('ecDelegateViewOnly')) el('ecDelegateViewOnly').checked = false;
+      if (status) status.textContent = `Delegate added for ${hid}.`;
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not add delegate';
+    }
+  });
+
+  el('ecDelegateMemberList')?.addEventListener('change', async (event) => {
+    const box = event.target.closest('.ec-hh-view-only');
+    if (!box) return;
+    const hid = ecDelegateHouseId();
+    const id = box.getAttribute('data-id');
+    if (!hid || !id) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/members/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ viewOnly: box.checked }),
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not update access');
+      box.checked = !box.checked;
+    }
+  });
+
+  el('ecDelegateMemberList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.ec-hh-remove');
+    if (!btn) return;
+    const hid = ecDelegateHouseId();
+    const id = btn.getAttribute('data-id');
+    if (!hid || !id) return;
+    if (!window.confirm('Remove this household login?')) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/members/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: '{}',
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not remove member');
+    }
+  });
 
   function residentApiId(houseId) {
     return encodeURIComponent(String(houseId || ''));
@@ -2693,7 +3995,7 @@
   }
 
   async function loadRevisions() {
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('sensitive_ops')) return;
     const houseId = (el('revisionHouseFilter')?.value || '').trim();
     const qs = houseId ? `?houseId=${encodeURIComponent(houseId)}&limit=80` : '?limit=80';
     const data = await api(`/api/rwa/residents/revisions${qs}`);
@@ -2729,7 +4031,7 @@
 
   async function loadSmtpStatus() {
     const line = el('smtpStatusLine');
-    if (!line || !isEcAdmin()) return;
+    if (!line || !canOpenEcDesk()) return;
     try {
       const data = await api('/api/rwa/smtp/status');
       line.textContent = data.configured
@@ -2757,6 +4059,84 @@
       el('settingsStatus').textContent = smtp.configured
         ? `Configured · file ${s.envFile || 'data/smtp.env'}`
         : `Not fully configured · edit and save (${s.envFile || 'data/smtp.env'})`;
+    }
+    fillOpsSettingsForm(s.ops || {});
+    await loadOpsStatus().catch(() => {});
+  }
+
+  function fillOpsSettingsForm(ops = {}) {
+    if (el('opsAlertTo')) el('opsAlertTo').value = ops.alertTo || '';
+    if (el('opsVitalsEnabled')) el('opsVitalsEnabled').checked = ops.vitalsEnabled !== false;
+    if (el('opsBackupRetainDays')) el('opsBackupRetainDays').value = ops.backupRetainDays ?? 14;
+    if (el('opsBackupDiskMinPct')) el('opsBackupDiskMinPct').value = ops.backupDiskMinPct ?? 15;
+    if (el('opsAccessEventsDays')) el('opsAccessEventsDays').value = ops.accessEventsDays ?? 90;
+    if (el('opsDiskWarnPct')) el('opsDiskWarnPct').value = ops.diskWarnPct ?? 20;
+    if (el('opsDiskCritPct')) el('opsDiskCritPct').value = ops.diskCritPct ?? 10;
+    if (el('opsMemWarnPct')) el('opsMemWarnPct').value = ops.memWarnPct ?? 15;
+    if (el('opsMemCritPct')) el('opsMemCritPct').value = ops.memCritPct ?? 8;
+    if (el('opsLoadWarnRatio')) el('opsLoadWarnRatio').value = ops.loadWarnRatio ?? 1.5;
+    if (el('opsLoadCritRatio')) el('opsLoadCritRatio').value = ops.loadCritRatio ?? 2.5;
+    if (el('opsBackupMaxAgeHours')) el('opsBackupMaxAgeHours').value = ops.backupMaxAgeHours ?? 28;
+    if (el('opsAlertCooldownWarnH')) el('opsAlertCooldownWarnH').value = ops.alertCooldownWarnHours ?? 6;
+    if (el('opsAlertCooldownCritH')) el('opsAlertCooldownCritH').value = ops.alertCooldownCritHours ?? 1;
+  }
+
+  function collectOpsSettingsPayload() {
+    return {
+      alertTo: el('opsAlertTo')?.value.trim() || '',
+      vitalsEnabled: Boolean(el('opsVitalsEnabled')?.checked),
+      backupRetainDays: Number(el('opsBackupRetainDays')?.value || 14),
+      backupDiskMinPct: Number(el('opsBackupDiskMinPct')?.value || 15),
+      accessEventsDays: Number(el('opsAccessEventsDays')?.value || 90),
+      diskWarnPct: Number(el('opsDiskWarnPct')?.value || 20),
+      diskCritPct: Number(el('opsDiskCritPct')?.value || 10),
+      memWarnPct: Number(el('opsMemWarnPct')?.value || 15),
+      memCritPct: Number(el('opsMemCritPct')?.value || 8),
+      loadWarnRatio: Number(el('opsLoadWarnRatio')?.value || 1.5),
+      loadCritRatio: Number(el('opsLoadCritRatio')?.value || 2.5),
+      backupMaxAgeHours: Number(el('opsBackupMaxAgeHours')?.value || 28),
+      alertCooldownWarnHours: Number(el('opsAlertCooldownWarnH')?.value || 6),
+      alertCooldownCritHours: Number(el('opsAlertCooldownCritH')?.value || 1),
+    };
+  }
+
+  function fmtOpsWhen(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    } catch (_e) {
+      return String(iso).slice(0, 16);
+    }
+  }
+
+  async function loadOpsStatus() {
+    if (!isSuperAdmin()) return;
+    const panel = el('opsStatusPanel');
+    if (!panel) return;
+    panel.textContent = 'Loading server status…';
+    try {
+      const data = await api('/api/rwa/ops/status');
+      const live = data.live || {};
+      const lastB = data.lastBackup || {};
+      const lastV = data.lastVitals || {};
+      const disk = live.diskFreePct ?? '—';
+      const mem = live.memAvailablePct ?? '—';
+      const load = live.loadRatio ?? '—';
+      const adminOk = live.adminServiceActive;
+      const ngxOk = live.nginxActive;
+      const svc = (ok) => (ok === true ? '✓ active' : (ok === false ? '✗ down' : '—'));
+      panel.innerHTML = `
+        <div class="ops-status-grid">
+          <div><strong>Disk free</strong><span>${escapeHtml(String(disk))}%</span></div>
+          <div><strong>Memory avail</strong><span>${escapeHtml(String(mem))}%</span></div>
+          <div><strong>Load ratio</strong><span>${escapeHtml(String(load))}</span></div>
+          <div><strong>Admin service</strong><span>${escapeHtml(svc(adminOk))}</span></div>
+          <div><strong>Nginx</strong><span>${escapeHtml(svc(ngxOk))}</span></div>
+          <div><strong>Last backup</strong><span>${lastB.ok === false ? 'Failed' : (lastB.ok ? 'OK' : '—')} · ${escapeHtml(fmtOpsWhen(lastB.at))}</span></div>
+          <div><strong>Last vitals</strong><span>${escapeHtml(lastV.overall || '—')} · ${escapeHtml(fmtOpsWhen(lastV.at))}</span></div>
+        </div>`;
+    } catch (err) {
+      panel.textContent = err.message || 'Could not load ops status';
     }
   }
 
@@ -2866,6 +4246,7 @@
         },
         otpTtl: Number(el('settingsOtpTtl')?.value || 600),
         superadminUser: el('settingsSaUser')?.value.trim() || 'admin',
+        ops: collectOpsSettingsPayload(),
       };
       const pass = el('settingsSmtpPass')?.value || '';
       if (pass) payload.smtp.password = pass;
@@ -2881,11 +4262,55 @@
           : 'Settings saved. SMTP still needs an App Password.';
       }
       loadSmtpStatus();
+      fillOpsSettingsForm(data.settings?.ops || {});
     } catch (err) {
       if (status) status.textContent = err.message || 'Save failed';
     } finally {
       if (btn) btn.disabled = false;
     }
+  });
+
+  el('opsSettingsForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!isSuperAdmin()) return;
+    const status = el('opsSettingsStatus');
+    const btn = el('opsSettingsSaveBtn');
+    if (status) status.textContent = 'Saving…';
+    if (btn) btn.disabled = true;
+    try {
+      const data = await api('/api/rwa/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ops: collectOpsSettingsPayload() }),
+      });
+      fillOpsSettingsForm(data.settings?.ops || {});
+      if (status) status.textContent = 'Ops settings saved.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Save failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('opsTestAlertBtn')?.addEventListener('click', async () => {
+    if (!isSuperAdmin()) return;
+    const status = el('opsSettingsStatus');
+    const btn = el('opsTestAlertBtn');
+    if (status) status.textContent = 'Sending test alert…';
+    if (btn) btn.disabled = true;
+    try {
+      const data = await api('/api/rwa/ops/test-alert', { method: 'POST', body: '{}' });
+      if (status) status.textContent = `Test alert sent to ${data.to || 'alert address'}.`;
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Test alert failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('opsRefreshStatusBtn')?.addEventListener('click', () => {
+    loadOpsStatus().catch((err) => {
+      if (el('opsSettingsStatus')) el('opsSettingsStatus').textContent = err.message || 'Refresh failed';
+    });
   });
 
   // Progressive Web App: service worker + install hint

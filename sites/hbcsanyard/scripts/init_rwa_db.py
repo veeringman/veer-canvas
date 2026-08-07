@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 10
 SUPERADMIN_HOUSE_ID = "__SUPERADMIN__"
 
 # Residential plots A (rows 1–60) then commercial plots B (61–62) from HIMUDA ledger 15-06-2026.
@@ -258,11 +258,32 @@ def init_schema(conn: sqlite3.Connection) -> None:
           employment_status TEXT NOT NULL DEFAULT 'unknown'
             CHECK(employment_status IN ('working','retired','unknown')),
           official_title TEXT,
+          is_ec_member INTEGER NOT NULL DEFAULT 0,
+          is_office_bearer INTEGER NOT NULL DEFAULT 0,
           email TEXT,
           phone TEXT,
           role TEXT NOT NULL DEFAULT 'resident' CHECK(role IN ('admin','resident')),
           status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','inactive')),
           notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS resident_entitlements (
+          house_id TEXT NOT NULL,
+          entitlement TEXT NOT NULL,
+          granted_by TEXT,
+          granted_at TEXT NOT NULL,
+          PRIMARY KEY (house_id, entitlement)
+        );
+
+        CREATE TABLE IF NOT EXISTS report_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          dataset TEXT NOT NULL,
+          fields_json TEXT NOT NULL,
+          filters_json TEXT NOT NULL DEFAULT '{}',
+          created_by TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -545,6 +566,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_grievances_table(conn)
     ensure_info_documents_table(conn)
     ensure_colony_works_table(conn)
+    ensure_entitlements_schema(conn)
+    ensure_report_templates_table(conn)
+    ensure_bilingual_content_columns(conn)
     migrate_roman_plot_ids(conn)
     ensure_superadmin_account(conn)
 
@@ -560,10 +584,78 @@ def ensure_resident_profile_columns(conn: sqlite3.Connection) -> None:
             "ALTER TABLE residents ADD COLUMN employment_status TEXT NOT NULL DEFAULT 'unknown'",
         ),
         ("official_title", "ALTER TABLE residents ADD COLUMN official_title TEXT"),
+        (
+            "is_ec_member",
+            "ALTER TABLE residents ADD COLUMN is_ec_member INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
+            "is_office_bearer",
+            "ALTER TABLE residents ADD COLUMN is_office_bearer INTEGER NOT NULL DEFAULT 0",
+        ),
     ]
     for name, sql in alters:
         if name not in cols:
             conn.execute(sql)
+    conn.commit()
+
+
+def ensure_entitlements_schema(conn: sqlite3.Connection) -> None:
+    """EC member / office bearer flags + entitlement grants (migrate-safe)."""
+    ensure_resident_profile_columns(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resident_entitlements (
+          house_id TEXT NOT NULL,
+          entitlement TEXT NOT NULL,
+          granted_by TEXT,
+          granted_at TEXT NOT NULL,
+          PRIMARY KEY (house_id, entitlement)
+        )
+        """
+    )
+    # Backfill office bearers from title / admin role
+    conn.execute(
+        """
+        UPDATE residents
+        SET is_office_bearer = 1
+        WHERE house_id != ?
+          AND (
+            role = 'admin'
+            OR (official_title IS NOT NULL AND TRIM(official_title) != '')
+          )
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    )
+    # EC admins and office bearers are always EC members
+    conn.execute(
+        """
+        UPDATE residents
+        SET is_ec_member = 1
+        WHERE house_id != ?
+          AND (role = 'admin' OR is_office_bearer = 1
+               OR (official_title IS NOT NULL AND TRIM(official_title) != ''))
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    )
+    conn.commit()
+
+
+def ensure_report_templates_table(conn: sqlite3.Connection) -> None:
+    """Saved custom report definitions."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS report_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          dataset TEXT NOT NULL,
+          fields_json TEXT NOT NULL,
+          filters_json TEXT NOT NULL DEFAULT '{}',
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
 
 
@@ -694,6 +786,10 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
     member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
     if "view_only" not in member_cols:
         conn.execute("ALTER TABLE household_members ADD COLUMN view_only INTEGER NOT NULL DEFAULT 0")
+    # Refresh columns after possible alter
+    member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
+    if "photo_filename" not in member_cols:
+        conn.execute("ALTER TABLE household_members ADD COLUMN photo_filename TEXT")
 
     sess_cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
     if "member_id" not in sess_cols:
@@ -986,6 +1082,37 @@ def ensure_grievances_table(conn: sqlite3.Connection) -> None:
                     g["responded_at"] or g["updated_at"] or g["created_at"],
                 ),
             )
+    conn.commit()
+
+
+def ensure_bilingual_content_columns(conn: sqlite3.Connection) -> None:
+    """Hindi companion fields for notices, concerns, and in-house info HTML."""
+    notice_cols = {row[1] for row in conn.execute("PRAGMA table_info(notices)").fetchall()}
+    if notice_cols:
+        if "title_hi" not in notice_cols:
+            conn.execute("ALTER TABLE notices ADD COLUMN title_hi TEXT")
+        if "body_hi" not in notice_cols:
+            conn.execute("ALTER TABLE notices ADD COLUMN body_hi TEXT")
+
+    grievance_cols = {row[1] for row in conn.execute("PRAGMA table_info(grievances)").fetchall()}
+    if grievance_cols:
+        if "subject_hi" not in grievance_cols:
+            conn.execute("ALTER TABLE grievances ADD COLUMN subject_hi TEXT")
+        if "body_hi" not in grievance_cols:
+            conn.execute("ALTER TABLE grievances ADD COLUMN body_hi TEXT")
+
+    msg_cols = {row[1] for row in conn.execute("PRAGMA table_info(grievance_messages)").fetchall()}
+    if msg_cols and "body_hi" not in msg_cols:
+        conn.execute("ALTER TABLE grievance_messages ADD COLUMN body_hi TEXT")
+
+    info_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+    if info_cols:
+        if "title_hi" not in info_cols:
+            conn.execute("ALTER TABLE info_documents ADD COLUMN title_hi TEXT")
+        if "summary_hi" not in info_cols:
+            conn.execute("ALTER TABLE info_documents ADD COLUMN summary_hi TEXT")
+        if "has_html_hi" not in info_cols:
+            conn.execute("ALTER TABLE info_documents ADD COLUMN has_html_hi INTEGER NOT NULL DEFAULT 0")
     conn.commit()
 
 
