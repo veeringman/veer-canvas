@@ -76,6 +76,7 @@ Deploy protects the **entire** live `data/` tree (and never uploads a local `dat
 - `data/rwa.db` (SQLite)
 - `data/receipts/` (payment / claim proofs)
 - `data/no-dues/` (issued certificates)
+- `data/vault/` (Documents Vault uploads; catalog also indexes receipts / no-dues / cash notes in place)
 - `data/info-centre/` (Information Centre files)
 - `data/profile-photos/`, `data/payments/`, `data/imports/`, `data/messages/`
 - `data/smtp.env`, `data/vapid.env` (Web Push VAPID keys) and other runtime env files

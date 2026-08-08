@@ -574,6 +574,14 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_messages_and_push_tables(conn)
         ensure_msg_likes_and_ai(conn)
         try:
+            import rwa_vault as _rwa_vault
+
+            _rwa_vault.ensure_vault_tables(conn)
+            _rwa_vault.backfill_from_existing(conn, site_root)
+            _rwa_vault.dedupe_catalog(conn)
+        except Exception:
+            pass
+        try:
             import rwa_payments as _rwa_payments
 
             _rwa_payments.reconcile_orphan_receipts(conn, site_root)

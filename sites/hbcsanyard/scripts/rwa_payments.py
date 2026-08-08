@@ -126,9 +126,16 @@ def _replace_receipt_files(
         raise ValueError(f"At most {RECEIPT_MAX_FILES} files per claim")
 
     old = conn.execute(
-        "SELECT filename FROM payment_receipt_files WHERE record_id = ?",
+        "SELECT id, filename FROM payment_receipt_files WHERE record_id = ?",
         (record_id,),
     ).fetchall()
+    old_ids = [r["id"] for r in old]
+    try:
+        import rwa_vault
+
+        rwa_vault.remove_receipt_catalog(conn, record_id=record_id, file_ids=old_ids, commit=False)
+    except Exception:
+        pass
     conn.execute("DELETE FROM payment_receipt_files WHERE record_id = ?", (record_id,))
 
     dest_dir = receipts_root(site_root) / re.sub(r"[^A-Za-z0-9_-]", "_", house_id) / record_id
@@ -165,6 +172,43 @@ def _replace_receipt_files(
             saved += 1
         if saved < 1:
             raise ValueError("At least one receipt file is required")
+        # Index into Documents Vault (same files — no copies).
+        try:
+            import rwa_vault
+
+            rec = conn.execute(
+                "SELECT uploaded_by_house_id, uploaded_by_member_id, uploaded_by_role, note FROM payment_records WHERE id = ?",
+                (record_id,),
+            ).fetchone()
+            files_rows = conn.execute(
+                "SELECT * FROM payment_receipt_files WHERE record_id = ?",
+                (record_id,),
+            ).fetchall()
+            # Optional metadata stashed on the connection by create/update callers.
+            vault_title = getattr(conn, "_vault_doc_title", "") or ""
+            vault_desc = getattr(conn, "_vault_doc_description", "") or ""
+            if not vault_desc and rec and rec["note"]:
+                vault_desc = rec["note"] or ""
+            for fr in files_rows:
+                rwa_vault.index_receipt_file(
+                    conn,
+                    site_root,
+                    house_id=house_id,
+                    record_id=record_id,
+                    file_id=fr["id"],
+                    filename=fr["filename"],
+                    original_name=fr["original_name"] or fr["filename"],
+                    mime=fr["mime"],
+                    size_bytes=int(fr["size_bytes"] or 0),
+                    title=vault_title,
+                    description=vault_desc,
+                    uploaded_by_house_id=(rec["uploaded_by_house_id"] if rec else None),
+                    uploaded_by_member_id=(rec["uploaded_by_member_id"] if rec else None),
+                    uploaded_by_role=(rec["uploaded_by_role"] if rec else "resident") or "resident",
+                    commit=False,
+                )
+        except Exception:
+            pass
     except Exception:
         for f in old:
             # Best-effort: leave DB empty; caller rolls back transaction
@@ -261,6 +305,10 @@ def update_record(
         else (row["paid_on"] or "")
     )
     note = str(payload["note"]).strip()[:500] if "note" in payload else (row["note"] or "")
+    conn._vault_doc_title = str(payload.get("docTitle") or payload.get("title") or "").strip()[:200]
+    conn._vault_doc_description = str(
+        payload.get("docDescription") or payload.get("description") or note or ""
+    ).strip()[:1000]
 
     now = utc_now()
     conn.execute(
@@ -673,6 +721,11 @@ def create_record(
     paid_on = _as_paid_on(payload.get("paidOn") or payload.get("paid_on"))
     note = str(payload.get("note") or "").strip()[:500]
     role = uploaded_by_role if uploaded_by_role in ("resident", "ec") else "resident"
+    # Stash vault metadata for receipt indexing (same connection).
+    conn._vault_doc_title = str(payload.get("docTitle") or payload.get("title") or "").strip()[:200]
+    conn._vault_doc_description = str(
+        payload.get("docDescription") or payload.get("description") or note or ""
+    ).strip()[:1000]
 
     rid = f"pay_{secrets.token_hex(8)}"
     now = utc_now()

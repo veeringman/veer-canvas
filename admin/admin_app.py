@@ -4112,6 +4112,22 @@ def api_rwa_cash_received_note():
             filename=filename,
             commit=True,
         )
+        try:
+            import rwa_vault
+
+            rwa_vault.index_attestation(
+                conn,
+                SITE_ROOT,
+                attestation_id=att_id,
+                artifact_type="cash_note",
+                house_id=house_id,
+                stored_path=stored_rel,
+                filename=filename,
+                uploaded_by_house_id=actor.get("houseId") or actor.get("house_id"),
+                commit=True,
+            )
+        except Exception:
+            pass
         resp = send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
@@ -4139,6 +4155,168 @@ def api_rwa_attestation_verify(attestation_id: str):
 
         result = rwa_attest.verify_attestation(conn, SITE_ROOT, attestation_id)
         return jsonify(result)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/vault", methods=["GET", "POST"])
+def api_rwa_vault():
+    """Plot Documents Vault — list context or upload (single store, role-based view)."""
+    conn = _rwa_conn()
+    try:
+        import rwa_vault
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+
+        if request.method == "GET":
+            house_id = (request.args.get("houseId") or request.args.get("house_id") or actor.get("houseId") or "").strip()
+            if not house_id:
+                return jsonify({"ok": False, "error": "Plot required"}), 400
+            own = house_id == (actor.get("houseId") or "")
+            if not own and not rwa_vault.can_browse_ec_shared(actor) and not actor.get("superAdmin"):
+                return jsonify({"ok": False, "error": "Not allowed to view this vault"}), 403
+            return jsonify(rwa_vault.vault_context(conn, house_id=house_id, actor=actor))
+
+        if actor.get("viewOnly"):
+            return jsonify({"ok": False, "error": "View-only access cannot upload"}), 403
+        if request.content_type and "multipart/form-data" in request.content_type:
+            house_id = (request.form.get("houseId") or request.form.get("house_id") or actor.get("houseId") or "").strip()
+            title = (request.form.get("title") or "").strip()
+            description = (request.form.get("description") or "").strip()
+            doc_type = (request.form.get("docType") or request.form.get("doc_type") or "other").strip()
+            share = str(request.form.get("shareWithEc") or request.form.get("share_with_ec") or "").lower() in (
+                "1", "true", "yes", "on",
+            )
+            uploads = request.files.getlist("files") or request.files.getlist("file") or []
+            file_tuples = []
+            for up in uploads:
+                if not up or not up.filename:
+                    continue
+                file_tuples.append((up.read(), up.mimetype or "", up.filename or "document"))
+        else:
+            return jsonify({"ok": False, "error": "Multipart upload required"}), 400
+
+        if not rwa_vault.can_upload_for_house(actor, house_id):
+            return jsonify({"ok": False, "error": "Not allowed to upload for this plot"}), 403
+        try:
+            docs = rwa_vault.upload_direct(
+                conn,
+                SITE_ROOT,
+                house_id=house_id,
+                files=file_tuples,
+                actor=actor,
+                title=title,
+                description=description,
+                doc_type=doc_type,
+                share_with_ec=share,
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "documents": docs})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/vault/<doc_id>", methods=["DELETE"])
+def api_rwa_vault_delete(doc_id: str):
+    conn = _rwa_conn()
+    try:
+        import rwa_vault
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        try:
+            result = rwa_vault.delete_document(
+                conn, SITE_ROOT, doc_id, actor=sess["resident"]
+            )
+        except PermissionError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 403
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify(result)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/vault/<doc_id>/share", methods=["POST"])
+def api_rwa_vault_share(doc_id: str):
+    conn = _rwa_conn()
+    try:
+        import rwa_vault
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        visibility = str(payload.get("visibility") or "").strip()
+        try:
+            doc = rwa_vault.set_visibility(conn, doc_id, actor=sess["resident"], visibility=visibility)
+        except PermissionError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 403
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "document": doc})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/vault/<doc_id>/verify", methods=["POST"])
+def api_rwa_vault_verify(doc_id: str):
+    conn = _rwa_conn()
+    try:
+        import rwa_vault
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        status = str(payload.get("status") or "").strip()
+        note = str(payload.get("note") or "").strip()
+        try:
+            doc = rwa_vault.set_verify_status(
+                conn, doc_id, actor=sess["resident"], status=status, note=note
+            )
+        except PermissionError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 403
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "document": doc})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/vault/<doc_id>/file", methods=["GET"])
+def api_rwa_vault_file(doc_id: str):
+    conn = _rwa_conn()
+    try:
+        import rwa_vault
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        row = rwa_vault.get_doc_row(conn, doc_id)
+        if not row:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        doc = rwa_vault.public_doc(row)
+        if not rwa_vault.can_view_doc(sess["resident"], doc):
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        try:
+            path = rwa_vault.resolve_stored_file(SITE_ROOT, row["stored_rel"])
+        except ValueError:
+            return jsonify({"ok": False, "error": "Invalid path"}), 400
+        if not path.is_file():
+            return jsonify({"ok": False, "error": "File missing"}), 404
+        return send_file(
+            path,
+            mimetype=row["mime"] or "application/octet-stream",
+            as_attachment=False,
+            download_name=row["original_name"] or path.name,
+            max_age=0,
+        )
     finally:
         conn.close()
 
@@ -4194,6 +4372,8 @@ def api_rwa_payment_records():
                 "category": request.form.get("category"),
                 "method": request.form.get("method"),
                 "note": request.form.get("note"),
+                "docTitle": request.form.get("docTitle") or request.form.get("title"),
+                "docDescription": request.form.get("docDescription") or request.form.get("description"),
             }
             uploads = request.files.getlist("files") or request.files.getlist("file") or []
             if not uploads and request.files.get("receipt"):
@@ -4354,6 +4534,8 @@ def api_rwa_payment_record_mutate(record_id: str):
                     "category": request.form.get("category"),
                     "method": request.form.get("method"),
                     "note": request.form.get("note"),
+                    "docTitle": request.form.get("docTitle") or request.form.get("title"),
+                    "docDescription": request.form.get("docDescription") or request.form.get("description"),
                 }
                 # Drop empty keys so update_record keeps existing values
                 payload = {k: v for k, v in payload.items() if v is not None and str(v).strip() != ""}

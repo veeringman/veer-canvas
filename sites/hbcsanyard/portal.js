@@ -157,6 +157,121 @@
     return data;
   }
 
+  let docViewerObjectUrl = '';
+
+  function closeDocViewer() {
+    const dialog = el('docViewerDialog');
+    if (dialog?.open) dialog.close();
+    const frame = el('docViewerFrame');
+    const img = el('docViewerImage');
+    const fallback = el('docViewerFallback');
+    if (frame) {
+      frame.hidden = true;
+      frame.removeAttribute('src');
+    }
+    if (img) {
+      img.hidden = true;
+      img.removeAttribute('src');
+    }
+    if (fallback) fallback.hidden = true;
+    const dl = el('docViewerDownloadBtn');
+    if (dl) {
+      dl.hidden = true;
+      dl.removeAttribute('href');
+      dl.removeAttribute('download');
+    }
+    if (docViewerObjectUrl) {
+      URL.revokeObjectURL(docViewerObjectUrl);
+      docViewerObjectUrl = '';
+    }
+  }
+
+  function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '' } = {}) {
+    const dialog = el('docViewerDialog');
+    if (!dialog) return;
+    if (docViewerObjectUrl && docViewerObjectUrl !== objectUrl) {
+      URL.revokeObjectURL(docViewerObjectUrl);
+    }
+    docViewerObjectUrl = objectUrl;
+    if (el('docViewerTitle')) el('docViewerTitle').textContent = title || filename || 'Document';
+    if (el('docViewerMeta')) {
+      el('docViewerMeta').textContent = filename && filename !== title ? filename : (mime || 'Preview');
+    }
+    const frame = el('docViewerFrame');
+    const img = el('docViewerImage');
+    const fallback = el('docViewerFallback');
+    const isImage = String(mime || '').startsWith('image/')
+      || /\.(jpe?g|png|webp|gif)$/i.test(filename || title || '');
+    const isPdf = String(mime || '') === 'application/pdf'
+      || /\.pdf$/i.test(filename || title || '')
+      || String(mime || '').includes('pdf');
+    if (frame) {
+      frame.hidden = !isPdf;
+      if (isPdf) frame.src = objectUrl;
+      else frame.removeAttribute('src');
+    }
+    if (img) {
+      img.hidden = !isImage;
+      if (isImage) img.src = objectUrl;
+      else img.removeAttribute('src');
+    }
+    if (fallback) fallback.hidden = Boolean(isPdf || isImage);
+    const dl = el('docViewerDownloadBtn');
+    if (dl) {
+      dl.hidden = false;
+      dl.href = objectUrl;
+      dl.download = filename || title || 'document';
+    }
+    if (!dialog.open) dialog.showModal();
+  }
+
+  async function openDocViewerFromAuthUrl(url, { title = 'Document', filename = '', mime = '' } = {}) {
+    if (!url) throw new Error('Document URL missing');
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    const res = await fetch(url, { credentials: 'same-origin', headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText || 'Could not open document');
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    showDocViewerBlob(objectUrl, {
+      title,
+      filename: filename || title,
+      mime: mime || blob.type || '',
+    });
+  }
+
+  el('docViewerBackBtn')?.addEventListener('click', () => closeDocViewer());
+  el('docViewerDialog')?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeDocViewer();
+  });
+  el('docViewerDialog')?.addEventListener('close', () => {
+    // Ensure blob URLs are released even if closed via Esc after cancel handler.
+    if (!el('docViewerDialog')?.open && docViewerObjectUrl) {
+      const frame = el('docViewerFrame');
+      const img = el('docViewerImage');
+      if (frame) frame.removeAttribute('src');
+      if (img) img.removeAttribute('src');
+      URL.revokeObjectURL(docViewerObjectUrl);
+      docViewerObjectUrl = '';
+    }
+  });
+  document.addEventListener('click', (event) => {
+    const btn = event.target.closest('.doc-open');
+    if (!btn) return;
+    event.preventDefault();
+    const url = btn.getAttribute('data-url') || '';
+    if (!url || url === '#') return;
+    openDocViewerFromAuthUrl(url, {
+      title: btn.getAttribute('data-title') || 'Document',
+      filename: btn.getAttribute('data-filename') || '',
+      mime: btn.getAttribute('data-mime') || '',
+    }).catch((err) => window.alert(err.message || 'Could not open document'));
+  });
+
   function inr(n) {
     const num = Number(n) || 0;
     const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(num);
@@ -1765,7 +1880,7 @@
     const isClaim = (rec.kind || 'payment') === 'reimbursement';
     const files = (rec.files || []).map((f) => {
       const label = escapeHtml(f.originalName || f.filename || 'Receipt');
-      return `<a class="payment-file-link" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${label}</a>`;
+      return `<button type="button" class="btn ghost compact doc-open" data-url="${escapeHtml(f.url)}" data-title="${label}" data-filename="${label}" data-mime="${escapeHtml(f.mime || '')}">${label}</button>`;
     }).join(' · ') || '<span class="muted">No files</span>';
     const canDelete = ecMode
       ? (rec.status !== 'reimbursed' && (rec.status !== 'verified' || !rec.ledgerApplied))
@@ -1859,6 +1974,7 @@
     if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(rec.feeYear || new Date().getFullYear());
     if (el('paymentRecordCategory')) el('paymentRecordCategory').value = rec.category || '';
     if (el('paymentRecordMethod')) el('paymentRecordMethod').value = rec.method || 'upi';
+    if (el('paymentRecordTitle')) el('paymentRecordTitle').value = '';
     if (el('paymentRecordNote')) el('paymentRecordNote').value = rec.note || '';
     const files = el('paymentRecordFiles');
     if (files) {
@@ -1920,24 +2036,14 @@
 
   async function downloadNoDuesRequest(requestId) {
     if (!requestId) throw new Error('Request required');
-    const headers = {};
-    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
-    const res = await fetch(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(requestId)}/download`, {
-      method: 'GET',
-      credentials: 'same-origin',
-      headers,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || res.statusText || 'Could not download certificate');
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `no-dues-${requestId}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await openDocViewerFromAuthUrl(
+      `/api/rwa/payments/no-dues-requests/${encodeURIComponent(requestId)}/download`,
+      {
+        title: 'No Dues certificate',
+        filename: `no-dues-${requestId}.pdf`,
+        mime: 'application/pdf',
+      },
+    );
   }
 
   function renderNoDuesRequestCard(item, { issuer = false } = {}) {
@@ -2061,6 +2167,11 @@
     const status = el('paymentRecordFormStatus');
     const btn = el('paymentRecordSubmitBtn');
     const editId = el('paymentRecordForm')?.dataset?.editId || '';
+    const docTitle = (el('paymentRecordTitle')?.value || '').trim();
+    if (!docTitle) {
+      if (status) status.textContent = 'Add a document title (like a cash note).';
+      return;
+    }
     if (status) status.textContent = editId ? 'Saving…' : 'Uploading…';
     if (btn) btn.disabled = true;
     try {
@@ -2075,6 +2186,8 @@
       fd.append('category', el('paymentRecordCategory')?.value || 'annual_dues');
       fd.append('method', el('paymentRecordMethod')?.value || 'upi');
       fd.append('note', el('paymentRecordNote')?.value || '');
+      fd.append('docTitle', docTitle);
+      fd.append('docDescription', el('paymentRecordNote')?.value || '');
       const files = el('paymentRecordFiles')?.files || [];
       Array.from(files).slice(0, 3).forEach((f) => fd.append('files', f));
       const headers = {};
@@ -2256,7 +2369,7 @@
     const status = el('noDuesResidentStatus');
     try {
       await downloadNoDuesRequest(id);
-      if (status) status.textContent = 'Certificate downloaded.';
+      if (status) status.textContent = 'Certificate opened — use Go back to return, or Download to save.';
     } catch (err) {
       if (status) status.textContent = err.message || 'Download failed';
     }
@@ -2618,6 +2731,211 @@
   let ledgerCache = [];
   let ledgerAutoRecalc = true;
 
+  let vaultActiveHouseId = '';
+
+  function vaultFileUrl(doc) {
+    const base = doc?.downloadUrl || (doc?.id ? `/api/rwa/vault/${encodeURIComponent(doc.id)}/file` : '');
+    if (!base) return '#';
+    const token = state.session?.token || '';
+    if (!token) return base;
+    return `${base}${base.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+  }
+
+  function renderVaultDocCard(doc, caps) {
+    const actions = [];
+    actions.push(`<button type="button" class="btn ghost compact doc-open" data-url="/api/rwa/vault/${escapeHtml(doc.id)}/file" data-title="${escapeHtml(doc.title || doc.originalName || 'Document')}" data-filename="${escapeHtml(doc.originalName || doc.title || 'document')}" data-mime="${escapeHtml(doc.mime || '')}">Open</button>`);
+    if (caps?.canShare && doc.visibility === 'private') {
+      actions.push(`<button type="button" class="btn secondary compact vault-share" data-id="${escapeHtml(doc.id)}" data-visibility="shared_ec">Share with EC</button>`);
+    }
+    if (caps?.canShare && doc.visibility === 'shared_ec' && doc.sourceKind === 'vault_upload') {
+      actions.push(`<button type="button" class="btn ghost compact vault-share" data-id="${escapeHtml(doc.id)}" data-visibility="private">Make private</button>`);
+    }
+    if (caps?.canVerify && doc.visibility === 'shared_ec') {
+      if (doc.status !== 'verified') {
+        actions.push(`<button type="button" class="btn secondary compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="verified">Verify</button>`);
+      }
+      if (doc.status !== 'rejected') {
+        actions.push(`<button type="button" class="btn ghost compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="rejected">Reject</button>`);
+      }
+    }
+    if (doc.canDelete) {
+      actions.push(`<button type="button" class="btn ghost compact vault-delete" data-id="${escapeHtml(doc.id)}">Delete</button>`);
+    }
+    return `
+      <article class="vault-doc-card" data-id="${escapeHtml(doc.id)}">
+        <header>
+          <strong>${escapeHtml(doc.title || doc.originalName || 'Document')}</strong>
+          <span class="vault-badge is-${escapeHtml(doc.docType)}">${escapeHtml(doc.docTypeLabel || doc.docType)}</span>
+          <span class="vault-badge is-${escapeHtml(doc.visibility)}">${escapeHtml(doc.visibilityLabel || doc.visibility)}</span>
+          <span class="vault-badge is-${escapeHtml(doc.status)}">${escapeHtml(doc.statusLabel || doc.status)}</span>
+        </header>
+        ${doc.description ? `<p>${escapeHtml(doc.description)}</p>` : ''}
+        <p class="muted">
+          ${escapeHtml(formatIstDateTime(doc.createdAt) || '')}
+          ${doc.linkedPaymentRecordId ? ` · payment ${escapeHtml(doc.linkedPaymentRecordId)}` : ''}
+          ${doc.linkedNoDuesId ? ` · no-dues ${escapeHtml(doc.linkedNoDuesId)}` : ''}
+        </p>
+        ${doc.verifyNote ? `<p class="muted">Note: ${escapeHtml(doc.verifyNote)}</p>` : ''}
+        <div class="btn-row">${actions.join('')}</div>
+      </article>`;
+  }
+
+  function renderVaultDialog(data) {
+    const caps = data.capabilities || {};
+    if (el('vaultDialogTitle')) {
+      el('vaultDialogTitle').textContent = `Documents vault · plot ${data.plotNo || data.houseId || ''}`;
+    }
+    if (el('vaultDialogSubtitle')) {
+      el('vaultDialogSubtitle').textContent = data.residentName
+        ? `${data.residentName} — receipts, cash notes, certificates (one copy, role-based view).`
+        : 'Receipts, cash notes, and certificates for this plot.';
+    }
+    const strip = el('vaultLedgerStrip');
+    if (strip) {
+      const ledger = data.ledger;
+      if (ledger) {
+        const tActs = caps.canTreasury
+          ? treasuryActionButtons('ledger', data.houseId, ledger.treasuryStatus)
+          : '';
+        strip.hidden = false;
+        strip.innerHTML = `
+          <span>Ledger treasury ${treasuryStatusIcon(ledger)}</span>
+          ${tActs || ''}`;
+      } else {
+        strip.hidden = true;
+        strip.innerHTML = '';
+      }
+    }
+    const uploadWrap = el('vaultUploadWrap');
+    if (uploadWrap) uploadWrap.hidden = !caps.canUpload || isViewOnly();
+    const list = el('vaultDocList');
+    if (list) {
+      const docs = data.documents || [];
+      list.innerHTML = docs.length
+        ? docs.map((d) => renderVaultDocCard(d, caps)).join('')
+        : '<p class="muted">No documents in this vault yet.</p>';
+    }
+    if (el('vaultDialogError')) {
+      el('vaultDialogError').hidden = true;
+      el('vaultDialogError').textContent = '';
+    }
+    if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = '';
+  }
+
+  async function openVault(houseId) {
+    const hid = (houseId || state.session?.resident?.houseId || '').trim();
+    if (!hid) return;
+    vaultActiveHouseId = hid;
+    const dialog = el('vaultDialog');
+    if (!dialog) return;
+    if (el('vaultDocList')) el('vaultDocList').innerHTML = '<p class="muted">Loading…</p>';
+    if (!dialog.open) dialog.showModal();
+    try {
+      const data = await api(`/api/rwa/vault?houseId=${encodeURIComponent(hid)}`);
+      renderVaultDialog(data);
+    } catch (err) {
+      if (el('vaultDialogError')) {
+        el('vaultDialogError').hidden = false;
+        el('vaultDialogError').textContent = err.message || 'Could not open vault';
+      }
+      if (el('vaultDocList')) el('vaultDocList').innerHTML = '';
+    }
+  }
+
+  async function refreshVaultIfOpen() {
+    if (!vaultActiveHouseId || !el('vaultDialog')?.open) return;
+    await openVault(vaultActiveHouseId);
+  }
+
+  el('vaultOpenMineBtn')?.addEventListener('click', () => {
+    openVault(state.session?.resident?.houseId).catch(console.error);
+  });
+  el('vaultDialogCloseBtn')?.addEventListener('click', () => el('vaultDialog')?.close());
+  el('vaultUploadBtn')?.addEventListener('click', async () => {
+    const input = el('vaultUploadFiles');
+    const files = Array.from(input?.files || []);
+    if (!files.length || !vaultActiveHouseId) {
+      if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = 'Choose at least one file.';
+      return;
+    }
+    const title = (el('vaultUploadTitle')?.value || '').trim();
+    if (!title) {
+      if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = 'Add a title for this document.';
+      return;
+    }
+    const fd = new FormData();
+    fd.append('houseId', vaultActiveHouseId);
+    fd.append('title', title);
+    fd.append('description', (el('vaultUploadDescription')?.value || '').trim());
+    fd.append('docType', el('vaultUploadDocType')?.value || 'other');
+    fd.append('shareWithEc', el('vaultShareWithEc')?.checked ? '1' : '0');
+    files.slice(0, 5).forEach((f) => fd.append('files', f));
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    if (el('vaultUploadBtn')) el('vaultUploadBtn').disabled = true;
+    if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = 'Uploading…';
+    try {
+      const res = await fetch('/api/rwa/vault', { method: 'POST', credentials: 'same-origin', headers, body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText || 'Upload failed');
+      if (input) input.value = '';
+      if (el('vaultUploadTitle')) el('vaultUploadTitle').value = '';
+      if (el('vaultUploadDescription')) el('vaultUploadDescription').value = '';
+      if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = `Uploaded ${(data.documents || []).length} file(s).`;
+      await refreshVaultIfOpen();
+    } catch (err) {
+      if (el('vaultUploadStatus')) el('vaultUploadStatus').textContent = err.message || 'Upload failed';
+    } finally {
+      if (el('vaultUploadBtn')) el('vaultUploadBtn').disabled = false;
+    }
+  });
+  el('vaultDocList')?.addEventListener('click', async (event) => {
+    const shareBtn = event.target.closest('.vault-share');
+    const verifyBtn = event.target.closest('.vault-verify');
+    const deleteBtn = event.target.closest('.vault-delete');
+    if (shareBtn) {
+      try {
+        await api(`/api/rwa/vault/${encodeURIComponent(shareBtn.getAttribute('data-id'))}/share`, {
+          method: 'POST',
+          body: JSON.stringify({ visibility: shareBtn.getAttribute('data-visibility') }),
+        });
+        await refreshVaultIfOpen();
+      } catch (err) {
+        window.alert(err.message || 'Share update failed');
+      }
+      return;
+    }
+    if (verifyBtn) {
+      try {
+        await api(`/api/rwa/vault/${encodeURIComponent(verifyBtn.getAttribute('data-id'))}/verify`, {
+          method: 'POST',
+          body: JSON.stringify({ status: verifyBtn.getAttribute('data-status') }),
+        });
+        await refreshVaultIfOpen();
+      } catch (err) {
+        window.alert(err.message || 'Verify failed');
+      }
+      return;
+    }
+    if (deleteBtn) {
+      if (!window.confirm('Delete this document from the vault?')) return;
+      try {
+        await api(`/api/rwa/vault/${encodeURIComponent(deleteBtn.getAttribute('data-id'))}`, {
+          method: 'DELETE',
+          body: '{}',
+        });
+        await refreshVaultIfOpen();
+      } catch (err) {
+        window.alert(err.message || 'Delete failed');
+      }
+    }
+  });
+  el('vaultLedgerStrip')?.addEventListener('click', (event) => {
+    handleTreasuryClick(event).then((handled) => {
+      if (handled) refreshVaultIfOpen().catch(() => {});
+    }).catch(console.error);
+  });
+
   function renderLedgerSummary(sum) {
     if (!el('ledgerSummary') || !sum) return;
     el('ledgerSummary').textContent =
@@ -2651,6 +2969,12 @@
         <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
         <td data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
         <td data-label="Actions" class="row-actions">
+          <button type="button" class="btn ghost compact vault-open" data-vault-house="${escapeHtml(r.houseId)}" title="Documents vault">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7.5V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2H12L9.5 5H5a2 2 0 0 0-2 2.5z"/>
+            </svg>
+            Vault
+          </button>
           <button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button>
           ${tActs}
         </td>
@@ -2765,7 +3089,15 @@
 
   el('ledgerSearch')?.addEventListener('input', () => renderLedgerRows());
   el('ledgerRows')?.addEventListener('click', async (event) => {
-    if (await handleTreasuryClick(event)) return;
+    const vaultBtn = event.target.closest('[data-vault-house]');
+    if (vaultBtn) {
+      openVault(vaultBtn.getAttribute('data-vault-house')).catch(console.error);
+      return;
+    }
+    if (await handleTreasuryClick(event)) {
+      refreshVaultIfOpen().catch(() => {});
+      return;
+    }
     const btn = event.target.closest('.ledger-edit');
     if (!btn) return;
     openLedgerEdit(btn.getAttribute('data-house'));
@@ -3021,32 +3353,13 @@
 
   async function openInfoDocument(doc, { lang = 'en' } = {}) {
     if (!doc?.id) return;
-    const token = state.session?.token || '';
     const qs = lang === 'hi' ? '?lang=hi' : '';
     const url = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file${qs}`;
-    // Authenticated open: fetch blob then open object URL (headers not sent on plain window.open).
-    const res = await fetch(url, {
-      credentials: 'same-origin',
-      headers: token ? { 'X-RWA-Token': token } : {},
+    await openDocViewerFromAuthUrl(url, {
+      title: doc.title || doc.originalName || 'Document',
+      filename: doc.originalName || doc.title || 'document',
+      mime: doc.mime || '',
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || res.statusText || 'Could not open document');
-    }
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const win = window.open(objectUrl, '_blank', 'noopener');
-    if (!win) {
-      // Popup blocked — force download via temporary link
-      const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = doc.originalName || 'document';
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   }
 
   async function saveInfoDocument(event) {
@@ -3366,10 +3679,12 @@
         || (!m.authorMemberId && m.houseId === myHouse && !m.isAi);
       const isAi = Boolean(m.isAi);
       const atts = (m.attachments || []).map((a) => {
+        const label = escapeHtml(a.originalName || 'Attachment');
+        const mime = escapeHtml(a.mime || '');
         if ((a.mime || '').startsWith('image/')) {
-          return `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt=""></a>`;
+          return `<button type="button" class="msg-att-open is-image doc-open" data-url="${escapeHtml(a.url)}" data-title="${label}" data-filename="${label}" data-mime="${mime}"><img src="${escapeHtml(a.url)}" alt=""></button>`;
         }
-        return `<a class="btn ghost compact" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.originalName || 'Attachment')}</a>`;
+        return `<button type="button" class="btn ghost compact doc-open" data-url="${escapeHtml(a.url)}" data-title="${label}" data-filename="${label}" data-mime="${mime}">${label}</button>`;
       }).join('');
       let mods = '';
       if (state.msgCanModerate && !m.hidden && !isAi) {

@@ -603,6 +603,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_treasury_columns(conn)
     ensure_messages_and_push_tables(conn)
     ensure_msg_likes_and_ai(conn)
+    try:
+        import rwa_vault as _rwa_vault
+
+        _rwa_vault.ensure_vault_tables(conn)
+    except Exception:
+        pass
     migrate_roman_plot_ids(conn)
     ensure_superadmin_account(conn)
 

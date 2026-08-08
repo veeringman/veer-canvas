@@ -299,6 +299,22 @@ def issue_request(
         filename=download_name,
         commit=True,
     )
+    try:
+        import rwa_vault
+
+        rwa_vault.index_no_dues_certificate(
+            conn,
+            site_root,
+            house_id=row["house_id"],
+            request_id=request_id,
+            filename=filename,
+            original_name=download_name,
+            attestation_id=att_id,
+            uploaded_by_house_id=issuer_house,
+            commit=True,
+        )
+    except Exception:
+        pass
     out = get_request(conn, request_id)
     if not out:
         raise ValueError("Request not found after issue")
