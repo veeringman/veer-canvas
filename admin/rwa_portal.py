@@ -31,7 +31,8 @@ _SCRIPT_CANDIDATES = [
     pathlib.Path(__file__).resolve().parents[1] / "sites" / "hbcsanyard" / "scripts",
 ]
 for _scripts in _SCRIPT_CANDIDATES:
-    if _scripts.is_dir() and str(_scripts) not in sys.path:
+    # Skip empty dirs created by deploy scaffolding (e.g. canvas has no RWA scripts).
+    if (_scripts / "init_rwa_db.py").is_file() and str(_scripts) not in sys.path:
         sys.path.insert(0, str(_scripts))
         break
 else:
