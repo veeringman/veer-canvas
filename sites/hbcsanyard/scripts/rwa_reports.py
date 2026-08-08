@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from init_rwa_db import SUPERADMIN_HOUSE_ID
+from init_rwa_db import SUPERADMIN_HOUSE_ID, section_plot_sort_key
 
 _RL = None  # lazy reportlab bundle
 
@@ -21,7 +21,7 @@ def _reportlab():
         return _RL
     try:
         from reportlab.lib import colors
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
@@ -40,6 +40,7 @@ def _reportlab():
     _RL = {
         "colors": colors,
         "TA_CENTER": TA_CENTER,
+        "TA_JUSTIFY": TA_JUSTIFY,
         "TA_LEFT": TA_LEFT,
         "TA_RIGHT": TA_RIGHT,
         "A4": A4,
@@ -93,6 +94,9 @@ MONEY_FIELDS = {
     "amountReceived",
     "totalDue",
     "pendingDues",
+    "amount",
+    "estimatedCost",
+    "actualCost",
 }
 
 DIRECTORY_FIELDS: list[dict[str, Any]] = [
@@ -115,24 +119,128 @@ CONCERNS_FIELDS: list[dict[str, Any]] = [
     {"id": "updatedAt", "label": "Updated", "default": True, "align": "left", "width": 80},
 ]
 
+PAYMENT_RECORD_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 26},
+    {"id": "paidOn", "label": "Date", "default": True, "align": "left", "width": 52},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 42},
+    {"id": "residentName", "label": "Name", "default": True, "align": "left", "width": 90},
+    {"id": "kindLabel", "label": "Type", "default": True, "align": "left", "width": 70},
+    {"id": "categoryLabel", "label": "Category", "default": True, "align": "left", "width": 70},
+    {"id": "methodLabel", "label": "Method", "default": True, "align": "left", "width": 48},
+    {"id": "amount", "label": "Amount", "default": True, "align": "right", "width": 58},
+    {"id": "feeYear", "label": "Year", "default": False, "align": "center", "width": 36},
+    {"id": "status", "label": "Status", "default": True, "align": "center", "width": 55},
+    {"id": "treasuryStatus", "label": "Treasury", "default": False, "align": "center", "width": 55},
+    {"id": "note", "label": "Note", "default": False, "align": "left", "width": 90},
+    {"id": "reviewedAt", "label": "Reviewed", "default": False, "align": "left", "width": 70},
+]
+
+NO_DUES_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 48},
+    {"id": "residentName", "label": "Name", "default": True, "align": "left", "width": 110},
+    {"id": "status", "label": "Status", "default": True, "align": "center", "width": 55},
+    {"id": "treasuryStatus", "label": "Treasury", "default": True, "align": "center", "width": 55},
+    {"id": "createdAt", "label": "Requested", "default": True, "align": "left", "width": 70},
+    {"id": "issuedAt", "label": "Issued", "default": True, "align": "left", "width": 70},
+    {"id": "requestNote", "label": "Note", "default": False, "align": "left", "width": 100},
+]
+
+WORKS_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
+    {"id": "title", "label": "Title", "default": True, "align": "left", "width": 130},
+    {"id": "kind", "label": "Kind", "default": True, "align": "left", "width": 55},
+    {"id": "status", "label": "Status", "default": True, "align": "center", "width": 60},
+    {"id": "estimatedCost", "label": "Est. cost", "default": True, "align": "right", "width": 58},
+    {"id": "actualCost", "label": "Actual", "default": True, "align": "right", "width": 58},
+    {"id": "startDate", "label": "Start", "default": False, "align": "left", "width": 55},
+    {"id": "endDate", "label": "End", "default": False, "align": "left", "width": 55},
+    {"id": "visibility", "label": "Visibility", "default": False, "align": "center", "width": 55},
+]
+
+NOTICES_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
+    {"id": "publishedAt", "label": "Published", "default": True, "align": "left", "width": 70},
+    {"id": "category", "label": "Category", "default": True, "align": "left", "width": 60},
+    {"id": "title", "label": "Title", "default": True, "align": "left", "width": 160},
+    {"id": "status", "label": "Status", "default": True, "align": "center", "width": 55},
+    {"id": "pinned", "label": "Pinned", "default": False, "align": "center", "width": 40},
+]
+
 DATASETS_META = {
     "dues": {
         "id": "dues",
         "title": "Dues / ledger",
         "fields": PENDING_DUES_FIELDS,
         "defaultFilters": {"pendingOnly": True, "section": "all", "search": "", "houseIds": []},
+        "filterUi": {"section": True, "search": True, "plots": True, "pendingOnly": True},
+    },
+    "payments": {
+        "id": "payments",
+        "title": "Payments received",
+        "description": "Resident payments to RWA (UPI / bank / cash)",
+        "fields": PAYMENT_RECORD_FIELDS,
+        "defaultFilters": {"status": "verified", "search": "", "houseIds": [], "method": "all"},
+        "filterUi": {"section": False, "search": True, "plots": True, "recordStatus": True, "method": True},
+    },
+    "cash": {
+        "id": "cash",
+        "title": "Cash register",
+        "description": "Cash received notes and cash payment vouchers",
+        "fields": PAYMENT_RECORD_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": [], "method": "cash"},
+        "filterUi": {"section": False, "search": True, "plots": True, "recordStatus": True},
+    },
+    "reimbursements": {
+        "id": "reimbursements",
+        "title": "Reimbursement claims",
+        "description": "Expense claims and payouts",
+        "fields": PAYMENT_RECORD_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": []},
+        "filterUi": {"section": False, "search": True, "plots": True, "recordStatus": True},
+    },
+    "transactions": {
+        "id": "transactions",
+        "title": "All transactions",
+        "description": "Combined payments and reimbursement claims",
+        "fields": PAYMENT_RECORD_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": [], "method": "all"},
+        "filterUi": {"section": False, "search": True, "plots": True, "recordStatus": True, "method": True},
+    },
+    "no_dues": {
+        "id": "no_dues",
+        "title": "No Dues certificates",
+        "fields": NO_DUES_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": []},
+        "filterUi": {"section": False, "search": True, "plots": True, "noDuesStatus": True},
     },
     "directory": {
         "id": "directory",
         "title": "Resident directory",
         "fields": DIRECTORY_FIELDS,
         "defaultFilters": {"section": "all", "search": "", "officeBearersOnly": False},
+        "filterUi": {"section": True, "search": True, "plots": False},
     },
     "concerns": {
         "id": "concerns",
         "title": "Resident concerns",
         "fields": CONCERNS_FIELDS,
         "defaultFilters": {"status": "open", "category": "all", "search": ""},
+        "filterUi": {"section": False, "search": True, "plots": False, "concernStatus": True},
+    },
+    "works": {
+        "id": "works",
+        "title": "Works & events",
+        "fields": WORKS_FIELDS,
+        "defaultFilters": {"status": "all", "search": ""},
+        "filterUi": {"section": False, "search": True, "plots": False, "worksStatus": True},
+    },
+    "notices": {
+        "id": "notices",
+        "title": "Notices",
+        "fields": NOTICES_FIELDS,
+        "defaultFilters": {"status": "published", "search": ""},
+        "filterUi": {"section": False, "search": True, "plots": False, "noticeStatus": True},
     },
 }
 
@@ -231,13 +339,28 @@ def office_bearers_for_header(conn) -> list[dict]:
 
 
 def _fmt_inr(n: int | float | None) -> str:
+    """Currency for PDF (Helvetica/WinAnsi has no ₹ — use Rs to avoid black tofu boxes)."""
     try:
         v = int(n or 0)
     except (TypeError, ValueError):
         v = 0
     sign = "-" if v < 0 else ""
     s = f"{abs(v):,}"
-    return f"{sign}₹{s}"
+    return f"{sign}Rs {s}"
+
+
+def _pdf_safe(text) -> str:
+    """Strip glyphs Helvetica cannot draw (otherwise ReportLab shows solid black boxes)."""
+    s = "" if text is None else str(text)
+    s = s.replace("\u20b9", "Rs ")  # ₹
+    s = s.replace("\u2014", "-")  # —
+    s = s.replace("\u2013", "-")  # –
+    s = s.replace("\u2026", "...")  # …
+    s = s.replace("\u2713", "OK")  # ✓
+    s = s.replace("\u2717", "X")  # ✗
+    s = s.replace("\u25be", "v")  # ▾
+    s = s.replace("\u00a0", " ")
+    return s
 
 
 def _normalize_house_list(raw) -> list[str]:
@@ -272,7 +395,6 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
         )
           AND r.house_id != ?
           AND r.status = 'active'
-        ORDER BY r.section, r.plot_no
         """,
         (SUPERADMIN_HOUSE_ID,),
     ).fetchall()
@@ -300,6 +422,13 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
         if pending_only and int(item.get("pendingDues") or 0) <= 0:
             continue
         out.append(item)
+    out.sort(
+        key=lambda row: section_plot_sort_key(
+            row.get("section"),
+            row.get("plotNo") or row.get("houseId"),
+            row.get("houseId"),
+        )
+    )
     return out
 
 
@@ -348,10 +477,10 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
         leading=9,
         alignment=a,
     )
-    text = str(value if value is not None else "—")
+    text = _pdf_safe(value if value is not None else "-")
     if not markup:
         text = text.replace("&", "&amp;").replace("<", "&lt;")
-    return rl["Paragraph"](text or "—", style)
+    return rl["Paragraph"](text or "-", style)
 
 
 def build_pending_dues_pdf(
@@ -394,7 +523,7 @@ def build_pending_dues_pdf(
         rightMargin=12 * mm,
         topMargin=10 * mm,
         bottomMargin=12 * mm,
-        title="Pending Dues Report — HBC Sanyard RWA",
+        title="Pending Dues Report - HBC Sanyard RWA",
         author="HBC Sanyard RWA",
     )
 
@@ -527,7 +656,7 @@ def build_pending_dues_pdf(
                 totals[fid] = totals.get(fid, 0) + num
                 val = _fmt_inr(num)
             else:
-                val = str(row.get(fid) or "—")
+                val = str(row.get(fid) or "-")
             cells.append(_cell(val, align=f.get("align") or "left"))
         data.append(cells)
 
@@ -574,7 +703,7 @@ def build_pending_dues_pdf(
     story.append(Spacer(1, 4 * mm))
     story.append(
         Paragraph(
-            "Service to the Colony · Collective Strength · Cooperation for All — HBC Sanyard RWA",
+            "Service to the Colony · Collective Strength · Cooperation for All - HBC Sanyard RWA",
             ParagraphStyle("foot", parent=meta_style, alignment=rl["TA_CENTER"], fontSize=7.5),
         )
     )
@@ -583,7 +712,7 @@ def build_pending_dues_pdf(
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(12 * mm, 8 * mm, "HBC Sanyard RWA — Pending Dues Report")
+        canvas.drawString(12 * mm, 8 * mm, "HBC Sanyard RWA - Pending Dues Report")
         canvas.drawRightString(page[0] - 12 * mm, 8 * mm, f"Page {_doc.page}")
         canvas.restoreState()
 
@@ -732,6 +861,13 @@ def query_directory_rows(directory_fn, conn, *, filters: dict | None = None) -> 
             if search not in blob:
                 continue
         out.append(r)
+    out.sort(
+        key=lambda row: section_plot_sort_key(
+            row.get("section"),
+            row.get("plotNo") or row.get("houseId"),
+            row.get("houseId"),
+        )
+    )
     return out
 
 
@@ -758,6 +894,156 @@ def query_concerns_rows(list_grievances, conn, *, filters: dict | None = None) -
         }
         if search:
             blob = f"{row['plotNo']} {row['category']} {row['subject']} {row['status']}".lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    return out
+
+
+def query_payment_record_rows(
+    conn,
+    *,
+    filters: dict | None = None,
+    kind: str | None = None,
+    force_method: str | None = None,
+) -> list[dict]:
+    """Rows from payment_records for payments / cash / claims / all transactions."""
+    import rwa_payments
+
+    filters = filters or {}
+    status = str(filters.get("status") or "all").strip() or "all"
+    search = str(filters.get("search") or "").strip().lower()
+    method = str(force_method or filters.get("method") or "all").strip() or "all"
+    house_ids = {h.upper() for h in _normalize_house_list(filters.get("houseIds"))}
+
+    records = rwa_payments.list_records(
+        conn,
+        status=None if status == "all" else status,
+        kind=None if not kind or kind == "all" else kind,
+        limit=500,
+    )
+    out = []
+    for rec in records:
+        if method and method != "all" and str(rec.get("method") or "") != method:
+            continue
+        hid = str(rec.get("houseId") or "").upper()
+        plot = str(rec.get("plotNo") or hid).upper()
+        if house_ids and hid not in house_ids and plot not in house_ids:
+            continue
+        row = {
+            "paidOn": (rec.get("paidOn") or "")[:10],
+            "plotNo": rec.get("plotNo") or rec.get("houseId") or "",
+            "houseId": rec.get("houseId") or "",
+            "residentName": rec.get("residentName") or "",
+            "kindLabel": rec.get("kindLabel") or rec.get("kind") or "",
+            "categoryLabel": rec.get("categoryLabel") or rec.get("category") or "",
+            "methodLabel": rec.get("methodLabel") or rec.get("method") or "",
+            "amount": int(rec.get("amount") or 0),
+            "feeYear": rec.get("feeYear") or "",
+            "status": rec.get("status") or "",
+            "treasuryStatus": rec.get("treasuryStatus") or "pending",
+            "note": (rec.get("note") or "")[:120],
+            "reviewedAt": (rec.get("reviewedAt") or "")[:16],
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    out.sort(
+        key=lambda r: (
+            r.get("paidOn") or "",
+            *section_plot_sort_key("", r.get("plotNo"), r.get("houseId")),
+        ),
+        reverse=True,
+    )
+    return out
+
+
+def query_no_dues_rows(conn, *, filters: dict | None = None) -> list[dict]:
+    import rwa_no_dues
+
+    filters = filters or {}
+    status = str(filters.get("status") or "all").strip() or "all"
+    search = str(filters.get("search") or "").strip().lower()
+    house_ids = {h.upper() for h in _normalize_house_list(filters.get("houseIds"))}
+    items = rwa_no_dues.list_requests(
+        conn,
+        status=None if status == "all" else status,
+        limit=300,
+    )
+    out = []
+    for item in items:
+        hid = str(item.get("houseId") or "").upper()
+        plot = str(item.get("plotNo") or hid).upper()
+        if house_ids and hid not in house_ids and plot not in house_ids:
+            continue
+        row = {
+            "plotNo": item.get("plotNo") or item.get("houseId") or "",
+            "houseId": item.get("houseId") or "",
+            "residentName": item.get("residentName") or "",
+            "status": item.get("statusLabel") or item.get("status") or "",
+            "treasuryStatus": item.get("treasuryStatus") or "pending",
+            "createdAt": (item.get("createdAt") or "")[:10],
+            "issuedAt": (item.get("issuedAt") or "")[:10],
+            "requestNote": (item.get("requestNote") or "")[:120],
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    out.sort(
+        key=lambda r: section_plot_sort_key("", r.get("plotNo"), r.get("houseId")),
+    )
+    return out
+
+
+def query_works_rows(list_colony_works, conn, *, filters: dict | None = None) -> list[dict]:
+    filters = filters or {}
+    status = str(filters.get("status") or "all").strip() or "all"
+    search = str(filters.get("search") or "").strip().lower()
+    items = list_colony_works(
+        conn,
+        status=None if status == "all" else status,
+        as_admin=True,
+    )
+    out = []
+    for w in items:
+        row = {
+            "title": w.get("title") or "",
+            "kind": w.get("kindLabel") or w.get("kind") or "",
+            "status": w.get("statusLabel") or w.get("status") or "",
+            "estimatedCost": int(w.get("estimatedCost") or w.get("estCost") or 0),
+            "actualCost": int(w.get("actualCost") or w.get("actCost") or 0),
+            "startDate": (w.get("startDate") or "")[:10],
+            "endDate": (w.get("endDate") or "")[:10],
+            "visibility": w.get("visibility") or "",
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    return out
+
+
+def query_notices_rows(list_notices, conn, *, filters: dict | None = None) -> list[dict]:
+    filters = filters or {}
+    status = str(filters.get("status") or "published").strip() or "published"
+    search = str(filters.get("search") or "").strip().lower()
+    items = list_notices(conn, status=status if status != "all" else "all")
+    out = []
+    for n in items:
+        row = {
+            "publishedAt": (n.get("publishedAt") or n.get("updatedAt") or "")[:16],
+            "category": n.get("category") or "",
+            "title": n.get("title") or "",
+            "status": n.get("status") or "",
+            "pinned": "Yes" if n.get("pinned") else "",
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
             if search not in blob:
                 continue
         out.append(row)
@@ -798,7 +1084,7 @@ def build_tabular_pdf(
         rightMargin=12 * mm,
         topMargin=10 * mm,
         bottomMargin=12 * mm,
-        title=f"{title} — HBC Sanyard RWA",
+        title=f"{title} - HBC Sanyard RWA",
         author="HBC Sanyard RWA",
     )
     org_style = ParagraphStyle(
@@ -872,7 +1158,7 @@ def build_tabular_pdf(
                 totals[fid] = totals.get(fid, 0) + num
                 val = _fmt_inr(num)
             else:
-                val = str(row.get(fid) or "—")
+                val = str(row.get(fid) or "-")
             cells.append(_cell(val, align=f.get("align") or "left"))
         data.append(cells)
     if rows and money_fields:
@@ -913,12 +1199,414 @@ def build_tabular_pdf(
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(12 * mm, 8 * mm, f"HBC Sanyard RWA — {title}")
+        canvas.drawString(12 * mm, 8 * mm, f"HBC Sanyard RWA - {title}")
         canvas.drawRightString(page[0] - 12 * mm, 8 * mm, f"Page {_doc.page}")
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return buf.getvalue()
+
+
+def no_dues_eligibility(conn, house_id: str, *, enrich_payment_row) -> dict:
+    """Check whether a plot can receive a No Dues Certificate."""
+    from init_rwa_db import ensure_payment_records_tables
+
+    hid = (house_id or "").strip()
+    if not hid:
+        raise ValueError("houseId required")
+    resident = conn.execute(
+        """
+        SELECT house_id, plot_no, name, section, status
+        FROM residents WHERE house_id = ?
+        """,
+        (hid,),
+    ).fetchone()
+    if not resident:
+        raise ValueError(f"Unknown plot {hid}")
+    if (resident["status"] or "") != "active":
+        raise ValueError("Plot is not active on the roster")
+
+    row = conn.execute(
+        """
+        SELECT pr.*, pl.as_of, pl.source
+        FROM payment_rows pr
+        JOIN payment_ledgers pl ON pl.id = pr.ledger_id
+        WHERE pr.house_id = ?
+        ORDER BY pl.as_of DESC, pr.id DESC
+        LIMIT 1
+        """,
+        (hid,),
+    ).fetchone()
+    if not row:
+        raise ValueError("No ledger row for this plot yet")
+    payment = enrich_payment_row(row)
+    outstanding = int(payment.get("pendingDues") if payment.get("pendingDues") is not None else payment.get("balanceOutstanding") or 0)
+
+    ensure_payment_records_tables(conn)
+    pending_receipts = conn.execute(
+        """
+        SELECT COUNT(*) FROM payment_records
+        WHERE house_id = ? AND status = 'submitted'
+          AND COALESCE(kind, 'payment') = 'payment'
+        """,
+        (hid,),
+    ).fetchone()[0]
+
+    clear = outstanding <= 0 and int(pending_receipts or 0) == 0
+    return {
+        "eligible": clear,
+        "houseId": hid,
+        "plotNo": resident["plot_no"] or hid,
+        "name": resident["name"] or hid,
+        "section": resident["section"] or "",
+        "outstanding": outstanding,
+        "pendingReceipts": int(pending_receipts or 0),
+        "payment": payment,
+        "reason": (
+            None
+            if clear
+            else (
+                f"Outstanding dues {outstanding}" if outstanding > 0
+                else f"{pending_receipts} payment receipt(s) awaiting EC verification"
+            )
+        ),
+    }
+
+
+def build_no_dues_certificate_pdf(
+    conn,
+    *,
+    site_root: Path,
+    house_id: str,
+    enrich_payment_row,
+    issued_by: str | None = None,
+    attestation_id: str | None = None,
+    verify_url: str | None = None,
+) -> tuple[bytes, str]:
+    """Portrait No Dues Certificate PDF for one plot."""
+    info = no_dues_eligibility(conn, house_id, enrich_payment_row=enrich_payment_row)
+    if not info["eligible"]:
+        raise ValueError(info.get("reason") or "Plot is not clear of dues")
+
+    rl = _reportlab()
+    colors = rl["colors"]
+    mm = rl["mm"]
+    ParagraphStyle = rl["ParagraphStyle"]
+    Paragraph = rl["Paragraph"]
+    Spacer = rl["Spacer"]
+    Image = rl["Image"]
+    styles = rl["getSampleStyleSheet"]()
+
+    bearers = office_bearers_for_header(conn)
+    issued = datetime.now(timezone.utc).strftime("%d %b %Y")
+    fee_year = info["payment"].get("feeYear") or datetime.now(timezone.utc).year
+
+    buf = io.BytesIO()
+    page = rl["A4"]
+    doc = rl["SimpleDocTemplate"](
+        buf,
+        pagesize=page,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title=f"No Dues Certificate - Plot {info['plotNo']}",
+        author="HBC Sanyard RWA",
+    )
+
+    org_style = ParagraphStyle(
+        "ndOrg", parent=styles["Heading1"], fontSize=14, leading=18,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
+    )
+    sub_style = ParagraphStyle(
+        "ndSub", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
+    )
+    title_style = ParagraphStyle(
+        "ndTitle", parent=styles["Heading1"], fontSize=16, leading=20,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
+        spaceBefore=10, spaceAfter=14,
+    )
+    body_style = ParagraphStyle(
+        "ndBody", parent=styles["Normal"], fontSize=11, leading=16,
+        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
+    )
+    meta_style = ParagraphStyle(
+        "ndMeta", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#444444"), spaceAfter=4,
+    )
+
+    story = []
+    seal = _seal_path(site_root)
+    if seal:
+        try:
+            img = Image(str(seal), width=22 * mm, height=22 * mm)
+            img.hAlign = "CENTER"
+            story.append(img)
+            story.append(Spacer(1, 4 * mm))
+        except Exception:
+            pass
+
+    story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
+    story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
+    story.append(Paragraph("<b>NO DUES CERTIFICATE</b>", title_style))
+
+    body = (
+        f"This is to certify that <b>{_escape(info['name'])}</b>, "
+        f"resident of Plot <b>{_escape(str(info['plotNo']))}</b>"
+        f"{(' (' + _escape(info['section']) + ')' ) if info.get('section') else ''}, "
+        f"Housing Board Colony Sanyard, Mandi, has <b>no outstanding subscription / maintenance dues</b> "
+        f"as per the RWA ledger on record for fee year <b>{fee_year}</b>."
+    )
+    story.append(Paragraph(body, body_style))
+    story.append(Paragraph(
+        "Outstanding balance on the latest ledger: <b>Rs 0</b> "
+        "(no pending dues; no payment receipts awaiting verification).",
+        body_style,
+    ))
+    story.append(Paragraph(f"Issued on: <b>{issued}</b>", meta_style))
+    if issued_by:
+        story.append(Paragraph(f"Issued by: {_escape(issued_by)}", meta_style))
+    story.append(Spacer(1, 8 * mm))
+
+    if bearers:
+        story.append(Paragraph("<b>Office bearers</b>", meta_style))
+        for b in bearers[:6]:
+            title = b.get("officialTitle") or "Office Bearer"
+            story.append(Paragraph(
+                f"{_escape(title)} - {_escape(b.get('name') or '')}"
+                + (f" · {_escape(b['phone'])}" if b.get("phone") else ""),
+                meta_style,
+            ))
+
+    story.append(Spacer(1, 14 * mm))
+    story.append(Paragraph(
+        "This certificate is issued for official / banking / transfer purposes as requested. "
+        "It reflects RWA subscription ledger status only and does not cover municipal taxes or utility bills.",
+        ParagraphStyle("ndFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
+    ))
+
+    if attestation_id and verify_url:
+        try:
+            import rwa_attest
+            rwa_attest.append_attestation_to_story(
+                story, rl, verify_url=verify_url, attestation_id=attestation_id
+            )
+        except Exception:
+            pass
+
+    def _footer(canvas, _doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#666666"))
+        canvas.drawString(18 * mm, 10 * mm, "HBC Sanyard RWA - No Dues Certificate")
+        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"Plot {info['plotNo']}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", str(info["plotNo"]))
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return buf.getvalue(), f"no-dues-{safe_plot}-{stamp}.pdf"
+
+
+def build_cash_received_note_pdf(
+    *,
+    site_root: Path,
+    kind: str,
+    amount: int,
+    paid_on: str,
+    plot_no: str,
+    payer_name: str,
+    receiver_name: str,
+    purpose: str = "",
+    category_label: str = "",
+    attestation_id: str | None = None,
+    verify_url: str | None = None,
+) -> tuple[bytes, str]:
+    """Cash Received Note / Cash Payment Voucher PDF (upload as proof, then EC verifies)."""
+    rl = _reportlab()
+    colors = rl["colors"]
+    mm = rl["mm"]
+    ParagraphStyle = rl["ParagraphStyle"]
+    Paragraph = rl["Paragraph"]
+    Spacer = rl["Spacer"]
+    Table = rl["Table"]
+    TableStyle = rl["TableStyle"]
+    Image = rl["Image"]
+    styles = rl["getSampleStyleSheet"]()
+
+    is_claim = (kind or "payment").strip().lower() == "reimbursement"
+    title = "CASH PAYMENT VOUCHER" if is_claim else "CASH RECEIVED NOTE"
+    subtitle = (
+        "Proof of cash paid for colony expense / reimbursement claim"
+        if is_claim
+        else "Proof of cash received toward RWA dues / collection"
+    )
+    amount = int(amount or 0)
+    if amount < 1:
+        raise ValueError("Amount is required")
+    paid_on = str(paid_on or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", paid_on):
+        raise ValueError("Date must be YYYY-MM-DD")
+    try:
+        paid_fmt = datetime.strptime(paid_on, "%Y-%m-%d").strftime("%d %b %Y")
+    except ValueError as exc:
+        raise ValueError("Invalid date") from exc
+
+    plot_no = str(plot_no or "").strip() or "-"
+    payer_name = str(payer_name or "").strip() or "-"
+    receiver_name = str(receiver_name or "").strip() or "-"
+    purpose = str(purpose or "").strip()[:400]
+    category_label = str(category_label or "").strip()
+
+    buf = io.BytesIO()
+    page = rl["A4"]
+    doc = rl["SimpleDocTemplate"](
+        buf,
+        pagesize=page,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=18 * mm,
+        title=f"{title} - Plot {plot_no}",
+        author="HBC Sanyard RWA",
+    )
+
+    org_style = ParagraphStyle(
+        "crOrg", parent=styles["Heading1"], fontSize=13, leading=17,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
+    )
+    sub_style = ParagraphStyle(
+        "crSub", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
+    )
+    title_style = ParagraphStyle(
+        "crTitle", parent=styles["Heading1"], fontSize=15, leading=19,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
+        spaceBefore=8, spaceAfter=6,
+    )
+    body_style = ParagraphStyle(
+        "crBody", parent=styles["Normal"], fontSize=10.5, leading=15,
+        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_LEFT"], spaceAfter=8,
+    )
+    meta_style = ParagraphStyle(
+        "crMeta", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#444444"), spaceAfter=3,
+    )
+    sign_style = ParagraphStyle(
+        "crSign", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#222222"), spaceBefore=2, spaceAfter=2,
+    )
+
+    story = []
+    seal = _seal_path(site_root)
+    if seal:
+        try:
+            img = Image(str(seal), width=20 * mm, height=20 * mm)
+            img.hAlign = "CENTER"
+            story.append(img)
+            story.append(Spacer(1, 3 * mm))
+        except Exception:
+            pass
+
+    story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
+    story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
+    story.append(Paragraph(f"<b>{title}</b>", title_style))
+    story.append(Paragraph(subtitle, sub_style))
+
+    rows = [
+        [Paragraph("<b>Date</b>", meta_style), Paragraph(_escape(paid_fmt), meta_style)],
+        [Paragraph("<b>Plot</b>", meta_style), Paragraph(_escape(plot_no), meta_style)],
+        [Paragraph("<b>Amount</b>", meta_style), Paragraph(f"Rs {amount:,}", meta_style)],
+    ]
+    if category_label:
+        rows.append([Paragraph("<b>Category</b>", meta_style), Paragraph(_escape(category_label), meta_style)])
+    if is_claim:
+        rows.append([Paragraph("<b>Paid by (resident)</b>", meta_style), Paragraph(_escape(payer_name), meta_style)])
+        rows.append([Paragraph("<b>Cash received by</b>", meta_style), Paragraph(_escape(receiver_name), meta_style)])
+    else:
+        rows.append([Paragraph("<b>Paid by (resident)</b>", meta_style), Paragraph(_escape(payer_name), meta_style)])
+        rows.append([Paragraph("<b>Cash received by (RWA)</b>", meta_style), Paragraph(_escape(receiver_name), meta_style)])
+    if purpose:
+        rows.append([Paragraph("<b>Particulars</b>", meta_style), Paragraph(_escape(purpose), meta_style)])
+
+    table = Table(rows, colWidths=[55 * mm, 110 * mm])
+    table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#c9b8a0")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2d5c4")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f1e8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 8 * mm))
+
+    if is_claim:
+        story.append(Paragraph(
+            "This voucher acknowledges that cash was paid for the stated colony expense. "
+            "Attach / upload this note as claim proof. An authorised EC member must verify and approve "
+            "before reimbursement is marked paid.",
+            body_style,
+        ))
+    else:
+        story.append(Paragraph(
+            "This note acknowledges that cash was received toward RWA dues / collection for the plot above. "
+            "The recipient should sign, upload this note as the payment receipt, and another authorised "
+            "EC member must verify it before the ledger is updated.",
+            body_style,
+        ))
+
+    story.append(Spacer(1, 16 * mm))
+    story.append(Paragraph("<b>Signatures</b>", meta_style))
+    story.append(Spacer(1, 10 * mm))
+    sig = Table(
+        [[
+            Paragraph("_________________________<br/>Payer / Resident", sign_style),
+            Paragraph("_________________________<br/>Cash recipient", sign_style),
+        ]],
+        colWidths=[85 * mm, 85 * mm],
+    )
+    story.append(sig)
+    story.append(Spacer(1, 12 * mm))
+    story.append(Paragraph(
+        "_________________________<br/>EC verifier (after upload)",
+        sign_style,
+    ))
+    story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph(
+        "Generated from the HBC Sanyard RWA portal. Print, sign if needed, then upload as receipt proof.",
+        ParagraphStyle("crFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
+    ))
+
+    if attestation_id and verify_url:
+        try:
+            import rwa_attest
+            rwa_attest.append_attestation_to_story(
+                story, rl, verify_url=verify_url, attestation_id=attestation_id
+            )
+        except Exception:
+            pass
+
+    def _footer(canvas, _doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#666666"))
+        canvas.drawString(18 * mm, 10 * mm, f"HBC Sanyard RWA - {title}")
+        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"Plot {plot_no} · Rs {amount:,}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", plot_no) or "plot"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    prefix = "cash-voucher" if is_claim else "cash-received"
+    return buf.getvalue(), f"{prefix}-{safe_plot}-{stamp}.pdf"
+
+
+def _escape(text: str) -> str:
+    return str(text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def generate_report_pdf(
@@ -929,12 +1617,17 @@ def generate_report_pdf(
     payload: dict,
     list_grievances=None,
     directory_fn=None,
+    list_colony_works=None,
+    list_notices=None,
 ) -> tuple[bytes, str]:
     """Return (pdf_bytes, filename) for builtin / custom / saved template."""
     report_id = str(payload.get("reportId") or payload.get("id") or "pending-dues").strip()
     fields = payload.get("fields") if isinstance(payload.get("fields"), list) else None
     filters = payload.get("filters") if isinstance(payload.get("filters"), dict) else {}
-    for key in ("pendingOnly", "section", "search", "houseIds", "status", "category", "officeBearersOnly"):
+    for key in (
+        "pendingOnly", "section", "search", "houseIds", "status", "category",
+        "officeBearersOnly", "method", "dataset",
+    ):
         if key in payload and key not in filters:
             filters[key] = payload[key]
 
@@ -951,6 +1644,7 @@ def generate_report_pdf(
             "dataset": tpl["dataset"],
             "fields": fields or tpl["fields"],
             "filters": {**(tpl.get("filters") or {}), **filters},
+            "title": payload.get("title") or tpl.get("name"),
         }
         fields = payload["fields"]
         filters = payload["filters"]
@@ -970,44 +1664,107 @@ def generate_report_pdf(
         if dataset not in DATASETS_META:
             raise ValueError("Select a dataset for the custom report")
         field_defs = _resolve_dataset_fields(dataset, fields)
+        title = str(payload.get("title") or DATASETS_META[dataset]["title"])
+        money = MONEY_FIELDS
+
         if dataset == "dues":
             rows = query_pending_dues_rows(conn, enrich_payment_row, filters=filters)
             pdf = build_tabular_pdf(
-                conn,
-                site_root=site_root,
-                title=str(payload.get("title") or "Custom Dues Report"),
-                field_defs=field_defs,
-                rows=rows,
-                money_fields=MONEY_FIELDS,
+                conn, site_root=site_root, title=title or "Custom Dues Report",
+                field_defs=field_defs, rows=rows, money_fields=money,
                 filter_summary="custom · dues",
             )
             return pdf, f"custom-dues-{stamp}.pdf"
+
+        if dataset == "payments":
+            rows = query_payment_record_rows(conn, filters=filters, kind="payment")
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Payments Received",
+                field_defs=field_defs, rows=rows, money_fields=money,
+                filter_summary="custom · payments",
+            )
+            return pdf, f"custom-payments-{stamp}.pdf"
+
+        if dataset == "cash":
+            rows = query_payment_record_rows(conn, filters=filters, force_method="cash")
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Cash Register",
+                field_defs=field_defs, rows=rows, money_fields=money,
+                filter_summary="custom · cash register",
+            )
+            return pdf, f"custom-cash-{stamp}.pdf"
+
+        if dataset == "reimbursements":
+            rows = query_payment_record_rows(conn, filters=filters, kind="reimbursement")
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Reimbursement Claims",
+                field_defs=field_defs, rows=rows, money_fields=money,
+                filter_summary="custom · reimbursements",
+            )
+            return pdf, f"custom-reimbursements-{stamp}.pdf"
+
+        if dataset == "transactions":
+            rows = query_payment_record_rows(conn, filters=filters, kind="all")
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "All Transactions",
+                field_defs=field_defs, rows=rows, money_fields=money,
+                filter_summary="custom · transactions",
+            )
+            return pdf, f"custom-transactions-{stamp}.pdf"
+
+        if dataset == "no_dues":
+            rows = query_no_dues_rows(conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "No Dues Certificates",
+                field_defs=field_defs, rows=rows,
+                filter_summary="custom · no dues",
+            )
+            return pdf, f"custom-no-dues-{stamp}.pdf"
+
         if dataset == "directory":
             if not directory_fn:
                 raise ValueError("Directory source unavailable")
             rows = query_directory_rows(directory_fn, conn, filters=filters)
             pdf = build_tabular_pdf(
-                conn,
-                site_root=site_root,
-                title=str(payload.get("title") or "Directory Report"),
-                field_defs=field_defs,
-                rows=rows,
+                conn, site_root=site_root, title=title or "Directory Report",
+                field_defs=field_defs, rows=rows,
                 filter_summary="custom · directory",
             )
             return pdf, f"custom-directory-{stamp}.pdf"
+
         if dataset == "concerns":
             if not list_grievances:
                 raise ValueError("Concerns source unavailable")
             rows = query_concerns_rows(list_grievances, conn, filters=filters)
             pdf = build_tabular_pdf(
-                conn,
-                site_root=site_root,
-                title=str(payload.get("title") or "Concerns Report"),
-                field_defs=field_defs,
-                rows=rows,
+                conn, site_root=site_root, title=title or "Concerns Report",
+                field_defs=field_defs, rows=rows,
                 filter_summary="custom · concerns",
             )
             return pdf, f"custom-concerns-{stamp}.pdf"
+
+        if dataset == "works":
+            if not list_colony_works:
+                raise ValueError("Works source unavailable")
+            rows = query_works_rows(list_colony_works, conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Works & Events",
+                field_defs=field_defs, rows=rows, money_fields=money,
+                filter_summary="custom · works",
+            )
+            return pdf, f"custom-works-{stamp}.pdf"
+
+        if dataset == "notices":
+            if not list_notices:
+                raise ValueError("Notices source unavailable")
+            rows = query_notices_rows(list_notices, conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Notices Report",
+                field_defs=field_defs, rows=rows,
+                filter_summary="custom · notices",
+            )
+            return pdf, f"custom-notices-{stamp}.pdf"
+
         raise ValueError("Unsupported dataset")
 
     raise ValueError(f"Unknown report: {report_id}")

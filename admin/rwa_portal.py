@@ -58,8 +58,15 @@ from init_rwa_db import (  # noqa: E402
     ensure_entitlements_schema,
     ensure_report_templates_table,
     ensure_bilingual_content_columns,
+    ensure_payment_records_tables,
+    ensure_no_dues_requests_table,
+    ensure_document_attestations_table,
+    ensure_treasury_columns,
+    ensure_messages_and_push_tables,
+    ensure_msg_likes_and_ai,
     hash_otp,
     normalize_house_id,
+    section_plot_sort_key,
     utc_now,
     verify_password,
 )
@@ -68,7 +75,8 @@ import rwa_household as household  # noqa: E402
 import rwa_entitlements as entitlements  # noqa: E402
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
-SESSION_TTL_SECONDS = int(os.environ.get("RWA_SESSION_TTL", str(7 * 24 * 3600)))
+# Persist until Sign out (default ~10 years). Override with RWA_SESSION_TTL seconds.
+SESSION_TTL_SECONDS = int(os.environ.get("RWA_SESSION_TTL", str(3650 * 24 * 3600)))
 WELCOME_NOTICE_ID = "n_welcome"
 HOUSE_RE = re.compile(r"^[A-Za-z0-9/_()-]{1,20}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -501,6 +509,19 @@ def rwa_db_path(site_root: pathlib.Path) -> pathlib.Path:
 def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
     path = rwa_db_path(site_root)
     ensure_db(path, seed=True)
+    # Load data/smtp.env + vapid.env early so secrets / Web Push keys are available.
+    try:
+        _load_env_file(pathlib.Path(site_root) / "data" / "smtp.env")
+        _load_env_file(pathlib.Path(site_root) / "data" / "vapid.env")
+        _load_env_file(pathlib.Path(site_root) / "data" / "ai.env")
+    except Exception:
+        pass
+    try:
+        import rwa_push as _rwa_push
+
+        _rwa_push.ensure_vapid_keys(pathlib.Path(site_root))
+    except Exception:
+        pass
     conn = connect(path)
     # Migrate-safe: ensure portal_accounts + revisions + superadmin exist on older DBs
     try:
@@ -546,9 +567,53 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_entitlements_schema(conn)
         ensure_report_templates_table(conn)
         ensure_bilingual_content_columns(conn)
+        ensure_payment_records_tables(conn)
+        ensure_no_dues_requests_table(conn)
+        ensure_document_attestations_table(conn)
+        ensure_treasury_columns(conn)
+        ensure_messages_and_push_tables(conn)
+        ensure_msg_likes_and_ai(conn)
+        try:
+            import rwa_payments as _rwa_payments
+
+            _rwa_payments.reconcile_orphan_receipts(conn, site_root)
+        except Exception:
+            pass
+        try:
+            repair_missing_info_files(conn, site_root)
+        except Exception:
+            pass
         migrate_roman_plot_ids(conn)
         ensure_superadmin_account(conn)
+        try:
+            ensure_persistent_sessions_once(conn)
+        except Exception:
+            pass
     return conn
+
+
+def ensure_persistent_sessions_once(conn: sqlite3.Connection) -> None:
+    """One-time: extend active sessions to the long-lived 'until Sign out' TTL."""
+    flagged = conn.execute(
+        "SELECT value FROM meta WHERE key = 'sessions_persistent_v1'"
+    ).fetchone()
+    if flagged:
+        return
+    now = datetime.now(timezone.utc)
+    new_expires = _session_expiry_iso(now)
+    conn.execute(
+        """
+        UPDATE sessions
+        SET expires_at = ?
+        WHERE expires_at > ?
+        """,
+        (new_expires, now.replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES ('sessions_persistent_v1', ?)",
+        (utc_now(),),
+    )
+    conn.commit()
 
 
 def ensure_household_ready(conn: sqlite3.Connection) -> None:
@@ -902,6 +967,34 @@ def verify_otp(
     return sess
 
 
+def _session_expiry_iso(from_dt: datetime | None = None) -> str:
+    base = from_dt or datetime.now(timezone.utc)
+    return (base + timedelta(seconds=SESSION_TTL_SECONDS)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def touch_session(conn: sqlite3.Connection, token: str, *, current_expires: str | None = None) -> str:
+    """Sliding expiry: keep the session alive while the user keeps using the portal."""
+    now = datetime.now(timezone.utc)
+    new_expires = _session_expiry_iso(now)
+    should_extend = True
+    if current_expires:
+        try:
+            expires = datetime.fromisoformat(str(current_expires).replace("Z", "+00:00"))
+            remaining = (expires - now).total_seconds()
+            # Only rewrite when less than half the TTL remains (avoids a write on every request).
+            should_extend = remaining < (SESSION_TTL_SECONDS * 0.5)
+        except ValueError:
+            should_extend = True
+    if should_extend:
+        conn.execute(
+            "UPDATE sessions SET expires_at = ? WHERE token = ?",
+            (new_expires, token),
+        )
+        conn.commit()
+        return new_expires
+    return current_expires or new_expires
+
+
 def session_from_token(conn: sqlite3.Connection, token: str | None) -> dict | None:
     if not token:
         return None
@@ -928,9 +1021,10 @@ def session_from_token(conn: sqlite3.Connection, token: str | None) -> dict | No
             return None
     if not member and resident.get("house_id") != SUPERADMIN_HOUSE_ID:
         member = household.primary_member(conn, row["house_id"])
+    expires_at = touch_session(conn, token, current_expires=row["expires_at"])
     return {
         "token": token,
-        "expiresAt": row["expires_at"],
+        "expiresAt": expires_at,
         "resident": public_actor(conn, resident, member=member),
     }
 
@@ -1178,9 +1272,6 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
                    official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
             FROM residents
             WHERE house_id != ?
-            ORDER BY section,
-              CASE WHEN plot_no GLOB '[0-9]*' THEN CAST(plot_no AS INTEGER) ELSE 9999 END,
-              plot_no
             """,
             (SUPERADMIN_HOUSE_ID,),
         ).fetchall()
@@ -1191,9 +1282,6 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
                    official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
             FROM residents
             WHERE status = 'active' AND house_id != ?
-            ORDER BY section,
-              CASE WHEN plot_no GLOB '[0-9]*' THEN CAST(plot_no AS INTEGER) ELSE 9999 END,
-              plot_no
             """,
             (SUPERADMIN_HOUSE_ID,),
         ).fetchall()
@@ -1235,6 +1323,13 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
                 else (entitlements.load_grants(conn, r["house_id"]) if is_mem else [])
             )
         out.append(item)
+    out.sort(
+        key=lambda row: section_plot_sort_key(
+            row.get("section"),
+            row.get("plotNo") or row.get("houseId"),
+            row.get("houseId"),
+        )
+    )
     return out
 
 
@@ -1285,7 +1380,9 @@ def enrich_payment_row(row: sqlite3.Row | dict) -> dict:
     paid_toward_year = max(0, received - prev_paid)
     year_pending = max(0, year_total - paid_toward_year)
 
-    return {
+    import rwa_treasury
+
+    out = {
         "houseId": data.get("house_id") or data.get("houseId"),
         "balancePrev": prev_total,
         "previousTotal": prev_total,
@@ -1304,6 +1401,8 @@ def enrich_payment_row(row: sqlite3.Row | dict) -> dict:
         "asOf": data.get("as_of") or data.get("asOf"),
         "source": data.get("source"),
     }
+    out.update(rwa_treasury.treasury_fields_from_row(data))
+    return out
 
 
 def latest_payment_for(conn: sqlite3.Connection, house_id: str) -> dict | None:
@@ -1746,8 +1845,49 @@ def info_doc_file_path(site_root: pathlib.Path, doc_id: str, filename: str | Non
     name = pathlib.Path(str(filename)).name
     if name != str(filename) or ".." in name or "/" in name or "\\" in name:
         return None
-    path = info_doc_dir(site_root, doc_id) / name
+    try:
+        path = info_doc_dir(site_root, doc_id) / name
+    except ValueError:
+        return None
     return path if path.is_file() else None
+
+
+def _atomic_write_bytes(path: pathlib.Path, data: bytes) -> None:
+    """Write via temp file then replace, so a crash cannot leave an empty target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+
+def _replace_dir_file(
+    dest_dir: pathlib.Path,
+    filename: str,
+    data: bytes,
+    *,
+    keep_names: set[str] | None = None,
+) -> pathlib.Path:
+    """Write new file first, then remove other files (except keep_names)."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    target = dest_dir / filename
+    _atomic_write_bytes(target, data)
+    keep = set(keep_names or set()) | {filename}
+    for old in list(dest_dir.iterdir()):
+        if old.is_file() and old.name not in keep and not old.name.startswith("."):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+    if not target.is_file() or target.stat().st_size != len(data):
+        raise ValueError("Failed to store document file on server")
+    return target
 
 
 def _info_category(raw: str | None) -> str:
@@ -1761,7 +1901,7 @@ def _info_audience(raw: str | None) -> str:
     return key if key in {"all", "ec"} else "all"
 
 
-def _info_public(r: sqlite3.Row | dict) -> dict:
+def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -> dict:
     if hasattr(r, "keys"):
         data = {k: r[k] for k in r.keys()}
     else:
@@ -1769,6 +1909,13 @@ def _info_public(r: sqlite3.Row | dict) -> dict:
     cat = data.get("category") or "general"
     label = next((lbl for cid, lbl in INFO_DOC_CATEGORIES if cid == cat), cat)
     audience = _info_audience(data.get("audience"))
+    filename = data.get("filename")
+    file_missing = False
+    has_file = bool(filename)
+    if filename and site_root is not None:
+        path = info_doc_file_path(site_root, str(data.get("id") or ""), filename)
+        has_file = path is not None
+        file_missing = path is None
     return {
         "id": data.get("id"),
         "title": data.get("title") or "",
@@ -1778,7 +1925,7 @@ def _info_public(r: sqlite3.Row | dict) -> dict:
         "category": cat,
         "categoryLabel": label,
         "docType": data.get("doc_type") or "file",
-        "filename": data.get("filename"),
+        "filename": filename,
         "originalName": data.get("original_name") or data.get("filename") or "",
         "mimeType": data.get("mime_type") or "",
         "sizeBytes": int(data.get("size_bytes") or 0),
@@ -1789,7 +1936,8 @@ def _info_public(r: sqlite3.Row | dict) -> dict:
         "publishedBy": data.get("published_by"),
         "createdAt": data.get("created_at"),
         "updatedAt": data.get("updated_at"),
-        "hasFile": bool(data.get("filename")),
+        "hasFile": has_file,
+        "fileMissing": file_missing,
         "hasHtmlHi": bool(int(data.get("has_html_hi") or data.get("hasHtmlHi") or 0)),
     }
 
@@ -1800,6 +1948,7 @@ def list_info_documents(
     status: str | None = "published",
     category: str | None = None,
     as_admin: bool = False,
+    site_root: pathlib.Path | None = None,
 ) -> list[dict]:
     ensure_info_documents_table(conn)
     status_key = (status or "published").strip().lower()
@@ -1833,7 +1982,7 @@ def list_info_documents(
         """,
         params,
     ).fetchall()
-    return [_info_public(r) for r in rows]
+    return [_info_public(r, site_root=site_root) for r in rows]
 
 
 def get_info_document(
@@ -1841,6 +1990,7 @@ def get_info_document(
     doc_id: str,
     *,
     as_admin: bool = False,
+    site_root: pathlib.Path | None = None,
 ) -> dict | None:
     ensure_info_documents_table(conn)
     row = conn.execute("SELECT * FROM info_documents WHERE id = ?", (doc_id,)).fetchone()
@@ -1851,7 +2001,43 @@ def get_info_document(
     audience = _info_audience(row["audience"] if "audience" in row.keys() else "all")
     if audience == "ec" and not as_admin:
         return None
-    return _info_public(row)
+    return _info_public(row, site_root=site_root)
+
+
+def repair_missing_info_files(conn: sqlite3.Connection, site_root: pathlib.Path) -> int:
+    """If a doc's file is missing, copy from another doc with the same original name when unique."""
+    ensure_info_documents_table(conn)
+    rows = conn.execute(
+        "SELECT id, filename, original_name, size_bytes FROM info_documents WHERE filename IS NOT NULL"
+    ).fetchall()
+    fixed = 0
+    for row in rows:
+        if info_doc_file_path(site_root, row["id"], row["filename"]):
+            continue
+        original = (row["original_name"] or "").strip()
+        if not original:
+            continue
+        donors = [
+            r for r in rows
+            if r["id"] != row["id"]
+            and (r["original_name"] or "").strip() == original
+            and info_doc_file_path(site_root, r["id"], r["filename"])
+        ]
+        if len(donors) != 1:
+            continue
+        donor = donors[0]
+        src = info_doc_file_path(site_root, donor["id"], donor["filename"])
+        if not src:
+            continue
+        dest_dir = info_doc_dir(site_root, row["id"])
+        dest = dest_dir / row["filename"]
+        try:
+            dest.write_bytes(src.read_bytes())
+            if dest.is_file():
+                fixed += 1
+        except OSError:
+            pass
+    return fixed
 
 
 def _sanitize_upload_name(name: str) -> str:
@@ -1970,14 +2156,7 @@ def upsert_info_document(
         mime_type = "text/html"
         size_bytes = len(data)
         dest_dir = info_doc_dir(site_root, doc_id)
-        # Keep content_hi.html when replacing English HTML.
-        for old in dest_dir.iterdir():
-            if old.is_file() and old.name != "content_hi.html":
-                try:
-                    old.unlink()
-                except OSError:
-                    pass
-        (dest_dir / filename).write_bytes(data)
+        _replace_dir_file(dest_dir, filename, data, keep_names={"content_hi.html"})
 
     html_body_hi = None
     if "htmlBodyHi" in payload or "html_body_hi" in payload:
@@ -1990,7 +2169,7 @@ def upsert_info_document(
             if len(hi_text.encode("utf-8")) > INFO_MAX_BYTES:
                 raise ValueError("Hindi HTML content must be under 15 MB")
             wrapped_hi = _wrap_html_document(title_hi or title, hi_text)
-            hi_path.write_bytes(wrapped_hi.encode("utf-8"))
+            _atomic_write_bytes(hi_path, wrapped_hi.encode("utf-8"))
             has_html_hi = 1
         else:
             try:
@@ -2024,18 +2203,15 @@ def upsert_info_document(
         size_bytes = len(data)
         doc_type = "html" if ext in {".html", ".htm"} else "file"
         dest_dir = info_doc_dir(site_root, doc_id)
-        for old in dest_dir.iterdir():
-            if old.is_file():
-                try:
-                    old.unlink()
-                except OSError:
-                    pass
-        (dest_dir / filename).write_bytes(data)
+        _replace_dir_file(dest_dir, filename, data, keep_names=set())
         has_html_hi = 0
     elif not existing and not filename:
         if doc_type == "html":
             raise ValueError("HTML content required")
         raise ValueError("Upload a document file, or create HTML content")
+
+    if filename and not info_doc_file_path(site_root, doc_id, filename):
+        raise ValueError("Document file missing on server — please re-upload the file")
 
     if status == "published" and not filename:
         raise ValueError("Add a file or HTML content before publishing")
@@ -2099,7 +2275,7 @@ def upsert_info_document(
         ),
     )
     conn.commit()
-    return get_info_document(conn, doc_id, as_admin=True) or {"id": doc_id}
+    return get_info_document(conn, doc_id, as_admin=True, site_root=site_root) or {"id": doc_id}
 
 
 def delete_info_document(conn: sqlite3.Connection, site_root: pathlib.Path, doc_id: str) -> None:
@@ -2715,7 +2891,13 @@ def update_payment_row(
             total_due = ?,
             amount_received = ?,
             balance_outstanding = ?,
-            remarks = ?
+            remarks = ?,
+            treasury_status = 'pending',
+            treasury_validated_by = NULL,
+            treasury_validated_at = NULL,
+            treasury_confirmed_by = NULL,
+            treasury_confirmed_at = NULL,
+            treasury_note = NULL
         WHERE ledger_id = ? AND house_id = ?
         """,
         (
@@ -4311,24 +4493,26 @@ def update_profile(
     )
 
     if role == "admin":
-        conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (resident["house_id"],))
+        # Drop redundant implicit grants; keep / refresh explicit grants via set_grants below.
+        for key in entitlements.GRANTABLE_ENTITLEMENTS - entitlements.EXPLICIT_GRANT_ENTITLEMENTS:
+            conn.execute(
+                "DELETE FROM resident_entitlements WHERE house_id = ? AND entitlement = ?",
+                (resident["house_id"], key),
+            )
     elif not is_ec_member:
         conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (resident["house_id"],))
 
-    # One-off entitlement grants for EC members / office bearers (not EC admins)
+    # One-off entitlement grants (EC members/bearers; EC Admins only store explicit grants)
     if "entitlements" in payload and isinstance(payload.get("entitlements"), list):
         if not can_manage_roles:
             raise ValueError("manage_roles entitlement required")
-        if role == "admin":
-            pass
-        else:
-            entitlements.set_grants(
-                conn,
-                resident["house_id"],
-                payload["entitlements"],
-                granted_by=actor.get("houseId"),
-                commit=False,
-            )
+        entitlements.set_grants(
+            conn,
+            resident["house_id"],
+            payload["entitlements"],
+            granted_by=actor.get("houseId"),
+            commit=False,
+        )
 
     after = {
         "houseId": resident["house_id"],
@@ -4377,7 +4561,7 @@ def create_session_for_resident(
     ensure_household_members_table(conn)
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
-    expires_at = (now + timedelta(seconds=SESSION_TTL_SECONDS)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    expires_at = _session_expiry_iso(now)
     mid = None
     if member:
         mid = member.get("id")

@@ -6,7 +6,76 @@
     pendingContact: false,
     missingEmail: false,
     missingPhone: false,
+    msgThreads: [],
+    msgActiveThreadId: null,
+    msgCanModerate: false,
+    msgCanCleanup: false,
+    msgPollTimer: null,
+    msgAttachFiles: [],
+    msgLastId: null,
+    msgIsAiThread: false,
+    msgSending: false,
   };
+  let rosterCache = [];
+  const MSG_EMOJI = ['😀', '😁', '😂', '😊', '😍', '🤔', '👍', '👏', '🙏', '❤️', '🎉', '✅', '❌', '🙂', '😅', '🙌', '💪', '🌹', '🏠', '☀️'];
+  const MSG_ATTACH_MAX_BYTES = 5 * 1024 * 1024;
+  const MSG_ATTACH_MAX_FILES = 3;
+  const MSG_ATTACH_HINT_DEFAULT = 'Images or PDF · max 5 MB each · up to 3';
+  const MSG_ATTACH_TYPES = new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+  ]);
+
+  function msgAttachAllowed(file) {
+    const name = (file?.name || '').toLowerCase();
+    const type = (file?.type || '').toLowerCase();
+    if (MSG_ATTACH_TYPES.has(type)) return true;
+    return /\.(jpe?g|png|webp|gif|pdf)$/.test(name);
+  }
+
+  function formatMsgAttachSize(n) {
+    const num = Number(n) || 0;
+    if (num < 1024) return `${num} B`;
+    if (num < 1024 * 1024) return `${(num / 1024).toFixed(0)} KB`;
+    return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function setMsgAttachHint(text, { isError = false } = {}) {
+    const hint = el('msgAttachHint');
+    if (!hint) return;
+    hint.textContent = text || MSG_ATTACH_HINT_DEFAULT;
+    hint.classList.toggle('is-error', Boolean(isError));
+  }
+
+  function syncMsgAttachFiles(fileList) {
+    const picked = Array.from(fileList || []);
+    const accepted = [];
+    const problems = [];
+    for (const f of picked) {
+      if (!msgAttachAllowed(f)) {
+        problems.push(`${f.name}: use JPG, PNG, WebP, GIF, or PDF`);
+        continue;
+      }
+      if ((f.size || 0) > MSG_ATTACH_MAX_BYTES) {
+        problems.push(`${f.name}: over 5 MB (${formatMsgAttachSize(f.size)})`);
+        continue;
+      }
+      accepted.push(f);
+      if (accepted.length >= MSG_ATTACH_MAX_FILES) break;
+    }
+    if (picked.length > MSG_ATTACH_MAX_FILES) {
+      problems.push(`Only the first ${MSG_ATTACH_MAX_FILES} files were kept`);
+    }
+    state.msgAttachFiles = accepted;
+    if (accepted.length) {
+      const names = accepted.map((f) => `${f.name} (${formatMsgAttachSize(f.size)})`).join(', ');
+      setMsgAttachHint(problems.length ? `${names} · ${problems[0]}` : names, { isError: problems.length > 0 });
+    } else if (problems.length) {
+      setMsgAttachHint(problems[0], { isError: true });
+    } else {
+      setMsgAttachHint(MSG_ATTACH_HINT_DEFAULT);
+    }
+    return accepted;
+  }
 
   const el = (id) => document.getElementById(id);
 
@@ -35,7 +104,9 @@
 
   function inr(n) {
     const num = Number(n) || 0;
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
+    const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(num);
+    // Explicit ₹ + Noto Sans fallback (Sora/Fraunces lack U+20B9 → black tofu boxes).
+    return `\u20B9${formatted}`;
   }
 
   function showError(msg) {
@@ -84,6 +155,7 @@
     });
     const delegateBlock = el('ecDelegateBlock');
     if (delegateBlock) delegateBlock.hidden = !isEcAdmin();
+    prepareMobileSections();
   }
 
   function isViewOnly(r = state.session?.resident) {
@@ -320,12 +392,18 @@
   }
 
   const AVATAR_PLACEHOLDER_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.8 18.8c1.5-2.6 3.4-3.9 6.2-3.9s4.7 1.3 6.2 3.9"/></svg>`;
+  const AI_AVATAR_URL = '/assets/rwa-assistant-avatar.svg';
 
   function personAvatarHtml(person = {}, { size = 'sm', className = '' } = {}) {
     const url = person.photoUrl || '';
     const cls = ['person-avatar', size === 'md' ? 'is-md' : (size === 'lg' ? 'is-lg' : 'is-sm'), className].filter(Boolean).join(' ');
     const attrs = url ? ` data-photo-url="${escapeHtml(url)}"` : '';
     return `<span class="${cls}"${attrs} aria-hidden="true"><span class="person-avatar-fallback">${AVATAR_PLACEHOLDER_SVG}</span></span>`;
+  }
+
+  function aiAvatarHtml({ size = 'sm', className = '' } = {}) {
+    const cls = ['person-avatar', 'is-ai-avatar', size === 'md' ? 'is-md' : (size === 'lg' ? 'is-lg' : 'is-sm'), className].filter(Boolean).join(' ');
+    return `<span class="${cls}" title="RWA Assistant" aria-hidden="true"><img class="ai-avatar-img" src="${AI_AVATAR_URL}" alt=""></span>`;
   }
 
   function hhAvatarHtml(m) {
@@ -655,12 +733,27 @@
   }
 
   function prepareMobileSections(root = document) {
-    const blocks = root.querySelectorAll('#panel-admin .roster-block, #panel-observability .roster-block, #adminDues');
-    blocks.forEach((block, index) => {
+    const blocks = root.querySelectorAll([
+      '#panel-admin > .roster-block',
+      '#panel-admin > .settings-block',
+      '#panel-dues .roster-block',
+      '#panel-dues #adminDues',
+      '#panel-observability .roster-block',
+      '#panel-info > .roster-block',
+      '#panel-works > .roster-block',
+      '#panel-concerns .desk-tablet',
+      '#panel-profile > .roster-block',
+    ].join(', '));
+    let openByPanel = new Set();
+    blocks.forEach((block) => {
       if (block.dataset.mobileSectionReady) return;
+      // Skip nested roster-blocks inside already-prepared parents (e.g. sensitive ops)
+      if (block.parentElement?.closest('.mobile-section')) return;
       block.dataset.mobileSectionReady = '1';
-      block.classList.add('mobile-section');
-      const toolbar = block.querySelector(':scope > .roster-toolbar, :scope > .panel-head, :scope > .ledger-toolbar');
+      block.classList.add('mobile-section', 'desk-tablet');
+      const toolbar = block.querySelector(
+        ':scope > .roster-toolbar, :scope > .panel-head, :scope > .ledger-toolbar, :scope > .mailbox-toolbar, :scope > .info-toolbar, :scope > .works-toolbar'
+      );
       if (!toolbar) return;
 
       const bodyNodes = [];
@@ -672,21 +765,42 @@
       if (!bodyNodes.length) return;
 
       const body = document.createElement('div');
-      body.className = 'mobile-section-body';
+      body.className = 'mobile-section-body desk-section-body';
       bodyNodes.forEach((n) => body.appendChild(n));
       block.appendChild(body);
 
       const heading = toolbar.querySelector('h3, h2');
-      if (heading && !toolbar.querySelector('.mobile-section-toggle')) {
+      if (heading && !toolbar.querySelector('.mobile-section-toggle, .desk-section-toggle')) {
         const toggle = document.createElement('button');
         toggle.type = 'button';
-        toggle.className = 'mobile-section-toggle';
-        toggle.setAttribute('aria-expanded', index === 0 ? 'true' : 'false');
-        toggle.innerHTML = '<span class="mobile-section-chevron" aria-hidden="true"></span>';
-        heading.parentElement.insertBefore(toggle, heading);
-        if (index !== 0) block.classList.add('is-section-collapsed');
+        toggle.className = 'mobile-section-toggle desk-section-toggle';
+        toggle.setAttribute('aria-label', 'Expand or collapse section');
+        toggle.innerHTML = '<span class="mobile-section-chevron desk-section-chevron" aria-hidden="true"></span>';
+        const titleHost = heading.closest('.panel-head') || heading.parentElement || toolbar;
+        titleHost.insertBefore(toggle, heading);
       }
+
+      const panel = block.closest('.panel');
+      const panelKey = panel?.id || 'page';
+      const isVisible = !block.hidden
+        && !block.hasAttribute('hidden')
+        && getComputedStyle(block).display !== 'none';
+      const startOpen = isVisible && !openByPanel.has(panelKey);
+      if (startOpen) openByPanel.add(panelKey);
+      const toggleBtn = block.querySelector('.mobile-section-toggle, .desk-section-toggle');
+      if (!startOpen) block.classList.add('is-section-collapsed');
+      if (toggleBtn) toggleBtn.setAttribute('aria-expanded', startOpen ? 'true' : 'false');
     });
+  }
+
+  function toggleDeskSection(section, { preferOpen } = {}) {
+    if (!section) return;
+    const collapsed = section.classList.contains('is-section-collapsed');
+    const shouldOpen = preferOpen == null ? collapsed : preferOpen;
+    section.classList.toggle('is-section-collapsed', !shouldOpen);
+    const toggle = section.querySelector('.mobile-section-toggle, .desk-section-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    if (shouldOpen) scrollBelowAppHeader(section.querySelector('.mobile-section-body') || section);
   }
 
   function refreshMobileListUi() {
@@ -744,6 +858,8 @@
     if (app) app.hidden = !isAuthed;
 
     if (!isAuthed) {
+      stopMsgPolling();
+      updateMessagesBadge(0);
       document.querySelectorAll('.admin-only, .superadmin-only').forEach((node) => {
         node.hidden = true;
       });
@@ -761,6 +877,7 @@
       const label = r.superAdmin ? 'admin' : r.houseId;
       const titleBit = (r.officialTitle && r.role === 'admin') ? ` (${r.officialTitle})` : '';
       chip.textContent = `${label} · ${r.name}${titleBit}${tag}`;
+      chip.title = chip.textContent;
     }
     renderUserAvatars(r);
     const deskChip = el('ecDeskRoleChip');
@@ -846,6 +963,7 @@
     const grievanceForm = el('grievanceForm');
     if (grievanceForm) grievanceForm.hidden = isViewOnly(r);
     loadHouseholdMembers().catch(() => {});
+    refreshMsgThreads().catch(() => {});
   }
 
   function activePanelName() {
@@ -865,7 +983,13 @@
     if (data.authenticated) {
       const preferred = activePanelName();
       setAuthed(data);
-      ensurePanelVisibility(preferred);
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (hash === 'messages' || hash.startsWith('messages/') || hash === 'dues' || hash === 'concerns'
+        || hash === 'profile' || hash === 'directory' || hash === 'info' || hash === 'works' || hash === 'admin') {
+        applyRouteHash();
+      } else {
+        ensurePanelVisibility(preferred);
+      }
     } else {
       setAuthed(null);
     }
@@ -1360,6 +1484,7 @@
             <div class="stat"><span>Previous pending / dues</span><strong>${inr(p.previousPending ?? p.balancePrev)}</strong></div>
             <div class="stat"><span>Current year total</span><strong>${inr(p.currentYearTotal ?? p.feeAmount)}</strong></div>
             <div class="stat"><span>Pending / dues</span><strong>${inr(p.pendingDues ?? p.balanceOutstanding)}</strong></div>
+            <div class="stat"><span>Treasury</span><strong>${treasuryStatusIcon(p)}</strong></div>
           </div>`;
       }
     }
@@ -1368,10 +1493,871 @@
       renderPayCard(bank, data.summary?.bank, { showEdit: isEcAdmin() });
     }
 
-    if (isEcAdmin()) {
+    const houseWrap = el('paymentRecordHouseWrap');
+    if (houseWrap) houseWrap.hidden = !hasEntitlement('manage_dues');
+    const payForm = el('paymentRecordForm');
+    if (payForm) payForm.hidden = isViewOnly() || isSuperAdmin();
+    if (el('paymentRecordFeeYear') && !el('paymentRecordFeeYear').value) {
+      el('paymentRecordFeeYear').value = String(new Date().getFullYear());
+    }
+    if (el('paymentRecordPaidOn') && !el('paymentRecordPaidOn').value) {
+      el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+    }
+    syncPaymentRecordFormKind();
+    if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues')) {
+      populatePaymentHouseList().catch(() => {});
+    }
+    await loadPaymentRecords().catch((e) => {
+      if (el('paymentRecordsStatus')) el('paymentRecordsStatus').textContent = e.message || 'Could not load payments';
+    });
+    await loadResidentNoDues().catch((e) => {
+      if (el('noDuesResidentStatus')) el('noDuesResidentStatus').textContent = e.message || 'Could not load certificate status';
+    });
+
+    if (hasEntitlement('manage_dues')) {
       await loadLedger();
     }
   }
+
+  async function populatePaymentHouseList() {
+    const list = el('paymentRecordHouseList');
+    if (!list) return;
+    if (!rosterCache.length) {
+      try {
+        if (hasEntitlement('manage_roster') || hasEntitlement('sensitive_ops')) {
+          const data = await api('/api/rwa/residents');
+          rosterCache = data.residents || [];
+        } else {
+          const data = await api('/api/rwa/directory');
+          rosterCache = (data.residents || data.directory || []).map((r) => ({
+            houseId: r.houseId || r.plotNo || r.id,
+            name: r.name || '',
+          }));
+        }
+      } catch (_e) { /* ignore */ }
+    }
+    list.innerHTML = rosterCache.map((r) =>
+      `<option value="${escapeHtml(r.houseId)}">${escapeHtml(r.houseId)} — ${escapeHtml(r.name || '')}</option>`
+    ).join('');
+  }
+
+  const PAYMENT_CATEGORIES = [
+    { value: 'annual_dues', label: 'Annual dues' },
+    { value: 'special_levy', label: 'Special levy' },
+    { value: 'other', label: 'Other payment' },
+  ];
+  const REIMBURSEMENT_CATEGORIES = [
+    { value: 'colony_work', label: 'Colony work / labour' },
+    { value: 'supplies', label: 'Supplies / materials' },
+    { value: 'travel', label: 'Travel / logistics' },
+    { value: 'event', label: 'Event / function' },
+    { value: 'other_expense', label: 'Other expense' },
+  ];
+
+  function syncPaymentRecordFormKind() {
+    const kind = el('paymentRecordKind')?.value || 'payment';
+    const isClaim = kind === 'reimbursement';
+    const cat = el('paymentRecordCategory');
+    if (cat) {
+      const opts = isClaim ? REIMBURSEMENT_CATEGORIES : PAYMENT_CATEGORIES;
+      const prev = cat.value;
+      cat.innerHTML = opts.map((o) =>
+        `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`
+      ).join('');
+      if (opts.some((o) => o.value === prev)) cat.value = prev;
+    }
+    if (el('paymentRecordPaidOnText')) {
+      el('paymentRecordPaidOnText').textContent = isClaim ? 'Spent on' : 'Paid on';
+    }
+    const feeWrap = el('paymentRecordFeeYearWrap');
+    if (feeWrap) feeWrap.hidden = isClaim;
+    const feeInput = el('paymentRecordFeeYear');
+    if (feeInput) feeInput.required = !isClaim;
+    const methodWrap = el('paymentRecordMethodWrap');
+    if (methodWrap) methodWrap.hidden = false;
+    const note = el('paymentRecordNote');
+    if (note) {
+      note.placeholder = isClaim
+        ? 'What was purchased / work done'
+        : 'Optional UPI ref or remark';
+    }
+    syncPaymentCashNoteUi();
+    const btn = el('paymentRecordSubmitBtn');
+    if (btn && !el('paymentRecordForm')?.dataset?.editId) {
+      btn.textContent = isClaim ? 'Submit claim' : 'Upload payment';
+    }
+  }
+
+  function syncPaymentCashNoteUi() {
+    const method = el('paymentRecordMethod')?.value || 'upi';
+    const kind = el('paymentRecordKind')?.value || 'payment';
+    const isClaim = kind === 'reimbursement';
+    const isCash = method === 'cash';
+    const box = el('paymentCashNoteBox');
+    if (box) box.hidden = !isCash;
+    if (el('paymentCashNoteHint')) {
+      el('paymentCashNoteHint').textContent = isClaim
+        ? 'For cash expenses: generate a Cash Payment Voucher, upload it as proof, then EC verifies / reimburses.'
+        : 'For cash dues: the recipient generates a Cash Received Note, uploads it as proof, then another EC member verifies.';
+    }
+    if (el('paymentCashNoteBtn')) {
+      el('paymentCashNoteBtn').textContent = isClaim
+        ? 'Generate Cash Payment Voucher (PDF)'
+        : 'Generate Received Note (PDF)';
+    }
+    if (el('paymentRecordFilesText')) {
+      if (isCash) {
+        el('paymentRecordFilesText').textContent = isClaim
+          ? 'Upload signed Cash Payment Voucher (JPG/PNG/PDF, max 3)'
+          : 'Upload signed Cash Received Note (JPG/PNG/PDF, max 3)';
+      } else {
+        el('paymentRecordFilesText').textContent = isClaim
+          ? 'Expense proof (JPG/PNG/WebP/PDF, max 3)'
+          : 'Receipt files (JPG/PNG/WebP/PDF, max 3)';
+      }
+    }
+    if (el('paymentCashReceiver') && !el('paymentCashReceiver').value) {
+      el('paymentCashReceiver').value = state.session?.resident?.name || '';
+    }
+  }
+
+  function paymentStatusBadge(status) {
+    const s = status || 'submitted';
+    const labels = {
+      submitted: 'submitted',
+      verified: 'verified',
+      rejected: 'rejected',
+      reimbursed: 'reimbursed',
+    };
+    return `<span class="payment-status is-${escapeHtml(s)}">${escapeHtml(labels[s] || s)}</span>`;
+  }
+
+  function treasuryStatusIcon(rec, { showLabel = true } = {}) {
+    const st = (rec && (rec.treasuryStatus || rec.treasury_status)) || 'pending';
+    const labels = {
+      pending: 'Pending',
+      validated: 'Validated',
+      confirmed: 'Confirmed',
+    };
+    const label = (rec && rec.treasuryStatusLabel) || labels[st] || st;
+    const title = escapeHtml(label);
+    return `<span class="treasury-seal is-${escapeHtml(st)}" title="Treasury: ${title}" aria-label="Treasury: ${title}">
+      <span class="treasury-seal-icon" aria-hidden="true"></span>
+      ${showLabel ? `<span class="treasury-seal-label">${escapeHtml(labels[st] || st)}</span>` : ''}
+    </span>`;
+  }
+
+  function treasuryActionButtons(kind, id, status, { compact = true } = {}) {
+    if (!hasEntitlement('treasury') || !id) return '';
+    const st = status || 'pending';
+    const cls = compact ? 'btn ghost compact' : 'btn secondary compact';
+    const actions = [];
+    if (st === 'pending') {
+      actions.push(`<button type="button" class="${cls} treasury-validate" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}">Validate</button>`);
+    }
+    if (st === 'validated') {
+      actions.push(`<button type="button" class="btn secondary compact treasury-confirm" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}">Confirm</button>`);
+    }
+    if (st === 'validated' || st === 'confirmed') {
+      actions.push(`<button type="button" class="btn ghost compact treasury-revert" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}">Revert Treasury</button>`);
+    }
+    return actions.join('');
+  }
+
+  async function runTreasuryAction(kind, id, action) {
+    const paths = {
+      payment: `/api/rwa/treasury/payments/${encodeURIComponent(id)}/${action}`,
+      ledger: `/api/rwa/treasury/ledger/${encodeURIComponent(id)}/${action}`,
+      no_dues: `/api/rwa/treasury/no-dues/${encodeURIComponent(id)}/${action}`,
+    };
+    const url = paths[kind];
+    if (!url) throw new Error('Unknown treasury kind');
+    return api(url, { method: 'POST', body: JSON.stringify({}) });
+  }
+
+  async function handleTreasuryClick(event) {
+    const btn = event.target.closest('.treasury-validate, .treasury-confirm, .treasury-revert');
+    if (!btn) return false;
+    const kind = btn.getAttribute('data-kind');
+    const id = btn.getAttribute('data-id');
+    const action = btn.classList.contains('treasury-validate')
+      ? 'validate'
+      : btn.classList.contains('treasury-confirm')
+        ? 'confirm'
+        : 'revert';
+    if (action === 'revert' && !window.confirm('Revert Treasury status to pending?')) return true;
+    btn.disabled = true;
+    try {
+      await runTreasuryAction(kind, id, action);
+      if (hasEntitlement('treasury')) await loadEcTreasuryQueue().catch(() => {});
+      if (hasEntitlement('manage_dues')) {
+        await loadEcPaymentRecords().catch(() => {});
+        await loadLedger().catch(() => {});
+      }
+      if (hasEntitlement('issue_no_dues')) await loadEcNoDuesRequests().catch(() => {});
+      await loadPaymentRecords().catch(() => {});
+      await loadResidentNoDues().catch(() => {});
+      await loadDues().catch(() => {});
+    } catch (err) {
+      window.alert(err.message || 'Treasury action failed');
+    } finally {
+      btn.disabled = false;
+    }
+    return true;
+  }
+
+  function renderPaymentRecordCard(rec, { ecMode = false } = {}) {
+    const isClaim = (rec.kind || 'payment') === 'reimbursement';
+    const files = (rec.files || []).map((f) => {
+      const label = escapeHtml(f.originalName || f.filename || 'Receipt');
+      return `<a class="payment-file-link" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${label}</a>`;
+    }).join(' · ') || '<span class="muted">No files</span>';
+    const canDelete = ecMode
+      ? (rec.status !== 'reimbursed' && (rec.status !== 'verified' || !rec.ledgerApplied))
+      : (rec.status === 'submitted' && !isViewOnly());
+    const canEdit = !isViewOnly() && (rec.status === 'submitted' || rec.status === 'rejected')
+      && (ecMode || true);
+    const actions = [];
+    if (ecMode && rec.status === 'submitted') {
+      const approveLabel = isClaim ? 'Approve' : 'Verify';
+      actions.push(`<button type="button" class="btn secondary compact pay-verify" data-id="${escapeHtml(rec.id)}">${approveLabel}</button>`);
+      actions.push(`<button type="button" class="btn ghost compact pay-reject" data-id="${escapeHtml(rec.id)}">Reject</button>`);
+    }
+    if (ecMode && isClaim && rec.status === 'verified') {
+      actions.push(`<button type="button" class="btn secondary compact pay-reimburse" data-id="${escapeHtml(rec.id)}">Mark reimbursed</button>`);
+    }
+    if (ecMode && (rec.status === 'verified' || rec.status === 'rejected' || rec.status === 'reimbursed')) {
+      actions.push(`<button type="button" class="btn ghost compact pay-revert" data-id="${escapeHtml(rec.id)}">Revert</button>`);
+    }
+    if ((ecMode || hasEntitlement('treasury')) && (rec.status === 'verified' || rec.status === 'reimbursed')) {
+      const tActs = treasuryActionButtons('payment', rec.id, rec.treasuryStatus);
+      if (tActs) actions.push(tActs);
+    }
+    if (canEdit) {
+      actions.push(`<button type="button" class="btn ghost compact pay-edit" data-id="${escapeHtml(rec.id)}">Edit / re-upload</button>`);
+    }
+    if (canDelete) {
+      actions.push(`<button type="button" class="btn ghost compact pay-delete" data-id="${escapeHtml(rec.id)}">Delete</button>`);
+    }
+    const dateLabel = isClaim ? 'spent' : 'paid';
+    const kindBit = isClaim ? ' · claim' : ' · payment';
+    const cashBit = (rec.method || '') === 'cash' ? ' · cash note' : '';
+    const showTreasury = rec.status === 'verified' || rec.status === 'reimbursed' || rec.treasuryStatus;
+    return `
+      <article class="payment-record-card" data-id="${escapeHtml(rec.id)}" data-kind="${escapeHtml(rec.kind || 'payment')}">
+        <div class="payment-record-head">
+          <strong>${escapeHtml(rec.kindLabel || rec.kind || 'Payment')} · ${escapeHtml(rec.categoryLabel || rec.category)} · ${inr(rec.amount)}</strong>
+          ${paymentStatusBadge(rec.status)}
+          ${showTreasury ? treasuryStatusIcon(rec) : ''}
+        </div>
+        <p class="muted">
+          Plot <code>${escapeHtml(rec.plotNo || rec.houseId)}</code>
+          ${rec.residentName ? ` · ${escapeHtml(rec.residentName)}` : ''}
+          · ${dateLabel} ${escapeHtml(rec.paidOn || '')}
+          · ${escapeHtml(rec.methodLabel || rec.method || '')}
+          ${isClaim ? '' : ` · year ${escapeHtml(String(rec.feeYear || ''))}`}
+          ${kindBit}${cashBit}
+          ${rec.uploadedByRole === 'ec' ? ' · uploaded by EC' : ''}
+          ${rec.reimbursedAt ? ` · reimbursed ${escapeHtml(String(rec.reimbursedAt).slice(0, 10))}` : ''}
+        </p>
+        ${(rec.method || '') === 'cash' && rec.status === 'submitted'
+          ? '<p class="muted">Cash proof uploaded — awaiting EC verification / approval.</p>'
+          : ''}
+        ${rec.note ? `<p>${escapeHtml(rec.note)}</p>` : ''}
+        ${rec.reviewNote ? `<p class="muted">Review: ${escapeHtml(rec.reviewNote)}</p>` : ''}
+        <div class="payment-files">${files}</div>
+        ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
+      </article>`;
+  }
+
+  function clearPaymentRecordEditMode() {
+    const form = el('paymentRecordForm');
+    if (form) delete form.dataset.editId;
+    const files = el('paymentRecordFiles');
+    if (files) files.required = true;
+    if (el('paymentRecordFilesText')) {
+      const isClaim = (el('paymentRecordKind')?.value || 'payment') === 'reimbursement';
+      el('paymentRecordFilesText').textContent = isClaim
+        ? 'Expense proof (JPG/PNG/WebP/PDF, max 3)'
+        : 'Receipt files (JPG/PNG/WebP/PDF, max 3)';
+    }
+    syncPaymentRecordFormKind();
+    const cancel = el('paymentRecordCancelEditBtn');
+    if (cancel) cancel.hidden = true;
+  }
+
+  async function beginPaymentRecordEdit(recordId) {
+    const data = await api('/api/rwa/payments/records');
+    const rec = (data.records || []).find((r) => r.id === recordId)
+      || (hasEntitlement('manage_dues')
+        ? ((await api(`/api/rwa/payments/records?status=all&limit=200`)).records || []).find((r) => r.id === recordId)
+        : null);
+    if (!rec) throw new Error('Record not found');
+    const form = el('paymentRecordForm');
+    if (!form) return;
+    form.dataset.editId = rec.id;
+    if (el('paymentRecordHouse')) el('paymentRecordHouse').value = rec.houseId || '';
+    if (el('paymentRecordKind')) el('paymentRecordKind').value = rec.kind || 'payment';
+    syncPaymentRecordFormKind();
+    if (el('paymentRecordAmount')) el('paymentRecordAmount').value = String(rec.amount || '');
+    if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = rec.paidOn || '';
+    if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(rec.feeYear || new Date().getFullYear());
+    if (el('paymentRecordCategory')) el('paymentRecordCategory').value = rec.category || '';
+    if (el('paymentRecordMethod')) el('paymentRecordMethod').value = rec.method || 'upi';
+    if (el('paymentRecordNote')) el('paymentRecordNote').value = rec.note || '';
+    const files = el('paymentRecordFiles');
+    if (files) {
+      files.value = '';
+      files.required = !(rec.files && rec.files.length);
+    }
+    if (el('paymentRecordFilesText')) {
+      el('paymentRecordFilesText').textContent = (rec.files && rec.files.length)
+        ? 'Replace receipts (optional — leave empty to keep existing)'
+        : 'Receipt files required (JPG/PNG/WebP/PDF, max 3)';
+    }
+    const btn = el('paymentRecordSubmitBtn');
+    if (btn) btn.textContent = 'Save changes';
+    const cancel = el('paymentRecordCancelEditBtn');
+    if (cancel) cancel.hidden = false;
+    if (el('paymentRecordFormStatus')) {
+      el('paymentRecordFormStatus').textContent = `Editing ${rec.kindLabel || rec.kind} for plot ${rec.plotNo || rec.houseId}.`;
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function loadPaymentRecords() {
+    const list = el('paymentRecordsList');
+    if (!list) return;
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    const data = await api('/api/rwa/payments/records');
+    const rows = data.records || [];
+    if (!rows.length) {
+      list.innerHTML = '<p class="muted">No payments or claims uploaded yet.</p>';
+      return;
+    }
+    list.innerHTML = rows.map((r) => renderPaymentRecordCard(r, { ecMode: false })).join('');
+  }
+
+  async function loadEcPaymentRecords() {
+    if (!hasEntitlement('manage_dues')) return;
+    const list = el('ecPaymentList');
+    if (!list) return;
+    const status = el('ecPaymentStatusFilter')?.value || 'submitted';
+    const kind = el('ecPaymentKindFilter')?.value || 'all';
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    const qs = new URLSearchParams({ status, limit: '150' });
+    if (kind && kind !== 'all') qs.set('kind', kind);
+    const data = await api(`/api/rwa/payments/records?${qs.toString()}`);
+    const rows = data.records || [];
+    if (el('ecPaymentStats')) {
+      const submitted = rows.filter((r) => r.status === 'submitted').length;
+      el('ecPaymentStats').textContent = status === 'submitted'
+        ? `${rows.length} awaiting review`
+        : `${rows.length} item(s) · filter: ${status}`;
+      if (status === 'all') el('ecPaymentStats').textContent = `${rows.length} item(s)${submitted ? ` · ${submitted} submitted` : ''}`;
+    }
+    if (!rows.length) {
+      list.innerHTML = '<p class="muted">No items match this filter.</p>';
+      return;
+    }
+    list.innerHTML = rows.map((r) => renderPaymentRecordCard(r, { ecMode: true })).join('');
+  }
+
+  async function downloadNoDuesRequest(requestId) {
+    if (!requestId) throw new Error('Request required');
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    const res = await fetch(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(requestId)}/download`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText || 'Could not download certificate');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `no-dues-${requestId}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderNoDuesRequestCard(item, { issuer = false } = {}) {
+    const actions = [];
+    if (issuer && item.status === 'requested') {
+      actions.push(`<button type="button" class="btn secondary compact nd-issue" data-id="${escapeHtml(item.id)}">Issue</button>`);
+      actions.push(`<button type="button" class="btn ghost compact nd-reject" data-id="${escapeHtml(item.id)}">Reject</button>`);
+      actions.push(`<button type="button" class="btn ghost compact nd-cancel" data-id="${escapeHtml(item.id)}">Cancel</button>`);
+    }
+    if (!issuer && item.status === 'requested') {
+      actions.push(`<button type="button" class="btn ghost compact nd-cancel" data-id="${escapeHtml(item.id)}">Cancel request</button>`);
+    }
+    if (issuer && (item.status === 'issued' || item.status === 'rejected')) {
+      actions.push(`<button type="button" class="btn ghost compact nd-revert" data-id="${escapeHtml(item.id)}">Revert to pending</button>`);
+    }
+    if (item.status === 'issued') {
+      const tActs = treasuryActionButtons('no_dues', item.id, item.treasuryStatus);
+      if (tActs) actions.push(tActs);
+    }
+    if (item.status === 'issued' && item.downloadUrl) {
+      actions.push(`<button type="button" class="btn secondary compact nd-download" data-id="${escapeHtml(item.id)}">Download</button>`);
+    } else if (item.status === 'issued' && item.downloadLocked) {
+      actions.push('<span class="muted">Download locked until Treasury confirms</span>');
+    }
+    return `
+      <article class="payment-record-card" data-id="${escapeHtml(item.id)}">
+        <div class="payment-record-head">
+          <strong>Plot <code>${escapeHtml(item.plotNo || item.houseId)}</code>${item.residentName ? ` · ${escapeHtml(item.residentName)}` : ''}</strong>
+          <span class="payment-status is-${escapeHtml(item.status || '')}">${escapeHtml(item.statusLabel || item.status)}</span>
+          ${item.status === 'issued' ? treasuryStatusIcon(item) : ''}
+        </div>
+        <p class="muted">Requested ${escapeHtml(String(item.createdAt || '').slice(0, 10))}${item.issuedAt ? ` · issued ${escapeHtml(String(item.issuedAt).slice(0, 10))}` : ''}</p>
+        ${item.requestNote ? `<p>${escapeHtml(item.requestNote)}</p>` : ''}
+        ${item.reviewNote ? `<p class="muted">Note: ${escapeHtml(item.reviewNote)}</p>` : ''}
+        ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
+      </article>`;
+  }
+
+  async function loadResidentNoDues() {
+    const block = el('noDuesResidentBlock');
+    if (!block) return;
+    if (isSuperAdmin() || isViewOnly()) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+    const own = state.session?.resident?.houseId || '';
+    const qs = own ? `?houseId=${encodeURIComponent(own)}` : '';
+    const data = await api(`/api/rwa/payments/no-dues-requests${qs}`);
+    const rows = data.requests || [];
+    const elig = data.eligibility || {};
+    const pending = rows.find((r) => r.status === 'requested');
+    const latestIssued = rows.find((r) => r.status === 'issued');
+    const reqBtn = el('noDuesRequestBtn');
+    const dlBtn = el('noDuesDownloadBtn');
+    const status = el('noDuesResidentStatus');
+    if (reqBtn) {
+      reqBtn.hidden = !elig.eligible || Boolean(pending) || isViewOnly();
+      reqBtn.dataset.requestId = '';
+    }
+    if (dlBtn) {
+      const canDl = latestIssued && latestIssued.downloadUrl && !latestIssued.downloadLocked;
+      dlBtn.hidden = !canDl;
+      dlBtn.dataset.requestId = canDl ? (latestIssued.id || '') : '';
+    }
+    if (status) {
+      if (pending) status.textContent = 'Request submitted — waiting for a No Dues Issuer to approve.';
+      else if (latestIssued && latestIssued.downloadLocked) {
+        status.textContent = `Certificate issued — awaiting Treasury ${latestIssued.treasuryStatus === 'validated' ? 'confirmation' : 'validation'} before download.`;
+      } else if (latestIssued) status.textContent = 'Certificate issued and Treasury-confirmed — you can download it below.';
+      else if (elig.eligible) status.textContent = 'Your ledger is clear. You can request a No Dues Certificate.';
+      else status.textContent = elig.reason || 'Not eligible yet.';
+    }
+    const list = el('noDuesResidentList');
+    if (list) {
+      list.innerHTML = rows.length
+        ? rows.map((r) => renderNoDuesRequestCard(r)).join('')
+        : '<p class="muted">No certificate requests yet.</p>';
+    }
+  }
+
+  async function loadEcNoDuesRequests() {
+    if (!hasEntitlement('issue_no_dues')) return;
+    const list = el('ecNoDuesList');
+    if (!list) return;
+    const statusFilter = el('ecNoDuesStatusFilter')?.value || 'requested';
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    const qs = new URLSearchParams({ status: statusFilter, limit: '150' });
+    const data = await api(`/api/rwa/payments/no-dues-requests?${qs.toString()}`);
+    const rows = data.requests || [];
+    if (el('ecNoDuesStats')) {
+      el('ecNoDuesStats').textContent = statusFilter === 'requested'
+        ? `${rows.length} awaiting issue`
+        : `${rows.length} request(s) · filter: ${statusFilter}`;
+    }
+    list.innerHTML = rows.length
+      ? rows.map((r) => renderNoDuesRequestCard(r, { issuer: true })).join('')
+      : '<p class="muted">No requests match this filter.</p>';
+  }
+
+  async function issueNoDuesForHouse(houseId) {
+    const data = await api('/api/rwa/payments/no-dues-certificate', {
+      method: 'POST',
+      body: JSON.stringify({ houseId }),
+    });
+    return data.request;
+  }
+
+  el('paymentRecordCancelEditBtn')?.addEventListener('click', () => {
+    clearPaymentRecordEditMode();
+    el('paymentRecordForm')?.reset();
+    syncPaymentRecordFormKind();
+    if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(new Date().getFullYear());
+    if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+    if (el('paymentRecordFormStatus')) el('paymentRecordFormStatus').textContent = '';
+  });
+
+  el('paymentRecordForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (isViewOnly()) return;
+    const status = el('paymentRecordFormStatus');
+    const btn = el('paymentRecordSubmitBtn');
+    const editId = el('paymentRecordForm')?.dataset?.editId || '';
+    if (status) status.textContent = editId ? 'Saving…' : 'Uploading…';
+    if (btn) btn.disabled = true;
+    try {
+      const fd = new FormData();
+      const house = (el('paymentRecordHouse')?.value || '').trim()
+        || (state.session?.resident?.houseId || '');
+      if (!editId) fd.append('houseId', house);
+      fd.append('kind', el('paymentRecordKind')?.value || 'payment');
+      fd.append('amount', el('paymentRecordAmount')?.value || '');
+      fd.append('paidOn', el('paymentRecordPaidOn')?.value || '');
+      fd.append('feeYear', el('paymentRecordFeeYear')?.value || String(new Date().getFullYear()));
+      fd.append('category', el('paymentRecordCategory')?.value || 'annual_dues');
+      fd.append('method', el('paymentRecordMethod')?.value || 'upi');
+      fd.append('note', el('paymentRecordNote')?.value || '');
+      const files = el('paymentRecordFiles')?.files || [];
+      Array.from(files).slice(0, 3).forEach((f) => fd.append('files', f));
+      const headers = {};
+      if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+      const url = editId
+        ? `/api/rwa/payments/records/${encodeURIComponent(editId)}`
+        : '/api/rwa/payments/records';
+      const res = await fetch(url, {
+        method: editId ? 'PATCH' : 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText || (editId ? 'Save failed' : 'Upload failed'));
+      const submittedKind = el('paymentRecordKind')?.value || 'payment';
+      el('paymentRecordForm')?.reset();
+      clearPaymentRecordEditMode();
+      if (el('paymentRecordKind')) el('paymentRecordKind').value = submittedKind;
+      syncPaymentRecordFormKind();
+      if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(new Date().getFullYear());
+      if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+      if (status) {
+        status.textContent = editId
+          ? 'Saved — awaiting EC review.'
+          : (submittedKind === 'reimbursement'
+            ? 'Claim submitted — awaiting EC approval.'
+            : 'Payment uploaded — awaiting EC verification.');
+      }
+      await loadPaymentRecords();
+      if (hasEntitlement('manage_dues')) await loadEcPaymentRecords().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Upload failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  async function handlePaymentListClick(event, { refreshEc = false } = {}) {
+    if (await handleTreasuryClick(event)) return;
+    const verify = event.target.closest('.pay-verify');
+    const reject = event.target.closest('.pay-reject');
+    const reimburse = event.target.closest('.pay-reimburse');
+    const revert = event.target.closest('.pay-revert');
+    const edit = event.target.closest('.pay-edit');
+    const del = event.target.closest('.pay-delete');
+    const id = (verify || reject || reimburse || revert || edit || del)?.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (edit) {
+        await beginPaymentRecordEdit(id);
+        return;
+      }
+      if (verify) {
+        const note = window.prompt('Optional review note:') || '';
+        await api(`/api/rwa/payments/records/${encodeURIComponent(id)}/verify`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (reject) {
+        const note = window.prompt('Reason for rejection (optional):') || '';
+        await api(`/api/rwa/payments/records/${encodeURIComponent(id)}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (reimburse) {
+        const note = window.prompt('Optional payout note (UPI ref, etc.):') || '';
+        await api(`/api/rwa/payments/records/${encodeURIComponent(id)}/reimburse`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (revert) {
+        if (!window.confirm('Revert this item so it can be edited / reviewed again?')) return;
+        const note = window.prompt('Optional revert note:') || '';
+        await api(`/api/rwa/payments/records/${encodeURIComponent(id)}/revert`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (del) {
+        if (!window.confirm('Delete this item?')) return;
+        await api(`/api/rwa/payments/records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      }
+      await loadPaymentRecords().catch(() => {});
+      if (refreshEc) await loadEcPaymentRecords().catch(() => {});
+      if (verify || revert) await loadDues().catch(() => {});
+    } catch (err) {
+      window.alert(err.message || 'Action failed');
+    }
+  }
+
+  el('paymentRecordKind')?.addEventListener('change', () => syncPaymentRecordFormKind());
+  el('paymentRecordMethod')?.addEventListener('change', () => syncPaymentCashNoteUi());
+  el('paymentCashNoteBtn')?.addEventListener('click', async () => {
+    const status = el('paymentRecordFormStatus');
+    const amount = el('paymentRecordAmount')?.value || '';
+    const paidOn = el('paymentRecordPaidOn')?.value || '';
+    const receiver = (el('paymentCashReceiver')?.value || '').trim();
+    if (!amount || !paidOn) {
+      if (status) status.textContent = 'Enter amount and date before generating the note.';
+      return;
+    }
+    if (!receiver) {
+      if (status) status.textContent = 'Enter who received the cash.';
+      return;
+    }
+    const kind = el('paymentRecordKind')?.value || 'payment';
+    if (kind === 'payment' && !hasEntitlement('manage_dues')) {
+      if (status) status.textContent = 'Cash Received Notes for dues must be generated by the EC member who received the cash.';
+      return;
+    }
+    if (status) status.textContent = 'Generating PDF…';
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+      const house = (el('paymentRecordHouse')?.value || '').trim()
+        || (state.session?.resident?.houseId || '');
+      const res = await fetch('/api/rwa/payments/cash-received-note', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: JSON.stringify({
+          kind,
+          houseId: house,
+          amount,
+          paidOn,
+          category: el('paymentRecordCategory')?.value || '',
+          note: el('paymentRecordNote')?.value || '',
+          receiverName: receiver,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || res.statusText || 'Could not generate note');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = kind === 'reimbursement' ? 'cash-payment-voucher.pdf' : 'cash-received-note.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      if (status) {
+        status.textContent = 'PDF downloaded — sign if needed, then upload it below as proof for EC verification.';
+      }
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not generate note';
+    }
+  });
+  el('paymentRecordsList')?.addEventListener('click', (event) => {
+    handlePaymentListClick(event, { refreshEc: hasEntitlement('manage_dues') }).catch(console.error);
+  });
+  el('ecPaymentList')?.addEventListener('click', (event) => {
+    handlePaymentListClick(event, { refreshEc: true }).catch(console.error);
+  });
+  el('ecPaymentRefreshBtn')?.addEventListener('click', () => loadEcPaymentRecords().catch(console.error));
+  el('ecPaymentStatusFilter')?.addEventListener('change', () => loadEcPaymentRecords().catch(console.error));
+  el('ecPaymentKindFilter')?.addEventListener('change', () => loadEcPaymentRecords().catch(console.error));
+
+  el('noDuesRequestBtn')?.addEventListener('click', async () => {
+    const status = el('noDuesResidentStatus');
+    const btn = el('noDuesRequestBtn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Submitting request…';
+    try {
+      await api('/api/rwa/payments/no-dues-requests', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      await loadResidentNoDues();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Request failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('noDuesDownloadBtn')?.addEventListener('click', async () => {
+    const id = el('noDuesDownloadBtn')?.dataset?.requestId;
+    const status = el('noDuesResidentStatus');
+    try {
+      await downloadNoDuesRequest(id);
+      if (status) status.textContent = 'Certificate downloaded.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+    }
+  });
+
+  el('noDuesResidentList')?.addEventListener('click', async (event) => {
+    if (await handleTreasuryClick(event)) return;
+    const dl = event.target.closest('.nd-download');
+    const cancel = event.target.closest('.nd-cancel');
+    const id = (dl || cancel)?.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (cancel) {
+        if (!window.confirm('Cancel this certificate request?')) return;
+        await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/cancel`, {
+          method: 'POST',
+          body: '{}',
+        });
+        await loadResidentNoDues();
+        return;
+      }
+      await downloadNoDuesRequest(id);
+    } catch (err) {
+      window.alert(err.message || 'Action failed');
+    }
+  });
+
+  async function loadEcTreasuryQueue() {
+    if (!hasEntitlement('treasury')) return;
+    const list = el('ecTreasuryList');
+    if (!list) return;
+    const kind = el('ecTreasuryKindFilter')?.value || 'all';
+    const status = el('ecTreasuryStatusFilter')?.value || 'attention';
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    if (el('ecTreasuryStatus')) el('ecTreasuryStatus').textContent = '';
+    try {
+      const qs = new URLSearchParams({ kind, status, limit: '120' });
+      const data = await api(`/api/rwa/treasury/queue?${qs.toString()}`);
+      const payments = data.payments || [];
+      const ledger = data.ledger || [];
+      const noDues = data.noDues || [];
+      const n = payments.length + ledger.length + noDues.length;
+      if (el('ecTreasuryStats')) {
+        el('ecTreasuryStats').textContent =
+          `${n} item${n === 1 ? '' : 's'} · validate then confirm · ledger amounts may already show after EC verify`;
+      }
+      if (!n) {
+        list.innerHTML = '<p class="muted">Nothing in this Treasury queue.</p>';
+        return;
+      }
+      const parts = [];
+      if (payments.length) {
+        parts.push(`<div class="treasury-queue-section"><h4>Payments &amp; claims (${payments.length})</h4>
+          ${payments.map((r) => renderPaymentRecordCard(r, { ecMode: true })).join('')}</div>`);
+      }
+      if (ledger.length) {
+        parts.push(`<div class="treasury-queue-section"><h4>Ledger rows (${ledger.length})</h4>
+          ${ledger.map((r) => `
+            <article class="payment-record-card" data-house="${escapeHtml(r.houseId)}">
+              <div class="payment-record-head">
+                <strong>Plot <code>${escapeHtml(r.plotNo || r.houseId)}</code>${r.name ? ` · ${escapeHtml(r.name)}` : ''}</strong>
+                ${treasuryStatusIcon(r)}
+              </div>
+              <p class="muted">Pending / dues ${inr(r.pendingDues ?? r.balanceOutstanding)} · received ${inr(r.amountReceived)}</p>
+              <div class="btn-row">${treasuryActionButtons('ledger', r.houseId, r.treasuryStatus)}</div>
+            </article>`).join('')}</div>`);
+      }
+      if (noDues.length) {
+        parts.push(`<div class="treasury-queue-section"><h4>No Dues (${noDues.length})</h4>
+          ${noDues.map((r) => renderNoDuesRequestCard(r, { issuer: false })).join('')}</div>`);
+      }
+      list.innerHTML = parts.join('');
+    } catch (err) {
+      list.innerHTML = '';
+      if (el('ecTreasuryStatus')) el('ecTreasuryStatus').textContent = err.message || 'Treasury queue failed';
+    }
+  }
+
+  el('ecTreasuryRefreshBtn')?.addEventListener('click', () => loadEcTreasuryQueue().catch(console.error));
+  el('ecTreasuryKindFilter')?.addEventListener('change', () => loadEcTreasuryQueue().catch(console.error));
+  el('ecTreasuryStatusFilter')?.addEventListener('change', () => loadEcTreasuryQueue().catch(console.error));
+  el('ecTreasuryList')?.addEventListener('click', (event) => {
+    handleTreasuryClick(event).catch(console.error);
+  });
+
+  el('ecNoDuesList')?.addEventListener('click', async (event) => {
+    if (await handleTreasuryClick(event)) return;
+    const issue = event.target.closest('.nd-issue');
+    const reject = event.target.closest('.nd-reject');
+    const revert = event.target.closest('.nd-revert');
+    const cancel = event.target.closest('.nd-cancel');
+    const dl = event.target.closest('.nd-download');
+    const id = (issue || reject || revert || cancel || dl)?.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (issue) {
+        await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/issue`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      } else if (reject) {
+        const note = window.prompt('Reason for rejection (optional):') || '';
+        await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (revert) {
+        if (!window.confirm('Revert this request to pending? The issued PDF (if any) will be removed.')) return;
+        const note = window.prompt('Optional revert note:') || '';
+        await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/revert`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (cancel) {
+        if (!window.confirm('Cancel this pending request?')) return;
+        await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/cancel`, {
+          method: 'POST',
+          body: '{}',
+        });
+      } else if (dl) {
+        await downloadNoDuesRequest(id);
+      }
+      await loadEcNoDuesRequests().catch(() => {});
+      await loadResidentNoDues().catch(() => {});
+    } catch (err) {
+      window.alert(err.message || 'Action failed');
+    }
+  });
+
+  el('ecNoDuesRefreshBtn')?.addEventListener('click', () => loadEcNoDuesRequests().catch(console.error));
+  el('ecNoDuesStatusFilter')?.addEventListener('change', () => loadEcNoDuesRequests().catch(console.error));
+
+  el('ecNoDuesCertBtn')?.addEventListener('click', async () => {
+    if (!hasEntitlement('issue_no_dues')) {
+      window.alert('No Dues Issuer entitlement required');
+      return;
+    }
+    const house = (el('ecNoDuesHouse')?.value || '').trim();
+    const status = el('ecNoDuesCertStatus');
+    if (!house) {
+      if (status) status.textContent = 'Enter a plot number.';
+      return;
+    }
+    const btn = el('ecNoDuesCertBtn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Issuing…';
+    try {
+      await issueNoDuesForHouse(house);
+      if (status) status.textContent = `Certificate issued for plot ${house}. Use Download on the request card when needed.`;
+      await loadEcNoDuesRequests().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 
   function qrImgUrl(bank) {
     if (!bank?.hasQr && !bank?.qrUrl) return '';
@@ -1592,11 +2578,14 @@
       return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
     });
     if (!rows.length) {
-      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="8" class="muted">No matching ledger rows.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="9" class="muted">No matching ledger rows.</td></tr>';
       refreshMobileListUi();
       return;
     }
-    tbody.innerHTML = rows.map((r) => `
+    const canTreasury = hasEntitlement('treasury');
+    tbody.innerHTML = rows.map((r) => {
+      const tActs = canTreasury ? treasuryActionButtons('ledger', r.houseId, r.treasuryStatus) : '';
+      return `
       <tr data-house="${escapeHtml(r.houseId)}">
         <td data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
         <td data-label="Name">${escapeHtml(r.name || '')}</td>
@@ -1605,8 +2594,13 @@
         <td data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
         <td data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
         <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
-        <td data-label="Actions" class="row-actions"><button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button></td>
-      </tr>`).join('');
+        <td data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
+        <td data-label="Actions" class="row-actions">
+          <button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button>
+          ${tActs}
+        </td>
+      </tr>`;
+    }).join('');
     refreshMobileListUi();
   }
 
@@ -1715,7 +2709,8 @@
   }
 
   el('ledgerSearch')?.addEventListener('input', () => renderLedgerRows());
-  el('ledgerRows')?.addEventListener('click', (event) => {
+  el('ledgerRows')?.addEventListener('click', async (event) => {
+    if (await handleTreasuryClick(event)) return;
     const btn = event.target.closest('.ledger-edit');
     if (!btn) return;
     openLedgerEdit(btn.getAttribute('data-house'));
@@ -1855,9 +2850,13 @@
     if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Save changes';
     if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = false;
     if (el('infoFormStatus')) {
-      el('infoFormStatus').textContent = doc.docType === 'html'
-        ? 'Editing HTML document — switch EN/हिं for bilingual content. Leave HTML blank to keep existing.'
-        : `Editing ${doc.originalName || doc.id} — Hindi title/summary optional; file uploads stay single-language.`;
+      if (doc.fileMissing) {
+        el('infoFormStatus').textContent = 'File missing on server — choose the file again and Save to restore it.';
+      } else if (doc.docType === 'html') {
+        el('infoFormStatus').textContent = 'Editing HTML document — switch EN/हिं for bilingual content. Leave HTML blank to keep existing.';
+      } else {
+        el('infoFormStatus').textContent = `Editing ${doc.originalName || doc.id} — Hindi title/summary optional; file uploads stay single-language.`;
+      }
     }
     el('infoManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -1890,6 +2889,7 @@
       const badges = [
         `<span class="info-doc-badge">${escapeHtml(d.categoryLabel || d.category || 'general')}</span>`,
         `<span class="info-doc-badge ${d.docType === 'html' ? 'is-html' : 'is-file'}">${d.docType === 'html' ? 'HTML' : 'File'}</span>`,
+        d.fileMissing ? '<span class="info-doc-badge is-draft">File missing</span>' : '',
         d.status === 'published'
           ? `<span class="info-doc-badge ${d.audience === 'ec' ? 'is-ec' : 'is-all'}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : 'All members'))}</span>`
           : '',
@@ -1900,11 +2900,12 @@
         d.sizeBytes ? formatBytes(d.sizeBytes) : '',
         when || '',
       ].filter(Boolean).join(' · ');
-      const actions = [
-        `<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`,
-      ];
+      const actions = [];
+      if (!d.fileMissing) {
+        actions.push(`<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`);
+      }
       if (isEcAdmin()) {
-        actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">Edit</button>`);
+        actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? 'Re-upload file' : 'Edit'}</button>`);
         if (d.status !== 'published') {
           actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
           actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
@@ -2113,10 +3114,395 @@
     }
   }
 
+  function stopMsgPolling() {
+    if (state.msgPollTimer) {
+      clearInterval(state.msgPollTimer);
+      state.msgPollTimer = null;
+    }
+  }
+
+  function updateMessagesBadge(total) {
+    const badge = el('messagesTabBadge');
+    if (!badge) return;
+    const n = Number(total) || 0;
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? '99+' : String(n);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function refreshPushUi() {
+    const statusEl = el('pushStatusText');
+    const enableBtn = el('pushEnableBtn');
+    const disableBtn = el('pushDisableBtn');
+    const testBtn = el('pushTestBtn');
+    if (!state.session) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      if (statusEl) statusEl.textContent = 'Push is not supported in this browser.';
+      if (enableBtn) enableBtn.hidden = true;
+      return;
+    }
+    try {
+      const data = await api('/api/rwa/push/status');
+      const perm = Notification.permission;
+      if (statusEl) {
+        statusEl.textContent = data.subscribed
+          ? `Push enabled on ${data.deviceCount} device(s). Browser permission: ${perm}.`
+          : `Push not enabled on this device. Browser permission: ${perm}.`;
+      }
+      if (enableBtn) enableBtn.hidden = Boolean(data.subscribed) && perm === 'granted';
+      if (disableBtn) disableBtn.hidden = !data.subscribed;
+      if (testBtn) testBtn.hidden = !data.subscribed;
+      const prefs = data.prefs || {};
+      document.querySelectorAll('#pushPrefsFields [data-pref]').forEach((input) => {
+        const key = input.getAttribute('data-pref');
+        input.checked = prefs[key] !== false;
+      });
+    } catch (e) {
+      if (statusEl) statusEl.textContent = e.message || 'Could not load push status';
+    }
+  }
+
+  async function enablePush() {
+    const statusEl = el('pushStatusText');
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        throw new Error('Push is not supported here');
+      }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') throw new Error('Notification permission denied');
+      const keyData = await api('/api/rwa/push/vapid-public-key');
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+        });
+      }
+      await api('/api/rwa/push/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+      if (statusEl) statusEl.textContent = 'Push enabled on this device.';
+      await refreshPushUi();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = e.message || 'Could not enable push';
+    }
+  }
+
+  async function disablePush() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await api('/api/rwa/push/unsubscribe', {
+          method: 'POST',
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      } else {
+        await api('/api/rwa/push/unsubscribe', { method: 'POST', body: JSON.stringify({}) });
+      }
+      await refreshPushUi();
+    } catch (e) {
+      if (el('pushStatusText')) el('pushStatusText').textContent = e.message || 'Could not disable';
+    }
+  }
+
+  async function savePushPrefs() {
+    const prefs = {};
+    document.querySelectorAll('#pushPrefsFields [data-pref]').forEach((input) => {
+      prefs[input.getAttribute('data-pref')] = Boolean(input.checked);
+    });
+    try {
+      await api('/api/rwa/push/prefs', { method: 'PUT', body: JSON.stringify({ prefs }) });
+      if (el('pushPrefsStatus')) el('pushPrefsStatus').textContent = 'Preferences saved.';
+    } catch (e) {
+      if (el('pushPrefsStatus')) el('pushPrefsStatus').textContent = e.message || 'Save failed';
+    }
+  }
+
+  async function refreshMsgThreads() {
+    const data = await api('/api/rwa/messages/threads');
+    state.msgThreads = data.threads || [];
+    updateMessagesBadge(data.unreadTotal);
+    renderMsgThreadList();
+  }
+
+  function renderMsgThreadList() {
+    const box = el('msgThreadList');
+    if (!box) return;
+    if (!state.msgThreads.length) {
+      box.innerHTML = '<p class="muted">No conversations yet.</p>';
+      return;
+    }
+    box.innerHTML = state.msgThreads.map((t) => {
+      const active = t.id === state.msgActiveThreadId ? ' is-active' : '';
+      const unread = t.unread ? `<span class="msg-unread">${t.unread} new</span>` : '';
+      const preview = t.lastMessage
+        ? `${escapeHtml(t.lastMessage.authorName || '')}: ${escapeHtml(t.lastMessage.body || '')}`
+        : (t.kind === 'colony' ? 'Colony channel' : (t.kind === 'ai' ? 'Private assistant' : 'No messages yet'));
+      let avatarPerson = { photoUrl: '' };
+      if (t.kind === 'dm' && t.peerPhotoUrl) avatarPerson = { photoUrl: t.peerPhotoUrl };
+      else if (t.lastMessage?.photoUrl) avatarPerson = { photoUrl: t.lastMessage.photoUrl };
+      const avatar = t.kind === 'ai'
+        ? aiAvatarHtml({ size: 'sm', className: 'msg-thread-avatar' })
+        : personAvatarHtml(avatarPerson, { size: 'sm', className: 'msg-thread-avatar' });
+      return `<button type="button" class="msg-thread-item${active}${t.kind === 'ai' ? ' is-ai-thread' : ''}" data-thread-id="${escapeHtml(t.id)}">
+        ${avatar}
+        <span class="msg-thread-copy">
+          <strong>${escapeHtml(t.title || t.id)}</strong>
+          <span class="msg-preview">${preview}</span>
+          ${unread}
+        </span>
+      </button>`;
+    }).join('');
+    hydrateAvatars(box).catch(() => {});
+  }
+
+  function renderMsgFeed(messages, { append = false } = {}) {
+    const feed = el('msgFeed');
+    if (!feed) return;
+    let list = messages || [];
+    if (append) {
+      const seen = new Set(
+        [...feed.querySelectorAll('.msg-row[data-msg-id]')].map((n) => n.getAttribute('data-msg-id'))
+      );
+      list = list.filter((m) => m && m.id && !seen.has(m.id));
+      if (!list.length) return;
+    }
+    const myHouse = state.session?.resident?.houseId;
+    const myMember = state.session?.resident?.memberId;
+    const canEditBoard = !isViewOnly() && !state.msgIsAiThread;
+    const html = list.map((m) => {
+      if (m.hidden && !state.msgCanModerate) {
+        return `<article class="msg-row is-hidden" data-msg-id="${escapeHtml(m.id)}"><div class="msg-bubble is-hidden"><div class="msg-body">Message hidden by moderators</div></div></article>`;
+      }
+      const mine = (m.authorMemberId && m.authorMemberId === myMember)
+        || (!m.authorMemberId && m.houseId === myHouse && !m.isAi);
+      const isAi = Boolean(m.isAi);
+      const atts = (m.attachments || []).map((a) => {
+        if ((a.mime || '').startsWith('image/')) {
+          return `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(a.url)}" alt=""></a>`;
+        }
+        return `<a class="btn ghost compact" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.originalName || 'Attachment')}</a>`;
+      }).join('');
+      let mods = '';
+      if (state.msgCanModerate && !m.hidden && !isAi) {
+        mods = `<div class="msg-mod-actions">
+          <button type="button" class="btn ghost compact msg-mod" data-action="hide" data-id="${escapeHtml(m.id)}">Hide</button>
+          <button type="button" class="btn ghost compact msg-mod" data-action="pin" data-id="${escapeHtml(m.id)}">Pin</button>
+          <button type="button" class="btn ghost compact msg-mod" data-action="delete" data-id="${escapeHtml(m.id)}">Delete</button>
+        </div>`;
+      } else if (state.msgCanModerate && m.hidden) {
+        mods = `<div class="msg-mod-actions">
+          <button type="button" class="btn ghost compact msg-mod" data-action="unhide" data-id="${escapeHtml(m.id)}">Unhide</button>
+        </div>`;
+      }
+      const authorActions = (mine && canEditBoard && !m.hidden && !isAi)
+        ? `<div class="msg-author-actions">
+            <button type="button" class="btn ghost compact msg-edit" data-msg-edit="${escapeHtml(m.id)}">Edit</button>
+            <button type="button" class="btn ghost compact msg-delete-own" data-msg-delete="${escapeHtml(m.id)}">Delete</button>
+          </div>`
+        : '';
+      const likeCount = Number(m.likeCount || 0);
+      const liked = Boolean(m.likedByMe);
+      const likeBtn = (!isAi && !m.hidden)
+        ? `<button type="button" class="msg-like${liked ? ' is-active' : ''}" data-msg-like="${escapeHtml(m.id)}" aria-pressed="${liked ? 'true' : 'false'}" title="${isViewOnly() ? 'View-only' : (liked ? 'Unlike' : 'Like')}"${isViewOnly() ? ' disabled' : ''}>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.1C.7 10.1 1.5 6.8 4.4 5.4 6.5 4.4 9 5 12 7.4c3-2.4 5.5-3 7.6-2 2.9 1.4 3.7 4.7 1.9 7.5C19 16.65 12 21 12 21z"/></svg>
+            <span class="msg-like-count">${likeCount}</span>
+          </button>`
+        : '';
+      const avatar = isAi
+        ? aiAvatarHtml({ size: 'sm', className: 'msg-avatar' })
+        : personAvatarHtml({ photoUrl: m.photoUrl || '' }, { size: 'sm', className: 'msg-avatar' });
+      const editedBit = m.editedAt ? ' · edited' : '';
+      const who = isAi
+        ? 'RWA Assistant · only you see this'
+        : `${escapeHtml(m.houseId || '')} · ${escapeHtml(m.authorName || '')}`;
+      return `<article class="msg-row${mine ? ' is-mine' : ''}${isAi ? ' is-ai' : ''}" data-msg-id="${escapeHtml(m.id)}">
+        ${avatar}
+        <div class="msg-bubble${mine ? ' is-mine' : ''}${m.hidden ? ' is-hidden' : ''}${isAi ? ' is-ai' : ''}">
+          <div class="msg-meta">${who} · ${escapeHtml((m.createdAt || '').replace('T', ' ').slice(0, 16))}${editedBit}</div>
+          <div class="msg-body">${escapeHtml(m.body || '')}</div>
+          ${atts ? `<div class="msg-attachments">${atts}</div>` : ''}
+          <div class="msg-footer">${likeBtn}${authorActions}${mods}</div>
+        </div>
+      </article>`;
+    }).join('');
+    if (append) feed.insertAdjacentHTML('beforeend', html);
+    else feed.innerHTML = html || '<p class="muted">No messages yet. Say hello.</p>';
+    feed.scrollTop = feed.scrollHeight;
+    hydrateAvatars(feed).catch(() => {});
+  }
+
+  async function openMsgThread(threadId, { skipHash = false } = {}) {
+    if (!threadId) return;
+    state.msgActiveThreadId = threadId;
+    el('msgLayout')?.classList.add('is-thread-open');
+    if (el('msgBackBtn')) el('msgBackBtn').hidden = false;
+    if (el('msgComposeForm')) el('msgComposeForm').hidden = isViewOnly();
+    renderMsgThreadList();
+    const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(threadId)}?limit=80`);
+    state.msgCanModerate = Boolean(data.canModerate);
+    state.msgCanCleanup = Boolean(data.canCleanup);
+    state.msgIsAiThread = Boolean(data.isAi || (data.thread && data.thread.kind === 'ai'));
+    const thread = data.thread || {};
+    if (el('msgConversationTitle')) el('msgConversationTitle').textContent = thread.title || 'Conversation';
+    if (el('msgConversationMeta')) {
+      if (thread.kind === 'ai') {
+        el('msgConversationMeta').textContent = 'Private to you — answers are not shared with the colony';
+      } else if (thread.kind === 'colony') {
+        el('msgConversationMeta').textContent = 'Visible to all residents';
+      } else {
+        el('msgConversationMeta').textContent = `Private · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
+      }
+    }
+    const tools = el('msgChannelTools');
+    if (tools) {
+      tools.hidden = !state.msgCanCleanup;
+      const menu = tools.querySelector('.msg-cleanup-menu');
+      if (menu) menu.open = false;
+      const clearHiddenBtn = tools.querySelector('[data-cleanup="clear_hidden"]');
+      if (clearHiddenBtn) clearHiddenBtn.hidden = thread.kind !== 'colony';
+    }
+    const attachLabel = document.querySelector('.msg-attach-label');
+    if (attachLabel) attachLabel.hidden = Boolean(state.msgIsAiThread);
+    if (el('msgAttachHint')) {
+      el('msgAttachHint').hidden = Boolean(state.msgIsAiThread);
+      if (!state.msgIsAiThread && !state.msgAttachFiles.length) setMsgAttachHint(MSG_ATTACH_HINT_DEFAULT);
+    }
+    if (el('msgEmojiBtn')) el('msgEmojiBtn').hidden = false;
+    if (el('msgBodyInput')) {
+      el('msgBodyInput').placeholder = state.msgIsAiThread
+        ? 'Ask about your dues, EC members, concerns, notices…'
+        : 'Write a message…';
+    }
+    const pin = el('msgPinned');
+    if (pin) {
+      if (data.pinned && data.pinned.body) {
+        pin.hidden = false;
+        pin.textContent = `Pinned: ${data.pinned.body}`;
+      } else {
+        pin.hidden = true;
+        pin.textContent = '';
+      }
+    }
+    renderMsgFeed(data.messages || []);
+    const msgs = data.messages || [];
+    state.msgLastId = msgs.length ? msgs[msgs.length - 1].id : null;
+    await api(`/api/rwa/messages/threads/${encodeURIComponent(threadId)}/read`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId: state.msgLastId }),
+    }).catch(() => {});
+    await refreshMsgThreads().catch(() => {});
+    if (!skipHash) {
+      history.replaceState(null, '', `#messages/${threadId}`);
+    }
+    stopMsgPolling();
+    state.msgPollTimer = setInterval(() => pollMsgThread().catch(() => {}), 4000);
+  }
+
+  async function pollMsgThread() {
+    if (!state.msgActiveThreadId || state.msgSending) return;
+    const q = state.msgLastId ? `?since=${encodeURIComponent(state.msgLastId)}&limit=50` : '?limit=50';
+    const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}${q}`);
+    const msgs = data.messages || [];
+    if (!msgs.length) return;
+    if (state.msgLastId) renderMsgFeed(msgs, { append: true });
+    else renderMsgFeed(msgs);
+    state.msgLastId = msgs[msgs.length - 1].id;
+    await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/read`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId: state.msgLastId }),
+    }).catch(() => {});
+    await refreshMsgThreads().catch(() => {});
+  }
+
+  async function loadMessagesPanel() {
+    await refreshMsgThreads();
+    const hash = (location.hash || '').replace(/^#/, '');
+    const m = hash.match(/^messages\/(.+)$/);
+    if (m) {
+      await openMsgThread(decodeURIComponent(m[1]), { skipHash: true });
+    } else if (state.msgThreads[0]) {
+      // Desktop: show colony by default; mobile stays on list until pick
+      if (window.matchMedia('(min-width: 821px)').matches) {
+        await openMsgThread(state.msgThreads[0].id, { skipHash: true });
+      } else {
+        el('msgLayout')?.classList.remove('is-thread-open');
+        if (el('msgComposeForm')) el('msgComposeForm').hidden = true;
+      }
+    }
+    refreshPushUi().catch(() => {});
+  }
+
+  async function sendMsgCompose(event) {
+    event.preventDefault();
+    if (state.msgSending) return;
+    const status = el('msgComposeStatus');
+    const body = (el('msgBodyInput')?.value || '').trim();
+    if (!state.msgActiveThreadId) return;
+    if (isViewOnly()) {
+      if (status) status.textContent = 'View-only access cannot post.';
+      return;
+    }
+    if (!body && !(state.msgAttachFiles || []).length) {
+      if (status) status.textContent = state.msgIsAiThread ? 'Ask a question.' : 'Write a message or attach a file.';
+      return;
+    }
+    state.msgSending = true;
+    if (el('msgSendBtn')) el('msgSendBtn').disabled = true;
+    try {
+      if (status) status.textContent = state.msgIsAiThread ? 'Thinking…' : 'Sending…';
+      const fd = new FormData();
+      fd.append('body', body);
+      if (!state.msgIsAiThread) {
+        for (const f of state.msgAttachFiles) fd.append('files', f);
+      }
+      const token = state.session?.token;
+      const res = await fetch(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/messages`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: token ? { 'X-RWA-Token': token } : {},
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Send failed');
+      if (el('msgBodyInput')) el('msgBodyInput').value = '';
+      state.msgAttachFiles = [];
+      if (el('msgAttachInput')) el('msgAttachInput').value = '';
+      setMsgAttachHint(MSG_ATTACH_HINT_DEFAULT);
+      if (el('msgEmojiPicker')) el('msgEmojiPicker').hidden = true;
+      // Full refresh avoids poll race that duplicated AI replies
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      if (status) status.textContent = '';
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Send failed';
+    } finally {
+      state.msgSending = false;
+      if (el('msgSendBtn')) el('msgSendBtn').disabled = false;
+    }
+  }
+
   function switchPanel(name) {
     if (name === 'admin' && !canOpenEcDesk()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
+    if (name !== 'messages') stopMsgPolling();
     document.querySelectorAll('.tab').forEach((t) => {
       const isTab = t.dataset.panel === name;
       t.classList.toggle('is-active', isTab);
@@ -2140,6 +3526,10 @@
     if (name === 'concerns') loadMailbox().catch((e) => {
       if (el('mailboxList')) el('mailboxList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
+    if (name === 'messages') loadMessagesPanel().catch((e) => {
+      if (el('msgThreadList')) el('msgThreadList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    });
+    if (name === 'profile') refreshPushUi().catch(() => {});
     if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`; });
     if (name === 'info') loadInfoCentre().catch((e) => {
       if (el('infoDocList')) el('infoDocList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
@@ -2162,6 +3552,22 @@
       }
       if (hasEntitlement('manage_concerns')) {
         loadEcGrievances().catch((e) => { if (el('ecGrievanceStatus')) el('ecGrievanceStatus').textContent = e.message || 'Concerns failed'; });
+      }
+      if (hasEntitlement('manage_dues')) {
+        loadEcPaymentRecords().catch((e) => { if (el('ecPaymentStatus')) el('ecPaymentStatus').textContent = e.message || 'Payments failed'; });
+      }
+      if (hasEntitlement('treasury')) {
+        loadEcTreasuryQueue().catch((e) => {
+          if (el('ecTreasuryStatus')) el('ecTreasuryStatus').textContent = e.message || 'Treasury queue failed';
+        });
+      }
+      if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues')) {
+        populatePaymentHouseList().catch(() => {});
+      }
+      if (hasEntitlement('issue_no_dues')) {
+        loadEcNoDuesRequests().catch((e) => {
+          if (el('ecNoDuesListStatus')) el('ecNoDuesListStatus').textContent = e.message || 'No dues requests failed';
+        });
       }
       if (hasEntitlement('manage_roster')) {
         loadRoster().catch((e) => { if (el('rosterStatus')) el('rosterStatus').textContent = e.message || 'Roster failed'; });
@@ -2423,6 +3829,263 @@
 
   el('otpContactBackBtn')?.addEventListener('click', () => resetLoginForms());
   el('restartLoginBtn')?.addEventListener('click', () => resetLoginForms());
+
+  el('msgThreadList')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-thread-id]');
+    if (!btn) return;
+    openMsgThread(btn.getAttribute('data-thread-id')).catch((e) => {
+      if (el('msgFeed')) el('msgFeed').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    });
+  });
+  el('msgBackBtn')?.addEventListener('click', () => {
+    el('msgLayout')?.classList.remove('is-thread-open');
+    state.msgActiveThreadId = null;
+    stopMsgPolling();
+    history.replaceState(null, '', '#messages');
+  });
+  el('msgRefreshThreadsBtn')?.addEventListener('click', () => refreshMsgThreads().catch(console.error));
+  el('msgComposeForm')?.addEventListener('submit', sendMsgCompose);
+  el('msgAttachInput')?.addEventListener('change', () => {
+    const input = el('msgAttachInput');
+    syncMsgAttachFiles(input?.files);
+    // Clear native selection if nothing usable remains so re-picking same file works
+    if (!state.msgAttachFiles.length && input) input.value = '';
+  });
+  el('msgEmojiBtn')?.addEventListener('click', () => {
+    const picker = el('msgEmojiPicker');
+    if (!picker) return;
+    if (picker.hidden) {
+      picker.innerHTML = MSG_EMOJI.map((e) => `<button type="button" data-emoji="${e}">${e}</button>`).join('');
+      picker.hidden = false;
+    } else {
+      picker.hidden = true;
+    }
+  });
+  el('msgEmojiPicker')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-emoji]');
+    if (!btn || !el('msgBodyInput')) return;
+    el('msgBodyInput').value += btn.getAttribute('data-emoji') || '';
+    el('msgBodyInput').focus();
+  });
+  el('msgFeed')?.addEventListener('click', async (event) => {
+    const likeBtn = event.target.closest('[data-msg-like]');
+    if (likeBtn) {
+      if (isViewOnly()) return;
+      const id = likeBtn.getAttribute('data-msg-like');
+      likeBtn.disabled = true;
+      try {
+        const data = await api(`/api/rwa/messages/${encodeURIComponent(id)}/like`, {
+          method: 'POST',
+          body: '{}',
+        });
+        likeBtn.classList.toggle('is-active', Boolean(data.likedByMe));
+        likeBtn.setAttribute('aria-pressed', data.likedByMe ? 'true' : 'false');
+        likeBtn.title = data.likedByMe ? 'Unlike' : 'Like';
+        const countEl = likeBtn.querySelector('.msg-like-count');
+        if (countEl) countEl.textContent = String(data.likeCount || 0);
+        const svg = likeBtn.querySelector('svg');
+        if (svg) svg.setAttribute('fill', data.likedByMe ? 'currentColor' : 'none');
+      } catch (e) {
+        if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Like failed';
+      } finally {
+        likeBtn.disabled = false;
+      }
+      return;
+    }
+
+    const editBtn = event.target.closest('[data-msg-edit]');
+    if (editBtn) {
+      if (isViewOnly()) return;
+      const id = editBtn.getAttribute('data-msg-edit');
+      const row = editBtn.closest('.msg-row');
+      const bubble = row?.querySelector('.msg-bubble');
+      const bodyEl = bubble?.querySelector('.msg-body');
+      if (!bubble || !bodyEl || bubble.querySelector('.msg-edit-form')) return;
+      const current = bodyEl.textContent || '';
+      bodyEl.hidden = true;
+      const form = document.createElement('form');
+      form.className = 'msg-edit-form';
+      form.innerHTML = `
+        <textarea rows="3" maxlength="4000" aria-label="Edit message">${escapeHtml(current)}</textarea>
+        <div class="btn-row">
+          <button type="submit" class="btn primary compact">Save</button>
+          <button type="button" class="btn ghost compact msg-edit-cancel">Cancel</button>
+        </div>`;
+      bodyEl.insertAdjacentElement('afterend', form);
+      const ta = form.querySelector('textarea');
+      ta?.focus();
+      form.querySelector('.msg-edit-cancel')?.addEventListener('click', () => {
+        form.remove();
+        bodyEl.hidden = false;
+      });
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const next = (ta?.value || '').trim();
+        try {
+          await api(`/api/rwa/messages/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ body: next }),
+          });
+          await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+        } catch (e) {
+          if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Edit failed';
+        }
+      });
+      return;
+    }
+
+    const delOwn = event.target.closest('[data-msg-delete]');
+    if (delOwn) {
+      if (isViewOnly()) return;
+      const id = delOwn.getAttribute('data-msg-delete');
+      if (!window.confirm('Delete your message?')) return;
+      try {
+        await api(`/api/rwa/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      } catch (e) {
+        if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Delete failed';
+      }
+      return;
+    }
+
+    const btn = event.target.closest('.msg-mod');
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    const action = btn.getAttribute('data-action');
+    try {
+      await api(`/api/rwa/messages/${encodeURIComponent(id)}/moderate`, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+    } catch (e) {
+      if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Moderation failed';
+    }
+  });
+
+  el('msgChannelTools')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-cleanup]');
+    if (!btn || !state.msgActiveThreadId) return;
+    event.preventDefault();
+    const action = btn.getAttribute('data-cleanup');
+    const days = btn.getAttribute('data-days');
+    const labels = {
+      clear_all: 'Clear the entire channel? This removes all messages for everyone.',
+      clear_hidden: 'Permanently remove all hidden messages?',
+      older_than: `Delete messages older than ${days} days?`,
+    };
+    if (!window.confirm(labels[action] || 'Run cleanup?')) return;
+    try {
+      const payload = { action };
+      if (action === 'older_than') payload.days = Number(days || 30);
+      const data = await api(
+        `/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/cleanup`,
+        { method: 'POST', body: JSON.stringify(payload) },
+      );
+      const menu = el('msgChannelTools')?.querySelector('.msg-cleanup-menu');
+      if (menu) menu.open = false;
+      if (el('msgComposeStatus')) {
+        el('msgComposeStatus').textContent = `Cleanup done — ${data.deleted || 0} message(s) removed.`;
+      }
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      await refreshMsgThreads().catch(() => {});
+    } catch (e) {
+      if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Cleanup failed';
+    }
+  });
+  let peerTimer = null;
+  el('msgPeerSearch')?.addEventListener('input', () => {
+    clearTimeout(peerTimer);
+    peerTimer = setTimeout(async () => {
+      const q = (el('msgPeerSearch')?.value || '').trim();
+      const box = el('msgPeerResults');
+      if (!box) return;
+      if (q.length < 1) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      try {
+        const data = await api(`/api/rwa/messages/peers?q=${encodeURIComponent(q)}`);
+        const peers = data.peers || [];
+        if (!peers.length) {
+          box.innerHTML = '<p class="muted" style="padding:0.5rem">No plots found</p>';
+          box.hidden = false;
+          return;
+        }
+        box.innerHTML = peers.map((p) => (
+          `<button type="button" data-house-id="${escapeHtml(p.houseId)}">${escapeHtml(p.label)}</button>`
+        )).join('');
+        box.hidden = false;
+      } catch (_e) {
+        box.hidden = true;
+      }
+    }, 200);
+  });
+  el('msgPeerResults')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-house-id]');
+    if (!btn) return;
+    try {
+      const data = await api('/api/rwa/messages/dm', {
+        method: 'POST',
+        body: JSON.stringify({ houseId: btn.getAttribute('data-house-id') }),
+      });
+      if (el('msgPeerSearch')) el('msgPeerSearch').value = '';
+      if (el('msgPeerResults')) {
+        el('msgPeerResults').hidden = true;
+        el('msgPeerResults').innerHTML = '';
+      }
+      await refreshMsgThreads();
+      await openMsgThread(data.thread.id);
+    } catch (e) {
+      if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Could not open chat';
+    }
+  });
+  el('pushEnableBtn')?.addEventListener('click', () => enablePush());
+  el('pushDisableBtn')?.addEventListener('click', () => disablePush());
+  el('pushTestBtn')?.addEventListener('click', async () => {
+    try {
+      const data = await api('/api/rwa/push/test', { method: 'POST', body: '{}' });
+      if (el('pushStatusText')) {
+        el('pushStatusText').textContent = data.result?.sent
+          ? `Test sent to ${data.result.sent} device(s).`
+          : (data.result?.status === 'skipped'
+            ? 'No subscription on this account yet — enable push first.'
+            : `Test result: ${data.result?.status || 'unknown'}`);
+      }
+    } catch (e) {
+      if (el('pushStatusText')) el('pushStatusText').textContent = e.message || 'Test failed';
+    }
+  });
+  el('pushPrefsSaveBtn')?.addEventListener('click', () => savePushPrefs());
+  el('duesRemindPendingBtn')?.addEventListener('click', async () => {
+    if (!confirm('Send a push dues reminder to all plots with outstanding balance?')) return;
+    try {
+      const data = await api('/api/rwa/dues/remind', {
+        method: 'POST',
+        body: JSON.stringify({ allPending: true, note: 'Please clear pending colony dues.' }),
+      });
+      if (el('ledgerEditStatus')) {
+        el('ledgerEditStatus').textContent = `Reminder queued for ${data.count || 0} plot(s).`;
+      }
+    } catch (e) {
+      if (el('ledgerEditStatus')) el('ledgerEditStatus').textContent = e.message || 'Remind failed';
+    }
+  });
+
+  function applyRouteHash() {
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (!hash || !state.session) return;
+    if (hash === 'messages' || hash.startsWith('messages/')) {
+      switchPanel('messages');
+      return;
+    }
+    if (hash === 'dues' || hash === 'concerns' || hash === 'profile' || hash === 'home'
+      || hash === 'directory' || hash === 'info' || hash === 'works' || hash === 'admin') {
+      switchPanel(hash);
+    }
+  }
+  window.addEventListener('hashchange', () => applyRouteHash());
 
   el('logoutBtn')?.addEventListener('click', async () => {
     try { await api('/api/rwa/logout', { method: 'POST', body: '{}' }); } catch (_e) { /* ignore */ }
@@ -3501,6 +5164,7 @@
         const def = (meta.entitlements || []).find((e) => e.id === id);
         return def || { id, label: id };
       });
+      const explicitIds = new Set(meta.explicit || ['issue_no_dues']);
       const members = data.members || [];
       if (!members.length) {
         box.innerHTML = '<p class="muted">No EC members yet. Add an EC Member or designate an Office Bearer above.</p>';
@@ -3516,8 +5180,9 @@
         const canGrant = m.isEcMember && !m.isEcAdmin;
         const canElevate = m.isOfficeBearer && !m.isEcAdmin;
         const checks = entitlementCatalog.map((e) => {
-          const disabled = m.isEcAdmin ? ' disabled' : '';
-          const checked = m.isEcAdmin || grants.has(e.id) ? ' checked' : '';
+          const isExplicit = explicitIds.has(e.id);
+          const disabled = m.isEcAdmin && !isExplicit ? ' disabled' : '';
+          const checked = (m.isEcAdmin && !isExplicit) || grants.has(e.id) ? ' checked' : '';
           return `<label class="check"><input type="checkbox" data-ent="${escapeHtml(e.id)}"${checked}${disabled}> <span>${escapeHtml(e.label)}</span></label>`;
         }).join('');
         return `<div class="roles-member-card" data-house="${escapeHtml(m.houseId)}">
@@ -3528,13 +5193,13 @@
               <span class="muted">${escapeHtml(m.officialTitle || '')}${m.officialTitle ? ' · ' : ''}${escapeHtml(roleBits.join(' · '))}</span>
             </div>
           </div>
-          ${canGrant || m.isEcAdmin ? `<div class="report-field-grid">${checks}</div>` : '<p class="muted">No entitlements yet — save grants below after selecting.</p><div class="report-field-grid">' + checks + '</div>'}
+          <div class="report-field-grid">${checks}</div>
           <div class="btn-row">
             ${m.isEcAdmin
               ? `<button type="button" class="btn ghost compact roles-demote" data-house="${escapeHtml(m.houseId)}">Demote from EC Admin</button>`
               : `${canElevate ? `<button type="button" class="btn secondary compact roles-elevate" data-house="${escapeHtml(m.houseId)}">Elevate to EC Admin</button>` : ''}
-                 ${!m.isOfficeBearer ? `<button type="button" class="btn ghost compact roles-make-ob" data-house="${escapeHtml(m.houseId)}">Make Office Bearer</button>` : ''}
-                 <button type="button" class="btn ghost compact roles-save-grants" data-house="${escapeHtml(m.houseId)}">Save entitlements</button>`}
+                 ${!m.isOfficeBearer ? `<button type="button" class="btn ghost compact roles-make-ob" data-house="${escapeHtml(m.houseId)}">Make Office Bearer</button>` : ''}`}
+            <button type="button" class="btn ghost compact roles-save-grants" data-house="${escapeHtml(m.houseId)}">Save entitlements</button>
             <button type="button" class="btn ghost compact roles-remove-member" data-house="${escapeHtml(m.houseId)}">Remove from EC</button>
           </div>
         </div>`;
@@ -3675,8 +5340,6 @@
     }
   });
 
-  let rosterCache = [];
-
   function renderRosterStats(stats) {
     const line = el('rosterStats');
     if (!line || !stats) return;
@@ -3726,7 +5389,7 @@
         <td data-label="Phone"><input name="phone" type="tel" inputmode="tel" placeholder="mobile" value="${escapeHtml(r.phone || '')}" aria-label="Phone ${escapeHtml(r.houseId)}"></td>
         <td data-label="Email"><input name="email" type="email" placeholder="email" value="${escapeHtml(r.email || '')}" aria-label="Email ${escapeHtml(r.houseId)}"></td>
         <td data-label="EC title"><input name="officialTitle" value="${escapeHtml(r.officialTitle || '')}" placeholder="EC title" aria-label="Official title ${escapeHtml(r.houseId)}"></td>
-        <td data-label="Notes"><input name="notes" value="${escapeHtml(r.notes || '')}" placeholder="notes" aria-label="Notes ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Notes"><input name="notes" value="${escapeHtml(r.notes || '')}" placeholder="e.g. EC: Father Full Name" aria-label="Notes ${escapeHtml(r.houseId)}"></td>
         <td data-label="Role">
           <select name="role" aria-label="Role ${escapeHtml(r.houseId)}"${roleDisabled} title="${escapeHtml(roleLabel)}">
             <option value="resident"${r.role !== 'admin' ? ' selected' : ''}>${escapeHtml(residentOptionLabel)}</option>
@@ -4124,7 +5787,7 @@
       const load = live.loadRatio ?? '—';
       const adminOk = live.adminServiceActive;
       const ngxOk = live.nginxActive;
-      const svc = (ok) => (ok === true ? '✓ active' : (ok === false ? '✗ down' : '—'));
+      const svc = (ok) => (ok === true ? 'OK · active' : (ok === false ? 'Down' : '—'));
       panel.innerHTML = `
         <div class="ops-status-grid">
           <div><strong>Disk free</strong><span>${escapeHtml(String(disk))}%</span></div>
@@ -4419,14 +6082,18 @@
       if (open) scrollBelowAppHeader(card.querySelector('.mobile-fold-body') || card);
       return;
     }
-    const sectionToggle = event.target.closest('.mobile-section-toggle');
-    if (sectionToggle && isMobileLayout()) {
-      const section = sectionToggle.closest('.mobile-section');
-      if (!section) return;
-      const open = !section.classList.contains('is-section-collapsed');
-      section.classList.toggle('is-section-collapsed', open);
-      sectionToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-      if (!open) scrollBelowAppHeader(section.querySelector('.mobile-section-body') || section);
+    const sectionToggle = event.target.closest('.mobile-section-toggle, .desk-section-toggle');
+    if (sectionToggle) {
+      event.preventDefault();
+      toggleDeskSection(sectionToggle.closest('.mobile-section'));
+      return;
+    }
+    const sectionHead = event.target.closest(
+      '.mobile-section > .roster-toolbar > div:first-child, .mobile-section > .panel-head, .mobile-section .mailbox-toolbar > .panel-head'
+    );
+    if (sectionHead) {
+      if (event.target.closest('input, select, textarea, button, a, label, .roster-search, .roster-toolbar-actions')) return;
+      toggleDeskSection(sectionHead.closest('.mobile-section'));
     }
   });
 

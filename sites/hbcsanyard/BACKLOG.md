@@ -47,11 +47,30 @@ Prefer A4, RWA letterhead styling consistent with `documents/` print pads.
 ## Evidence & money
 
 - [ ] **Photo evidence on concerns** — one photo + note; resolve with before/after
-- [ ] **Dues receipt vault** — resident uploads UPI screenshot; EC verifies; plot receipt history
+- [x] **Dues receipt vault** — resident/EC upload payment proofs; EC verify updates ledger; payment history on Dues panel
+- [x] **Reimbursement claims** — resident/EC submit expense claims with proof; EC approve (no ledger change) then mark reimbursed when paid out
+- [x] **No Dues Certificate** — resident requests when clear; **No Dues Issuer** issues; resident downloads stored PDF
+- [x] **Portal PDF attestation (HMAC + QR)** — free seal on No Dues + cash notes; verify at `/attest.html` (not IT Act eSign)
 - [ ] **Seasonal digests** — monthly email/PDF: notices, concerns, works, own dues
+
+## Digital signatures (future — cost-dependent)
+
+Colony RWA needs authenticity first; legal eSign only if banks/regulators demand it.
+
+| Option | What it is | Cost (ballpark) | When it makes sense |
+|--------|------------|-----------------|---------------------|
+| **1. Portal attestation + QR** (shipped) | HMAC seal of PDF hash + public verify page | **₹0** (uses site secret) | Default for certificates / cash notes |
+| **2. PAdES Document Signer** | Org `.pfx` cert; Adobe shows signed PDF (pyHanko) | **~₹7.5k–₹30k+/yr** + ops | Banks want Adobe “signed” badge; RWA can hold org cert |
+| **3. Aadhaar eSign (ASP)** | IT Act–binding eSign via licensed provider | Higher (per-sign + integration) | Legal filings / when statute requires |
+| **4. Visual drawn/typed stamp** | Capture signature image on approve, stamp PDF | ₹0 software; weak trust | UX polish only — pair with option 1, not alone |
+
+Revisit **2** or **3** only if cost is justified by external requirements; keep **1** as the free baseline.
 
 ## Platform / UX
 
+- [x] **Web Push notifications** — VAPID subscribe + prefs; notices, concerns, messages, dues remind, Treasury, No Dues
+- [x] **Message center** — colony channel + plot-to-plot DMs; text, images/PDF, emoji; EC moderate/pin; likes; profile photos
+- [x] **Private RAG AI Assistant** — per-member Messages thread; answers from notices/Info Centre/FAQ; optional LLM via `data/ai.env`
 - [ ] **Offline-first PWA polish** — cached notices + dues snapshot for weak network
 - [ ] **Proxy / mandate letter** — owner grants timed “act for dues/concerns” (beyond view-only)
 - [ ] **AGM mode** — attendance QR, agenda, live votes, minutes → Info Centre
@@ -59,7 +78,7 @@ Prefer A4, RWA letterhead styling consistent with `documents/` print pads.
 ## Ops / reliability
 
 - [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (14-day retention). See `deploy/OPS-BACKUP.md`
-- [ ] **Google Drive upload** — push encrypted or dated backup snapshots to a Drive folder (service account or OAuth; retain N days/weeks)
+- [ ] **Google Drive upload** — Phase 2 scripts ready (`deploy/ops/sync-to-drive.*`); enable when hbcsanyard Gmail + service account are configured (see OPS-BACKUP.md)
 - [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging *(on-box restore steps in OPS-BACKUP.md)*
 - [x] **Log / event stream rollover** — journald 200M/14d + nginx logrotate 14d + backup log rotate
 - [x] **Observability event pruning** — purge `access_events` older than 90 days with each backup run
@@ -114,3 +133,5 @@ Take the HBC Sanyard resident portal beyond one colony — configurable product 
 - Info Centre, Works & Events
 - EC desk, observability (super admin)
 - Print letterhead / EC committee pads (`documents/`)
+- **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
+- Portal attestation (HMAC + QR) for No Dues / cash notes

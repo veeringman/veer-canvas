@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 15
 SUPERADMIN_HOUSE_ID = "__SUPERADMIN__"
 
 # Residential plots A (rows 1–60) then commercial plots B (61–62) from HIMUDA ledger 15-06-2026.
@@ -128,6 +128,34 @@ def normalize_house_id(plot: str, section: str = "A") -> str:
             return raw
         return f"B-{raw}"
     return raw
+
+
+def plot_sort_key(plot: str | None) -> tuple:
+    """Natural plot order: 1, 2, 10, 12B, 12B-1 (not lexicographic 1, 10, 11, 2)."""
+    s = re.sub(r"\s+", "", str(plot or "").strip().upper())
+    if not s:
+        return ((1, ""),)
+    parts = re.findall(r"\d+|[^\d]+", s)
+    key: list[tuple] = []
+    for part in parts:
+        if part.isdigit():
+            key.append((0, int(part)))
+        else:
+            key.append((1, part))
+    return tuple(key)
+
+
+def section_plot_sort_key(
+    section: str | None,
+    plot: str | None,
+    house_id: str | None = None,
+) -> tuple:
+    """Sort by section, then natural plot number, then house id."""
+    return (
+        str(section or "").strip().upper(),
+        plot_sort_key(plot or house_id),
+        str(house_id or plot or "").strip().upper(),
+    )
 
 
 def migrate_roman_plot_ids(conn: sqlite3.Connection) -> int:
@@ -569,6 +597,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_entitlements_schema(conn)
     ensure_report_templates_table(conn)
     ensure_bilingual_content_columns(conn)
+    ensure_payment_records_tables(conn)
+    ensure_no_dues_requests_table(conn)
+    ensure_document_attestations_table(conn)
+    ensure_treasury_columns(conn)
+    ensure_messages_and_push_tables(conn)
+    ensure_msg_likes_and_ai(conn)
     migrate_roman_plot_ids(conn)
     ensure_superadmin_account(conn)
 
@@ -1082,6 +1116,450 @@ def ensure_grievances_table(conn: sqlite3.Connection) -> None:
                     g["responded_at"] or g["updated_at"] or g["created_at"],
                 ),
             )
+    conn.commit()
+
+
+def ensure_payment_records_tables(conn: sqlite3.Connection) -> None:
+    """Per-plot payment + reimbursement claims with receipt files."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS payment_records (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          kind TEXT NOT NULL DEFAULT 'payment'
+            CHECK(kind IN ('payment','reimbursement')),
+          fee_year INTEGER NOT NULL,
+          category TEXT NOT NULL DEFAULT 'annual_dues',
+          amount INTEGER NOT NULL,
+          paid_on TEXT NOT NULL,
+          method TEXT NOT NULL DEFAULT 'upi'
+            CHECK(method IN ('upi','bank','cash','other')),
+          note TEXT,
+          status TEXT NOT NULL DEFAULT 'submitted'
+            CHECK(status IN ('submitted','verified','rejected','reimbursed')),
+          uploaded_by_house_id TEXT,
+          uploaded_by_member_id TEXT,
+          uploaded_by_role TEXT NOT NULL DEFAULT 'resident'
+            CHECK(uploaded_by_role IN ('resident','ec')),
+          reviewed_by_house_id TEXT,
+          reviewed_at TEXT,
+          review_note TEXT,
+          ledger_applied INTEGER NOT NULL DEFAULT 0,
+          reimbursed_at TEXT,
+          reimbursed_by_house_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_payment_records_house
+          ON payment_records(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_payment_records_status
+          ON payment_records(status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS payment_receipt_files (
+          id TEXT PRIMARY KEY,
+          record_id TEXT NOT NULL REFERENCES payment_records(id) ON DELETE CASCADE,
+          filename TEXT NOT NULL,
+          original_name TEXT,
+          mime TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          width INTEGER,
+          height INTEGER,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_payment_receipt_files_record
+          ON payment_receipt_files(record_id);
+        """
+    )
+
+    # Migrate v11 → v12: add kind / reimbursed columns; rebuild if old category CHECK blocks claims.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(payment_records)").fetchall()}
+    create_sql = ""
+    row_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='payment_records'"
+    ).fetchone()
+    if row_sql and row_sql[0]:
+        create_sql = row_sql[0]
+    needs_rebuild = bool(cols) and (
+        "kind" not in cols
+        or "reimbursed" not in create_sql
+        or "reimbursement" not in create_sql
+    )
+    if needs_rebuild:
+        # FK OFF so DROP does not CASCADE-wipe payment_receipt_files (ON DELETE CASCADE).
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(
+            """
+            CREATE TABLE payment_records_v12 (
+              id TEXT PRIMARY KEY,
+              house_id TEXT NOT NULL REFERENCES residents(house_id),
+              kind TEXT NOT NULL DEFAULT 'payment'
+                CHECK(kind IN ('payment','reimbursement')),
+              fee_year INTEGER NOT NULL,
+              category TEXT NOT NULL DEFAULT 'annual_dues',
+              amount INTEGER NOT NULL,
+              paid_on TEXT NOT NULL,
+              method TEXT NOT NULL DEFAULT 'upi'
+                CHECK(method IN ('upi','bank','cash','other')),
+              note TEXT,
+              status TEXT NOT NULL DEFAULT 'submitted'
+                CHECK(status IN ('submitted','verified','rejected','reimbursed')),
+              uploaded_by_house_id TEXT,
+              uploaded_by_member_id TEXT,
+              uploaded_by_role TEXT NOT NULL DEFAULT 'resident'
+                CHECK(uploaded_by_role IN ('resident','ec')),
+              reviewed_by_house_id TEXT,
+              reviewed_at TEXT,
+              review_note TEXT,
+              ledger_applied INTEGER NOT NULL DEFAULT 0,
+              reimbursed_at TEXT,
+              reimbursed_by_house_id TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        kind_expr = "kind" if "kind" in cols else "'payment'"
+        reimb_at = "reimbursed_at" if "reimbursed_at" in cols else "NULL"
+        reimb_by = "reimbursed_by_house_id" if "reimbursed_by_house_id" in cols else "NULL"
+        conn.execute(
+            f"""
+            INSERT INTO payment_records_v12(
+              id, house_id, kind, fee_year, category, amount, paid_on, method, note, status,
+              uploaded_by_house_id, uploaded_by_member_id, uploaded_by_role,
+              reviewed_by_house_id, reviewed_at, review_note, ledger_applied,
+              reimbursed_at, reimbursed_by_house_id, created_at, updated_at
+            )
+            SELECT
+              id, house_id, COALESCE({kind_expr}, 'payment'), fee_year, category, amount, paid_on, method, note, status,
+              uploaded_by_house_id, uploaded_by_member_id, uploaded_by_role,
+              reviewed_by_house_id, reviewed_at, review_note, ledger_applied,
+              {reimb_at}, {reimb_by}, created_at, updated_at
+            FROM payment_records
+            """
+        )
+        conn.execute("DROP TABLE payment_records")
+        conn.execute("ALTER TABLE payment_records_v12 RENAME TO payment_records")
+        conn.execute("PRAGMA foreign_keys = ON")
+    else:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(payment_records)").fetchall()}
+        if cols and "reimbursed_at" not in cols:
+            conn.execute("ALTER TABLE payment_records ADD COLUMN reimbursed_at TEXT")
+        if cols and "reimbursed_by_house_id" not in cols:
+            conn.execute("ALTER TABLE payment_records ADD COLUMN reimbursed_by_house_id TEXT")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_payment_records_house ON payment_records(house_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_payment_records_status ON payment_records(status, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_payment_records_kind ON payment_records(kind, status, created_at DESC)"
+    )
+    ensure_treasury_columns_on_table(conn, "payment_records")
+    conn.commit()
+
+
+def ensure_no_dues_requests_table(conn: sqlite3.Connection) -> None:
+    """Resident requests for No Dues Certificates; issuer generates a downloadable PDF."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS no_dues_requests (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          status TEXT NOT NULL DEFAULT 'requested'
+            CHECK(status IN ('requested','issued','rejected')),
+          request_note TEXT,
+          requested_by_house_id TEXT,
+          requested_by_member_id TEXT,
+          reviewed_by_house_id TEXT,
+          reviewed_at TEXT,
+          review_note TEXT,
+          issued_at TEXT,
+          filename TEXT,
+          original_name TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_no_dues_requests_house
+          ON no_dues_requests(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_no_dues_requests_status
+          ON no_dues_requests(status, created_at DESC);
+        """
+    )
+    ensure_treasury_columns_on_table(conn, "no_dues_requests")
+    conn.commit()
+
+
+TREASURY_STATUS_DEFAULT = "pending"
+TREASURY_COLUMN_DEFS: list[tuple[str, str]] = [
+    ("treasury_status", "TEXT NOT NULL DEFAULT 'pending'"),
+    ("treasury_validated_by", "TEXT"),
+    ("treasury_validated_at", "TEXT"),
+    ("treasury_confirmed_by", "TEXT"),
+    ("treasury_confirmed_at", "TEXT"),
+    ("treasury_note", "TEXT"),
+]
+
+
+def ensure_treasury_columns_on_table(conn: sqlite3.Connection, table: str) -> None:
+    """Add treasury_* columns to an existing table (migrate-safe)."""
+    allowed = {"payment_records", "payment_rows", "no_dues_requests"}
+    if table not in allowed:
+        raise ValueError(f"Unsupported treasury table: {table}")
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if not cols:
+        return
+    for name, decl in TREASURY_COLUMN_DEFS:
+        if name not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
+def ensure_treasury_columns(conn: sqlite3.Connection) -> None:
+    """Ensure treasury validation columns on payments, ledger rows, and No Dues."""
+    # payment_rows may exist from base schema without treasury columns.
+    ensure_treasury_columns_on_table(conn, "payment_rows")
+    ensure_treasury_columns_on_table(conn, "payment_records")
+    ensure_treasury_columns_on_table(conn, "no_dues_requests")
+    conn.commit()
+
+
+def ensure_document_attestations_table(conn: sqlite3.Connection) -> None:
+    """Portal HMAC attestations for EC-issued PDFs (free verify-via-QR)."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS document_attestations (
+          id TEXT PRIMARY KEY,
+          artifact_type TEXT NOT NULL
+            CHECK(artifact_type IN ('no_dues','cash_note')),
+          artifact_id TEXT NOT NULL,
+          house_id TEXT,
+          issuer_house_id TEXT,
+          issued_at TEXT NOT NULL,
+          content_sha256 TEXT NOT NULL,
+          hmac_hex TEXT NOT NULL,
+          stored_path TEXT,
+          filename TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_document_attestations_artifact
+          ON document_attestations(artifact_type, artifact_id);
+        CREATE INDEX IF NOT EXISTS idx_document_attestations_house
+          ON document_attestations(house_id, created_at DESC);
+        """
+    )
+    conn.commit()
+
+
+COLONY_THREAD_ID = "msg_colony"
+
+
+def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
+    """Message center (colony + DMs) and Web Push subscriptions / prefs / outbox."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS msg_threads (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK(kind IN ('colony', 'dm', 'ai')),
+          house_a TEXT,
+          house_b TEXT,
+          title TEXT,
+          pinned_message_id TEXT,
+          owner_member_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_dm_pair
+          ON msg_threads(house_a, house_b) WHERE kind = 'dm';
+        CREATE INDEX IF NOT EXISTS idx_msg_threads_updated
+          ON msg_threads(updated_at DESC);
+        -- idx_msg_threads_ai_owner is created in ensure_msg_likes_and_ai after
+        -- owner_member_id is ALTERed onto older msg_threads tables.
+
+        CREATE TABLE IF NOT EXISTS msg_messages (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          author_member_id TEXT,
+          house_id TEXT NOT NULL,
+          author_name TEXT,
+          body TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active', 'hidden', 'deleted')),
+          reply_to_id TEXT,
+          is_ai INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(thread_id) REFERENCES msg_threads(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_messages_thread
+          ON msg_messages(thread_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_msg_messages_status
+          ON msg_messages(thread_id, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS msg_attachments (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          original_name TEXT,
+          mime TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          width INTEGER,
+          height INTEGER,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(message_id) REFERENCES msg_messages(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_attachments_message
+          ON msg_attachments(message_id);
+
+        CREATE TABLE IF NOT EXISTS msg_reads (
+          member_id TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          last_read_message_id TEXT,
+          last_read_at TEXT NOT NULL,
+          PRIMARY KEY (member_id, thread_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          id TEXT PRIMARY KEY,
+          endpoint TEXT NOT NULL UNIQUE,
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          member_id TEXT,
+          house_id TEXT NOT NULL,
+          user_agent TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_push_subs_house
+          ON push_subscriptions(house_id);
+        CREATE INDEX IF NOT EXISTS idx_push_subs_member
+          ON push_subscriptions(member_id);
+
+        CREATE TABLE IF NOT EXISTS notification_prefs (
+          member_id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL,
+          messages INTEGER NOT NULL DEFAULT 1,
+          notices INTEGER NOT NULL DEFAULT 1,
+          concerns INTEGER NOT NULL DEFAULT 1,
+          dues INTEGER NOT NULL DEFAULT 1,
+          treasury INTEGER NOT NULL DEFAULT 1,
+          no_dues INTEGER NOT NULL DEFAULT 1,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS push_outbox (
+          id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          pref_key TEXT NOT NULL,
+          audience_json TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          url TEXT,
+          payload_json TEXT,
+          status TEXT NOT NULL DEFAULT 'queued'
+            CHECK(status IN ('queued', 'sending', 'sent', 'failed', 'skipped')),
+          error TEXT,
+          created_at TEXT NOT NULL,
+          sent_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_push_outbox_status
+          ON push_outbox(status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS msg_likes (
+          message_id TEXT NOT NULL,
+          member_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (message_id, member_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_likes_message ON msg_likes(message_id);
+        """
+    )
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO msg_threads(id, kind, house_a, house_b, title, pinned_message_id, created_at, updated_at)
+        VALUES (?, 'colony', NULL, NULL, 'Colony channel', NULL, ?, ?)
+        """,
+        (COLONY_THREAD_ID, now, now),
+    )
+    conn.commit()
+    ensure_msg_likes_and_ai(conn)
+
+
+def ensure_msg_likes_and_ai(conn: sqlite3.Connection) -> None:
+    """Likes + private AI threads (migrate older CHECK constraints)."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS msg_likes (
+          message_id TEXT NOT NULL,
+          member_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (message_id, member_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_likes_message ON msg_likes(message_id);
+        """
+    )
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_threads)").fetchall()}
+    if thread_cols and "owner_member_id" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN owner_member_id TEXT")
+
+    msg_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_messages)").fetchall()}
+    if msg_cols and "is_ai" not in msg_cols:
+        conn.execute("ALTER TABLE msg_messages ADD COLUMN is_ai INTEGER NOT NULL DEFAULT 0")
+    if msg_cols and "edited_at" not in msg_cols:
+        conn.execute("ALTER TABLE msg_messages ADD COLUMN edited_at TEXT")
+
+    # Expand kind CHECK to include 'ai' when an older table is present.
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='msg_threads'"
+    ).fetchone()
+    ddl = (row[0] if row else "") or ""
+    needs_rebuild = bool(ddl) and ("'ai'" not in ddl and '"ai"' not in ddl)
+    if needs_rebuild:
+        # Child tables reference msg_threads; turn FKs off for the swap.
+        # PRAGMA foreign_keys only takes effect outside a transaction.
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS msg_threads_v2 (
+              id TEXT PRIMARY KEY,
+              kind TEXT NOT NULL CHECK(kind IN ('colony', 'dm', 'ai')),
+              house_a TEXT,
+              house_b TEXT,
+              title TEXT,
+              pinned_message_id TEXT,
+              owner_member_id TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO msg_threads_v2(
+              id, kind, house_a, house_b, title, pinned_message_id, owner_member_id, created_at, updated_at
+            )
+            SELECT id, kind, house_a, house_b, title, pinned_message_id,
+                   owner_member_id, created_at, updated_at
+            FROM msg_threads;
+            DROP TABLE msg_threads;
+            ALTER TABLE msg_threads_v2 RENAME TO msg_threads;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_dm_pair
+              ON msg_threads(house_a, house_b) WHERE kind = 'dm';
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_ai_owner
+              ON msg_threads(owner_member_id) WHERE kind = 'ai';
+            CREATE INDEX IF NOT EXISTS idx_msg_threads_updated
+              ON msg_threads(updated_at DESC);
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
+    else:
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_ai_owner
+              ON msg_threads(owner_member_id) WHERE kind = 'ai'
+            """
+        )
     conn.commit()
 
 

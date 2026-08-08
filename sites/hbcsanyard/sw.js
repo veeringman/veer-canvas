@@ -1,14 +1,15 @@
 /* HBC Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v37-ops';
+const CACHE = 'hbc-sanyard-v58-ecsafe';
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/apple-touch-icon.png',
-  '/portal.css?v=20260807ops1',
-  '/portal.js?v=20260807ops1',
+  '/portal.css?v=20260808attach1',
+  '/portal.js?v=20260808ecsafe1',
   '/assets/favicon-192.png',
   '/assets/apple-touch-icon.png',
+  '/assets/rwa-assistant-avatar.svg',
   '/assets/hbcs-sanyard-seal-240.webp',
   '/assets/hbcs-sanyard-seal-240.jpg',
   '/assets/hbcs-sanyard-seal-mark.jpg',
@@ -32,6 +33,45 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (_e) {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || 'HBC Sanyard';
+  const options = {
+    body: data.body || 'New update',
+    icon: '/assets/favicon-192.png',
+    badge: '/assets/favicon-192.png',
+    data: { url: data.url || '/' },
+    tag: data.eventType || 'rwa',
+    renotify: true,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  const url = new URL(target, self.location.origin).href;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          return client.focus().then(() => {
+            if ('navigate' in client) return client.navigate(url);
+            return undefined;
+          });
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+      return undefined;
+    })
+  );
 });
 
 self.addEventListener('fetch', (event) => {

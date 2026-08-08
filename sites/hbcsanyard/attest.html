@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify attestation — HBC Sanyard RWA</title>
+  <link rel="icon" href="assets/favicon-192.png" type="image/png">
+  <style>
+    :root {
+      --navy: #15233f;
+      --ink: #1a1a1a;
+      --muted: #5c564e;
+      --line: #e2d5c4;
+      --paper: #f7f1e8;
+      --ok: #1b6b3a;
+      --bad: #8b1e2d;
+      --warn: #8a5a12;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #fff8ee 0%, transparent 55%),
+        linear-gradient(180deg, #efe6d8 0%, var(--paper) 40%, #f3ebe0 100%);
+    }
+    main {
+      width: min(36rem, calc(100% - 2rem));
+      margin: 2.5rem auto 3rem;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    header img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+    }
+    h1 {
+      font-size: 1.35rem;
+      color: var(--navy);
+      margin: 0.65rem 0 0.25rem;
+    }
+    .muted { color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+    .card {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.15rem 1.2rem 1.25rem;
+      box-shadow: 0 10px 28px rgba(21, 35, 63, 0.06);
+    }
+    .status {
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin: 0 0 0.45rem;
+    }
+    .status.ok { color: var(--ok); }
+    .status.bad { color: var(--bad); }
+    .status.warn { color: var(--warn); }
+    dl {
+      display: grid;
+      grid-template-columns: 8.5rem 1fr;
+      gap: 0.35rem 0.75rem;
+      margin: 1rem 0 0;
+      font-size: 0.92rem;
+    }
+    dt { color: var(--muted); }
+    dd { margin: 0; word-break: break-word; }
+    .disclaimer {
+      margin-top: 1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--line);
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    a { color: var(--navy); }
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font: inherit;
+      background: #fff;
+    }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 0.95rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--navy);
+      color: #f7f3eb;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="assets/hbcs-sanyard-seal-240.webp" alt="HBC Sanyard seal" width="72" height="72"
+           onerror="this.src='assets/hbcs-sanyard-seal-240.jpg'">
+      <h1>Document attestation</h1>
+      <p class="muted">HBC Sanyard RWA — verify a portal-sealed PDF</p>
+    </header>
+    <section class="card" id="resultCard">
+      <p class="muted" id="loadingLine">Checking…</p>
+    </section>
+    <form class="form-row" id="lookupForm" hidden>
+      <input type="text" id="idInput" name="id" placeholder="att_…" autocomplete="off" spellcheck="false">
+      <button type="submit">Verify</button>
+    </form>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const card = document.getElementById('resultCard');
+    const form = document.getElementById('lookupForm');
+    const idInput = document.getElementById('idInput');
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function render(data) {
+      if (!data || !data.found) {
+        card.innerHTML = `
+          <p class="status bad">Not found</p>
+          <p class="muted">${esc(data?.message || 'No attestation found for this ID')}</p>
+          <p class="disclaimer">Ask the issuer for the Attestation ID printed on the PDF, or scan the QR again.</p>`;
+        form.hidden = false;
+        return;
+      }
+      const cls = data.valid ? 'ok' : (data.status === 'tampered' ? 'warn' : 'bad');
+      const label = data.valid ? 'Valid' : (data.status === 'tampered' ? 'File changed' : 'Invalid');
+      const rows = [
+        ['Type', data.artifactTypeLabel || data.artifactType],
+        ['Plot', data.plotNo || data.houseId || '—'],
+        ['Resident', data.residentName || '—'],
+        ['Issued', (data.issuedAt || '').replace('T', ' ').replace('Z', ' UTC') || '—'],
+        ['Issuer', [data.issuerTitle, data.issuerName].filter(Boolean).join(' · ') || data.issuerHouseId || '—'],
+        ['Attestation ID', data.id],
+      ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+      card.innerHTML = `
+        <p class="status ${cls}">${esc(label)}</p>
+        <p class="muted">${esc(data.message || '')}</p>
+        <dl>${rows}</dl>
+        <p class="disclaimer">${esc(data.disclaimer || '')}</p>`;
+      form.hidden = false;
+    }
+
+    async function verify(id) {
+      card.innerHTML = '<p class="muted" id="loadingLine">Checking…</p>';
+      if (!id) {
+        render({ found: false, message: 'Enter an attestation ID from the PDF.' });
+        return;
+      }
+      try {
+        const res = await fetch(`/api/rwa/attestations/${encodeURIComponent(id)}`, {
+          credentials: 'same-origin',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText || 'Verify failed');
+        render(data);
+      } catch (err) {
+        card.innerHTML = `<p class="status bad">Error</p><p class="muted">${esc(err.message || 'Could not verify')}</p>`;
+        form.hidden = false;
+      }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = (idInput.value || '').trim();
+      history.replaceState(null, '', id ? `?id=${encodeURIComponent(id)}` : 'attest.html');
+      verify(id);
+    });
+
+    const initial = (params.get('id') || '').trim();
+    if (initial) {
+      idInput.value = initial;
+      verify(initial);
+    } else {
+      card.innerHTML = '<p class="muted">Paste an attestation ID from a sealed PDF, or open the verify link / QR printed on the document.</p>';
+      form.hidden = false;
+    }
+  </script>
+</body>
+</html>

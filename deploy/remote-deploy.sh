@@ -198,9 +198,9 @@ python3 "$IMPORT_SCRIPT" "${GITHUB_OWNER:-veeringman}" imported_projects \
   --write-public-catalog
 
 echo "Syncing site ${SITE_ID} to ${EC2_USER}@${EC2_HOST}:${WEB_ROOT} ..."
-# Runtime data/config on the server must survive rebuilds:
-# - exclude from upload so local copies never overwrite production
-# - protect (P) so --delete cannot remove them either
+# Runtime data on the server must NEVER be overwritten or deleted by deploy:
+# - protect entire data/ tree (P) so --delete cannot remove production files
+# - exclude data/ from upload so laptop copies never clobber DB / receipts / info docs
 rsync -az --delete \
   -e "$RSYNC_SSH" \
   --filter 'P veercanvas/' \
@@ -209,35 +209,18 @@ rsync -az --delete \
   --filter 'P engagement.json' \
   --filter 'P contact-messages.json' \
   --filter 'P visitor-access.json' \
-  --filter 'P data/rwa.db' \
-  --filter 'P data/rwa.db-*' \
-  --filter 'P data/smtp.env' \
-  --filter 'P data/*.env' \
-  --filter 'P data/imports/' \
-  --filter 'P data/imports/***' \
-  --filter 'P data/payments/' \
-  --filter 'P data/payments/***' \
-  --filter 'P data/profile-photos/' \
-  --filter 'P data/profile-photos/***' \
-  --filter 'P data/info-centre/' \
-  --filter 'P data/info-centre/***' \
-  --exclude 'data/rwa.db' \
-  --exclude 'data/rwa.db-*' \
-  --exclude 'data/smtp.env' \
-  --exclude 'data/*.env' \
-  --exclude 'data/imports/' \
-  --exclude 'data/payments/' \
-  --exclude 'data/profile-photos/' \
-  --exclude 'data/info-centre/' \
+  --filter 'P data/' \
+  --filter 'P data/***' \
+  --exclude 'data/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
   "$SITE_DIR/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/"
 
-# First-deploy bootstrap only: seed DB / example env if missing on server (never overwrite).
+# First-deploy bootstrap only: create empty runtime dirs + seed DB/example if missing (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/info-centre' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \
@@ -248,7 +231,17 @@ if [[ -f "$SITE_DIR/data/smtp.env.example" ]]; then
     "$SITE_DIR/data/smtp.env.example" \
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/smtp.env.example"
 fi
-# Never push a real smtp.env from the laptop; only create from example when absent.
+if [[ -f "$SITE_DIR/data/vapid.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/vapid.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/vapid.env.example"
+fi
+if [[ -f "$SITE_DIR/data/ai.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/ai.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/ai.env.example"
+fi
+# Never push a real smtp.env / vapid.env / ai.env from the laptop; only create from example when absent.
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_ENV'
 set -euo pipefail
 WEB_ROOT="$1"
@@ -259,11 +252,34 @@ if [[ ! -f "$WEB_ROOT/data/smtp.env" && -f "$WEB_ROOT/data/smtp.env.example" ]];
 else
   echo "Preserved existing data/smtp.env (or no example present)."
 fi
+if [[ ! -f "$WEB_ROOT/data/vapid.env" && -f "$WEB_ROOT/data/vapid.env.example" ]]; then
+  cp "$WEB_ROOT/data/vapid.env.example" "$WEB_ROOT/data/vapid.env"
+  chmod 600 "$WEB_ROOT/data/vapid.env" || true
+  echo "Created data/vapid.env from example (keys generated on first portal boot)."
+else
+  echo "Preserved existing data/vapid.env (or no example present)."
+fi
+if [[ ! -f "$WEB_ROOT/data/ai.env" && -f "$WEB_ROOT/data/ai.env.example" ]]; then
+  cp "$WEB_ROOT/data/ai.env.example" "$WEB_ROOT/data/ai.env"
+  chmod 600 "$WEB_ROOT/data/ai.env" || true
+  echo "Created data/ai.env from example (optional RWA_AI_API_KEY)."
+else
+  echo "Preserved existing data/ai.env (or no example present)."
+fi
 if [[ -f "$WEB_ROOT/data/rwa.db" ]]; then
   echo "Preserved data/rwa.db on server."
 else
   echo "Warning: data/rwa.db still missing — app will seed on first start if scripts available."
 fi
+# Sanity: confirm protected upload dirs still exist after sync
+for d in receipts no-dues info-centre profile-photos payments imports attestations messages; do
+  if [[ -d "$WEB_ROOT/data/$d" ]]; then
+    echo "OK data/$d preserved ($(find "$WEB_ROOT/data/$d" -type f 2>/dev/null | wc -l | tr -d ' ') files)."
+  else
+    mkdir -p "$WEB_ROOT/data/$d"
+    echo "Created empty data/$d"
+  fi
+done
 REMOTE_ENV
 
 echo "Syncing VeerCanvas platform ..."

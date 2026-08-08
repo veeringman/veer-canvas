@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RWA Assistant">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a3a52"/>
+      <stop offset="45%" stop-color="#2d6e82"/>
+      <stop offset="100%" stop-color="#3d8f7a"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="12" y1="10" x2="52" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e8c878"/>
+      <stop offset="100%" stop-color="#c4a15a"/>
+    </linearGradient>
+    <linearGradient id="core" x1="22" y1="20" x2="42" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f7fbff"/>
+      <stop offset="100%" stop-color="#d6e8f2"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#bg)"/>
+  <circle cx="32" cy="32" r="26.5" fill="none" stroke="url(#ring)" stroke-width="1.6" opacity="0.9"/>
+  <circle cx="32" cy="32" r="14" fill="url(#core)" opacity="0.95"/>
+  <!-- spark / assistant mark -->
+  <path fill="#1a3a52" d="M32 18.5c.4 3.8 2.2 6.6 5.8 8.5-3.6 1.9-5.4 4.7-5.8 8.5-.4-3.8-2.2-6.6-5.8-8.5 3.6-1.9 5.4-4.7 5.8-8.5z"/>
+  <circle cx="45.5" cy="20.5" r="1.6" fill="#e8c878"/>
+  <circle cx="19.5" cy="42" r="1.25" fill="#e8c878" opacity="0.85"/>
+  <circle cx="46" cy="43.5" r="1" fill="#d6e8f2" opacity="0.9"/>
+  <path fill="none" stroke="#e8c878" stroke-width="1.2" stroke-linecap="round" d="M21 22.5c2.2-3.2 5.4-5 11-5.2"/>
+</svg>

@@ -71,13 +71,24 @@ Typical sync:
 
 ### Preserve filters (not overwritten)
 
-rsync protect includes:
+Deploy protects the **entire** live `data/` tree (and never uploads a local `data/` copy):
 
-- `visitor-access.json`
-- `engagement.json`
-- `contact-messages.json`
-- `assets/site/`
-- `veercanvas/` (runtime data dirs when present)
+- `data/rwa.db` (SQLite)
+- `data/receipts/` (payment / claim proofs)
+- `data/no-dues/` (issued certificates)
+- `data/info-centre/` (Information Centre files)
+- `data/profile-photos/`, `data/payments/`, `data/imports/`, `data/messages/`
+- `data/smtp.env`, `data/vapid.env` (Web Push VAPID keys) and other runtime env files
+
+### Web Push (hbcsanyard)
+
+- Requires HTTPS (already on production).
+- First portal boot generates `data/vapid.env` if missing; deploy preserves an existing file.
+- iOS Safari only delivers Web Push for apps added to the Home Screen (standalone PWA).
+
+Also protected: `visitor-access.json`, `engagement.json`, `contact-messages.json`, `assets/site/`, `veercanvas/`.
+
+First deploy only seeds missing `rwa.db` / example env with `--ignore-existing` — never overwrites.
 
 `site.config.json` is used for deploy resolution and is not treated as a public web asset to clobber carelessly — see script comments.
 
@@ -106,6 +117,9 @@ systemd services typically receive:
 - `PORT` / admin port
 - `VEERCANVAS_PLATFORM` and/or `VEERCANVAS_OPS` when applicable
 - `VEERCANVAS_ADMIN_SECRET` (set on host — not from git)
+- Optional `VEERCANVAS_ATTEST_SECRET` — HMAC key for portal PDF attestation (No Dues / cash notes). If unset, falls back to `VEERCANVAS_ADMIN_SECRET`. Prefer a dedicated long random value in the unit env or `data/smtp.env` (preserved across deploys). Never commit secrets.
+
+Public verify page: `/attest.html?id=att_…` → `GET /api/rwa/attestations/<id>` (no login).
 
 ## Related
 

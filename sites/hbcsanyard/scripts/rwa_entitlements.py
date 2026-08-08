@@ -5,11 +5,14 @@ Roles (nested):
 
 - EC Admin and Office Bearer are always EC Members.
 - EC Members (and office bearers) may receive one-off grantable entitlements.
-- EC Admins get all entitlements implicitly; sensitive_ops is EC-Admin-only.
+- EC Admins get most entitlements implicitly; sensitive_ops / manage_roles are EC-Admin-only.
+- issue_no_dues is explicit (not auto for EC Admins); default seed grants it to President.
+- treasury is explicit; default seed grants it to Treasurer.
 """
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Any
 
@@ -19,7 +22,22 @@ from rwa_household import primary_member_photo_map
 ENTITLEMENT_DEFS: list[dict[str, str]] = [
     {"id": "manage_roster", "label": "Resident roster", "description": "View and edit plot contacts"},
     {"id": "manage_dues", "label": "Dues ledger", "description": "View and curate colony dues"},
+    {
+        "id": "issue_no_dues",
+        "label": "No Dues Issuer",
+        "description": "Review requests and issue No Dues Certificates (explicit grant)",
+    },
+    {
+        "id": "treasury",
+        "label": "Treasury",
+        "description": "Validate and confirm financials — dues, cash, payments, No Dues (explicit grant)",
+    },
     {"id": "manage_notices", "label": "Notices", "description": "Publish and manage notices"},
+    {
+        "id": "moderate_messages",
+        "label": "Messages",
+        "description": "Moderate colony channel posts (hide, delete, pin)",
+    },
     {"id": "manage_concerns", "label": "Concerns mailbox", "description": "Respond to resident concerns"},
     {"id": "manage_info", "label": "Info centre", "description": "Manage documents"},
     {"id": "manage_works", "label": "Works & events", "description": "Manage colony works"},
@@ -30,17 +48,22 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
 ]
 
 EC_ADMIN_ONLY_ENTITLEMENTS = frozenset({"sensitive_ops", "manage_roles"})
+# Stored grants only — never implied by EC Admin role.
+EXPLICIT_GRANT_ENTITLEMENTS = frozenset({"issue_no_dues", "treasury"})
 GRANTABLE_ENTITLEMENTS = frozenset(
     e["id"] for e in ENTITLEMENT_DEFS if e["id"] not in EC_ADMIN_ONLY_ENTITLEMENTS
 )
 ALL_ENTITLEMENTS = frozenset(e["id"] for e in ENTITLEMENT_DEFS)
-EC_ADMIN_ENTITLEMENTS = frozenset(ALL_ENTITLEMENTS)
+# What EC Admins get without a row in resident_entitlements.
+EC_ADMIN_IMPLICIT_ENTITLEMENTS = frozenset(ALL_ENTITLEMENTS - EXPLICIT_GRANT_ENTITLEMENTS)
+EC_ADMIN_ENTITLEMENTS = frozenset(ALL_ENTITLEMENTS)  # capacity / UI catalog; effective set uses implicit + grants
 
 
 def entitlements_meta() -> dict:
     return {
         "entitlements": ENTITLEMENT_DEFS,
         "grantable": sorted(GRANTABLE_ENTITLEMENTS),
+        "explicit": sorted(EXPLICIT_GRANT_ENTITLEMENTS),
         "ecAdminOnly": sorted(EC_ADMIN_ONLY_ENTITLEMENTS),
         "roles": [
             {"id": "ec_member", "label": "EC Member", "description": "Committee member; may receive one-off entitlements"},
@@ -52,6 +75,84 @@ def entitlements_meta() -> dict:
 
 def ensure_ready(conn: sqlite3.Connection) -> None:
     ensure_entitlements_schema(conn)
+    ensure_default_no_dues_issuer(conn)
+    ensure_default_treasury(conn)
+
+
+def _seed_explicit_grant_for_title(
+    conn: sqlite3.Connection,
+    *,
+    entitlement: str,
+    meta_key: str,
+    title_match,
+) -> None:
+    """Once: if no grants exist for entitlement, grant to matching office titles."""
+    ensure_entitlements_schema(conn)
+    flagged = conn.execute(
+        "SELECT value FROM meta WHERE key = ?",
+        (meta_key,),
+    ).fetchone()
+    if flagged:
+        return
+
+    existing = conn.execute(
+        "SELECT COUNT(*) AS n FROM resident_entitlements WHERE entitlement = ?",
+        (entitlement,),
+    ).fetchone()
+    n = int(existing["n"] if hasattr(existing, "keys") else existing[0])
+    now = utc_now()
+    if n == 0:
+        rows = conn.execute(
+            """
+            SELECT house_id, official_title FROM residents
+            WHERE house_id != ?
+              AND status = 'active'
+              AND official_title IS NOT NULL
+              AND TRIM(official_title) != ''
+            """,
+            (SUPERADMIN_HOUSE_ID,),
+        ).fetchall()
+        for r in rows:
+            title = re.sub(r"\s+", " ", (r["official_title"] or "").strip()).lower()
+            if title_match(title):
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
+                    VALUES (?, ?, 'system:default', ?)
+                    """,
+                    (r["house_id"], entitlement, now),
+                )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+        (meta_key, now),
+    )
+    conn.commit()
+
+
+def ensure_default_no_dues_issuer(conn: sqlite3.Connection) -> None:
+    """Once: grant issue_no_dues to President only (not Vice President)."""
+    def _is_president(title: str) -> bool:
+        return title == "president" or bool(re.fullmatch(r"president(\s+rwa)?", title))
+
+    _seed_explicit_grant_for_title(
+        conn,
+        entitlement="issue_no_dues",
+        meta_key="no_dues_issuer_defaulted",
+        title_match=_is_president,
+    )
+
+
+def ensure_default_treasury(conn: sqlite3.Connection) -> None:
+    """Once: grant treasury to Treasurer only (not Vice Treasurer)."""
+    def _is_treasurer(title: str) -> bool:
+        return title == "treasurer" or bool(re.fullmatch(r"treasurer(\s+rwa)?", title))
+
+    _seed_explicit_grant_for_title(
+        conn,
+        entitlement="treasury",
+        meta_key="treasury_defaulted",
+        title_match=_is_treasurer,
+    )
 
 
 def _is_super(actor: dict | None) -> bool:
@@ -114,11 +215,12 @@ def entitlements_for_actor(conn: sqlite3.Connection, actor: dict | None) -> list
         return sorted(EC_ADMIN_ENTITLEMENTS)
     if actor.get("viewOnly") or actor.get("isPrimary") is False:
         return []
+    grants = load_grants(conn, actor.get("houseId") or "")
     if (actor.get("role") or "") == "admin":
-        return sorted(EC_ADMIN_ENTITLEMENTS)
+        return sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants))
     if not is_ec_member(actor):
         return []
-    return load_grants(conn, actor.get("houseId") or "")
+    return grants
 
 
 def enrich_actor(conn: sqlite3.Connection, actor: dict) -> dict:
@@ -169,7 +271,8 @@ def actor_has(actor: dict | None, key: str) -> bool:
     if isinstance(ents, list):
         return key in ents
     if (actor.get("role") or "") == "admin":
-        return True
+        # Without enriched list: implicit only (explicit grants e.g. issue_no_dues / treasury).
+        return key in EC_ADMIN_IMPLICIT_ENTITLEMENTS
     return False
 
 
@@ -206,7 +309,7 @@ def set_grants(
     granted_by: str | None = None,
     commit: bool = True,
 ) -> list[str]:
-    """Grant one-off entitlements to an EC Member (including office bearers). Not for EC Admins."""
+    """Grant entitlements to EC Members / office bearers; for EC Admins only explicit grants (e.g. issue_no_dues, treasury)."""
     ensure_ready(conn)
     hid = (house_id or "").strip()
     if not hid or hid == SUPERADMIN_HOUSE_ID:
@@ -220,21 +323,43 @@ def set_grants(
     ).fetchone()
     if not row:
         raise ValueError("Plot not found")
-    if (row["role"] or "") == "admin":
-        raise ValueError("EC Admins already have all entitlements")
+    is_admin = (row["role"] or "") == "admin"
     is_ob = int(row["is_office_bearer"] or 0) or bool(str(row["official_title"] or "").strip())
-    is_mem = int(row["is_ec_member"] or 0) or is_ob
+    is_mem = int(row["is_ec_member"] or 0) or is_ob or is_admin
     if not is_mem:
         raise ValueError("Grant entitlements only to EC Members")
-    clean = []
+
+    requested = []
     for e in entitlements or []:
         key = str(e or "").strip()
-        if key == "sensitive_ops" or key == "manage_roles":
+        if key in EC_ADMIN_ONLY_ENTITLEMENTS:
             raise ValueError(f"{key} cannot be granted; EC Admin / sensitive ops only")
-        if key in GRANTABLE_ENTITLEMENTS and key not in clean:
-            clean.append(key)
-    conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (hid,))
+        if key in GRANTABLE_ENTITLEMENTS and key not in requested:
+            requested.append(key)
+
     now = utc_now()
+    if is_admin:
+        # EC Admins already have implicit desk access — only store explicit grants.
+        clean = [k for k in requested if k in EXPLICIT_GRANT_ENTITLEMENTS]
+        for key in EXPLICIT_GRANT_ENTITLEMENTS:
+            conn.execute(
+                "DELETE FROM resident_entitlements WHERE house_id = ? AND entitlement = ?",
+                (hid, key),
+            )
+        for key in clean:
+            conn.execute(
+                """
+                INSERT INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (hid, key, granted_by, now),
+            )
+        if commit:
+            conn.commit()
+        return sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(clean))
+
+    clean = requested
+    conn.execute("DELETE FROM resident_entitlements WHERE house_id = ?", (hid,))
     for key in clean:
         conn.execute(
             """
@@ -278,7 +403,8 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         is_ec = (r["role"] or "") == "admin"
         is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(r["official_title"]) or is_ec
         is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
-        grants = [] if is_ec else load_grants(conn, hid)
+        grants = load_grants(conn, hid)
+        effective = sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants)) if is_ec else grants
         photo = photos.get(hid) or {}
         out.append({
             "houseId": hid,
@@ -290,7 +416,7 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             "isEcMember": is_mem,
             "isOfficeBearer": is_ob,
             "isEcAdmin": is_ec,
-            "entitlements": sorted(EC_ADMIN_ENTITLEMENTS) if is_ec else grants,
+            "entitlements": effective,
             "hasPhoto": bool(photo.get("hasPhoto")),
             "photoUrl": photo.get("photoUrl") or "",
             "primaryMemberId": photo.get("memberId"),

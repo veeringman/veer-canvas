@@ -19,9 +19,9 @@
   <meta name="application-name" content="HBC Sanyard">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260807ops1">
-  <script src="portal.js?v=20260807ops1" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260808attach1">
+  <script src="portal.js?v=20260808ecsafe1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -154,6 +154,9 @@
           <button type="button" class="tab is-active" data-panel="home" aria-selected="true">Home</button>
           <button type="button" class="tab" data-panel="dues" id="duesTab" aria-selected="false">Dues</button>
           <button type="button" class="tab" data-panel="concerns" aria-selected="false">Concerns</button>
+          <button type="button" class="tab" data-panel="messages" aria-selected="false" aria-label="Messages">
+            Messages<span class="tab-badge" id="messagesTabBadge" hidden></span>
+          </button>
           <button type="button" class="tab" data-panel="info" aria-selected="false" aria-label="Information Centre">
             <span class="tab-long">Information Centre</span><span class="tab-short" aria-hidden="true">Info</span>
           </button>
@@ -205,8 +208,83 @@
           <p class="muted">From the RWA subscription ledger (keyed by plot number).</p>
         </header>
         <div id="duesCard" class="stat-grid"></div>
+        <div class="roster-block no-dues-resident-block" id="noDuesResidentBlock">
+          <header class="panel-head">
+            <h3>No Dues Certificate</h3>
+            <p class="muted" id="noDuesResidentHint">Request a certificate when your ledger is clear. An authorised issuer will approve it, then you can download it here.</p>
+          </header>
+          <div class="btn-row" id="noDuesResidentActions">
+            <button type="button" class="btn secondary compact" id="noDuesRequestBtn" hidden>Request certificate</button>
+            <button type="button" class="btn primary compact" id="noDuesDownloadBtn" hidden>Download certificate</button>
+          </div>
+          <p class="muted" id="noDuesResidentStatus"></p>
+          <div id="noDuesResidentList" class="payment-records-list"></div>
+        </div>
         <div id="bankCard" class="pay-card"></div>
-        <div id="adminDues" class="admin-only" hidden>
+
+        <div class="roster-block payment-records-block" id="paymentRecordsBlock">
+          <header class="panel-head">
+            <h3>Payments &amp; claims</h3>
+            <p class="muted">Upload payment proofs (dues/levy) or reimbursement claims for colony expenses. EC reviews before ledger or payout updates.</p>
+          </header>
+          <form id="paymentRecordForm" class="stack narrow payment-record-form">
+            <div class="settings-grid">
+              <label class="ec-only-field" id="paymentRecordHouseWrap" hidden>
+                Plot
+                <input id="paymentRecordHouse" list="paymentRecordHouseList" placeholder="e.g. 43" autocomplete="off">
+                <datalist id="paymentRecordHouseList"></datalist>
+              </label>
+              <label>Type
+                <select id="paymentRecordKind">
+                  <option value="payment" selected>Payment to RWA</option>
+                  <option value="reimbursement">Reimbursement claim</option>
+                </select>
+              </label>
+              <label>Amount (₹) <input id="paymentRecordAmount" type="number" min="1" step="1" required placeholder="2400"></label>
+              <label><span id="paymentRecordPaidOnText">Paid on</span> <input id="paymentRecordPaidOn" type="date" required></label>
+              <label id="paymentRecordFeeYearWrap">Fee year <input id="paymentRecordFeeYear" type="number" min="2000" max="2100" required></label>
+              <label>Category
+                <select id="paymentRecordCategory">
+                  <option value="annual_dues">Annual dues</option>
+                  <option value="special_levy">Special levy</option>
+                  <option value="other">Other payment</option>
+                </select>
+              </label>
+              <label id="paymentRecordMethodWrap">Method
+                <select id="paymentRecordMethod">
+                  <option value="upi">UPI</option>
+                  <option value="bank">Bank transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label>Note <input id="paymentRecordNote" maxlength="500" placeholder="Optional UPI ref or remark"></label>
+            <div id="paymentCashNoteBox" class="stack narrow" hidden>
+              <p class="muted" id="paymentCashNoteHint">
+                For cash, the recipient generates a Received Note, uploads it as proof, then another EC member verifies it.
+              </p>
+              <label>Cash received by
+                <input id="paymentCashReceiver" maxlength="120" placeholder="Name of person who received cash">
+              </label>
+              <div class="btn-row">
+                <button type="button" class="btn ghost compact" id="paymentCashNoteBtn">Generate Received Note (PDF)</button>
+              </div>
+            </div>
+            <label><span id="paymentRecordFilesText">Receipt files (JPG/PNG/WebP/PDF, max 3)</span>
+              <input id="paymentRecordFiles" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" multiple required>
+            </label>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary" id="paymentRecordSubmitBtn">Upload payment</button>
+              <button type="button" class="btn ghost compact" id="paymentRecordCancelEditBtn" hidden>Cancel edit</button>
+            </div>
+            <p class="muted" id="paymentRecordFormStatus"></p>
+          </form>
+          <div id="paymentRecordsList" class="payment-records-list"></div>
+          <p class="muted" id="paymentRecordsStatus"></p>
+        </div>
+
+        <div id="adminDues" class="admin-only roster-block" hidden>
           <header class="panel-head">
             <h3>Full ledger</h3>
             <p class="muted" id="ledgerSummary"></p>
@@ -216,6 +294,7 @@
               <span class="sr-only">Search ledger</span>
               <input id="ledgerSearch" type="search" placeholder="Search plot or name…" autocomplete="off">
             </label>
+            <button type="button" class="btn secondary compact" id="duesRemindPendingBtn" title="Push dues reminder to plots with outstanding balance">Remind pending</button>
             <p class="muted" id="ledgerEditStatus"></p>
           </div>
           <div class="table-wrap ledger-wrap">
@@ -229,6 +308,7 @@
                   <th>Prev pending</th>
                   <th>Year total</th>
                   <th>Pending / dues</th>
+                  <th>Treasury</th>
                   <th></th>
                 </tr>
               </thead>
@@ -252,9 +332,16 @@
         </header>
 
         <div class="lang-section-wrap" data-lang-section="concerns">
+        <div class="desk-tablet" id="grievanceComposeBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>New concern</h3>
+              <p class="muted">Post to the shared colony mailbox.</p>
+            </div>
+          </div>
         <form id="grievanceForm" class="stack narrow grievance-form">
           <div class="form-lang-row">
-            <h3>New concern</h3>
+            <h3 class="sr-only">New concern</h3>
             <div class="author-lang-toggle" data-author-form="grievance" role="group" aria-label="Writing language">
               <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
@@ -300,7 +387,9 @@
           <button type="submit" class="btn primary" id="grievanceSubmitBtn">Post to mailbox</button>
           <p class="muted" id="grievanceFormStatus"></p>
         </form>
+        </div>
 
+        <div class="desk-tablet" id="mailboxBlock">
         <div class="mailbox-toolbar">
           <header class="panel-head">
             <h3>Mailbox</h3>
@@ -336,6 +425,7 @@
           <button type="button" class="btn ghost compact" id="mailboxRefreshBtn">Refresh</button>
         </div>
         <div id="mailboxList" class="grievance-list"></div>
+        </div>
           <div class="lang-overlay" id="concernsLangOverlay" hidden>
             <div class="lang-overlay-scrim" data-lang-close="concerns" aria-hidden="true"></div>
             <div class="lang-overlay-panel" role="dialog" aria-label="Hindi mailbox">
@@ -345,6 +435,67 @@
               </header>
               <div class="lang-overlay-body" id="concernsLangOverlayBody"></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-messages" hidden>
+        <header class="panel-head">
+          <div class="panel-head-copy">
+            <h2>Messages</h2>
+            <p class="muted">Colony channel for everyone, plus private plot-to-plot chats.</p>
+          </div>
+        </header>
+        <div class="msg-layout" id="msgLayout">
+          <aside class="msg-sidebar" id="msgSidebar">
+            <div class="msg-sidebar-head">
+              <h3>Conversations</h3>
+              <button type="button" class="btn ghost compact" id="msgRefreshThreadsBtn">Refresh</button>
+            </div>
+            <label class="msg-new-dm">
+              <span class="sr-only">Start chat with plot</span>
+              <input id="msgPeerSearch" type="search" placeholder="Message a plot…" autocomplete="off">
+              <div id="msgPeerResults" class="msg-peer-results" hidden></div>
+            </label>
+            <div id="msgThreadList" class="msg-thread-list"></div>
+          </aside>
+          <div class="msg-main" id="msgMain">
+            <header class="msg-conversation-head" id="msgConversationHead">
+              <button type="button" class="btn ghost compact msg-back" id="msgBackBtn" hidden>Back</button>
+              <div class="msg-conversation-titles">
+                <h3 id="msgConversationTitle">Select a conversation</h3>
+                <p class="muted" id="msgConversationMeta"></p>
+              </div>
+              <div class="msg-channel-tools" id="msgChannelTools" hidden>
+                <details class="msg-cleanup-menu">
+                  <summary class="btn ghost compact">Cleanup</summary>
+                  <div class="msg-cleanup-panel">
+                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="30">Delete older than 30 days</button>
+                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="7">Delete older than 7 days</button>
+                    <button type="button" class="btn ghost compact" data-cleanup="clear_hidden">Remove hidden</button>
+                    <button type="button" class="btn ghost compact msg-cleanup-danger" data-cleanup="clear_all">Clear entire channel</button>
+                  </div>
+                </details>
+              </div>
+            </header>
+            <div id="msgPinned" class="msg-pinned" hidden></div>
+            <div id="msgFeed" class="msg-feed" aria-live="polite"></div>
+            <form id="msgComposeForm" class="msg-compose" hidden>
+              <div class="msg-compose-tools">
+                <button type="button" class="btn ghost compact" id="msgEmojiBtn" title="Emoji" aria-label="Insert emoji">☺</button>
+                <label class="btn ghost compact msg-attach-label" title="Attach images or PDF (max 5 MB each, up to 3 files)">
+                  Attach
+                  <input id="msgAttachInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple hidden>
+                </label>
+                <span class="muted msg-attach-hint" id="msgAttachHint">Images or PDF · max 5 MB each · up to 3</span>
+              </div>
+              <div id="msgEmojiPicker" class="msg-emoji-picker" hidden></div>
+              <textarea id="msgBodyInput" rows="2" maxlength="4000" placeholder="Write a message…"></textarea>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="msgSendBtn">Send</button>
+              </div>
+              <p class="muted" id="msgComposeStatus"></p>
+            </form>
           </div>
         </div>
       </section>
@@ -384,8 +535,14 @@
         <p class="muted" id="infoListStatus"></p>
 
         <div class="roster-block admin-only info-manage" id="infoManageBlock" data-entitlement="manage_info" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3 id="infoFormTitle">Publish a document</h3>
+              <p class="muted">Upload files or write an HTML page for members.</p>
+            </div>
+          </div>
           <div class="form-lang-row">
-            <h3 id="infoFormTitle">Publish a document</h3>
+            <h3 class="sr-only">Publish a document</h3>
             <div class="author-lang-toggle" data-author-form="info" role="group" aria-label="Writing language">
               <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
@@ -515,8 +672,12 @@
         <p class="muted" id="worksListStatus"></p>
 
         <div class="roster-block admin-only works-manage" id="worksManageBlock" data-entitlement="manage_works" hidden>
-          <h3 id="worksFormTitle">Initiate work / event</h3>
-          <p class="muted">Track ownership, timelines, benefits, contractor, costs, and funding sources.</p>
+          <div class="roster-toolbar">
+            <div>
+              <h3 id="worksFormTitle">Initiate work / event</h3>
+              <p class="muted">Track ownership, timelines, benefits, contractor, costs, and funding sources.</p>
+            </div>
+          </div>
           <form id="worksForm" class="stack">
             <input type="hidden" id="worksEditId" value="">
             <div class="settings-grid">
@@ -634,7 +795,13 @@
           <p class="muted">Keep contact details current so OTP and notices reach you.</p>
         </header>
 
-        <div class="profile-photo-block" id="profilePhotoBlock">
+        <div class="roster-block profile-photo-block" id="profilePhotoBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Profile photo</h3>
+              <p class="muted">Optional · shown on notices and the mailbox.</p>
+            </div>
+          </div>
           <div class="profile-avatar-wrap">
             <div class="profile-avatar" id="profileAvatar" aria-hidden="true">
               <img id="profileAvatarImg" alt="" hidden>
@@ -655,6 +822,13 @@
           <p class="muted profile-photo-hint">Square crop · saved light for phones. Drag and zoom to adjust before applying.</p>
         </div>
 
+        <div class="roster-block" id="profileDetailsBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Contact details</h3>
+              <p class="muted">Keep email and phone current for OTP and notices.</p>
+            </div>
+          </div>
         <form id="profileForm" class="stack narrow">
           <label>Plot <input id="profileHouse" disabled></label>
           <p class="muted" id="profileMemberMeta" hidden></p>
@@ -678,8 +852,9 @@
           <button type="submit" class="btn primary">Save profile</button>
           <p class="muted" id="profileStatus"></p>
         </form>
+        </div>
 
-        <div class="household-block" id="householdBlock" hidden>
+        <div class="roster-block household-block" id="householdBlock" hidden>
           <header class="panel-head">
             <h3>Household logins</h3>
             <p class="muted">Owner and delegates for this plot. Delegates never get EC desk access. Owners can mark a delegate as view-only.</p>
@@ -703,6 +878,32 @@
             <p class="muted" id="householdStatus"></p>
           </form>
         </div>
+
+        <div class="roster-block" id="profileNotificationsBlock">
+          <header class="panel-head">
+            <h3>Notifications</h3>
+            <p class="muted">Push alerts on this device for messages, notices, concerns, and dues. On iPhone, add this site to your Home Screen first.</p>
+          </header>
+          <div class="stack narrow">
+            <p class="muted" id="pushStatusText">Checking…</p>
+            <div class="btn-row">
+              <button type="button" class="btn primary" id="pushEnableBtn">Enable push</button>
+              <button type="button" class="btn ghost" id="pushDisableBtn" hidden>Disable on this device</button>
+              <button type="button" class="btn secondary compact" id="pushTestBtn" hidden>Test</button>
+            </div>
+            <fieldset class="push-prefs" id="pushPrefsFields">
+              <legend>Alert me about</legend>
+              <label class="check"><input type="checkbox" data-pref="messages" checked> Messages</label>
+              <label class="check"><input type="checkbox" data-pref="notices" checked> Notices</label>
+              <label class="check"><input type="checkbox" data-pref="concerns" checked> Concerns</label>
+              <label class="check"><input type="checkbox" data-pref="dues" checked> Dues / payments</label>
+              <label class="check"><input type="checkbox" data-pref="treasury" checked> Treasury</label>
+              <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues</label>
+            </fieldset>
+            <button type="button" class="btn secondary compact" id="pushPrefsSaveBtn">Save preferences</button>
+            <p class="muted" id="pushPrefsStatus"></p>
+          </div>
+        </div>
       </section>
 
       <section class="panel admin-only" id="panel-admin" hidden>
@@ -719,6 +920,99 @@
             <p class="muted ec-desk-lede">Manage colony operations by entitlement. EC Admins have full access; office bearers and EC members may receive a subset.<span class="superadmin-only" hidden> CMS at <a href="/admin/">/admin</a>.</span></p>
           </div>
         </header>
+
+        <div class="roster-block grievance-ec-block" data-entitlement="manage_dues">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Payments &amp; claims to review</h3>
+              <p class="muted" id="ecPaymentStats">Submitted receipts and claims awaiting EC review.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter kind</span>
+              <select id="ecPaymentKindFilter">
+                <option value="all" selected>All types</option>
+                <option value="payment">Payments</option>
+                <option value="reimbursement">Reimbursements</option>
+              </select>
+            </label>
+            <label class="roster-search">
+              <span class="sr-only">Filter status</span>
+              <select id="ecPaymentStatusFilter">
+                <option value="submitted" selected>Submitted</option>
+                <option value="verified">Verified / approved</option>
+                <option value="reimbursed">Reimbursed</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="ecPaymentRefreshBtn">Refresh</button>
+          </div>
+          <div id="ecPaymentList" class="payment-records-list"></div>
+          <p class="muted" id="ecPaymentStatus"></p>
+        </div>
+
+        <div class="roster-block grievance-ec-block" data-entitlement="treasury">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Treasury validation</h3>
+              <p class="muted" id="ecTreasuryStats">Validate then confirm financials before they are final. Ledger amounts may already show after EC verify.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter kind</span>
+              <select id="ecTreasuryKindFilter">
+                <option value="all" selected>All kinds</option>
+                <option value="payment">Payments / cash</option>
+                <option value="ledger">Ledger rows</option>
+                <option value="no_dues">No Dues</option>
+              </select>
+            </label>
+            <label class="roster-search">
+              <span class="sr-only">Filter treasury status</span>
+              <select id="ecTreasuryStatusFilter">
+                <option value="attention" selected>Needs attention</option>
+                <option value="pending">Pending</option>
+                <option value="validated">Validated</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="ecTreasuryRefreshBtn">Refresh</button>
+          </div>
+          <div id="ecTreasuryList" class="payment-records-list"></div>
+          <p class="muted" id="ecTreasuryStatus"></p>
+        </div>
+
+        <div class="roster-block grievance-ec-block" data-entitlement="issue_no_dues">
+          <div class="roster-toolbar">
+            <div>
+              <h3>No Dues Certificate requests</h3>
+              <p class="muted" id="ecNoDuesStats">Resident requests awaiting issue.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter status</span>
+              <select id="ecNoDuesStatusFilter">
+                <option value="requested" selected>Requested</option>
+                <option value="issued">Issued</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="ecNoDuesRefreshBtn">Refresh</button>
+          </div>
+          <div id="ecNoDuesList" class="payment-records-list"></div>
+          <p class="muted" id="ecNoDuesListStatus"></p>
+          <div class="stack narrow" style="margin-top:1rem;padding-top:0.85rem;border-top:1px solid var(--line)">
+            <h4>Issue for a plot</h4>
+            <p class="muted">Creates/issues a certificate when the plot is clear (and no pending payment receipts).</p>
+            <div class="btn-row" style="align-items:end;flex-wrap:wrap">
+              <label>Plot
+                <input id="ecNoDuesHouse" list="paymentRecordHouseList" placeholder="e.g. 43" autocomplete="off">
+              </label>
+              <button type="button" class="btn secondary compact" id="ecNoDuesCertBtn">Issue certificate</button>
+            </div>
+            <p class="muted" id="ecNoDuesCertStatus"></p>
+          </div>
+        </div>
 
         <div class="roster-block grievance-ec-block" data-entitlement="manage_concerns">
           <div class="roster-toolbar">
@@ -853,9 +1147,16 @@
           <div id="noticeDraftList" class="notice-draft-list"></div>
         </div>
 
-        <form id="noticeForm" class="stack" style="margin-top:1.75rem" data-entitlement="manage_notices">
+        <div class="roster-block" data-entitlement="manage_notices" id="noticeComposeBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Write notice</h3>
+              <p class="muted">Publish to the colony board or save a draft for later.</p>
+            </div>
+          </div>
+        <form id="noticeForm" class="stack">
           <div class="form-lang-row">
-            <h3 id="noticeFormTitle">Write notice</h3>
+            <h3 id="noticeFormTitle" class="sr-only">Write notice</h3>
             <div class="author-lang-toggle" data-author-form="notice" role="group" aria-label="Writing language">
               <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
@@ -894,10 +1195,15 @@
           </div>
           <p class="muted" id="noticeFormStatus"></p>
         </form>
+        </div>
 
-        <div class="stack report-section" style="margin-top:1.5rem" data-entitlement="generate_reports" id="reportsBlock">
-          <h3>Reports</h3>
-          <p class="muted">Choose a built-in report, a saved template, or build a custom report and save it.</p>
+        <div class="roster-block report-section" data-entitlement="generate_reports" id="reportsBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Reports</h3>
+              <p class="muted">Choose a built-in report, a saved template, or build a custom report and save it.</p>
+            </div>
+          </div>
           <form id="reportForm" class="stack report-form">
             <label>Report
               <select id="reportTypeSelect" name="reportId"></select>
@@ -1025,11 +1331,15 @@
           </div>
         </details>
 
-        <p class="muted" id="smtpStatusLine" style="margin-top:1.25rem">SMTP: checking…</p>
+        <p class="muted ec-desk-foot" id="smtpStatusLine">SMTP: checking…</p>
 
-        <div class="settings-block superadmin-only" id="settingsBlock" hidden>
-          <h3>Platform settings</h3>
-          <p class="muted">SMTP, OTP, and super-admin credentials. Saved on the server in <code>data/smtp.env</code> and preserved across deploys.</p>
+        <div class="roster-block settings-block superadmin-only" id="settingsBlock" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Platform settings</h3>
+              <p class="muted">SMTP, OTP, and super-admin credentials. Saved in <code>data/smtp.env</code>.</p>
+            </div>
+          </div>
           <form id="settingsForm" class="stack">
             <div class="settings-grid">
               <label>SMTP provider
@@ -1287,6 +1597,7 @@
         </div>
       </form>
     </dialog>
+    <footer class="app-foot">Managed on VeerCanvas · HBC Sanyard RWA</footer>
   </div>
 </body>
 </html>

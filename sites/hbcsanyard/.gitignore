@@ -2,8 +2,13 @@
 data/rwa.db
 data/rwa.db-*
 data/*.db-journal
+data/*-snapshot.db
 data/smtp.env
 smtp.env
+data/vapid.env
+vapid.env
+data/ai.env
+ai.env
 data/imports/*.pdf
 data/imports/*.xlsx
 data/imports/*.xls

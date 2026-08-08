@@ -169,7 +169,7 @@ sqlite_backup "${WEB_ROOT}/admin/admin.db" "${RUN_DIR}/db/admin-legacy.db" || tr
 
 # --- Uploads + secrets (mode 600 for env) ---
 UPLOAD_LIST=()
-for rel in data/profile-photos data/payments data/info-centre data/imports data/smtp.env; do
+for rel in data/profile-photos data/receipts data/no-dues data/payments data/info-centre data/attestations data/imports data/messages data/smtp.env data/vapid.env data/ai.env; do
   if [[ -e "${WEB_ROOT}/${rel}" ]]; then
     UPLOAD_LIST+=("$rel")
   fi
@@ -254,5 +254,13 @@ python3 "${SCRIPT_DIR}/ops/write-ops-status.py" \
   --site-root "$WEB_ROOT" \
   --section lastBackup \
   --json "{\"ok\":true,\"path\":\"${RUN_DIR}\",\"stamp\":\"${STAMP}\"}" 2>/dev/null || true
+
+# Optional Phase-2 Drive upload
+if [[ "${DRIVE_ENABLED:-0}" == "1" ]]; then
+  log "Drive sync starting…"
+  SITE_ID="$SITE_ID" WEB_ROOT="$WEB_ROOT" \
+    bash "${SCRIPT_DIR}/ops/sync-to-drive.sh" || log "warn: Drive sync failed"
+fi
+
 log "=== backup ok -> ${RUN_DIR} ==="
 exit 0

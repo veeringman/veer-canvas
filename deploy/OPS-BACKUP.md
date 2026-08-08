@@ -115,6 +115,42 @@ Verify login + a notice/dues read. Prefer copying `latest` aside first so you ca
 
 ## Not in Phase 1
 
-- Google Drive / S3 off-box copy
-- Encrypted archives for Drive
+- Encrypted archives for Drive (optional later)
 - Formal quarterly restore drill checklist (basic restore steps above only)
+
+## Phase 2 — Google Drive (official HBC Gmail)
+
+Use a dedicated Gmail (e.g. colony ops address) for **SMTP + Drive backup**.
+
+### Setup checklist
+
+1. Create the Gmail → App Password → set SMTP in master admin **Platform settings**.
+2. Google Cloud project → enable **Drive API** → create a **service account** → download JSON to `data/drive-sa.json` on the server (`chmod 600`; never commit).
+3. In Drive (signed in as that Gmail), create folder **HBC Sanyard Backups**, share it with the service account email (**Editor**).
+4. In `data/smtp.env` or `data/drive.env`:
+
+```bash
+DRIVE_ENABLED=1
+DRIVE_FOLDER_ID=the_folder_id_from_drive_url
+GOOGLE_APPLICATION_CREDENTIALS=/var/www/hbcsanyard.veerlabs.solutions/data/drive-sa.json
+```
+
+5. On the server venv (or system): `pip install google-api-python-client google-auth`
+6. After nightly backup, `backup-site.sh` calls [`ops/sync-to-drive.sh`](./ops/sync-to-drive.sh) when `DRIVE_ENABLED=1`.
+
+Drive layout:
+
+```
+HBC Sanyard Backups/
+  backups/<site>-latest.tgz
+  assets/<site>/{receipts,profile-photos,info-centre,payments}/*.tgz
+```
+
+Local disk remains the live source of truth; Drive is disaster recovery. Preserve `data/drive-sa.json` and `data/drive.env` on deploy like `smtp.env`.
+
+Manual sync:
+
+```bash
+sudo DRIVE_ENABLED=1 SITE_ID=hbcsanyard WEB_ROOT=/var/www/hbcsanyard.veerlabs.solutions \
+  bash /var/www/.../veercanvas/deploy/ops/sync-to-drive.sh
+```

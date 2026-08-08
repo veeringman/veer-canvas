@@ -26,7 +26,9 @@ chmod +x "${SCRIPT_DIR}/backup-site.sh" \
   "${SCRIPT_DIR}/ops/prune-access-events.py" \
   "${SCRIPT_DIR}/ops/check-server-vitals.sh" \
   "${SCRIPT_DIR}/ops/write-ops-status.py" \
-  "${SCRIPT_DIR}/ops/load-site-env.sh"
+  "${SCRIPT_DIR}/ops/load-site-env.sh" \
+  "${SCRIPT_DIR}/ops/sync-to-drive.sh" \
+  "${SCRIPT_DIR}/ops/sync-to-drive.py"
 
 # Hot SQLite backups need the CLI.
 if ! command -v sqlite3 >/dev/null 2>&1; then
