@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260808rosterwrap1">
-  <script src="portal.js?v=20260808rosterwrap1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260808noc5">
+  <script src="portal.js?v=20260808noc5" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -222,12 +222,36 @@
             <h3>No Dues Certificate</h3>
             <p class="muted" id="noDuesResidentHint">Request a certificate when your ledger is clear. An authorised issuer will approve it, then you can download it here.</p>
           </header>
+          <label class="no-dues-purpose-label" id="noDuesPurposeWrap">
+            <span>Purpose of certificate</span>
+            <textarea id="noDuesPurpose" rows="2" maxlength="400" placeholder="Why do you need this certificate?"></textarea>
+            <p class="muted" id="noDuesPurposeLockedHint" hidden>Purpose is locked after you submit. You can change it only if the issuer sends the request back (or after rejection, when requesting again).</p>
+            <button type="button" class="btn ghost compact" id="noDuesPurposeSaveBtn" hidden>Save purpose</button>
+          </label>
           <div class="btn-row" id="noDuesResidentActions">
             <button type="button" class="btn secondary compact" id="noDuesRequestBtn" hidden>Request certificate</button>
             <button type="button" class="btn primary compact" id="noDuesDownloadBtn" hidden>Download certificate</button>
           </div>
           <p class="muted" id="noDuesResidentStatus"></p>
           <div id="noDuesResidentList" class="payment-records-list"></div>
+        </div>
+        <div class="roster-block no-dues-resident-block" id="noObjectionResidentBlock">
+          <header class="panel-head">
+            <h3>No Objection Certificate</h3>
+            <p class="muted" id="noObjectionResidentHint">Request a certificate when you need RWA non-objection for transfer, sale, mortgage, or other official use. An authorised issuer will approve it, then you can download it here.</p>
+          </header>
+          <label class="no-dues-purpose-label" id="noObjectionPurposeWrap">
+            <span>Purpose of certificate</span>
+            <textarea id="noObjectionPurpose" rows="2" maxlength="400" placeholder="Why do you need this certificate?"></textarea>
+            <p class="muted" id="noObjectionPurposeLockedHint" hidden>Purpose is locked after you submit. You can change it only if the issuer sends the request back (or after rejection, when requesting again).</p>
+            <button type="button" class="btn ghost compact" id="noObjectionPurposeSaveBtn" hidden>Save purpose</button>
+          </label>
+          <div class="btn-row" id="noObjectionResidentActions">
+            <button type="button" class="btn secondary compact" id="noObjectionRequestBtn" hidden>Request certificate</button>
+            <button type="button" class="btn primary compact" id="noObjectionDownloadBtn" hidden>Download certificate</button>
+          </div>
+          <p class="muted" id="noObjectionResidentStatus"></p>
+          <div id="noObjectionResidentList" class="payment-records-list"></div>
         </div>
         <div id="bankCard" class="pay-card"></div>
 
@@ -915,7 +939,7 @@
         <div class="roster-block" id="profileNotificationsBlock">
           <header class="panel-head">
             <h3>Notifications</h3>
-            <p class="muted">Push alerts on this device for messages, notices, concerns, and dues. On iPhone, add this site to your Home Screen first.</p>
+            <p class="muted">Push alerts on this device for messages, notices, concerns, dues, and certificate requests. On iPhone, add this site to your Home Screen first.</p>
           </header>
           <div class="stack narrow">
             <p class="muted" id="pushStatusText">Checking…</p>
@@ -931,8 +955,10 @@
               <label class="check"><input type="checkbox" data-pref="concerns" checked> Concerns</label>
               <label class="check"><input type="checkbox" data-pref="dues" checked> Dues / payments</label>
               <label class="check"><input type="checkbox" data-pref="treasury" checked> Treasury</label>
-              <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues</label>
+              <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues certificate</label>
+              <label class="check"><input type="checkbox" data-pref="no_objection" checked> No Objection certificate</label>
             </fieldset>
+            <p class="muted" id="pushCertPrefsHint">Issuers with the No Dues / No Objection entitlement are alerted when a resident raises a request. Residents are alerted when a certificate is issued, rejected, or sent back.</p>
             <button type="button" class="btn secondary compact" id="pushPrefsSaveBtn">Save preferences</button>
             <p class="muted" id="pushPrefsStatus"></p>
           </div>
@@ -997,6 +1023,7 @@
                 <option value="payment">Payments / cash</option>
                 <option value="ledger">Ledger rows</option>
                 <option value="no_dues">No Dues</option>
+                <option value="no_objection">No Objection</option>
               </select>
             </label>
             <label class="roster-search">
@@ -1019,7 +1046,7 @@
           <div class="roster-toolbar">
             <div>
               <h3>No Dues Certificate requests</h3>
-              <p class="muted" id="ecNoDuesStats">Resident requests awaiting issue.</p>
+              <p class="muted" id="ecNoDuesStats">Issue when eligible. If plot ledger treasury is already confirmed, download is ready on issue; otherwise Treasury validate → confirm first.</p>
             </div>
             <label class="roster-search">
               <span class="sr-only">Filter status</span>
@@ -1044,6 +1071,38 @@
               <button type="button" class="btn secondary compact" id="ecNoDuesCertBtn">Issue certificate</button>
             </div>
             <p class="muted" id="ecNoDuesCertStatus"></p>
+          </div>
+        </div>
+
+        <div class="roster-block grievance-ec-block" data-entitlement="issue_no_objection">
+          <div class="roster-toolbar">
+            <div>
+              <h3>No Objection Certificate requests</h3>
+              <p class="muted" id="ecNoObjectionStats">Review plot dues / ledger treasury, then issue. If ledger treasury is already confirmed, download is ready on issue; otherwise Treasury must validate and confirm the certificate first.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Filter status</span>
+              <select id="ecNoObjectionStatusFilter">
+                <option value="requested" selected>Requested</option>
+                <option value="issued">Issued</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="ecNoObjectionRefreshBtn">Refresh</button>
+          </div>
+          <div id="ecNoObjectionList" class="payment-records-list"></div>
+          <p class="muted" id="ecNoObjectionListStatus"></p>
+          <div class="stack narrow" style="margin-top:1rem;padding-top:0.85rem;border-top:1px solid var(--line)">
+            <h4>Issue for a plot</h4>
+            <p class="muted">Creates/issues a certificate for an active plot on the roster.</p>
+            <div class="btn-row" style="align-items:end;flex-wrap:wrap">
+              <label>Plot
+                <input id="ecNoObjectionHouse" list="paymentRecordHouseList" placeholder="e.g. 43" autocomplete="off">
+              </label>
+              <button type="button" class="btn secondary compact" id="ecNoObjectionCertBtn">Issue certificate</button>
+            </div>
+            <p class="muted" id="ecNoObjectionCertStatus"></p>
           </div>
         </div>
 
@@ -1493,6 +1552,50 @@
     </main>
 
     <!-- Dialogs must sit outside [hidden] panels or showModal() is invisible -->
+    <dialog id="noDuesDownloadDialog" class="ledger-dialog no-dues-download-dialog" aria-labelledby="noDuesDownloadTitle">
+      <div class="stack">
+        <header class="panel-head">
+          <h3 id="noDuesDownloadTitle">Download No Dues Certificate</h3>
+          <p class="muted">Choose the version that matches how you will use it.</p>
+        </header>
+        <div class="btn-row no-dues-download-options">
+          <button type="button" class="btn secondary" id="noDuesDlDigitalBtn" data-variant="digital">
+            Digital version
+            <span class="muted">With letterhead — for email / WhatsApp / portal</span>
+          </button>
+          <button type="button" class="btn ghost" id="noDuesDlPrintBtn" data-variant="print">
+            Paper print
+            <span class="muted">No letterhead — for pre-printed RWA stationery</span>
+          </button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="noDuesDownloadCancelBtn">Cancel</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="noObjectionDownloadDialog" class="ledger-dialog no-dues-download-dialog" aria-labelledby="noObjectionDownloadTitle">
+      <div class="stack">
+        <header class="panel-head">
+          <h3 id="noObjectionDownloadTitle">Download No Objection Certificate</h3>
+          <p class="muted">Choose the version that matches how you will use it.</p>
+        </header>
+        <div class="btn-row no-dues-download-options">
+          <button type="button" class="btn secondary" id="noObjectionDlDigitalBtn" data-variant="digital">
+            Digital version
+            <span class="muted">With letterhead — for email / WhatsApp / portal</span>
+          </button>
+          <button type="button" class="btn ghost" id="noObjectionDlPrintBtn" data-variant="print">
+            Paper print
+            <span class="muted">No letterhead — for pre-printed RWA stationery</span>
+          </button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="noObjectionDownloadCancelBtn">Cancel</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="docViewerDialog" class="doc-viewer-dialog" aria-labelledby="docViewerTitle">
       <div class="doc-viewer-shell">
         <header class="doc-viewer-bar">

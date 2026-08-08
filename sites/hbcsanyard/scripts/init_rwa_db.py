@@ -599,6 +599,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_bilingual_content_columns(conn)
     ensure_payment_records_tables(conn)
     ensure_no_dues_requests_table(conn)
+    ensure_no_objection_requests_table(conn)
     ensure_document_attestations_table(conn)
     ensure_treasury_columns(conn)
     ensure_messages_and_push_tables(conn)
@@ -1276,6 +1277,7 @@ def ensure_no_dues_requests_table(conn: sqlite3.Connection) -> None:
           status TEXT NOT NULL DEFAULT 'requested'
             CHECK(status IN ('requested','issued','rejected')),
           request_note TEXT,
+          purpose TEXT NOT NULL DEFAULT '',
           requested_by_house_id TEXT,
           requested_by_member_id TEXT,
           reviewed_by_house_id TEXT,
@@ -1293,7 +1295,45 @@ def ensure_no_dues_requests_table(conn: sqlite3.Connection) -> None:
           ON no_dues_requests(status, created_at DESC);
         """
     )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(no_dues_requests)").fetchall()}
+    if cols and "purpose" not in cols:
+        conn.execute("ALTER TABLE no_dues_requests ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
     ensure_treasury_columns_on_table(conn, "no_dues_requests")
+    conn.commit()
+
+
+def ensure_no_objection_requests_table(conn: sqlite3.Connection) -> None:
+    """Resident requests for No Objection Certificates; issuer generates a downloadable PDF."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS no_objection_requests (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          status TEXT NOT NULL DEFAULT 'requested'
+            CHECK(status IN ('requested','issued','rejected')),
+          request_note TEXT,
+          purpose TEXT NOT NULL DEFAULT '',
+          requested_by_house_id TEXT,
+          requested_by_member_id TEXT,
+          reviewed_by_house_id TEXT,
+          reviewed_at TEXT,
+          review_note TEXT,
+          issued_at TEXT,
+          filename TEXT,
+          original_name TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_no_objection_requests_house
+          ON no_objection_requests(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_no_objection_requests_status
+          ON no_objection_requests(status, created_at DESC);
+        """
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(no_objection_requests)").fetchall()}
+    if cols and "purpose" not in cols:
+        conn.execute("ALTER TABLE no_objection_requests ADD COLUMN purpose TEXT NOT NULL DEFAULT ''")
+    ensure_treasury_columns_on_table(conn, "no_objection_requests")
     conn.commit()
 
 
@@ -1310,7 +1350,7 @@ TREASURY_COLUMN_DEFS: list[tuple[str, str]] = [
 
 def ensure_treasury_columns_on_table(conn: sqlite3.Connection, table: str) -> None:
     """Add treasury_* columns to an existing table (migrate-safe)."""
-    allowed = {"payment_records", "payment_rows", "no_dues_requests"}
+    allowed = {"payment_records", "payment_rows", "no_dues_requests", "no_objection_requests"}
     if table not in allowed:
         raise ValueError(f"Unsupported treasury table: {table}")
     cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -1322,11 +1362,12 @@ def ensure_treasury_columns_on_table(conn: sqlite3.Connection, table: str) -> No
 
 
 def ensure_treasury_columns(conn: sqlite3.Connection) -> None:
-    """Ensure treasury validation columns on payments, ledger rows, and No Dues."""
+    """Ensure treasury validation columns on payments, ledger rows, and certificates."""
     # payment_rows may exist from base schema without treasury columns.
     ensure_treasury_columns_on_table(conn, "payment_rows")
     ensure_treasury_columns_on_table(conn, "payment_records")
     ensure_treasury_columns_on_table(conn, "no_dues_requests")
+    ensure_treasury_columns_on_table(conn, "no_objection_requests")
     conn.commit()
 
 
@@ -1337,7 +1378,7 @@ def ensure_document_attestations_table(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS document_attestations (
           id TEXT PRIMARY KEY,
           artifact_type TEXT NOT NULL
-            CHECK(artifact_type IN ('no_dues','cash_note')),
+            CHECK(artifact_type IN ('no_dues','no_objection','cash_note')),
           artifact_id TEXT NOT NULL,
           house_id TEXT,
           issuer_house_id TEXT,
@@ -1354,6 +1395,46 @@ def ensure_document_attestations_table(conn: sqlite3.Connection) -> None:
           ON document_attestations(house_id, created_at DESC);
         """
     )
+    # Expand artifact_type CHECK when an older table is present.
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='document_attestations'"
+    ).fetchone()
+    ddl = (row[0] if row else "") or ""
+    if ddl and "no_objection" not in ddl:
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS document_attestations_v2 (
+              id TEXT PRIMARY KEY,
+              artifact_type TEXT NOT NULL
+                CHECK(artifact_type IN ('no_dues','no_objection','cash_note')),
+              artifact_id TEXT NOT NULL,
+              house_id TEXT,
+              issuer_house_id TEXT,
+              issued_at TEXT NOT NULL,
+              content_sha256 TEXT NOT NULL,
+              hmac_hex TEXT NOT NULL,
+              stored_path TEXT,
+              filename TEXT,
+              created_at TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO document_attestations_v2(
+              id, artifact_type, artifact_id, house_id, issuer_house_id,
+              issued_at, content_sha256, hmac_hex, stored_path, filename, created_at
+            )
+            SELECT id, artifact_type, artifact_id, house_id, issuer_house_id,
+                   issued_at, content_sha256, hmac_hex, stored_path, filename, created_at
+            FROM document_attestations;
+            DROP TABLE document_attestations;
+            ALTER TABLE document_attestations_v2 RENAME TO document_attestations;
+            CREATE INDEX IF NOT EXISTS idx_document_attestations_artifact
+              ON document_attestations(artifact_type, artifact_id);
+            CREATE INDEX IF NOT EXISTS idx_document_attestations_house
+              ON document_attestations(house_id, created_at DESC);
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
     conn.commit()
 
 
@@ -1451,6 +1532,7 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
           dues INTEGER NOT NULL DEFAULT 1,
           treasury INTEGER NOT NULL DEFAULT 1,
           no_dues INTEGER NOT NULL DEFAULT 1,
+          no_objection INTEGER NOT NULL DEFAULT 1,
           updated_at TEXT NOT NULL
         );
 
@@ -1490,6 +1572,12 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
         """,
         (COLONY_THREAD_ID, now, now),
     )
+    pref_cols = {row[1] for row in conn.execute("PRAGMA table_info(notification_prefs)").fetchall()}
+    for col in ("treasury", "no_dues", "no_objection"):
+        if pref_cols and col not in pref_cols:
+            conn.execute(
+                f"ALTER TABLE notification_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT 1"
+            )
     conn.commit()
     ensure_msg_likes_and_ai(conn)
 

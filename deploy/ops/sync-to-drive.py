@@ -87,7 +87,7 @@ def main() -> int:
             print(f"upload backup {target.name}")
             _upload_file(service, MediaFileUpload, backups_id, target, remote_name=f"{args.site_id}-latest.tgz")
 
-    for rel in ("receipts", "no-dues", "vault", "profile-photos", "info-centre", "payments", "messages"):
+    for rel in ("receipts", "no-dues", "no-objection", "vault", "profile-photos", "info-centre", "payments", "messages"):
         local = root / "data" / rel
         if not local.is_dir():
             continue

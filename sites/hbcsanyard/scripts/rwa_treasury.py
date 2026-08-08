@@ -2,7 +2,7 @@
 
 Status flow: pending → validated → confirmed (final).
 Ledger amounts may already reflect EC-verified payments; treasury status is the
-audit seal. No Dues PDF download requires confirmed.
+audit seal. Certificate PDF download requires confirmed.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Any
 from init_rwa_db import ensure_treasury_columns, utc_now
 import rwa_entitlements
 import rwa_no_dues
+import rwa_no_objection
 import rwa_payments
 
 TREASURY_STATUSES = ("pending", "validated", "confirmed")
@@ -22,7 +23,7 @@ TREASURY_STATUS_LABELS = {
     "confirmed": "Treasury confirmed",
 }
 
-KINDS = ("payment", "ledger", "no_dues")
+KINDS = ("payment", "ledger", "no_dues", "no_objection")
 
 
 def _actor_house(actor: dict | None) -> str:
@@ -63,6 +64,74 @@ def treasury_fields_from_row(data: dict | sqlite3.Row | None) -> dict:
         "treasuryConfirmedAt": raw.get("treasury_confirmed_at") or raw.get("treasuryConfirmedAt") or "",
         "treasuryNote": raw.get("treasury_note") or raw.get("treasuryNote") or "",
     }
+
+
+def latest_ledger_treasury(conn: sqlite3.Connection, house_id: str) -> dict:
+    """Treasury fields for the plot's latest ledger row (empty → pending)."""
+    ensure_treasury_columns(conn)
+    hid = (house_id or "").strip()
+    if not hid:
+        return treasury_fields_from_row(None)
+    row = conn.execute(
+        """
+        SELECT pr.*
+        FROM payment_rows pr
+        JOIN payment_ledgers pl ON pl.id = pr.ledger_id
+        WHERE pr.house_id = ?
+        ORDER BY pl.as_of DESC, pr.id DESC
+        LIMIT 1
+        """,
+        (hid,),
+    ).fetchone()
+    return treasury_fields_from_row(row)
+
+
+def require_rejection_reason(review_note: str | None) -> str:
+    note = (review_note or "").strip()[:500]
+    if not note:
+        raise ValueError("Rejection reason is required")
+    return note
+
+
+def certificate_issue_treasury_sql(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    actor: dict | None,
+    now: str,
+) -> tuple[str, tuple]:
+    """If plot ledger is already Treasury-confirmed, certificate issues as confirmed.
+
+    Returns (SET fragment columns after original_name, values for those columns).
+    """
+    ledger = latest_ledger_treasury(conn, house_id)
+    if ledger.get("treasuryStatus") == "confirmed":
+        actor_house = _actor_house(actor)
+        note = "Auto-confirmed: plot ledger already Treasury-confirmed"
+        return (
+            """
+            treasury_status = 'confirmed',
+            treasury_validated_by = ?,
+            treasury_validated_at = ?,
+            treasury_confirmed_by = ?,
+            treasury_confirmed_at = ?,
+            treasury_note = ?,
+            updated_at = ?
+            """,
+            (actor_house, now, actor_house, now, note, now),
+        )
+    return (
+        """
+        treasury_status = 'pending',
+        treasury_validated_by = NULL,
+        treasury_validated_at = NULL,
+        treasury_confirmed_by = NULL,
+        treasury_confirmed_at = NULL,
+        treasury_note = NULL,
+        updated_at = ?
+        """,
+        (now,),
+    )
 
 
 def reset_treasury_sql_fragment() -> str:
@@ -136,6 +205,15 @@ def _load_target(conn: sqlite3.Connection, kind: str, target_id: str) -> tuple[s
         }
         return "payment_rows", tid, pub
 
+    if kid == "no_objection":
+        row = conn.execute("SELECT * FROM no_objection_requests WHERE id = ?", (tid,)).fetchone()
+        if not row:
+            raise ValueError("No Objection request not found")
+        if (row["status"] or "") != "issued":
+            raise ValueError("Only issued No Objection certificates can be treasury-reviewed")
+        pub = rwa_no_objection.get_request(conn, tid) or {}
+        return "no_objection_requests", tid, pub
+
     row = conn.execute("SELECT * FROM no_dues_requests WHERE id = ?", (tid,)).fetchone()
     if not row:
         raise ValueError("No Dues request not found")
@@ -175,6 +253,11 @@ def _reload_public(conn: sqlite3.Connection, kind: str, tid: str) -> dict:
         out = rwa_no_dues.get_request(conn, tid)
         if not out:
             raise ValueError("No Dues request not found after update")
+        return out
+    if kind == "no_objection":
+        out = rwa_no_objection.get_request(conn, tid)
+        if not out:
+            raise ValueError("No Objection request not found after update")
         return out
     ledger = conn.execute(
         "SELECT id FROM payment_ledgers ORDER BY as_of DESC, id DESC LIMIT 1"
@@ -335,7 +418,7 @@ def list_queue(
             return f"{col} IN ('pending','validated')", []
         return "1=1", []
 
-    out: dict[str, list[dict]] = {"payments": [], "ledger": [], "noDues": []}
+    out: dict[str, list[dict]] = {"payments": [], "ledger": [], "noDues": [], "noObjection": []}
 
     if kind_filter in ("all", "payment", "payments"):
         clause, params = status_clause("pr.")
@@ -424,5 +507,23 @@ def list_queue(
             (*params, lim),
         ).fetchall()
         out["noDues"] = [rwa_no_dues.public_request(conn, r) for r in rows]
+
+    if kind_filter in ("all", "no_objection", "noObjection"):
+        clause, params = status_clause("nr.")
+        rows = conn.execute(
+            f"""
+            SELECT nr.*, r.plot_no, r.name
+            FROM no_objection_requests nr
+            LEFT JOIN residents r ON r.house_id = nr.house_id
+            WHERE nr.status = 'issued'
+              AND {clause}
+            ORDER BY
+              CASE nr.treasury_status WHEN 'pending' THEN 0 WHEN 'validated' THEN 1 ELSE 2 END,
+              nr.issued_at DESC
+            LIMIT ?
+            """,
+            (*params, lim),
+        ).fetchall()
+        out["noObjection"] = [rwa_no_objection.public_request(conn, r) for r in rows]
 
     return out

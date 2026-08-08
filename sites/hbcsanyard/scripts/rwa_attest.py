@@ -18,7 +18,7 @@ from typing import Any
 
 from init_rwa_db import ensure_document_attestations_table, utc_now
 
-ARTIFACT_TYPES = frozenset({"no_dues", "cash_note"})
+ARTIFACT_TYPES = frozenset({"no_dues", "no_objection", "cash_note"})
 
 
 def attest_secret() -> bytes:
@@ -332,6 +332,7 @@ def verify_attestation(
 
     type_labels = {
         "no_dues": "No Dues Certificate",
+        "no_objection": "No Objection Certificate",
         "cash_note": "Cash Received Note / Payment Voucher",
     }
     return {

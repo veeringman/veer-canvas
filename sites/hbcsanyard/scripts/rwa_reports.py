@@ -1294,12 +1294,20 @@ def build_no_dues_certificate_pdf(
     house_id: str,
     enrich_payment_row,
     issued_by: str | None = None,
+    purpose: str | None = None,
+    letterhead: bool = True,
+    require_eligible: bool = True,
     attestation_id: str | None = None,
     verify_url: str | None = None,
 ) -> tuple[bytes, str]:
-    """Portrait No Dues Certificate PDF for one plot."""
+    """Portrait No Dues Certificate PDF for one plot.
+
+    letterhead=True (digital): seal + org header for screen/share.
+    letterhead=False (paper print): omit letterhead; enlarge top/bottom margins
+    so the body fits pre-printed RWA letterhead stationery.
+    """
     info = no_dues_eligibility(conn, house_id, enrich_payment_row=enrich_payment_row)
-    if not info["eligible"]:
+    if require_eligible and not info["eligible"]:
         raise ValueError(info.get("reason") or "Plot is not clear of dues")
 
     rl = _reportlab()
@@ -1314,6 +1322,11 @@ def build_no_dues_certificate_pdf(
     bearers = office_bearers_for_header(conn)
     issued = _fmt_ist_date()
     fee_year = info["payment"].get("feeYear") or _now_ist().year
+    purpose_text = (purpose or "").strip()[:400] or "Official / banking / transfer purposes"
+
+    # Paper print leaves room for physical letterhead / stamp area.
+    top_m = 48 * mm if not letterhead else 16 * mm
+    bottom_m = 32 * mm if not letterhead else 16 * mm
 
     buf = io.BytesIO()
     page = rl["A4"]
@@ -1322,9 +1335,9 @@ def build_no_dues_certificate_pdf(
         pagesize=page,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
-        topMargin=16 * mm,
-        bottomMargin=16 * mm,
-        title=f"No Dues Certificate - Plot {info['plotNo']}",
+        topMargin=top_m,
+        bottomMargin=bottom_m,
+        title=f"No Dues Certificate - House/Plot {info['plotNo']}",
         author="HBC Sanyard RWA",
     )
 
@@ -1339,7 +1352,7 @@ def build_no_dues_certificate_pdf(
     title_style = ParagraphStyle(
         "ndTitle", parent=styles["Heading1"], fontSize=16, leading=20,
         textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
-        spaceBefore=10, spaceAfter=14,
+        spaceBefore=10 if letterhead else 4, spaceAfter=14,
     )
     body_style = ParagraphStyle(
         "ndBody", parent=styles["Normal"], fontSize=11, leading=16,
@@ -1351,24 +1364,26 @@ def build_no_dues_certificate_pdf(
     )
 
     story = []
-    seal = _seal_path(site_root)
-    if seal:
-        try:
-            img = Image(str(seal), width=22 * mm, height=22 * mm)
-            img.hAlign = "CENTER"
-            story.append(img)
-            story.append(Spacer(1, 4 * mm))
-        except Exception:
-            pass
+    if letterhead:
+        seal = _seal_path(site_root)
+        if seal:
+            try:
+                img = Image(str(seal), width=22 * mm, height=22 * mm)
+                img.hAlign = "CENTER"
+                story.append(img)
+                story.append(Spacer(1, 4 * mm))
+            except Exception:
+                pass
 
-    story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
-    story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
+        story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
+        story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
+
     story.append(Paragraph("<b>NO DUES CERTIFICATE</b>", title_style))
 
+    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
     body = (
         f"This is to certify that <b>{_escape(info['name'])}</b>, "
-        f"resident of Plot <b>{_escape(str(info['plotNo']))}</b>"
-        f"{(' (' + _escape(info['section']) + ')' ) if info.get('section') else ''}, "
+        f"resident of House/Plot <b>{_escape(house_no)}</b>, "
         f"Housing Board Colony Sanyard, Mandi, has <b>no outstanding subscription / maintenance dues</b> "
         f"as per the RWA ledger on record for fee year <b>{fee_year}</b>."
     )
@@ -1378,6 +1393,7 @@ def build_no_dues_certificate_pdf(
         "(no pending dues; no payment receipts awaiting verification).",
         body_style,
     ))
+    story.append(Paragraph(f"<b>Purpose:</b> {_escape(purpose_text)}", body_style))
     story.append(Paragraph(f"Issued on: <b>{issued}</b>", meta_style))
     if issued_by:
         story.append(Paragraph(f"Issued by: {_escape(issued_by)}", meta_style))
@@ -1395,8 +1411,8 @@ def build_no_dues_certificate_pdf(
 
     story.append(Spacer(1, 14 * mm))
     story.append(Paragraph(
-        "This certificate is issued for official / banking / transfer purposes as requested. "
-        "It reflects RWA subscription ledger status only and does not cover municipal taxes or utility bills.",
+        "This certificate reflects RWA subscription ledger status only and does not cover "
+        "municipal taxes or utility bills.",
         ParagraphStyle("ndFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
     ))
 
@@ -1410,17 +1426,196 @@ def build_no_dues_certificate_pdf(
             pass
 
     def _footer(canvas, _doc):
+        # Digital only — paper print leaves the physical letterhead clean.
+        if not letterhead:
+            return
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(colors.HexColor("#666666"))
         canvas.drawString(18 * mm, 10 * mm, "HBC Sanyard RWA - No Dues Certificate")
-        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"Plot {info['plotNo']}")
+        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"House/Plot {house_no}")
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
-    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", str(info["plotNo"]))
+    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", house_no)
     stamp = _now_ist().strftime("%Y%m%d")
-    return buf.getvalue(), f"no-dues-{safe_plot}-{stamp}.pdf"
+    suffix = "" if letterhead else "-print"
+    return buf.getvalue(), f"no-dues-{safe_plot}-{stamp}{suffix}.pdf"
+
+
+def no_objection_eligibility(conn, house_id: str) -> dict:
+    """Check whether a plot can receive a No Objection Certificate (active on roster)."""
+    hid = (house_id or "").strip()
+    if not hid:
+        raise ValueError("houseId required")
+    resident = conn.execute(
+        """
+        SELECT house_id, plot_no, name, status
+        FROM residents WHERE house_id = ?
+        """,
+        (hid,),
+    ).fetchone()
+    if not resident:
+        raise ValueError(f"Unknown plot {hid}")
+    active = (resident["status"] or "") == "active"
+    return {
+        "eligible": active,
+        "houseId": hid,
+        "plotNo": resident["plot_no"] or hid,
+        "name": resident["name"] or hid,
+        "status": resident["status"] or "",
+        "reason": None if active else "Plot is not active on the roster",
+    }
+
+
+def build_no_objection_certificate_pdf(
+    conn,
+    *,
+    site_root: Path,
+    house_id: str,
+    issued_by: str | None = None,
+    purpose: str | None = None,
+    letterhead: bool = True,
+    require_eligible: bool = True,
+    attestation_id: str | None = None,
+    verify_url: str | None = None,
+) -> tuple[bytes, str]:
+    """Portrait No Objection Certificate PDF for one plot.
+
+    letterhead=True (digital): seal + org header for screen/share.
+    letterhead=False (paper print): omit letterhead; enlarge top/bottom margins
+    so the body fits pre-printed RWA letterhead stationery.
+    """
+    info = no_objection_eligibility(conn, house_id)
+    if require_eligible and not info["eligible"]:
+        raise ValueError(info.get("reason") or "Plot is not eligible")
+
+    rl = _reportlab()
+    colors = rl["colors"]
+    mm = rl["mm"]
+    ParagraphStyle = rl["ParagraphStyle"]
+    Paragraph = rl["Paragraph"]
+    Spacer = rl["Spacer"]
+    Image = rl["Image"]
+    styles = rl["getSampleStyleSheet"]()
+
+    bearers = office_bearers_for_header(conn)
+    issued = _fmt_ist_date()
+    purpose_text = (
+        (purpose or "").strip()[:400]
+        or "Property transfer / sale / mortgage / official purposes"
+    )
+
+    top_m = 48 * mm if not letterhead else 16 * mm
+    bottom_m = 32 * mm if not letterhead else 16 * mm
+
+    buf = io.BytesIO()
+    page = rl["A4"]
+    doc = rl["SimpleDocTemplate"](
+        buf,
+        pagesize=page,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=top_m,
+        bottomMargin=bottom_m,
+        title=f"No Objection Certificate - House/Plot {info['plotNo']}",
+        author="HBC Sanyard RWA",
+    )
+
+    org_style = ParagraphStyle(
+        "nocOrg", parent=styles["Heading1"], fontSize=14, leading=18,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
+    )
+    sub_style = ParagraphStyle(
+        "nocSub", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
+    )
+    title_style = ParagraphStyle(
+        "nocTitle", parent=styles["Heading1"], fontSize=16, leading=20,
+        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
+        spaceBefore=10 if letterhead else 4, spaceAfter=14,
+    )
+    body_style = ParagraphStyle(
+        "nocBody", parent=styles["Normal"], fontSize=11, leading=16,
+        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
+    )
+    meta_style = ParagraphStyle(
+        "nocMeta", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor("#444444"), spaceAfter=4,
+    )
+
+    story = []
+    if letterhead:
+        seal = _seal_path(site_root)
+        if seal:
+            try:
+                img = Image(str(seal), width=22 * mm, height=22 * mm)
+                img.hAlign = "CENTER"
+                story.append(img)
+                story.append(Spacer(1, 4 * mm))
+            except Exception:
+                pass
+
+        story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
+        story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
+
+    story.append(Paragraph("<b>NO OBJECTION CERTIFICATE</b>", title_style))
+
+    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
+    body = (
+        f"This is to certify that the Residents Welfare Association of "
+        f"Housing Board Colony Sanyard, Mandi, has <b>no objection</b> for "
+        f"<b>{_escape(info['name'])}</b>, resident of House/Plot <b>{_escape(house_no)}</b>, "
+        f"in respect of the purpose stated below."
+    )
+    story.append(Paragraph(body, body_style))
+    story.append(Paragraph(f"<b>Purpose:</b> {_escape(purpose_text)}", body_style))
+    story.append(Paragraph(f"Issued on: <b>{issued}</b>", meta_style))
+    if issued_by:
+        story.append(Paragraph(f"Issued by: {_escape(issued_by)}", meta_style))
+    story.append(Spacer(1, 8 * mm))
+
+    if bearers:
+        story.append(Paragraph("<b>Office bearers</b>", meta_style))
+        for b in bearers[:6]:
+            title = b.get("officialTitle") or "Office Bearer"
+            story.append(Paragraph(
+                f"{_escape(title)} - {_escape(b.get('name') or '')}"
+                + (f" · {_escape(b['phone'])}" if b.get("phone") else ""),
+                meta_style,
+            ))
+
+    story.append(Spacer(1, 14 * mm))
+    story.append(Paragraph(
+        "This certificate expresses the RWA's non-objection for the stated purpose only "
+        "and does not constitute a dues clearance, title deed, or municipal approval.",
+        ParagraphStyle("nocFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
+    ))
+
+    if attestation_id and verify_url:
+        try:
+            import rwa_attest
+            rwa_attest.append_attestation_to_story(
+                story, rl, verify_url=verify_url, attestation_id=attestation_id
+            )
+        except Exception:
+            pass
+
+    def _footer(canvas, _doc):
+        if not letterhead:
+            return
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#666666"))
+        canvas.drawString(18 * mm, 10 * mm, "HBC Sanyard RWA - No Objection Certificate")
+        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"House/Plot {house_no}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", house_no)
+    stamp = _now_ist().strftime("%Y%m%d")
+    suffix = "" if letterhead else "-print"
+    return buf.getvalue(), f"no-objection-{safe_plot}-{stamp}{suffix}.pdf"
 
 
 def build_cash_received_note_pdf(

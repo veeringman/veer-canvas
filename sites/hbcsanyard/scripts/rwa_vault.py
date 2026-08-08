@@ -15,15 +15,16 @@ from typing import Any
 from init_rwa_db import SUPERADMIN_HOUSE_ID, utc_now
 import rwa_entitlements as entitlements
 
-DOC_TYPES = ("receipt", "cash_note", "no_dues", "other")
+DOC_TYPES = ("receipt", "cash_note", "no_dues", "no_objection", "other")
 VISIBILITIES = ("private", "shared_ec")
 DOC_STATUSES = ("uploaded", "under_review", "verified", "rejected")
-SOURCE_KINDS = ("receipt_file", "no_dues", "attestation", "vault_upload")
+SOURCE_KINDS = ("receipt_file", "no_dues", "no_objection", "attestation", "vault_upload")
 
 DOC_TYPE_LABELS = {
     "receipt": "Payment receipt",
     "cash_note": "Cash note",
     "no_dues": "No Dues certificate",
+    "no_objection": "No Objection certificate",
     "other": "Document",
 }
 STATUS_LABELS = {
@@ -48,7 +49,7 @@ def ensure_vault_tables(conn: sqlite3.Connection) -> None:
           id TEXT PRIMARY KEY,
           house_id TEXT NOT NULL REFERENCES residents(house_id),
           doc_type TEXT NOT NULL DEFAULT 'other'
-            CHECK(doc_type IN ('receipt','cash_note','no_dues','other')),
+            CHECK(doc_type IN ('receipt','cash_note','no_dues','no_objection','other')),
           title TEXT NOT NULL DEFAULT '',
           description TEXT NOT NULL DEFAULT '',
           original_name TEXT,
@@ -60,10 +61,11 @@ def ensure_vault_tables(conn: sqlite3.Connection) -> None:
           status TEXT NOT NULL DEFAULT 'uploaded'
             CHECK(status IN ('uploaded','under_review','verified','rejected')),
           source_kind TEXT NOT NULL DEFAULT 'vault_upload'
-            CHECK(source_kind IN ('receipt_file','no_dues','attestation','vault_upload')),
+            CHECK(source_kind IN ('receipt_file','no_dues','no_objection','attestation','vault_upload')),
           source_id TEXT,
           linked_payment_record_id TEXT,
           linked_no_dues_id TEXT,
+          linked_no_objection_id TEXT,
           linked_attestation_id TEXT,
           uploaded_by_house_id TEXT,
           uploaded_by_member_id TEXT,
@@ -86,6 +88,77 @@ def ensure_vault_tables(conn: sqlite3.Connection) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(vault_documents)").fetchall()}
     if cols and "description" not in cols:
         conn.execute("ALTER TABLE vault_documents ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+    if cols and "linked_no_objection_id" not in cols:
+        conn.execute("ALTER TABLE vault_documents ADD COLUMN linked_no_objection_id TEXT")
+    # Expand CHECK constraints when an older table is present.
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='vault_documents'"
+    ).fetchone()
+    ddl = (row[0] if row else "") or ""
+    if ddl and "no_objection" not in ddl:
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS vault_documents_v2 (
+              id TEXT PRIMARY KEY,
+              house_id TEXT NOT NULL REFERENCES residents(house_id),
+              doc_type TEXT NOT NULL DEFAULT 'other'
+                CHECK(doc_type IN ('receipt','cash_note','no_dues','no_objection','other')),
+              title TEXT NOT NULL DEFAULT '',
+              description TEXT NOT NULL DEFAULT '',
+              original_name TEXT,
+              mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+              size_bytes INTEGER NOT NULL DEFAULT 0,
+              stored_rel TEXT NOT NULL,
+              visibility TEXT NOT NULL DEFAULT 'private'
+                CHECK(visibility IN ('private','shared_ec')),
+              status TEXT NOT NULL DEFAULT 'uploaded'
+                CHECK(status IN ('uploaded','under_review','verified','rejected')),
+              source_kind TEXT NOT NULL DEFAULT 'vault_upload'
+                CHECK(source_kind IN ('receipt_file','no_dues','no_objection','attestation','vault_upload')),
+              source_id TEXT,
+              linked_payment_record_id TEXT,
+              linked_no_dues_id TEXT,
+              linked_no_objection_id TEXT,
+              linked_attestation_id TEXT,
+              uploaded_by_house_id TEXT,
+              uploaded_by_member_id TEXT,
+              uploaded_by_role TEXT NOT NULL DEFAULT 'resident',
+              verified_by_house_id TEXT,
+              verified_at TEXT,
+              verify_note TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO vault_documents_v2(
+              id, house_id, doc_type, title, description, original_name, mime, size_bytes,
+              stored_rel, visibility, status, source_kind, source_id,
+              linked_payment_record_id, linked_no_dues_id, linked_no_objection_id,
+              linked_attestation_id, uploaded_by_house_id, uploaded_by_member_id,
+              uploaded_by_role, verified_by_house_id, verified_at, verify_note,
+              created_at, updated_at
+            )
+            SELECT
+              id, house_id, doc_type, title, COALESCE(description, ''), original_name, mime, size_bytes,
+              stored_rel, visibility, status, source_kind, source_id,
+              linked_payment_record_id, linked_no_dues_id, NULL,
+              linked_attestation_id, uploaded_by_house_id, uploaded_by_member_id,
+              uploaded_by_role, verified_by_house_id, verified_at, verify_note,
+              created_at, updated_at
+            FROM vault_documents;
+            DROP TABLE vault_documents;
+            ALTER TABLE vault_documents_v2 RENAME TO vault_documents;
+            CREATE INDEX IF NOT EXISTS idx_vault_house
+              ON vault_documents(house_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_vault_visibility
+              ON vault_documents(visibility, house_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vault_source
+              ON vault_documents(source_kind, source_id)
+              WHERE source_id IS NOT NULL AND source_id != '';
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
     # Unique path index may fail until dedupe_catalog runs — create when possible.
     try:
         conn.execute(
@@ -106,7 +179,13 @@ def _status_rank(status: str | None) -> int:
 
 def _source_rank(source_kind: str | None) -> int:
     # Prefer canonical issued docs over payment receipt copies / ad-hoc uploads.
-    return {"no_dues": 4, "attestation": 3, "receipt_file": 2, "vault_upload": 1}.get(source_kind or "", 0)
+    return {
+        "no_dues": 4,
+        "no_objection": 4,
+        "attestation": 3,
+        "receipt_file": 2,
+        "vault_upload": 1,
+    }.get(source_kind or "", 0)
 
 
 def _pick_better_row(a: sqlite3.Row | dict, b: sqlite3.Row | dict) -> sqlite3.Row | dict:
@@ -323,6 +402,8 @@ def can_browse_ec_shared(actor: dict) -> bool:
         return True
     if entitlements.actor_has(actor, "issue_no_dues"):
         return True
+    if entitlements.actor_has(actor, "issue_no_objection"):
+        return True
     return entitlements.is_ec_member(actor)
 
 
@@ -362,7 +443,7 @@ def can_delete_doc(actor: dict, doc: dict) -> bool:
     if status == "verified":
         return False
     # Issued certificates stay unless rejected in vault review.
-    if source in ("no_dues", "attestation") and status != "rejected":
+    if source in ("no_dues", "no_objection", "attestation") and status != "rejected":
         return False
     return status in ("uploaded", "under_review", "rejected")
 
@@ -391,6 +472,7 @@ def public_doc(row: sqlite3.Row | dict, *, actor: dict | None = None) -> dict:
         "sourceId": data.get("source_id") or "",
         "linkedPaymentRecordId": data.get("linked_payment_record_id") or "",
         "linkedNoDuesId": data.get("linked_no_dues_id") or "",
+        "linkedNoObjectionId": data.get("linked_no_objection_id") or "",
         "linkedAttestationId": data.get("linked_attestation_id") or "",
         "uploadedByHouseId": data.get("uploaded_by_house_id") or "",
         "uploadedByRole": data.get("uploaded_by_role") or "",
@@ -404,13 +486,19 @@ def public_doc(row: sqlite3.Row | dict, *, actor: dict | None = None) -> dict:
         "isPdf": str(data.get("mime") or "") == "application/pdf"
         or str(data.get("original_name") or "").lower().endswith(".pdf"),
     }
-    # Distinguish re-issued No Dues certs that share a default filename.
+    # Distinguish re-issued certificates that share a default filename.
     if doc_type == "no_dues":
         sid = (out["sourceId"] or out["linkedNoDuesId"] or "")[-6:]
         label = out["statusLabel"]
         base = (out["title"] or "No Dues certificate").strip()
         if sid and sid not in base:
             out["title"] = f"No Dues · {label}" + (f" ({sid})" if sid else "")
+    if doc_type == "no_objection":
+        sid = (out["sourceId"] or out["linkedNoObjectionId"] or "")[-6:]
+        label = out["statusLabel"]
+        base = (out["title"] or "No Objection certificate").strip()
+        if sid and sid not in base:
+            out["title"] = f"No Objection · {label}" + (f" ({sid})" if sid else "")
     if actor is not None:
         out["canDelete"] = can_delete_doc(actor, out)
     return out
@@ -497,6 +585,7 @@ def _upsert_catalog(
     description: str = "",
     linked_payment_record_id: str | None = None,
     linked_no_dues_id: str | None = None,
+    linked_no_objection_id: str | None = None,
     linked_attestation_id: str | None = None,
     uploaded_by_house_id: str | None = None,
     uploaded_by_member_id: str | None = None,
@@ -531,6 +620,7 @@ def _upsert_catalog(
               size_bytes = ?, stored_rel = ?, visibility = ?, status = ?,
               linked_payment_record_id = COALESCE(?, linked_payment_record_id),
               linked_no_dues_id = COALESCE(?, linked_no_dues_id),
+              linked_no_objection_id = COALESCE(?, linked_no_objection_id),
               linked_attestation_id = COALESCE(?, linked_attestation_id),
               updated_at = ?
             WHERE id = ?
@@ -548,6 +638,7 @@ def _upsert_catalog(
                 status if status in DOC_STATUSES else "uploaded",
                 linked_payment_record_id,
                 linked_no_dues_id,
+                linked_no_objection_id,
                 linked_attestation_id,
                 now,
                 existing["id"],
@@ -561,10 +652,10 @@ def _upsert_catalog(
             INSERT INTO vault_documents(
               id, house_id, doc_type, title, description, original_name, mime, size_bytes, stored_rel,
               visibility, status, source_kind, source_id,
-              linked_payment_record_id, linked_no_dues_id, linked_attestation_id,
+              linked_payment_record_id, linked_no_dues_id, linked_no_objection_id, linked_attestation_id,
               uploaded_by_house_id, uploaded_by_member_id, uploaded_by_role,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 vid,
@@ -582,6 +673,7 @@ def _upsert_catalog(
                 source_id,
                 linked_payment_record_id,
                 linked_no_dues_id,
+                linked_no_objection_id,
                 linked_attestation_id,
                 uploaded_by_house_id,
                 uploaded_by_member_id,
@@ -732,6 +824,46 @@ def index_no_dues_certificate(
     )
 
 
+def index_no_objection_certificate(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    house_id: str,
+    request_id: str,
+    filename: str,
+    original_name: str,
+    attestation_id: str | None = None,
+    uploaded_by_house_id: str | None = None,
+    commit: bool = True,
+) -> dict | None:
+    import rwa_no_objection
+
+    if not filename:
+        return None
+    path = rwa_no_objection.certificate_path(site_root, house_id, request_id, filename)
+    if not path.is_file():
+        return None
+    return _upsert_catalog(
+        conn,
+        house_id=house_id,
+        doc_type="no_objection",
+        title=original_name or "No Objection certificate",
+        original_name=original_name or filename,
+        mime="application/pdf",
+        size_bytes=path.stat().st_size,
+        stored_rel=_rel_path(site_root, path),
+        visibility="shared_ec",
+        status="under_review",
+        source_kind="no_objection",
+        source_id=request_id,
+        linked_no_objection_id=request_id,
+        linked_attestation_id=attestation_id,
+        uploaded_by_house_id=uploaded_by_house_id,
+        uploaded_by_role="ec",
+        commit=commit,
+    )
+
+
 def index_attestation(
     conn: sqlite3.Connection,
     site_root: pathlib.Path,
@@ -747,11 +879,16 @@ def index_attestation(
     path = resolve_stored_file(site_root, stored_path)
     if not path.is_file():
         return None
-    doc_type = "cash_note" if artifact_type == "cash_note" else (
-        "no_dues" if artifact_type == "no_dues" else "other"
-    )
-    # No-dues already indexed via request id when issued; skip duplicate path-only row.
-    if artifact_type == "no_dues":
+    if artifact_type == "cash_note":
+        doc_type = "cash_note"
+    elif artifact_type == "no_dues":
+        doc_type = "no_dues"
+    elif artifact_type == "no_objection":
+        doc_type = "no_objection"
+    else:
+        doc_type = "other"
+    # Certificates already indexed via request id when issued; skip duplicate path-only row.
+    if artifact_type in ("no_dues", "no_objection"):
         return None
     return _upsert_catalog(
         conn,
@@ -955,6 +1092,11 @@ def set_verify_status(
         raise PermissionError("Not allowed to verify vault documents")
     if status not in ("verified", "rejected", "under_review"):
         raise ValueError("Invalid verify status")
+    note_text = (note or "").strip()[:500] or None
+    if status == "rejected":
+        import rwa_treasury
+
+        note_text = rwa_treasury.require_rejection_reason(note)
     row = get_doc_row(conn, doc_id)
     if not row:
         raise ValueError("Document not found")
@@ -977,7 +1119,7 @@ def set_verify_status(
             status,
             actor.get("houseId") or actor.get("house_id"),
             now if status in ("verified", "rejected") else None,
-            (note or "").strip()[:500] or None,
+            note_text,
             now,
             doc_id,
         ),
@@ -1031,18 +1173,27 @@ def vault_context(
         records = rwa_payments.list_records(conn, house_id=hid, limit=40)
 
     no_dues = []
+    no_objection = []
     own_or_issuer = (
         can_dues
         or entitlements.actor_has(actor, "issue_no_dues")
+        or entitlements.actor_has(actor, "issue_no_objection")
         or (actor.get("houseId") or "") == hid
         or bool(actor.get("superAdmin"))
     )
     if own_or_issuer:
+        import rwa_no_objection
+
         rows = conn.execute(
             "SELECT * FROM no_dues_requests WHERE house_id = ? ORDER BY created_at DESC LIMIT 20",
             (hid,),
         ).fetchall()
         no_dues = [rwa_no_dues.public_request(conn, r) for r in rows]
+        rows = conn.execute(
+            "SELECT * FROM no_objection_requests WHERE house_id = ? ORDER BY created_at DESC LIMIT 20",
+            (hid,),
+        ).fetchall()
+        no_objection = [rwa_no_objection.public_request(conn, r) for r in rows]
 
     return {
         "ok": True,
@@ -1053,6 +1204,7 @@ def vault_context(
         "ledger": ledger,
         "paymentRecords": records,
         "noDues": no_dues,
+        "noObjection": no_objection,
         "capabilities": {
             "canUpload": can_upload_for_house(actor, hid),
             "canShare": (actor.get("houseId") or "") == hid or can_dues,
@@ -1125,6 +1277,32 @@ def backfill_from_existing(conn: sqlite3.Connection, site_root: pathlib.Path) ->
                 added += 1
         except Exception:
             continue
+
+    try:
+        noc_rows = conn.execute(
+            """
+            SELECT id, house_id, filename, original_name, reviewed_by_house_id
+            FROM no_objection_requests
+            WHERE status = 'issued' AND filename IS NOT NULL AND filename != ''
+            """
+        ).fetchall()
+        for r in noc_rows:
+            try:
+                if index_no_objection_certificate(
+                    conn,
+                    site_root,
+                    house_id=r["house_id"],
+                    request_id=r["id"],
+                    filename=r["filename"],
+                    original_name=r["original_name"] or r["filename"],
+                    uploaded_by_house_id=r["reviewed_by_house_id"],
+                    commit=False,
+                ):
+                    added += 1
+            except Exception:
+                continue
+    except sqlite3.OperationalError:
+        pass
 
     att_rows = conn.execute(
         """

@@ -1358,6 +1358,16 @@ body.is-view-only #grievanceForm {
   border: 1px solid var(--line);
   background: rgba(255, 252, 246, 0.85);
 }
+.noc-plot-finance {
+  margin: 0.35rem 0 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(46, 90, 68, 0.06);
+  border: 1px solid rgba(46, 90, 68, 0.12);
+}
+.noc-plot-finance p {
+  margin: 0.15rem 0;
+}
 .payment-record-head {
   display: flex;
   flex-wrap: wrap;
@@ -1484,6 +1494,44 @@ body.is-view-only #grievanceForm {
 }
 .no-dues-resident-block {
   margin: 1rem 0 1.25rem;
+}
+.no-dues-purpose-label {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.88rem;
+  color: var(--navy);
+}
+.no-dues-purpose-label textarea {
+  width: 100%;
+  max-width: 36rem;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 3.2rem;
+}
+.no-dues-purpose-label textarea[readonly] {
+  background: rgba(21, 35, 63, 0.04);
+  color: var(--ink, #1a1a1a);
+  cursor: default;
+}
+.no-dues-download-dialog .no-dues-download-options {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1fr;
+}
+.no-dues-download-dialog .no-dues-download-options .btn {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  white-space: normal;
+  height: auto;
+  line-height: 1.35;
+}
+.no-dues-download-dialog .no-dues-download-options .btn .muted {
+  font-size: 0.78rem;
+  font-weight: 500;
 }
 .payment-files {
   margin: 0.35rem 0 0.45rem;

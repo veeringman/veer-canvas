@@ -12,7 +12,7 @@ from typing import Any
 
 from init_rwa_db import SUPERADMIN_HOUSE_ID, ensure_messages_and_push_tables, utc_now
 
-PREF_KEYS = ("messages", "notices", "concerns", "dues", "treasury", "no_dues")
+PREF_KEYS = ("messages", "notices", "concerns", "dues", "treasury", "no_dues", "no_objection")
 EVENT_PREF = {
     "message": "messages",
     "notice": "notices",
@@ -20,6 +20,7 @@ EVENT_PREF = {
     "dues": "dues",
     "treasury": "treasury",
     "no_dues": "no_dues",
+    "no_objection": "no_objection",
     "test": "messages",
 }
 
@@ -138,7 +139,7 @@ def get_prefs(conn: sqlite3.Connection, member_id: str | None, house_id: str) ->
     return {
         "memberId": member_id,
         "houseId": row["house_id"],
-        **{k: bool(row[k]) for k in PREF_KEYS},
+        **{k: bool(row[k]) if k in row.keys() else True for k in PREF_KEYS},
         "updatedAt": row["updated_at"],
     }
 
@@ -158,8 +159,8 @@ def save_prefs(
     conn.execute(
         """
         INSERT INTO notification_prefs(
-          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, no_objection, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(member_id) DO UPDATE SET
           house_id = excluded.house_id,
           messages = excluded.messages,
@@ -168,6 +169,7 @@ def save_prefs(
           dues = excluded.dues,
           treasury = excluded.treasury,
           no_dues = excluded.no_dues,
+          no_objection = excluded.no_objection,
           updated_at = excluded.updated_at
         """,
         (
@@ -179,6 +181,7 @@ def save_prefs(
             vals["dues"],
             vals["treasury"],
             vals["no_dues"],
+            vals["no_objection"],
             now,
         ),
     )

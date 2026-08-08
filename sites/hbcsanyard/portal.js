@@ -1674,7 +1674,7 @@
       el('paymentRecordPaidOn').value = todayIstDate();
     }
     syncPaymentRecordFormKind();
-    if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues')) {
+    if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues') || hasEntitlement('issue_no_objection')) {
       populatePaymentHouseList().catch(() => {});
     }
     await loadPaymentRecords().catch((e) => {
@@ -1682,6 +1682,9 @@
     });
     await loadResidentNoDues().catch((e) => {
       if (el('noDuesResidentStatus')) el('noDuesResidentStatus').textContent = e.message || 'Could not load certificate status';
+    });
+    await loadResidentNoObjection().catch((e) => {
+      if (el('noObjectionResidentStatus')) el('noObjectionResidentStatus').textContent = e.message || 'Could not load certificate status';
     });
 
     if (hasEntitlement('manage_dues')) {
@@ -1817,6 +1820,15 @@
     </span>`;
   }
 
+  function promptRejectionReason(label = 'Reason for rejection (required):') {
+    const note = (window.prompt(label) || '').trim();
+    if (!note) {
+      window.alert('A rejection reason is required.');
+      return null;
+    }
+    return note.slice(0, 500);
+  }
+
   function treasuryActionButtons(kind, id, status, { compact = true } = {}) {
     if (!hasEntitlement('treasury') || !id) return '';
     const st = status || 'pending';
@@ -1839,6 +1851,7 @@
       payment: `/api/rwa/treasury/payments/${encodeURIComponent(id)}/${action}`,
       ledger: `/api/rwa/treasury/ledger/${encodeURIComponent(id)}/${action}`,
       no_dues: `/api/rwa/treasury/no-dues/${encodeURIComponent(id)}/${action}`,
+      no_objection: `/api/rwa/treasury/no-objection/${encodeURIComponent(id)}/${action}`,
     };
     const url = paths[kind];
     if (!url) throw new Error('Unknown treasury kind');
@@ -1865,8 +1878,10 @@
         await loadLedger().catch(() => {});
       }
       if (hasEntitlement('issue_no_dues')) await loadEcNoDuesRequests().catch(() => {});
+      if (hasEntitlement('issue_no_objection')) await loadEcNoObjectionRequests().catch(() => {});
       await loadPaymentRecords().catch(() => {});
       await loadResidentNoDues().catch(() => {});
+      await loadResidentNoObjection().catch(() => {});
       await loadDues().catch(() => {});
     } catch (err) {
       window.alert(err.message || 'Treasury action failed');
@@ -2034,16 +2049,31 @@
     list.innerHTML = rows.map((r) => renderPaymentRecordCard(r, { ecMode: true })).join('');
   }
 
-  async function downloadNoDuesRequest(requestId) {
+  async function downloadNoDuesRequest(requestId, variant = 'digital') {
     if (!requestId) throw new Error('Request required');
+    const v = variant === 'print' ? 'print' : 'digital';
+    const label = v === 'print' ? 'No Dues certificate (paper print)' : 'No Dues certificate (digital)';
+    const suffix = v === 'print' ? '-print' : '';
     await openDocViewerFromAuthUrl(
-      `/api/rwa/payments/no-dues-requests/${encodeURIComponent(requestId)}/download`,
+      `/api/rwa/payments/no-dues-requests/${encodeURIComponent(requestId)}/download?variant=${encodeURIComponent(v)}`,
       {
-        title: 'No Dues certificate',
-        filename: `no-dues-${requestId}.pdf`,
+        title: label,
+        filename: `no-dues-${requestId}${suffix}.pdf`,
         mime: 'application/pdf',
       },
     );
+  }
+
+  let pendingNoDuesDownloadId = '';
+
+  function openNoDuesDownloadChooser(requestId) {
+    pendingNoDuesDownloadId = requestId || '';
+    const dialog = el('noDuesDownloadDialog');
+    if (!dialog || !pendingNoDuesDownloadId) {
+      return downloadNoDuesRequest(requestId, 'digital');
+    }
+    if (!dialog.open) dialog.showModal();
+    return Promise.resolve();
   }
 
   function renderNoDuesRequestCard(item, { issuer = false } = {}) {
@@ -2076,6 +2106,7 @@
           ${item.status === 'issued' ? treasuryStatusIcon(item) : ''}
         </div>
         <p class="muted">Requested ${escapeHtml(formatIstDate(item.createdAt) || '—')}${item.issuedAt ? ` · issued ${escapeHtml(formatIstDate(item.issuedAt))}` : ''}</p>
+        ${item.purpose ? `<p><strong>Purpose:</strong> ${escapeHtml(item.purpose)}${item.sentBack ? ' <span class="muted">(sent back — editable)</span>' : ''}</p>` : ''}
         ${item.requestNote ? `<p>${escapeHtml(item.requestNote)}</p>` : ''}
         ${item.reviewNote ? `<p class="muted">Note: ${escapeHtml(item.reviewNote)}</p>` : ''}
         ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
@@ -2100,8 +2131,37 @@
     const reqBtn = el('noDuesRequestBtn');
     const dlBtn = el('noDuesDownloadBtn');
     const status = el('noDuesResidentStatus');
+    const purposeInput = el('noDuesPurpose');
+    const purposeWrap = el('noDuesPurposeWrap');
+    const purposeSave = el('noDuesPurposeSaveBtn');
+    const purposeLockedHint = el('noDuesPurposeLockedHint');
+    const canEditSentBack = Boolean(pending?.canEditPurpose) && !isViewOnly();
+    const canNewRequest = Boolean(elig.eligible) && !pending && !isViewOnly();
+    if (purposeWrap) {
+      // Show for new request, locked pending (read-only), or sent-back edit.
+      purposeWrap.hidden = isViewOnly() || (!canNewRequest && !pending);
+    }
+    if (purposeInput) {
+      if (pending) {
+        purposeInput.value = pending.purpose || elig.defaultPurpose || 'Official / banking / transfer purposes';
+        purposeInput.readOnly = !canEditSentBack;
+        purposeInput.dataset.touched = canEditSentBack ? (purposeInput.dataset.touched || '') : '';
+      } else {
+        purposeInput.readOnly = false;
+        if (!purposeInput.dataset.touched) {
+          purposeInput.value = elig.defaultPurpose || 'Official / banking / transfer purposes';
+        }
+      }
+    }
+    if (purposeSave) {
+      purposeSave.hidden = !canEditSentBack;
+      purposeSave.dataset.requestId = canEditSentBack ? (pending.id || '') : '';
+    }
+    if (purposeLockedHint) {
+      purposeLockedHint.hidden = !(pending && !canEditSentBack);
+    }
     if (reqBtn) {
-      reqBtn.hidden = !elig.eligible || Boolean(pending) || isViewOnly();
+      reqBtn.hidden = !canNewRequest;
       reqBtn.dataset.requestId = '';
     }
     if (dlBtn) {
@@ -2110,7 +2170,8 @@
       dlBtn.dataset.requestId = canDl ? (latestIssued.id || '') : '';
     }
     if (status) {
-      if (pending) status.textContent = 'Request submitted — waiting for a No Dues Issuer to approve.';
+      if (pending?.sentBack) status.textContent = 'Request sent back — update the purpose if needed, then wait for re-issue.';
+      else if (pending) status.textContent = 'Request submitted — waiting for a No Dues Issuer to approve. Purpose is locked.';
       else if (latestIssued && latestIssued.downloadLocked) {
         status.textContent = `Certificate issued — awaiting Treasury ${latestIssued.treasuryStatus === 'validated' ? 'confirmation' : 'validation'} before download.`;
       } else if (latestIssued) status.textContent = 'Certificate issued and Treasury-confirmed — you can download it below.';
@@ -2248,7 +2309,8 @@
           body: JSON.stringify({ reviewNote: note }),
         });
       } else if (reject) {
-        const note = window.prompt('Reason for rejection (optional):') || '';
+        const note = promptRejectionReason();
+        if (!note) return;
         await api(`/api/rwa/payments/records/${encodeURIComponent(id)}/reject`, {
           method: 'POST',
           body: JSON.stringify({ reviewNote: note }),
@@ -2346,16 +2408,43 @@
   el('ecPaymentStatusFilter')?.addEventListener('change', () => loadEcPaymentRecords().catch(console.error));
   el('ecPaymentKindFilter')?.addEventListener('change', () => loadEcPaymentRecords().catch(console.error));
 
+  el('noDuesPurpose')?.addEventListener('input', () => {
+    if (el('noDuesPurpose') && !el('noDuesPurpose').readOnly) el('noDuesPurpose').dataset.touched = '1';
+  });
+
+  el('noDuesPurposeSaveBtn')?.addEventListener('click', async () => {
+    const id = el('noDuesPurposeSaveBtn')?.dataset?.requestId;
+    const status = el('noDuesResidentStatus');
+    const btn = el('noDuesPurposeSaveBtn');
+    if (!id) return;
+    if (btn) btn.disabled = true;
+    try {
+      await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/purpose`, {
+        method: 'POST',
+        body: JSON.stringify({ purpose: (el('noDuesPurpose')?.value || '').trim() }),
+      });
+      if (status) status.textContent = 'Purpose updated.';
+      await loadResidentNoDues();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save purpose';
+      window.alert(err.message || 'Could not save purpose');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
   el('noDuesRequestBtn')?.addEventListener('click', async () => {
     const status = el('noDuesResidentStatus');
     const btn = el('noDuesRequestBtn');
     if (btn) btn.disabled = true;
     if (status) status.textContent = 'Submitting request…';
     try {
+      const purpose = (el('noDuesPurpose')?.value || '').trim();
       await api('/api/rwa/payments/no-dues-requests', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ purpose }),
       });
+      if (el('noDuesPurpose')) el('noDuesPurpose').dataset.touched = '';
       await loadResidentNoDues();
     } catch (err) {
       if (status) status.textContent = err.message || 'Request failed';
@@ -2368,10 +2457,42 @@
     const id = el('noDuesDownloadBtn')?.dataset?.requestId;
     const status = el('noDuesResidentStatus');
     try {
-      await downloadNoDuesRequest(id);
-      if (status) status.textContent = 'Certificate opened — use Go back to return, or Download to save.';
+      await openNoDuesDownloadChooser(id);
     } catch (err) {
       if (status) status.textContent = err.message || 'Download failed';
+    }
+  });
+
+  el('noDuesDownloadCancelBtn')?.addEventListener('click', () => {
+    el('noDuesDownloadDialog')?.close();
+    pendingNoDuesDownloadId = '';
+  });
+  el('noDuesDlDigitalBtn')?.addEventListener('click', async () => {
+    const id = pendingNoDuesDownloadId;
+    el('noDuesDownloadDialog')?.close();
+    const status = el('noDuesResidentStatus');
+    try {
+      await downloadNoDuesRequest(id, 'digital');
+      if (status) status.textContent = 'Digital certificate opened — use Go back to return, or Download to save.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+      window.alert(err.message || 'Download failed');
+    } finally {
+      pendingNoDuesDownloadId = '';
+    }
+  });
+  el('noDuesDlPrintBtn')?.addEventListener('click', async () => {
+    const id = pendingNoDuesDownloadId;
+    el('noDuesDownloadDialog')?.close();
+    const status = el('noDuesResidentStatus');
+    try {
+      await downloadNoDuesRequest(id, 'print');
+      if (status) status.textContent = 'Print version opened — print on RWA letterhead paper.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+      window.alert(err.message || 'Download failed');
+    } finally {
+      pendingNoDuesDownloadId = '';
     }
   });
 
@@ -2391,7 +2512,7 @@
         await loadResidentNoDues();
         return;
       }
-      await downloadNoDuesRequest(id);
+      await openNoDuesDownloadChooser(id);
     } catch (err) {
       window.alert(err.message || 'Action failed');
     }
@@ -2411,7 +2532,8 @@
       const payments = data.payments || [];
       const ledger = data.ledger || [];
       const noDues = data.noDues || [];
-      const n = payments.length + ledger.length + noDues.length;
+      const noObjection = data.noObjection || [];
+      const n = payments.length + ledger.length + noDues.length + noObjection.length;
       if (el('ecTreasuryStats')) {
         el('ecTreasuryStats').textContent =
           `${n} item${n === 1 ? '' : 's'} · validate then confirm · ledger amounts may already show after EC verify`;
@@ -2441,6 +2563,10 @@
         parts.push(`<div class="treasury-queue-section"><h4>No Dues (${noDues.length})</h4>
           ${noDues.map((r) => renderNoDuesRequestCard(r, { issuer: false })).join('')}</div>`);
       }
+      if (noObjection.length) {
+        parts.push(`<div class="treasury-queue-section"><h4>No Objection (${noObjection.length})</h4>
+          ${noObjection.map((r) => renderNoObjectionRequestCard(r, { issuer: false })).join('')}</div>`);
+      }
       list.innerHTML = parts.join('');
     } catch (err) {
       list.innerHTML = '';
@@ -2452,6 +2578,20 @@
   el('ecTreasuryKindFilter')?.addEventListener('change', () => loadEcTreasuryQueue().catch(console.error));
   el('ecTreasuryStatusFilter')?.addEventListener('change', () => loadEcTreasuryQueue().catch(console.error));
   el('ecTreasuryList')?.addEventListener('click', (event) => {
+    const ndDl = event.target.closest('.nd-download');
+    if (ndDl) {
+      openNoDuesDownloadChooser(ndDl.getAttribute('data-id')).catch((err) => {
+        window.alert(err.message || 'Download failed');
+      });
+      return;
+    }
+    const nocDl = event.target.closest('.noc-download');
+    if (nocDl) {
+      openNoObjectionDownloadChooser(nocDl.getAttribute('data-id')).catch((err) => {
+        window.alert(err.message || 'Download failed');
+      });
+      return;
+    }
     handleTreasuryClick(event).catch(console.error);
   });
 
@@ -2471,7 +2611,8 @@
           body: JSON.stringify({}),
         });
       } else if (reject) {
-        const note = window.prompt('Reason for rejection (optional):') || '';
+        const note = promptRejectionReason();
+        if (!note) return;
         await api(`/api/rwa/payments/no-dues-requests/${encodeURIComponent(id)}/reject`, {
           method: 'POST',
           body: JSON.stringify({ reviewNote: note }),
@@ -2490,7 +2631,8 @@
           body: '{}',
         });
       } else if (dl) {
-        await downloadNoDuesRequest(id);
+        await openNoDuesDownloadChooser(id);
+        return;
       }
       await loadEcNoDuesRequests().catch(() => {});
       await loadResidentNoDues().catch(() => {});
@@ -2520,6 +2662,382 @@
       await issueNoDuesForHouse(house);
       if (status) status.textContent = `Certificate issued for plot ${house}. Use Download on the request card when needed.`;
       await loadEcNoDuesRequests().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  async function downloadNoObjectionRequest(requestId, variant = 'digital') {
+    if (!requestId) throw new Error('Request required');
+    const v = variant === 'print' ? 'print' : 'digital';
+    const label = v === 'print' ? 'No Objection certificate (paper print)' : 'No Objection certificate (digital)';
+    const suffix = v === 'print' ? '-print' : '';
+    await openDocViewerFromAuthUrl(
+      `/api/rwa/no-objection-requests/${encodeURIComponent(requestId)}/download?variant=${encodeURIComponent(v)}`,
+      {
+        title: label,
+        filename: `no-objection-${requestId}${suffix}.pdf`,
+        mime: 'application/pdf',
+      },
+    );
+  }
+
+  let pendingNoObjectionDownloadId = '';
+
+  function openNoObjectionDownloadChooser(requestId) {
+    pendingNoObjectionDownloadId = requestId || '';
+    const dialog = el('noObjectionDownloadDialog');
+    if (!dialog || !pendingNoObjectionDownloadId) {
+      return downloadNoObjectionRequest(requestId, 'digital');
+    }
+    if (!dialog.open) dialog.showModal();
+    return Promise.resolve();
+  }
+
+  function renderNoObjectionRequestCard(item, { issuer = false } = {}) {
+    const actions = [];
+    if (issuer && item.status === 'requested') {
+      actions.push(`<button type="button" class="btn secondary compact noc-issue" data-id="${escapeHtml(item.id)}">Issue</button>`);
+      actions.push(`<button type="button" class="btn ghost compact noc-reject" data-id="${escapeHtml(item.id)}">Reject</button>`);
+      actions.push(`<button type="button" class="btn ghost compact noc-cancel" data-id="${escapeHtml(item.id)}">Cancel</button>`);
+    }
+    if (!issuer && item.status === 'requested') {
+      actions.push(`<button type="button" class="btn ghost compact noc-cancel" data-id="${escapeHtml(item.id)}">Cancel request</button>`);
+    }
+    if (issuer && (item.status === 'issued' || item.status === 'rejected')) {
+      actions.push(`<button type="button" class="btn ghost compact noc-revert" data-id="${escapeHtml(item.id)}">Revert to pending</button>`);
+    }
+    if (item.status === 'issued') {
+      const tActs = treasuryActionButtons('no_objection', item.id, item.treasuryStatus);
+      if (tActs) actions.push(tActs);
+    }
+    if (item.status === 'issued' && item.downloadUrl) {
+      actions.push(`<button type="button" class="btn secondary compact noc-download" data-id="${escapeHtml(item.id)}">Download</button>`);
+    } else if (item.status === 'issued' && item.downloadLocked) {
+      actions.push('<span class="muted">Download locked until Treasury confirms</span>');
+    }
+    const pf = item.plotFinance || null;
+    let plotFinanceHtml = '';
+    if (issuer && pf) {
+      const ledgerFake = {
+        treasuryStatus: pf.ledgerTreasuryStatus || 'pending',
+        treasuryStatusLabel: pf.ledgerTreasuryStatusLabel || 'Treasury pending',
+      };
+      plotFinanceHtml = `
+        <div class="noc-plot-finance">
+          <p><strong>Plot / ledger:</strong> ${escapeHtml(pf.summary || '—')}
+            ${pf.outstanding != null ? ` · Outstanding <code>₹${escapeHtml(String(pf.outstanding))}</code>` : ''}
+          </p>
+          <p class="muted">Ledger treasury ${treasuryStatusIcon(ledgerFake)}${
+            item.status === 'requested'
+              ? (
+                (pf.ledgerTreasuryStatus || '') === 'confirmed'
+                  ? ' · Ledger already Treasury-confirmed — issuing unlocks download immediately.'
+                  : ' · After issue, this certificate still needs Treasury validate → confirm before download.'
+              )
+              : ''
+          }</p>
+        </div>`;
+    }
+    const certTreasuryHint =
+      issuer && item.status === 'issued' && item.downloadLocked
+        ? `<p class="muted">Certificate treasury ${treasuryStatusIcon(item)} — validate then confirm to unlock download.</p>`
+        : '';
+    return `
+      <article class="payment-record-card" data-id="${escapeHtml(item.id)}">
+        <div class="payment-record-head">
+          <strong>Plot <code>${escapeHtml(item.plotNo || item.houseId)}</code>${item.residentName ? ` · ${escapeHtml(item.residentName)}` : ''}</strong>
+          <span class="payment-status is-${escapeHtml(item.status || '')}">${escapeHtml(item.statusLabel || item.status)}</span>
+          ${item.status === 'issued' ? treasuryStatusIcon(item) : ''}
+        </div>
+        <p class="muted">Requested ${escapeHtml(formatIstDate(item.createdAt) || '—')}${item.issuedAt ? ` · issued ${escapeHtml(formatIstDate(item.issuedAt))}` : ''}</p>
+        ${plotFinanceHtml}
+        ${certTreasuryHint}
+        ${item.purpose ? `<p><strong>Purpose:</strong> ${escapeHtml(item.purpose)}${item.sentBack ? ' <span class="muted">(sent back — editable)</span>' : ''}</p>` : ''}
+        ${item.requestNote ? `<p>${escapeHtml(item.requestNote)}</p>` : ''}
+        ${item.reviewNote ? `<p class="muted">Note: ${escapeHtml(item.reviewNote)}</p>` : ''}
+        ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
+      </article>`;
+  }
+
+  async function loadResidentNoObjection() {
+    const block = el('noObjectionResidentBlock');
+    if (!block) return;
+    if (isSuperAdmin() || isViewOnly()) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+    const own = state.session?.resident?.houseId || '';
+    const qs = own ? `?houseId=${encodeURIComponent(own)}` : '';
+    const data = await api(`/api/rwa/no-objection-requests${qs}`);
+    const rows = data.requests || [];
+    const elig = data.eligibility || {};
+    const pending = rows.find((r) => r.status === 'requested');
+    const latestIssued = rows.find((r) => r.status === 'issued');
+    const reqBtn = el('noObjectionRequestBtn');
+    const dlBtn = el('noObjectionDownloadBtn');
+    const status = el('noObjectionResidentStatus');
+    const purposeInput = el('noObjectionPurpose');
+    const purposeWrap = el('noObjectionPurposeWrap');
+    const purposeSave = el('noObjectionPurposeSaveBtn');
+    const purposeLockedHint = el('noObjectionPurposeLockedHint');
+    const canEditSentBack = Boolean(pending?.canEditPurpose) && !isViewOnly();
+    const canNewRequest = Boolean(elig.eligible) && !pending && !isViewOnly();
+    if (purposeWrap) {
+      purposeWrap.hidden = isViewOnly() || (!canNewRequest && !pending);
+    }
+    if (purposeInput) {
+      if (pending) {
+        purposeInput.value = pending.purpose || elig.defaultPurpose || 'Property transfer / sale / mortgage / official purposes';
+        purposeInput.readOnly = !canEditSentBack;
+        purposeInput.dataset.touched = canEditSentBack ? (purposeInput.dataset.touched || '') : '';
+      } else {
+        purposeInput.readOnly = false;
+        if (!purposeInput.dataset.touched) {
+          purposeInput.value = elig.defaultPurpose || 'Property transfer / sale / mortgage / official purposes';
+        }
+      }
+    }
+    if (purposeSave) {
+      purposeSave.hidden = !canEditSentBack;
+      purposeSave.dataset.requestId = canEditSentBack ? (pending.id || '') : '';
+    }
+    if (purposeLockedHint) {
+      purposeLockedHint.hidden = !(pending && !canEditSentBack);
+    }
+    if (reqBtn) {
+      reqBtn.hidden = !canNewRequest;
+      reqBtn.dataset.requestId = '';
+    }
+    if (dlBtn) {
+      const canDl = latestIssued && latestIssued.downloadUrl && !latestIssued.downloadLocked;
+      dlBtn.hidden = !canDl;
+      dlBtn.dataset.requestId = canDl ? (latestIssued.id || '') : '';
+    }
+    if (status) {
+      if (pending?.sentBack) status.textContent = 'Request sent back — update the purpose if needed, then wait for re-issue.';
+      else if (pending) status.textContent = 'Request submitted — waiting for a No Objection Issuer to approve. Purpose is locked.';
+      else if (latestIssued && latestIssued.downloadLocked) {
+        status.textContent = `Certificate issued — awaiting Treasury ${latestIssued.treasuryStatus === 'validated' ? 'confirmation' : 'validation'} before download.`;
+      } else if (latestIssued) status.textContent = 'Certificate issued and Treasury-confirmed — you can download it below.';
+      else if (elig.eligible) status.textContent = 'You can request a No Objection Certificate.';
+      else status.textContent = elig.reason || 'Not eligible yet.';
+    }
+    const list = el('noObjectionResidentList');
+    if (list) {
+      list.innerHTML = rows.length
+        ? rows.map((r) => renderNoObjectionRequestCard(r)).join('')
+        : '<p class="muted">No certificate requests yet.</p>';
+    }
+  }
+
+  async function loadEcNoObjectionRequests() {
+    if (!hasEntitlement('issue_no_objection')) return;
+    const list = el('ecNoObjectionList');
+    if (!list) return;
+    const statusFilter = el('ecNoObjectionStatusFilter')?.value || 'requested';
+    list.innerHTML = '<p class="muted">Loading…</p>';
+    const qs = new URLSearchParams({ status: statusFilter, limit: '150' });
+    const data = await api(`/api/rwa/no-objection-requests?${qs.toString()}`);
+    const rows = data.requests || [];
+    if (el('ecNoObjectionStats')) {
+      el('ecNoObjectionStats').textContent = statusFilter === 'requested'
+        ? `${rows.length} awaiting issue`
+        : `${rows.length} request(s) · filter: ${statusFilter}`;
+    }
+    list.innerHTML = rows.length
+      ? rows.map((r) => renderNoObjectionRequestCard(r, { issuer: true })).join('')
+      : '<p class="muted">No requests match this filter.</p>';
+  }
+
+  async function issueNoObjectionForHouse(houseId) {
+    const data = await api('/api/rwa/no-objection-certificate', {
+      method: 'POST',
+      body: JSON.stringify({ houseId }),
+    });
+    return data.request;
+  }
+
+  el('noObjectionPurpose')?.addEventListener('input', () => {
+    if (el('noObjectionPurpose') && !el('noObjectionPurpose').readOnly) el('noObjectionPurpose').dataset.touched = '1';
+  });
+
+  el('noObjectionPurposeSaveBtn')?.addEventListener('click', async () => {
+    const id = el('noObjectionPurposeSaveBtn')?.dataset?.requestId;
+    const status = el('noObjectionResidentStatus');
+    const btn = el('noObjectionPurposeSaveBtn');
+    if (!id) return;
+    if (btn) btn.disabled = true;
+    try {
+      await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/purpose`, {
+        method: 'POST',
+        body: JSON.stringify({ purpose: (el('noObjectionPurpose')?.value || '').trim() }),
+      });
+      if (status) status.textContent = 'Purpose updated.';
+      await loadResidentNoObjection();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save purpose';
+      window.alert(err.message || 'Could not save purpose');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('noObjectionRequestBtn')?.addEventListener('click', async () => {
+    const status = el('noObjectionResidentStatus');
+    const btn = el('noObjectionRequestBtn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Submitting request…';
+    try {
+      const purpose = (el('noObjectionPurpose')?.value || '').trim();
+      await api('/api/rwa/no-objection-requests', {
+        method: 'POST',
+        body: JSON.stringify({ purpose }),
+      });
+      if (el('noObjectionPurpose')) el('noObjectionPurpose').dataset.touched = '';
+      await loadResidentNoObjection();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Request failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('noObjectionDownloadBtn')?.addEventListener('click', async () => {
+    const id = el('noObjectionDownloadBtn')?.dataset?.requestId;
+    const status = el('noObjectionResidentStatus');
+    try {
+      await openNoObjectionDownloadChooser(id);
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+    }
+  });
+
+  el('noObjectionDownloadCancelBtn')?.addEventListener('click', () => {
+    el('noObjectionDownloadDialog')?.close();
+    pendingNoObjectionDownloadId = '';
+  });
+  el('noObjectionDlDigitalBtn')?.addEventListener('click', async () => {
+    const id = pendingNoObjectionDownloadId;
+    el('noObjectionDownloadDialog')?.close();
+    const status = el('noObjectionResidentStatus');
+    try {
+      await downloadNoObjectionRequest(id, 'digital');
+      if (status) status.textContent = 'Digital certificate opened — use Go back to return, or Download to save.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+      window.alert(err.message || 'Download failed');
+    } finally {
+      pendingNoObjectionDownloadId = '';
+    }
+  });
+  el('noObjectionDlPrintBtn')?.addEventListener('click', async () => {
+    const id = pendingNoObjectionDownloadId;
+    el('noObjectionDownloadDialog')?.close();
+    const status = el('noObjectionResidentStatus');
+    try {
+      await downloadNoObjectionRequest(id, 'print');
+      if (status) status.textContent = 'Print version opened — print on RWA letterhead paper.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Download failed';
+      window.alert(err.message || 'Download failed');
+    } finally {
+      pendingNoObjectionDownloadId = '';
+    }
+  });
+
+  el('noObjectionResidentList')?.addEventListener('click', async (event) => {
+    if (await handleTreasuryClick(event)) return;
+    const dl = event.target.closest('.noc-download');
+    const cancel = event.target.closest('.noc-cancel');
+    const id = (dl || cancel)?.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (cancel) {
+        if (!window.confirm('Cancel this certificate request?')) return;
+        await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/cancel`, {
+          method: 'POST',
+          body: '{}',
+        });
+        await loadResidentNoObjection();
+        return;
+      }
+      await openNoObjectionDownloadChooser(id);
+    } catch (err) {
+      window.alert(err.message || 'Action failed');
+    }
+  });
+
+  el('ecNoObjectionList')?.addEventListener('click', async (event) => {
+    if (await handleTreasuryClick(event)) return;
+    const issue = event.target.closest('.noc-issue');
+    const reject = event.target.closest('.noc-reject');
+    const revert = event.target.closest('.noc-revert');
+    const cancel = event.target.closest('.noc-cancel');
+    const dl = event.target.closest('.noc-download');
+    const id = (issue || reject || revert || cancel || dl)?.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (issue) {
+        await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/issue`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      } else if (reject) {
+        const note = promptRejectionReason();
+        if (!note) return;
+        await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (revert) {
+        if (!window.confirm('Revert this request to pending? The issued PDF (if any) will be removed.')) return;
+        const note = window.prompt('Optional revert note:') || '';
+        await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/revert`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewNote: note }),
+        });
+      } else if (cancel) {
+        if (!window.confirm('Cancel this pending request?')) return;
+        await api(`/api/rwa/no-objection-requests/${encodeURIComponent(id)}/cancel`, {
+          method: 'POST',
+          body: '{}',
+        });
+      } else if (dl) {
+        await openNoObjectionDownloadChooser(id);
+        return;
+      }
+      await loadEcNoObjectionRequests().catch(() => {});
+      await loadResidentNoObjection().catch(() => {});
+    } catch (err) {
+      window.alert(err.message || 'Action failed');
+    }
+  });
+
+  el('ecNoObjectionRefreshBtn')?.addEventListener('click', () => loadEcNoObjectionRequests().catch(console.error));
+  el('ecNoObjectionStatusFilter')?.addEventListener('change', () => loadEcNoObjectionRequests().catch(console.error));
+
+  el('ecNoObjectionCertBtn')?.addEventListener('click', async () => {
+    if (!hasEntitlement('issue_no_objection')) {
+      window.alert('No Objection Issuer entitlement required');
+      return;
+    }
+    const house = (el('ecNoObjectionHouse')?.value || '').trim();
+    const status = el('ecNoObjectionCertStatus');
+    if (!house) {
+      if (status) status.textContent = 'Enter a plot number.';
+      return;
+    }
+    const btn = el('ecNoObjectionCertBtn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Issuing…';
+    try {
+      await issueNoObjectionForHouse(house);
+      if (status) status.textContent = `Certificate issued for plot ${house}. Use Download on the request card when needed.`;
+      await loadEcNoObjectionRequests().catch(() => {});
     } catch (err) {
       if (status) status.textContent = err.message || 'Failed';
     } finally {
@@ -2774,6 +3292,7 @@
           ${escapeHtml(formatIstDateTime(doc.createdAt) || '')}
           ${doc.linkedPaymentRecordId ? ` · payment ${escapeHtml(doc.linkedPaymentRecordId)}` : ''}
           ${doc.linkedNoDuesId ? ` · no-dues ${escapeHtml(doc.linkedNoDuesId)}` : ''}
+          ${doc.linkedNoObjectionId ? ` · no-objection ${escapeHtml(doc.linkedNoObjectionId)}` : ''}
         </p>
         ${doc.verifyNote ? `<p class="muted">Note: ${escapeHtml(doc.verifyNote)}</p>` : ''}
         <div class="btn-row">${actions.join('')}</div>
@@ -2907,9 +3426,16 @@
     }
     if (verifyBtn) {
       try {
+        const status = verifyBtn.getAttribute('data-status');
+        const body = { status };
+        if (status === 'rejected') {
+          const note = promptRejectionReason();
+          if (!note) return;
+          body.note = note;
+        }
         await api(`/api/rwa/vault/${encodeURIComponent(verifyBtn.getAttribute('data-id'))}/verify`, {
           method: 'POST',
-          body: JSON.stringify({ status: verifyBtn.getAttribute('data-status') }),
+          body: JSON.stringify(body),
         });
         await refreshVaultIfOpen();
       } catch (err) {
@@ -3554,6 +4080,21 @@
         const key = input.getAttribute('data-pref');
         input.checked = prefs[key] !== false;
       });
+      const hint = el('pushCertPrefsHint');
+      if (hint) {
+        const issuesNd = hasEntitlement('issue_no_dues');
+        const issuesNoc = hasEntitlement('issue_no_objection');
+        if (issuesNd || issuesNoc) {
+          const bits = [];
+          if (issuesNd) bits.push('No Dues');
+          if (issuesNoc) bits.push('No Objection');
+          hint.textContent =
+            `You can issue ${bits.join(' and ')} certificates — keep those alert types on so you are notified when a resident raises a request. Residents are alerted when a certificate is issued, rejected, or sent back.`;
+        } else {
+          hint.textContent =
+            'Issuers with the No Dues / No Objection entitlement are alerted when a resident raises a request. Residents are alerted when a certificate is issued, rejected, or sent back.';
+        }
+      }
     } catch (e) {
       if (statusEl) statusEl.textContent = e.message || 'Could not load push status';
     }
@@ -3950,12 +4491,17 @@
           if (el('ecTreasuryStatus')) el('ecTreasuryStatus').textContent = e.message || 'Treasury queue failed';
         });
       }
-      if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues')) {
+      if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues') || hasEntitlement('issue_no_objection')) {
         populatePaymentHouseList().catch(() => {});
       }
       if (hasEntitlement('issue_no_dues')) {
         loadEcNoDuesRequests().catch((e) => {
           if (el('ecNoDuesListStatus')) el('ecNoDuesListStatus').textContent = e.message || 'No dues requests failed';
+        });
+      }
+      if (hasEntitlement('issue_no_objection')) {
+        loadEcNoObjectionRequests().catch((e) => {
+          if (el('ecNoObjectionListStatus')) el('ecNoObjectionListStatus').textContent = e.message || 'No objection requests failed';
         });
       }
       if (hasEntitlement('manage_roster')) {

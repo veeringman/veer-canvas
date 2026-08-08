@@ -61,6 +61,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_bilingual_content_columns,
     ensure_payment_records_tables,
     ensure_no_dues_requests_table,
+    ensure_no_objection_requests_table,
     ensure_document_attestations_table,
     ensure_treasury_columns,
     ensure_messages_and_push_tables,
@@ -570,6 +571,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_bilingual_content_columns(conn)
         ensure_payment_records_tables(conn)
         ensure_no_dues_requests_table(conn)
+        ensure_no_objection_requests_table(conn)
         ensure_document_attestations_table(conn)
         ensure_treasury_columns(conn)
         ensure_messages_and_push_tables(conn)

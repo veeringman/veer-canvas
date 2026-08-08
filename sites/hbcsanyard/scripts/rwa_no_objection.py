@@ -1,4 +1,4 @@
-"""No Dues Certificate requests: resident request → issuer issue → resident download."""
+"""No Objection Certificate requests: resident request → issuer issue → resident download."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import pathlib
 import re
 import secrets
 import sqlite3
-from typing import Any, Callable
+from typing import Any
 
-from init_rwa_db import ensure_no_dues_requests_table, utc_now
+from init_rwa_db import ensure_no_objection_requests_table, utc_now
 import rwa_reports
 
 STATUS_LABELS = {
@@ -17,7 +17,7 @@ STATUS_LABELS = {
     "rejected": "Rejected",
 }
 
-DEFAULT_PURPOSE = "Official / banking / transfer purposes"
+DEFAULT_PURPOSE = "Property transfer / sale / mortgage / official purposes"
 
 
 def normalize_purpose(raw: str | None) -> str:
@@ -25,8 +25,8 @@ def normalize_purpose(raw: str | None) -> str:
     return text or DEFAULT_PURPOSE
 
 
-def no_dues_root(site_root: pathlib.Path) -> pathlib.Path:
-    path = pathlib.Path(site_root) / "data" / "no-dues"
+def no_objection_root(site_root: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(site_root) / "data" / "no-objection"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -37,14 +37,77 @@ def certificate_path(site_root: pathlib.Path, house_id: str, request_id: str, fi
     safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", (filename or "").strip()) or "certificate.pdf"
     if ".." in safe_name or "/" in safe_name or "\\" in safe_name:
         raise ValueError("Invalid filename")
-    base = (no_dues_root(site_root) / safe_house / safe_id).resolve()
+    base = (no_objection_root(site_root) / safe_house / safe_id).resolve()
     path = (base / safe_name).resolve()
     if not str(path).startswith(str(base)):
         raise ValueError("Invalid path")
     return path
 
 
-def public_request(_conn: sqlite3.Connection, row: Any) -> dict:
+def house_plot_finance(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    enrich_payment_row=None,
+) -> dict:
+    """Dues + ledger treasury snapshot for the plot (issuer context on a NOC request)."""
+    import rwa_treasury
+
+    hid = (house_id or "").strip()
+    empty = {
+        "houseId": hid,
+        "outstanding": None,
+        "pendingReceipts": 0,
+        "duesClear": None,
+        "ledgerTreasuryStatus": "pending",
+        "ledgerTreasuryStatusLabel": "Treasury pending",
+        "asOf": "",
+        "summary": "No ledger row for this plot yet",
+    }
+    if not hid:
+        return empty
+    if enrich_payment_row is None:
+        try:
+            from rwa_portal import enrich_payment_row as enrich_payment_row  # type: ignore
+        except ImportError:
+            return empty
+    try:
+        info = rwa_reports.no_dues_eligibility(conn, hid, enrich_payment_row=enrich_payment_row)
+    except ValueError as exc:
+        empty["summary"] = str(exc)
+        return empty
+    payment = info.get("payment") or {}
+    ledger_t = rwa_treasury.treasury_fields_from_row(payment)
+    outstanding = int(info.get("outstanding") or 0)
+    pending_receipts = int(info.get("pendingReceipts") or 0)
+    dues_clear = bool(info.get("eligible"))
+    if dues_clear:
+        summary = "Dues clear"
+    elif outstanding > 0:
+        summary = f"Outstanding dues ₹{outstanding}"
+    else:
+        summary = f"{pending_receipts} payment receipt(s) awaiting EC verification"
+    lst = ledger_t.get("treasuryStatus") or "pending"
+    return {
+        "houseId": hid,
+        "plotNo": info.get("plotNo") or hid,
+        "outstanding": outstanding,
+        "pendingReceipts": pending_receipts,
+        "duesClear": dues_clear,
+        "ledgerTreasuryStatus": lst,
+        "ledgerTreasuryStatusLabel": ledger_t.get("treasuryStatusLabel")
+        or rwa_treasury.TREASURY_STATUS_LABELS.get(lst, lst),
+        "asOf": payment.get("asOf") or payment.get("as_of") or "",
+        "summary": summary,
+    }
+
+
+def public_request(
+    _conn: sqlite3.Connection,
+    row: Any,
+    *,
+    plot_finance: dict | None = None,
+) -> dict:
     data = {k: row[k] for k in row.keys()}
     st = data.get("status") or "requested"
     rid = data.get("id")
@@ -76,17 +139,17 @@ def public_request(_conn: sqlite3.Connection, row: Any) -> dict:
         "createdAt": data.get("created_at") or "",
         "updatedAt": data.get("updated_at") or "",
         "downloadUrl": (
-            f"/api/rwa/payments/no-dues-requests/{rid}/download" if can_download else None
+            f"/api/rwa/no-objection-requests/{rid}/download" if can_download else None
         ),
         "downloadLocked": bool(st == "issued" and rid and not can_download),
     }
-    # Sent back to requester (issuer reverted issued/rejected → pending).
     out["sentBack"] = bool(
         st == "requested" and (out["reviewedAt"] or out["reviewNote"])
     )
-    # Purpose locked once submitted, until rejected (new request) or sent back.
     out["canEditPurpose"] = bool(out["sentBack"])
     out.update(treasury)
+    if plot_finance is not None:
+        out["plotFinance"] = plot_finance
     return out
 
 
@@ -98,7 +161,7 @@ def update_purpose(
     purpose: str | None,
 ) -> dict:
     """Requester may change purpose only when the request was sent back."""
-    ensure_no_dues_requests_table(conn)
+    ensure_no_objection_requests_table(conn)
     item = get_request(conn, request_id)
     if not item:
         raise ValueError("Request not found")
@@ -112,7 +175,7 @@ def update_purpose(
     now = utc_now()
     conn.execute(
         """
-        UPDATE no_dues_requests
+        UPDATE no_objection_requests
         SET purpose = ?, updated_at = ?
         WHERE id = ?
         """,
@@ -125,21 +188,34 @@ def update_purpose(
     return out
 
 
-def get_request(conn: sqlite3.Connection, request_id: str) -> dict | None:
-    ensure_no_dues_requests_table(conn)
+def get_request(
+    conn: sqlite3.Connection,
+    request_id: str,
+    *,
+    include_plot_finance: bool = False,
+    enrich_payment_row=None,
+) -> dict | None:
+    ensure_no_objection_requests_table(conn)
     rid = (request_id or "").strip()
     if not rid:
         return None
     row = conn.execute(
         """
-        SELECT nd.*, r.plot_no, r.name
-        FROM no_dues_requests nd
-        LEFT JOIN residents r ON r.house_id = nd.house_id
-        WHERE nd.id = ?
+        SELECT nr.*, r.plot_no, r.name
+        FROM no_objection_requests nr
+        LEFT JOIN residents r ON r.house_id = nr.house_id
+        WHERE nr.id = ?
         """,
         (rid,),
     ).fetchone()
-    return public_request(conn, row) if row else None
+    if not row:
+        return None
+    finance = None
+    if include_plot_finance:
+        finance = house_plot_finance(
+            conn, row["house_id"], enrich_payment_row=enrich_payment_row
+        )
+    return public_request(conn, row, plot_finance=finance)
 
 
 def list_requests(
@@ -148,32 +224,46 @@ def list_requests(
     house_id: str | None = None,
     status: str | None = None,
     limit: int = 100,
+    include_plot_finance: bool = False,
+    enrich_payment_row=None,
 ) -> list[dict]:
-    ensure_no_dues_requests_table(conn)
+    ensure_no_objection_requests_table(conn)
     clauses: list[str] = []
     params: list[Any] = []
     if house_id:
-        clauses.append("nd.house_id = ?")
+        clauses.append("nr.house_id = ?")
         params.append(house_id.strip())
     if status and status != "all":
-        clauses.append("nd.status = ?")
+        clauses.append("nr.status = ?")
         params.append(status.strip())
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     lim = max(1, min(int(limit or 100), 500))
     rows = conn.execute(
         f"""
-        SELECT nd.*, r.plot_no, r.name
-        FROM no_dues_requests nd
-        LEFT JOIN residents r ON r.house_id = nd.house_id
+        SELECT nr.*, r.plot_no, r.name
+        FROM no_objection_requests nr
+        LEFT JOIN residents r ON r.house_id = nr.house_id
         {where}
         ORDER BY
-          CASE nd.status WHEN 'requested' THEN 0 WHEN 'issued' THEN 1 ELSE 2 END,
-          nd.created_at DESC
+          CASE nr.status WHEN 'requested' THEN 0 WHEN 'issued' THEN 1 ELSE 2 END,
+          nr.created_at DESC
         LIMIT ?
         """,
         (*params, lim),
     ).fetchall()
-    return [public_request(conn, r) for r in rows]
+    cache: dict[str, dict] = {}
+    out: list[dict] = []
+    for r in rows:
+        finance = None
+        if include_plot_finance:
+            hid = r["house_id"]
+            if hid not in cache:
+                cache[hid] = house_plot_finance(
+                    conn, hid, enrich_payment_row=enrich_payment_row
+                )
+            finance = cache[hid]
+        out.append(public_request(conn, r, plot_finance=finance))
+    return out
 
 
 def create_request(
@@ -183,33 +273,32 @@ def create_request(
     actor: dict,
     note: str | None = None,
     purpose: str | None = None,
-    enrich_payment_row: Callable,
 ) -> dict:
-    ensure_no_dues_requests_table(conn)
+    ensure_no_objection_requests_table(conn)
     hid = (house_id or "").strip()
     if not hid:
         raise ValueError("Plot required")
-    info = rwa_reports.no_dues_eligibility(conn, hid, enrich_payment_row=enrich_payment_row)
+    info = rwa_reports.no_objection_eligibility(conn, hid)
     if not info.get("eligible"):
-        raise ValueError(info.get("reason") or "Plot is not eligible for a No Dues Certificate")
+        raise ValueError(info.get("reason") or "Plot is not eligible for a No Objection Certificate")
 
     open_row = conn.execute(
         """
-        SELECT id FROM no_dues_requests
+        SELECT id FROM no_objection_requests
         WHERE house_id = ? AND status = 'requested'
         LIMIT 1
         """,
         (hid,),
     ).fetchone()
     if open_row:
-        raise ValueError("A No Dues Certificate request is already pending for this plot")
+        raise ValueError("A No Objection Certificate request is already pending for this plot")
 
-    rid = f"nd_{secrets.token_hex(8)}"
+    rid = f"noc_{secrets.token_hex(8)}"
     now = utc_now()
     purpose_text = normalize_purpose(purpose)
     conn.execute(
         """
-        INSERT INTO no_dues_requests(
+        INSERT INTO no_objection_requests(
           id, house_id, status, request_note, purpose,
           requested_by_house_id, requested_by_member_id,
           created_at, updated_at
@@ -240,11 +329,11 @@ def reject_request(
     actor: dict,
     review_note: str | None = None,
 ) -> dict:
-    ensure_no_dues_requests_table(conn)
+    ensure_no_objection_requests_table(conn)
     import rwa_treasury
 
     note = rwa_treasury.require_rejection_reason(review_note)
-    row = conn.execute("SELECT * FROM no_dues_requests WHERE id = ?", (request_id,)).fetchone()
+    row = conn.execute("SELECT * FROM no_objection_requests WHERE id = ?", (request_id,)).fetchone()
     if not row:
         raise ValueError("Request not found")
     if row["status"] != "requested":
@@ -252,7 +341,7 @@ def reject_request(
     now = utc_now()
     conn.execute(
         """
-        UPDATE no_dues_requests
+        UPDATE no_objection_requests
         SET status = 'rejected',
             reviewed_by_house_id = ?,
             reviewed_at = ?,
@@ -281,13 +370,12 @@ def issue_request(
     request_id: str,
     *,
     actor: dict,
-    enrich_payment_row: Callable,
     review_note: str | None = None,
     public_base: str | None = None,
 ) -> dict:
     """Generate PDF, store on disk, mark request issued."""
-    ensure_no_dues_requests_table(conn)
-    row = conn.execute("SELECT * FROM no_dues_requests WHERE id = ?", (request_id,)).fetchone()
+    ensure_no_objection_requests_table(conn)
+    row = conn.execute("SELECT * FROM no_objection_requests WHERE id = ?", (request_id,)).fetchone()
     if not row:
         raise ValueError("Request not found")
     if row["status"] != "requested":
@@ -301,18 +389,17 @@ def issue_request(
 
     att_id = rwa_attest.new_attestation_id()
     verify_url = rwa_attest.verify_url_for(site_root, att_id, public_base=public_base)
-    pdf_bytes, download_name = rwa_reports.build_no_dues_certificate_pdf(
+    pdf_bytes, download_name = rwa_reports.build_no_objection_certificate_pdf(
         conn,
         site_root=site_root,
         house_id=row["house_id"],
-        enrich_payment_row=enrich_payment_row,
         issued_by=issuer_name,
         purpose=normalize_purpose(row["purpose"] if row["purpose"] is not None else ""),
         letterhead=True,
         attestation_id=att_id,
         verify_url=verify_url,
     )
-    filename = f"no-dues-{secrets.token_hex(4)}.pdf"
+    filename = f"no-objection-{secrets.token_hex(4)}.pdf"
     dest = certificate_path(site_root, row["house_id"], request_id, filename)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(pdf_bytes)
@@ -325,7 +412,7 @@ def issue_request(
     )
     conn.execute(
         f"""
-        UPDATE no_dues_requests
+        UPDATE no_objection_requests
         SET status = 'issued',
             reviewed_by_house_id = ?,
             reviewed_at = ?,
@@ -351,7 +438,7 @@ def issue_request(
         conn,
         site_root,
         attestation_id=att_id,
-        artifact_type="no_dues",
+        artifact_type="no_objection",
         artifact_id=request_id,
         house_id=row["house_id"],
         issuer_house_id=issuer_house,
@@ -364,7 +451,7 @@ def issue_request(
     try:
         import rwa_vault
 
-        rwa_vault.index_no_dues_certificate(
+        rwa_vault.index_no_objection_certificate(
             conn,
             site_root,
             house_id=row["house_id"],
@@ -391,7 +478,6 @@ def issue_for_house(
     *,
     house_id: str,
     actor: dict,
-    enrich_payment_row: Callable,
     note: str | None = None,
     public_base: str | None = None,
 ) -> dict:
@@ -401,7 +487,7 @@ def issue_for_house(
         raise ValueError("Plot required")
     pending = conn.execute(
         """
-        SELECT id FROM no_dues_requests
+        SELECT id FROM no_objection_requests
         WHERE house_id = ? AND status = 'requested'
         ORDER BY created_at ASC
         LIMIT 1
@@ -414,21 +500,19 @@ def issue_for_house(
             site_root,
             pending["id"],
             actor=actor,
-            enrich_payment_row=enrich_payment_row,
             review_note=note,
             public_base=public_base,
         )
 
-    # Create a request attributed to the issuer, then issue immediately.
-    ensure_no_dues_requests_table(conn)
-    info = rwa_reports.no_dues_eligibility(conn, hid, enrich_payment_row=enrich_payment_row)
+    ensure_no_objection_requests_table(conn)
+    info = rwa_reports.no_objection_eligibility(conn, hid)
     if not info.get("eligible"):
         raise ValueError(info.get("reason") or "Plot is not eligible")
-    rid = f"nd_{secrets.token_hex(8)}"
+    rid = f"noc_{secrets.token_hex(8)}"
     now = utc_now()
     conn.execute(
         """
-        INSERT INTO no_dues_requests(
+        INSERT INTO no_objection_requests(
           id, house_id, status, request_note, purpose,
           requested_by_house_id, requested_by_member_id,
           created_at, updated_at
@@ -437,7 +521,7 @@ def issue_for_house(
         (
             rid,
             hid,
-            (note or "").strip()[:500] or "Issued by No Dues Issuer",
+            (note or "").strip()[:500] or "Issued by No Objection Issuer",
             DEFAULT_PURPOSE,
             actor.get("houseId") or actor.get("house_id"),
             actor.get("memberId") or actor.get("member_id"),
@@ -451,7 +535,6 @@ def issue_for_house(
         site_root,
         rid,
         actor=actor,
-        enrich_payment_row=enrich_payment_row,
         review_note=note,
         public_base=public_base,
     )
@@ -462,7 +545,6 @@ def build_download_pdf(
     site_root: pathlib.Path,
     request_id: str,
     *,
-    enrich_payment_row: Callable,
     variant: str = "digital",
     public_base: str | None = None,
 ) -> tuple[bytes, str]:
@@ -480,15 +562,14 @@ def build_download_pdf(
         path = certificate_path(site_root, item["houseId"], item["id"], item["filename"])
         if not path.is_file():
             raise FileNotFoundError("Certificate file missing")
-        name = item.get("originalName") or f"no-dues-{item.get('plotNo') or item['houseId']}.pdf"
+        name = item.get("originalName") or f"no-objection-{item.get('plotNo') or item['houseId']}.pdf"
         return path.read_bytes(), name
 
     if kind not in ("print", "paper", "no_letterhead", "blank"):
         raise ValueError("Invalid download variant (use digital or print)")
 
-    # Resolve issuer display name + attestation for regenerated print PDF.
     row = conn.execute(
-        "SELECT * FROM no_dues_requests WHERE id = ?",
+        "SELECT * FROM no_objection_requests WHERE id = ?",
         (request_id,),
     ).fetchone()
     issuer_name = None
@@ -509,7 +590,7 @@ def build_download_pdf(
         att = conn.execute(
             """
             SELECT id FROM document_attestations
-            WHERE artifact_type = 'no_dues' AND artifact_id = ?
+            WHERE artifact_type = 'no_objection' AND artifact_id = ?
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -521,11 +602,10 @@ def build_download_pdf(
     except Exception:
         pass
 
-    pdf_bytes, download_name = rwa_reports.build_no_dues_certificate_pdf(
+    pdf_bytes, download_name = rwa_reports.build_no_objection_certificate_pdf(
         conn,
         site_root=site_root,
         house_id=item["houseId"],
-        enrich_payment_row=enrich_payment_row,
         issued_by=issuer_name,
         purpose=item.get("purpose") or DEFAULT_PURPOSE,
         letterhead=False,
@@ -551,8 +631,8 @@ def cancel_request(
     can_issue: bool = False,
 ) -> dict:
     """Resident or issuer: withdraw a pending request."""
-    ensure_no_dues_requests_table(conn)
-    row = conn.execute("SELECT * FROM no_dues_requests WHERE id = ?", (request_id,)).fetchone()
+    ensure_no_objection_requests_table(conn)
+    row = conn.execute("SELECT * FROM no_objection_requests WHERE id = ?", (request_id,)).fetchone()
     if not row:
         raise ValueError("Request not found")
     if row["status"] != "requested":
@@ -560,7 +640,7 @@ def cancel_request(
     own = (actor.get("houseId") or actor.get("house_id") or "") == (row["house_id"] or "")
     if not own and not can_issue and not actor.get("superAdmin"):
         raise ValueError("Not allowed to cancel this request")
-    conn.execute("DELETE FROM no_dues_requests WHERE id = ?", (request_id,))
+    conn.execute("DELETE FROM no_objection_requests WHERE id = ?", (request_id,))
     conn.commit()
     return {"id": request_id, "status": "cancelled"}
 
@@ -574,8 +654,8 @@ def revert_request(
     review_note: str | None = None,
 ) -> dict:
     """Issuer: send issued/rejected request back to pending (delete stored PDF if any)."""
-    ensure_no_dues_requests_table(conn)
-    row = conn.execute("SELECT * FROM no_dues_requests WHERE id = ?", (request_id,)).fetchone()
+    ensure_no_objection_requests_table(conn)
+    row = conn.execute("SELECT * FROM no_objection_requests WHERE id = ?", (request_id,)).fetchone()
     if not row:
         raise ValueError("Request not found")
     status = row["status"] or ""
@@ -597,7 +677,7 @@ def revert_request(
     now = utc_now()
     conn.execute(
         """
-        UPDATE no_dues_requests
+        UPDATE no_objection_requests
         SET status = 'requested',
             reviewed_by_house_id = ?,
             reviewed_at = ?,

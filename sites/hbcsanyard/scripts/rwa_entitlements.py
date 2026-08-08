@@ -6,7 +6,7 @@ Roles (nested):
 - EC Admin and Office Bearer are always EC Members.
 - EC Members (and office bearers) may receive one-off grantable entitlements.
 - EC Admins get most entitlements implicitly; sensitive_ops / manage_roles are EC-Admin-only.
-- issue_no_dues is explicit (not auto for EC Admins); default seed grants it to President.
+- issue_no_dues / issue_no_objection are explicit (not auto for EC Admins); default seed grants them to President.
 - treasury is explicit; default seed grants it to Treasurer.
 """
 
@@ -28,9 +28,14 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
         "description": "Review requests and issue No Dues Certificates (explicit grant)",
     },
     {
+        "id": "issue_no_objection",
+        "label": "No Objection Issuer",
+        "description": "Review requests and issue No Objection Certificates (explicit grant)",
+    },
+    {
         "id": "treasury",
         "label": "Treasury",
-        "description": "Validate and confirm financials — dues, cash, payments, No Dues (explicit grant)",
+        "description": "Validate and confirm financials — dues, cash, payments, certificates (explicit grant)",
     },
     {"id": "manage_notices", "label": "Notices", "description": "Publish and manage notices"},
     {
@@ -49,7 +54,7 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
 
 EC_ADMIN_ONLY_ENTITLEMENTS = frozenset({"sensitive_ops", "manage_roles"})
 # Stored grants only — never implied by EC Admin role.
-EXPLICIT_GRANT_ENTITLEMENTS = frozenset({"issue_no_dues", "treasury"})
+EXPLICIT_GRANT_ENTITLEMENTS = frozenset({"issue_no_dues", "issue_no_objection", "treasury"})
 GRANTABLE_ENTITLEMENTS = frozenset(
     e["id"] for e in ENTITLEMENT_DEFS if e["id"] not in EC_ADMIN_ONLY_ENTITLEMENTS
 )
@@ -76,6 +81,7 @@ def entitlements_meta() -> dict:
 def ensure_ready(conn: sqlite3.Connection) -> None:
     ensure_entitlements_schema(conn)
     ensure_default_no_dues_issuer(conn)
+    ensure_default_no_objection_issuer(conn)
     ensure_default_treasury(conn)
 
 
@@ -129,16 +135,27 @@ def _seed_explicit_grant_for_title(
     conn.commit()
 
 
+def _is_president_title(title: str) -> bool:
+    return title == "president" or bool(re.fullmatch(r"president(\s+rwa)?", title))
+
+
 def ensure_default_no_dues_issuer(conn: sqlite3.Connection) -> None:
     """Once: grant issue_no_dues to President only (not Vice President)."""
-    def _is_president(title: str) -> bool:
-        return title == "president" or bool(re.fullmatch(r"president(\s+rwa)?", title))
-
     _seed_explicit_grant_for_title(
         conn,
         entitlement="issue_no_dues",
         meta_key="no_dues_issuer_defaulted",
-        title_match=_is_president,
+        title_match=_is_president_title,
+    )
+
+
+def ensure_default_no_objection_issuer(conn: sqlite3.Connection) -> None:
+    """Once: grant issue_no_objection to President only (not Vice President)."""
+    _seed_explicit_grant_for_title(
+        conn,
+        entitlement="issue_no_objection",
+        meta_key="no_objection_issuer_defaulted",
+        title_match=_is_president_title,
     )
 
 

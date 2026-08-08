@@ -220,7 +220,7 @@ rsync -az --delete \
 
 # First-deploy bootstrap only: create empty runtime dirs + seed DB/example if missing (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \
@@ -272,7 +272,7 @@ else
   echo "Warning: data/rwa.db still missing — app will seed on first start if scripts available."
 fi
 # Sanity: confirm protected upload dirs still exist after sync
-for d in receipts no-dues vault info-centre profile-photos payments imports attestations messages; do
+for d in receipts no-dues no-objection vault info-centre profile-photos payments imports attestations messages; do
   if [[ -d "$WEB_ROOT/data/$d" ]]; then
     echo "OK data/$d preserved ($(find "$WEB_ROOT/data/$d" -type f 2>/dev/null | wc -l | tr -d ' ') files)."
   else

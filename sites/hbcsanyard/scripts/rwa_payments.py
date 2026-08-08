@@ -900,6 +900,9 @@ def reject_record(
     review_note: str | None = None,
 ) -> dict:
     ensure_payment_records_tables(conn)
+    import rwa_treasury
+
+    note = rwa_treasury.require_rejection_reason(review_note)
     row = conn.execute("SELECT * FROM payment_records WHERE id = ?", (record_id,)).fetchone()
     if not row:
         raise ValueError("Record not found")
@@ -919,7 +922,7 @@ def reject_record(
         (
             actor.get("houseId") or actor.get("house_id"),
             now,
-            (review_note or "").strip()[:500] or None,
+            note,
             now,
             record_id,
         ),

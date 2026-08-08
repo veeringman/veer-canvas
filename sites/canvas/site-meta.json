@@ -13,5 +13,11 @@
   "version": "v1.0.0",
   "lastUpdated": "2026-07-25T16:49:11Z",
   "platformSiteId": "canvas",
-  "platformMark": "assets/site/platform-mark.png"
+  "platformMark": "assets/site/platform-mark.png",
+  "auth": {
+    "agentBaseUrl": "",
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "veerlabs-web",
+    "gateAllLearnMore": true
+  }
 }
