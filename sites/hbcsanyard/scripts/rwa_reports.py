@@ -5,13 +5,27 @@ from __future__ import annotations
 import io
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from init_rwa_db import SUPERADMIN_HOUSE_ID, section_plot_sort_key
 
+IST = ZoneInfo("Asia/Kolkata")
 _RL = None  # lazy reportlab bundle
+
+
+def _now_ist() -> datetime:
+    return datetime.now(IST)
+
+
+def _fmt_ist_datetime(dt: datetime | None = None) -> str:
+    return (dt or _now_ist()).strftime("%d %b %Y %H:%M IST")
+
+
+def _fmt_ist_date(dt: datetime | None = None) -> str:
+    return (dt or _now_ist()).strftime("%d %b %Y")
 
 
 def _reportlab():
@@ -102,11 +116,11 @@ MONEY_FIELDS = {
 DIRECTORY_FIELDS: list[dict[str, Any]] = [
     {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
     {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 48},
-    {"id": "section", "label": "Sec.", "default": True, "align": "center", "width": 32},
-    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 120},
+    {"id": "section", "label": "Sec.", "default": False, "align": "center", "width": 32},
+    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 110},
     {"id": "officialTitle", "label": "Office", "default": True, "align": "left", "width": 90},
-    {"id": "phone", "label": "Phone", "default": True, "align": "left", "width": 72},
-    {"id": "email", "label": "Email", "default": False, "align": "left", "width": 110},
+    {"id": "phone", "label": "Phone", "default": True, "align": "left", "width": 78},
+    {"id": "email", "label": "Email", "default": True, "align": "left", "width": 120},
     {"id": "profession", "label": "Profession", "default": False, "align": "left", "width": 90},
 ]
 
@@ -512,7 +526,7 @@ def build_pending_dues_pdf(
 
     org = org_title or "Housing Board Colony Sanyard\nResidents Welfare Association"
     sub = org_subtitle or "HIMUDA Housing Colony Sanyard · Mandi (H.P.)"
-    generated = datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC")
+    generated = _fmt_ist_datetime()
 
     buf = io.BytesIO()
     page = rl["landscape"](rl["A4"])
@@ -1074,7 +1088,7 @@ def build_tabular_pdf(
     money_fields = money_fields or set()
 
     bearers = office_bearers_for_header(conn)
-    generated = datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC")
+    generated = _fmt_ist_datetime()
     buf = io.BytesIO()
     page = rl["landscape"](rl["A4"])
     doc = rl["SimpleDocTemplate"](
@@ -1298,8 +1312,8 @@ def build_no_dues_certificate_pdf(
     styles = rl["getSampleStyleSheet"]()
 
     bearers = office_bearers_for_header(conn)
-    issued = datetime.now(timezone.utc).strftime("%d %b %Y")
-    fee_year = info["payment"].get("feeYear") or datetime.now(timezone.utc).year
+    issued = _fmt_ist_date()
+    fee_year = info["payment"].get("feeYear") or _now_ist().year
 
     buf = io.BytesIO()
     page = rl["A4"]
@@ -1405,7 +1419,7 @@ def build_no_dues_certificate_pdf(
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", str(info["plotNo"]))
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    stamp = _now_ist().strftime("%Y%m%d")
     return buf.getvalue(), f"no-dues-{safe_plot}-{stamp}.pdf"
 
 
@@ -1600,7 +1614,7 @@ def build_cash_received_note_pdf(
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", plot_no) or "plot"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    stamp = _now_ist().strftime("%Y%m%d")
     prefix = "cash-voucher" if is_claim else "cash-received"
     return buf.getvalue(), f"{prefix}-{safe_plot}-{stamp}.pdf"
 
@@ -1631,7 +1645,7 @@ def generate_report_pdf(
         if key in payload and key not in filters:
             filters[key] = payload[key]
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    stamp = _now_ist().strftime("%Y%m%d")
 
     if report_id.startswith("template:"):
         tid = report_id.split(":", 1)[1]

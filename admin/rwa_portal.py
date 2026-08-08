@@ -1302,6 +1302,10 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             "isEcMember": is_mem,
             "isOfficeBearer": is_ob,
             "isEcAdmin": is_ec,
+            "email": r["email"] or "",
+            "phone": r["phone"] or "",
+            "hasPhone": bool(r["phone"]),
+            "hasEmail": bool(r["email"]),
             "hasPhoto": photo["hasPhoto"],
             "photoUrl": photo["photoUrl"],
             "primaryMemberId": photo.get("memberId"),
@@ -1310,13 +1314,8 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             item["title"] = r["title"] or ""
             item["profession"] = r["profession"] or ""
             item["employmentStatus"] = r["employment_status"] or "unknown"
-            item["officialTitle"] = r["official_title"] or ""
-            item["email"] = r["email"] or ""
-            item["phone"] = r["phone"] or ""
             item["notes"] = r["notes"] or ""
             item["status"] = r["status"] or "active"
-            item["hasPhone"] = bool(r["phone"])
-            item["hasEmail"] = bool(r["email"])
             item["entitlements"] = (
                 sorted(entitlements.EC_ADMIN_ENTITLEMENTS)
                 if is_ec

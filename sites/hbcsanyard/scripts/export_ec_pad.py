@@ -11,8 +11,11 @@ from __future__ import annotations
 import argparse
 import html
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 
 SITE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = SITE_ROOT / "data" / "rwa.db"
@@ -134,7 +137,7 @@ def render(office: list[dict], general: list[dict]) -> str:
     else:
         general_for_members = []
 
-    generated = datetime.now(timezone.utc).strftime("%d %b %Y")
+    generated = datetime.now(IST).strftime("%d %b %Y")
 
     return f"""<!DOCTYPE html>
 <html lang="en">

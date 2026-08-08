@@ -67,7 +67,8 @@ function renderSiteChrome(meta) {
 
   const footer = document.getElementById('site-footer');
   if (!footer) return;
-  const updated = meta.lastUpdated ? new Date(meta.lastUpdated).toLocaleDateString(undefined, {
+  const updated = meta.lastUpdated ? new Date(meta.lastUpdated).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: 'short',
     day: 'numeric'

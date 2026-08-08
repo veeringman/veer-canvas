@@ -133,6 +133,23 @@
       }[c]));
     }
 
+    function formatIst(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }) + ' IST';
+      } catch (_e) {
+        return String(iso);
+      }
+    }
+
     function render(data) {
       if (!data || !data.found) {
         card.innerHTML = `
@@ -148,7 +165,7 @@
         ['Type', data.artifactTypeLabel || data.artifactType],
         ['Plot', data.plotNo || data.houseId || '—'],
         ['Resident', data.residentName || '—'],
-        ['Issued', (data.issuedAt || '').replace('T', ' ').replace('Z', ' UTC') || '—'],
+        ['Issued', formatIst(data.issuedAt)],
         ['Issuer', [data.issuerTitle, data.issuerName].filter(Boolean).join(' · ') || data.issuerHouseId || '—'],
         ['Attestation ID', data.id],
       ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');

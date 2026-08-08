@@ -79,6 +79,61 @@
 
   const el = (id) => document.getElementById(id);
 
+  const IST_TZ = 'Asia/Kolkata';
+
+  /** Format an ISO / Date value as date+time in IST (Asia/Kolkata). */
+  function formatIstDateTime(iso, { withSeconds = false } = {}) {
+    if (!iso) return '';
+    try {
+      const d = iso instanceof Date ? iso : new Date(iso);
+      if (Number.isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('en-IN', {
+        timeZone: IST_TZ,
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        ...(withSeconds ? { second: '2-digit' } : {}),
+        hour12: true,
+      });
+    } catch (_e) {
+      return String(iso);
+    }
+  }
+
+  /** Format a calendar date or timestamp as a date in IST. */
+  function formatIstDate(iso) {
+    if (!iso) return '';
+    const s = String(iso).trim();
+    try {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const d = new Date(`${s}T12:00:00+05:30`);
+        return d.toLocaleDateString('en-IN', {
+          timeZone: IST_TZ,
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+      }
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return s.slice(0, 10);
+      return d.toLocaleDateString('en-IN', {
+        timeZone: IST_TZ,
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (_e) {
+      return s.slice(0, 10);
+    }
+  }
+
+  /** Today's calendar date in IST as YYYY-MM-DD (for date inputs). */
+  function todayIstDate() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: IST_TZ });
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -584,7 +639,7 @@
       cards.push(`
         <article class="lang-overlay-card">
           <h4>${escapeHtml(title.text || n.title || 'Untitled')} ${autoBadge(title.auto || body.auto)}</h4>
-          <span class="meta">${escapeHtml(n.category || 'general')}${(n.publishedAt || '').slice(0, 10) ? ` · ${escapeHtml((n.publishedAt || '').slice(0, 10))}` : ''}</span>
+          <span class="meta">${escapeHtml(n.category || 'general')}${n.publishedAt ? ` · ${escapeHtml(formatIstDate(n.publishedAt))}` : ''}</span>
           ${failed
             ? '<p class="lang-missing">अनुवाद उपलब्ध नहीं · Could not auto-translate.</p>'
             : `<div class="body">${formatNoticeBody(body.text || n.body || '')}</div>`}
@@ -1032,7 +1087,7 @@
   }
 
   function renderNoticeCard(n, { canMoveUp = false, canMoveDown = false } = {}) {
-    const date = (n.publishedAt || '').slice(0, 10);
+    const date = n.publishedAt ? formatIstDate(n.publishedAt) : '';
     const welcome = isWelcomeNotice(n);
     const recent = isRecentNotice(n);
     const likeCount = Number(n.likeCount || 0);
@@ -1166,7 +1221,7 @@
     box.innerHTML = draftsCache.map((n) => {
       const excerpt = String(n.body || '').trim() || 'No body yet.';
       const short = excerpt.length > 160 ? `${excerpt.slice(0, 157)}…` : excerpt;
-      const when = (n.publishedAt || '').slice(0, 16).replace('T', ' ');
+      const when = formatIstDateTime(n.publishedAt || n.updatedAt);
       const canEdit = n.canEdit !== false;
       const isOwner = Boolean(n.isOwner);
       const shareLine = draftShareSummary(n);
@@ -1484,7 +1539,7 @@
             <div class="stat"><span>Previous pending / dues</span><strong>${inr(p.previousPending ?? p.balancePrev)}</strong></div>
             <div class="stat"><span>Current year total</span><strong>${inr(p.currentYearTotal ?? p.feeAmount)}</strong></div>
             <div class="stat"><span>Pending / dues</span><strong>${inr(p.pendingDues ?? p.balanceOutstanding)}</strong></div>
-            <div class="stat"><span>Treasury</span><strong>${treasuryStatusIcon(p)}</strong></div>
+            <div class="stat stat-treasury"><span>Treasury</span><strong>${treasuryStatusIcon(p)}</strong></div>
           </div>`;
       }
     }
@@ -1501,7 +1556,7 @@
       el('paymentRecordFeeYear').value = String(new Date().getFullYear());
     }
     if (el('paymentRecordPaidOn') && !el('paymentRecordPaidOn').value) {
-      el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+      el('paymentRecordPaidOn').value = todayIstDate();
     }
     syncPaymentRecordFormKind();
     if (hasEntitlement('manage_dues') || hasEntitlement('issue_no_dues')) {
@@ -1643,7 +1698,7 @@
     const title = escapeHtml(label);
     return `<span class="treasury-seal is-${escapeHtml(st)}" title="Treasury: ${title}" aria-label="Treasury: ${title}">
       <span class="treasury-seal-icon" aria-hidden="true"></span>
-      ${showLabel ? `<span class="treasury-seal-label">${escapeHtml(labels[st] || st)}</span>` : ''}
+      ${showLabel ? `<span class="treasury-seal-label">${escapeHtml(label)}</span>` : ''}
     </span>`;
   }
 
@@ -1758,7 +1813,7 @@
           ${isClaim ? '' : ` · year ${escapeHtml(String(rec.feeYear || ''))}`}
           ${kindBit}${cashBit}
           ${rec.uploadedByRole === 'ec' ? ' · uploaded by EC' : ''}
-          ${rec.reimbursedAt ? ` · reimbursed ${escapeHtml(String(rec.reimbursedAt).slice(0, 10))}` : ''}
+          ${rec.reimbursedAt ? ` · reimbursed ${escapeHtml(formatIstDate(rec.reimbursedAt))}` : ''}
         </p>
         ${(rec.method || '') === 'cash' && rec.status === 'submitted'
           ? '<p class="muted">Cash proof uploaded — awaiting EC verification / approval.</p>'
@@ -1914,7 +1969,7 @@
           <span class="payment-status is-${escapeHtml(item.status || '')}">${escapeHtml(item.statusLabel || item.status)}</span>
           ${item.status === 'issued' ? treasuryStatusIcon(item) : ''}
         </div>
-        <p class="muted">Requested ${escapeHtml(String(item.createdAt || '').slice(0, 10))}${item.issuedAt ? ` · issued ${escapeHtml(String(item.issuedAt).slice(0, 10))}` : ''}</p>
+        <p class="muted">Requested ${escapeHtml(formatIstDate(item.createdAt) || '—')}${item.issuedAt ? ` · issued ${escapeHtml(formatIstDate(item.issuedAt))}` : ''}</p>
         ${item.requestNote ? `<p>${escapeHtml(item.requestNote)}</p>` : ''}
         ${item.reviewNote ? `<p class="muted">Note: ${escapeHtml(item.reviewNote)}</p>` : ''}
         ${actions.length ? `<div class="btn-row">${actions.join('')}</div>` : ''}
@@ -1996,7 +2051,7 @@
     el('paymentRecordForm')?.reset();
     syncPaymentRecordFormKind();
     if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(new Date().getFullYear());
-    if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+    if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = todayIstDate();
     if (el('paymentRecordFormStatus')) el('paymentRecordFormStatus').textContent = '';
   });
 
@@ -2041,7 +2096,7 @@
       if (el('paymentRecordKind')) el('paymentRecordKind').value = submittedKind;
       syncPaymentRecordFormKind();
       if (el('paymentRecordFeeYear')) el('paymentRecordFeeYear').value = String(new Date().getFullYear());
-      if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = new Date().toISOString().slice(0, 10);
+      if (el('paymentRecordPaidOn')) el('paymentRecordPaidOn').value = todayIstDate();
       if (status) {
         status.textContent = editId
           ? 'Saved — awaiting EC review.'
@@ -2758,18 +2813,34 @@
 
   async function loadDirectory() {
     const data = await api('/api/rwa/directory');
-    el('directoryRows').innerHTML = (data.residents || []).map((r) => {
+    const rows = data.residents || [];
+    const box = el('directoryRows');
+    if (!box) return;
+    if (!rows.length) {
+      box.innerHTML = '<tr class="is-empty-row"><td colspan="5" class="muted">No active plots in the directory.</td></tr>';
+      return;
+    }
+    box.innerHTML = rows.map((r) => {
       const roleLabel = committeeRoleLabel(r);
       const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
+      const phone = (r.phone || '').trim();
+      const email = (r.email || '').trim();
+      const phoneHtml = phone
+        ? `<a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
+        : '<span class="muted">—</span>';
+      const emailHtml = email
+        ? `<a class="dir-contact" href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
+        : '<span class="muted">—</span>';
       return `
       <tr>
-        <td data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
-        <td data-label="Section">${escapeHtml(r.section)}</td>
-        <td data-label="Name" class="person-cell">${personAvatarHtml(r)} <span>${escapeHtml(r.name)}</span></td>
+        <td class="plot-cell" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
+        <td data-label="Name"><span class="person-inline">${personAvatarHtml(r)}<span>${escapeHtml(r.name || '')}</span></span></td>
         <td data-label="Role">${escapeHtml(roleLabel)}${titleBit}</td>
+        <td data-label="Phone">${phoneHtml}</td>
+        <td data-label="Email" class="dir-email">${emailHtml}</td>
       </tr>`;
     }).join('');
-    await hydrateAvatars(el('directoryRows'));
+    await hydrateAvatars(box);
   }
 
   let infoCategoriesCache = [];
@@ -2885,7 +2956,7 @@
       status.textContent = `${infoDocsCache.length} document${infoDocsCache.length === 1 ? '' : 's'}`;
     }
     box.innerHTML = infoDocsCache.map((d) => {
-      const when = String(d.publishedAt || d.updatedAt || '').slice(0, 10);
+      const when = formatIstDate(d.publishedAt || d.updatedAt);
       const badges = [
         `<span class="info-doc-badge">${escapeHtml(d.categoryLabel || d.category || 'general')}</span>`,
         `<span class="info-doc-badge ${d.docType === 'html' ? 'is-html' : 'is-file'}">${d.docType === 'html' ? 'HTML' : 'File'}</span>`,
@@ -3336,7 +3407,7 @@
       return `<article class="msg-row${mine ? ' is-mine' : ''}${isAi ? ' is-ai' : ''}" data-msg-id="${escapeHtml(m.id)}">
         ${avatar}
         <div class="msg-bubble${mine ? ' is-mine' : ''}${m.hidden ? ' is-hidden' : ''}${isAi ? ' is-ai' : ''}">
-          <div class="msg-meta">${who} · ${escapeHtml((m.createdAt || '').replace('T', ' ').slice(0, 16))}${editedBit}</div>
+          <div class="msg-meta">${who} · ${escapeHtml(formatIstDateTime(m.createdAt))}${editedBit}</div>
           <div class="msg-body">${escapeHtml(m.body || '')}</div>
           ${atts ? `<div class="msg-attachments">${atts}</div>` : ''}
           <div class="msg-footer">${likeBtn}${authorActions}${mods}</div>
@@ -3354,6 +3425,7 @@
     state.msgActiveThreadId = threadId;
     el('msgLayout')?.classList.add('is-thread-open');
     if (el('msgBackBtn')) el('msgBackBtn').hidden = false;
+    if (el('msgLeaveBar')) el('msgLeaveBar').hidden = false;
     if (el('msgComposeForm')) el('msgComposeForm').hidden = isViewOnly();
     renderMsgThreadList();
     const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(threadId)}?limit=80`);
@@ -3368,7 +3440,7 @@
       } else if (thread.kind === 'colony') {
         el('msgConversationMeta').textContent = 'Visible to all residents';
       } else {
-        el('msgConversationMeta').textContent = `Private · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
+        el('msgConversationMeta').textContent = `Private person-to-person · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
       }
     }
     const tools = el('msgChannelTools');
@@ -3444,6 +3516,8 @@
         await openMsgThread(state.msgThreads[0].id, { skipHash: true });
       } else {
         el('msgLayout')?.classList.remove('is-thread-open');
+        if (el('msgBackBtn')) el('msgBackBtn').hidden = true;
+        if (el('msgLeaveBar')) el('msgLeaveBar').hidden = true;
         if (el('msgComposeForm')) el('msgComposeForm').hidden = true;
       }
     }
@@ -3530,7 +3604,7 @@
       if (el('msgThreadList')) el('msgThreadList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
     if (name === 'profile') refreshPushUi().catch(() => {});
-    if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr><td colspan="4">${escapeHtml(e.message)}</td></tr>`; });
+    if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr class="is-empty-row"><td colspan="5">${escapeHtml(e.message)}</td></tr>`; });
     if (name === 'info') loadInfoCentre().catch((e) => {
       if (el('infoDocList')) el('infoDocList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
@@ -3837,12 +3911,19 @@
       if (el('msgFeed')) el('msgFeed').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
   });
-  el('msgBackBtn')?.addEventListener('click', () => {
+  function leaveMsgThread() {
     el('msgLayout')?.classList.remove('is-thread-open');
     state.msgActiveThreadId = null;
     stopMsgPolling();
+    if (el('msgBackBtn')) el('msgBackBtn').hidden = true;
+    if (el('msgLeaveBar')) el('msgLeaveBar').hidden = true;
+    if (el('msgComposeForm')) el('msgComposeForm').hidden = true;
+    if (el('msgChannelTools')) el('msgChannelTools').hidden = true;
     history.replaceState(null, '', '#messages');
-  });
+  }
+
+  el('msgBackBtn')?.addEventListener('click', leaveMsgThread);
+  el('msgBackBottomBtn')?.addEventListener('click', leaveMsgThread);
   el('msgRefreshThreadsBtn')?.addEventListener('click', () => refreshMsgThreads().catch(console.error));
   el('msgComposeForm')?.addEventListener('submit', sendMsgCompose);
   el('msgAttachInput')?.addEventListener('change', () => {
@@ -3994,35 +4075,74 @@
     }
   });
   let peerTimer = null;
+
+  function clearMsgPeerSearch({ focusInput = false } = {}) {
+    clearTimeout(peerTimer);
+    if (el('msgPeerSearch')) el('msgPeerSearch').value = '';
+    if (el('msgPeerResults')) {
+      el('msgPeerResults').hidden = true;
+      el('msgPeerResults').innerHTML = '';
+    }
+    if (el('msgPeerCancelBtn')) el('msgPeerCancelBtn').hidden = true;
+    if (focusInput) el('msgPeerSearch')?.focus();
+  }
+
+  function setMsgPeerSearching(active) {
+    if (el('msgPeerCancelBtn')) el('msgPeerCancelBtn').hidden = !active;
+  }
+
+  function renderMsgPeerResults(peers) {
+    const box = el('msgPeerResults');
+    if (!box) return;
+    const head = `<div class="msg-peer-results-head">
+      <span class="muted">Person-to-person chat</span>
+      <button type="button" class="btn ghost compact" data-peer-dismiss>Cancel</button>
+    </div>`;
+    if (!peers.length) {
+      box.innerHTML = `${head}<p class="muted msg-peer-empty">No people found</p>`;
+      box.hidden = false;
+      setMsgPeerSearching(true);
+      return;
+    }
+    box.innerHTML = head + peers.map((p) => (
+      `<button type="button" data-house-id="${escapeHtml(p.houseId)}">${escapeHtml(p.label)}</button>`
+    )).join('');
+    box.hidden = false;
+    setMsgPeerSearching(true);
+  }
+
   el('msgPeerSearch')?.addEventListener('input', () => {
     clearTimeout(peerTimer);
+    const q = (el('msgPeerSearch')?.value || '').trim();
+    setMsgPeerSearching(q.length > 0);
     peerTimer = setTimeout(async () => {
-      const q = (el('msgPeerSearch')?.value || '').trim();
       const box = el('msgPeerResults');
       if (!box) return;
       if (q.length < 1) {
-        box.hidden = true;
-        box.innerHTML = '';
+        clearMsgPeerSearch();
         return;
       }
       try {
         const data = await api(`/api/rwa/messages/peers?q=${encodeURIComponent(q)}`);
-        const peers = data.peers || [];
-        if (!peers.length) {
-          box.innerHTML = '<p class="muted" style="padding:0.5rem">No plots found</p>';
-          box.hidden = false;
-          return;
-        }
-        box.innerHTML = peers.map((p) => (
-          `<button type="button" data-house-id="${escapeHtml(p.houseId)}">${escapeHtml(p.label)}</button>`
-        )).join('');
-        box.hidden = false;
+        renderMsgPeerResults(data.peers || []);
       } catch (_e) {
         box.hidden = true;
+        box.innerHTML = '';
       }
     }, 200);
   });
+  el('msgPeerSearch')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearMsgPeerSearch();
+    }
+  });
+  el('msgPeerCancelBtn')?.addEventListener('click', () => clearMsgPeerSearch());
   el('msgPeerResults')?.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-peer-dismiss]')) {
+      clearMsgPeerSearch();
+      return;
+    }
     const btn = event.target.closest('[data-house-id]');
     if (!btn) return;
     try {
@@ -4030,16 +4150,19 @@
         method: 'POST',
         body: JSON.stringify({ houseId: btn.getAttribute('data-house-id') }),
       });
-      if (el('msgPeerSearch')) el('msgPeerSearch').value = '';
-      if (el('msgPeerResults')) {
-        el('msgPeerResults').hidden = true;
-        el('msgPeerResults').innerHTML = '';
-      }
+      clearMsgPeerSearch();
       await refreshMsgThreads();
       await openMsgThread(data.thread.id);
     } catch (e) {
       if (el('msgComposeStatus')) el('msgComposeStatus').textContent = e.message || 'Could not open chat';
     }
+  });
+  document.addEventListener('pointerdown', (event) => {
+    const wrap = el('msgSidebar')?.querySelector('.msg-new-dm');
+    const box = el('msgPeerResults');
+    if (!wrap || !box || box.hidden) return;
+    if (wrap.contains(event.target)) return;
+    clearMsgPeerSearch();
   });
   el('pushEnableBtn')?.addEventListener('click', () => enablePush());
   el('pushDisableBtn')?.addEventListener('click', () => disablePush());
@@ -4445,7 +4568,7 @@
     const me = state.session?.resident?.houseId;
     return comments.map((c) => {
       const canDelete = c.houseId === me || isEcAdmin();
-      const when = (c.createdAt || '').slice(0, 16).replace('T', ' ');
+      const when = formatIstDateTime(c.createdAt);
       return `
         <div class="notice-comment" data-comment-id="${escapeHtml(c.id)}">
           <div class="notice-comment-head">
@@ -4638,12 +4761,7 @@
   }
 
   function formatWhen(iso) {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-    } catch (_e) {
-      return String(iso).slice(0, 16);
-    }
+    return formatIstDateTime(iso);
   }
 
   function renderMessageTrail(messages) {
@@ -5067,7 +5185,7 @@
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const stamp = todayIstDate().replace(/-/g, '');
     a.href = url;
     a.download = `report-${stamp}.pdf`;
     document.body.appendChild(a);
@@ -5673,7 +5791,7 @@
     }
     tbody.innerHTML = rows.map((rev) => `
       <tr>
-        <td data-label="When">${escapeHtml((rev.changedAt || '').replace('T', ' ').replace('Z', ''))}</td>
+        <td data-label="When">${escapeHtml(formatIstDateTime(rev.changedAt))}</td>
         <td data-label="Plot"><code>${escapeHtml(rev.houseId)}</code></td>
         <td data-label="Changed by">${escapeHtml(rev.changedByName || rev.changedByHouseId || 'system')}<div class="muted plot-section">${escapeHtml(rev.source || '')}</div></td>
         <td data-label="Fields">${escapeHtml((rev.fields || []).join(', ') || '—')}</td>
@@ -5764,12 +5882,7 @@
   }
 
   function fmtOpsWhen(iso) {
-    if (!iso) return '—';
-    try {
-      return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-    } catch (_e) {
-      return String(iso).slice(0, 16);
-    }
+    return formatIstDateTime(iso) || '—';
   }
 
   async function loadOpsStatus() {
@@ -5859,12 +5972,12 @@
         : '<tr><td colspan="3">No users in this period.</td></tr>';
     }
     if (el('obsTrailStats')) {
-      el('obsTrailStats').textContent = `${(data.recent || []).length} recent events · since ${(data.since || '').slice(0, 10)}`;
+      el('obsTrailStats').textContent = `${(data.recent || []).length} recent events · since ${formatIstDate(data.since) || '—'}`;
     }
     if (el('obsRecentRows')) {
       el('obsRecentRows').innerHTML = (data.recent || []).length
         ? data.recent.map((e) => {
-            const when = String(e.createdAt || '').slice(0, 19).replace('T', ' ');
+            const when = formatIstDateTime(e.createdAt, { withSeconds: true });
             const who = e.superAdmin
               ? `admin · ${escapeHtml(e.name || 'Super admin')}`
               : `<code>${escapeHtml(e.houseId || '—')}</code> ${escapeHtml(e.name || '')}`;
