@@ -172,6 +172,7 @@ _SETTINGS_KEYS = (
     "RWA_SMTP_PASS",
     "RWA_OTP_TTL",
     "RWA_SUPERADMIN_USER",
+    "RWA_INFO_CENTRE_PROTECT",
 )
 
 _OPS_ENV_KEYS = (
@@ -389,6 +390,14 @@ def _smtp_env_path(site_root: pathlib.Path) -> pathlib.Path:
     return site_root / "data" / "smtp.env"
 
 
+def info_centre_protect_enabled(site_root: pathlib.Path | None = None) -> bool:
+    """Master-admin flag: enforce view-only / watermark deterrents for Information Centre."""
+    if site_root is not None:
+        _load_env_file(_smtp_env_path(site_root))
+    raw = (os.environ.get("RWA_INFO_CENTRE_PROTECT") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def read_platform_settings(site_root: pathlib.Path) -> dict:
     """Return editable platform settings (never include raw SMTP password)."""
     _load_env_file(_smtp_env_path(site_root))
@@ -407,6 +416,7 @@ def read_platform_settings(site_root: pathlib.Path) -> dict:
         "superadminUser": (os.environ.get("RWA_SUPERADMIN_USER") or "admin").strip() or "admin",
         "envFile": status["envFile"],
         "ops": read_ops_settings(site_root),
+        "infoCentreProtect": info_centre_protect_enabled(site_root),
     }
 
 
@@ -436,6 +446,12 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
     }
     if payload.get("superadminUser"):
         mapping["RWA_SUPERADMIN_USER"] = str(payload["superadminUser"]).strip().lower()
+
+    if "infoCentreProtect" in payload:
+        flag = str(payload.get("infoCentreProtect") or "").strip().lower()
+        mapping["RWA_INFO_CENTRE_PROTECT"] = (
+            "1" if flag in {"1", "true", "yes", "on"} else "0"
+        )
 
     ops_payload = payload.get("ops") if isinstance(payload.get("ops"), dict) else {}
     if ops_payload:
@@ -2556,21 +2572,16 @@ def render_info_share_page(
   </script>"""
 
     return f"""<!DOCTYPE html>
-<html lang="en" prefix="og: https://ogp.me/ns#">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{et} · {es}</title>
-  <meta name="description" content="{ed}">
-  <meta name="robots" content="index,follow">
-  <link rel="canonical" href="{eu}">
-  <meta property="og:type" content="website">
-  <meta property="og:locale" content="en_IN">
-  <meta property="og:site_name" content="{es}">
   <meta property="og:title" content="{et}">
   <meta property="og:description" content="{ed}">
-  <meta property="og:url" content="{eu}">
   <meta property="og:image" content="{ei}">
+  <meta property="og:url" content="{eu}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{es}">
+  <meta property="og:locale" content="en_IN">
   <meta property="og:image:secure_url" content="{ei}">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="{int(image_width)}">
@@ -2580,11 +2591,13 @@ def render_info_share_page(
   <meta name="twitter:title" content="{et}">
   <meta name="twitter:description" content="{ed}">
   <meta name="twitter:image" content="{ei}">
+  <meta name="description" content="{ed}">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{eu}">
   <link rel="image_src" href="{ei}">
   <link rel="icon" href="/assets/favicon-192.png" type="image/png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  {auto_script}
-  {open_script}
+  <title>{et} · {es}</title>
   <style>
     :root {{
       --navy: #15233f;
@@ -2703,6 +2716,8 @@ def render_info_share_page(
       <p class="note">Residents must sign in with their house / plot number to open the full document.</p>
     </div>
   </main>
+  {auto_script}
+  {open_script}
 </body>
 </html>
 """

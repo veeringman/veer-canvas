@@ -2779,6 +2779,16 @@ def _rwa_conn():
     return rwa_portal.open_rwa(SITE_ROOT)
 
 
+def _rwa_auth_payload(sess: dict) -> dict:
+    """Session dict plus public portal feature flags."""
+    return {
+        **sess,
+        "features": {
+            "infoCentreProtect": rwa_portal.info_centre_protect_enabled(SITE_ROOT),
+        },
+    }
+
+
 def _public_base_url() -> str:
     """HTTPS origin for QR / attest links (prefer forwarded host behind nginx)."""
     proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip()
@@ -2890,7 +2900,12 @@ def api_rwa_session():
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": True, "authenticated": False})
-        resp = jsonify({"ok": True, "authenticated": True, **sess})
+        payload = {
+            "ok": True,
+            "authenticated": True,
+            **_rwa_auth_payload(sess),
+        }
+        resp = jsonify(payload)
         # Refresh cookie so existing short-lived cookies pick up persistent login.
         if sess.get("token") and request.cookies.get("rwa_session"):
             _rwa_set_session_cookie(resp, sess["token"])
@@ -3037,7 +3052,7 @@ def api_rwa_password_login():
         sess = rwa_portal.login_with_password(conn, username, password)
         if not sess:
             return jsonify({"ok": False, "error": "Invalid username or password"}), 401
-        resp = jsonify({"ok": True, **sess})
+        resp = jsonify({"ok": True, **_rwa_auth_payload(sess)})
         _rwa_set_session_cookie(resp, sess["token"])
         return resp
     finally:
@@ -3057,7 +3072,7 @@ def api_rwa_otp_verify():
         sess = rwa_portal.verify_otp(conn, house_id, code, member_id=member_id)
         if not sess:
             return jsonify({"ok": False, "error": "Invalid or expired code"}), 401
-        resp = jsonify({"ok": True, **sess})
+        resp = jsonify({"ok": True, **_rwa_auth_payload(sess)})
         _rwa_set_session_cookie(resp, sess["token"])
         return resp
     finally:
@@ -5964,6 +5979,9 @@ def api_rwa_info_centre():
                 "documents": docs,
                 "categories": rwa_portal.info_centre_categories(),
                 "folders": rwa_portal.list_info_folders(conn),
+                "features": {
+                    "infoCentreProtect": rwa_portal.info_centre_protect_enabled(SITE_ROOT),
+                },
             })
 
         if not is_admin:
@@ -6098,17 +6116,26 @@ def api_rwa_info_centre_file(doc_id: str):
                     force_download = str(request.args.get("download") or "").strip().lower() in {
                         "1", "true", "yes", "download",
                     }
+                    protect = rwa_portal.info_centre_protect_enabled(SITE_ROOT)
+                    if force_download and protect and not is_admin:
+                        return jsonify({
+                            "ok": False,
+                            "error": "Downloads are disabled for Information Centre documents",
+                        }), 403
                     resp = send_file(
                         candidate,
                         mimetype=mime or None,
                         as_attachment=force_download,
                         download_name=candidate.name,
                         conditional=True,
-                        max_age=300,
+                        max_age=0 if protect else 300,
                     )
                     if not force_download:
                         resp.headers["Content-Disposition"] = f'inline; filename="{candidate.name}"'
                     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+                    resp.headers["Cache-Control"] = (
+                        "private, no-store" if protect else "private, max-age=300"
+                    )
                     return resp
             # Absolute http(s) or unresolved relative path: redirect so the viewer can load it.
             return redirect(url, code=302)
@@ -6136,6 +6163,12 @@ def api_rwa_info_centre_file(doc_id: str):
         force_download = str(request.args.get("download") or "").strip().lower() in {
             "1", "true", "yes", "download",
         }
+        protect = rwa_portal.info_centre_protect_enabled(SITE_ROOT)
+        if force_download and protect and not is_admin:
+            return jsonify({
+                "ok": False,
+                "error": "Downloads are disabled for Information Centre documents",
+            }), 403
         if is_html:
             raw = path.read_text(encoding="utf-8", errors="replace")
             html = rwa_portal.render_info_html_for_view(doc.get("title") or "Document", raw)
@@ -6148,7 +6181,7 @@ def api_rwa_info_centre_file(doc_id: str):
                         if force_download
                         else f'inline; filename="{download_name}"'
                     ),
-                    "Cache-Control": "private, max-age=120",
+                    "Cache-Control": "private, no-store" if protect else "private, max-age=120",
                 },
             )
         mime = (doc.get("mimeType") or "").strip() or None
@@ -6169,12 +6202,12 @@ def api_rwa_info_centre_file(doc_id: str):
             download_name=download_name,
             conditional=True,
             etag=True,
-            max_age=300,
+            max_age=0 if protect else 300,
         )
         if not as_attachment:
             resp.headers["Content-Disposition"] = f'inline; filename="{download_name}"'
             resp.headers["Accept-Ranges"] = "bytes"
-        resp.headers["Cache-Control"] = "private, max-age=300"
+        resp.headers["Cache-Control"] = "private, no-store" if protect else "private, max-age=300"
         resp.headers["X-Content-Type-Options"] = "nosniff"
         # Allow embedding in the portal document viewer (<dialog> iframe / blob fallback).
         resp.headers["X-Frame-Options"] = "SAMEORIGIN"

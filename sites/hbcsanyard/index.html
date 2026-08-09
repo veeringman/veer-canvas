@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260809deeplink1">
-  <script src="portal.js?v=20260809deeplink1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260809icprotect5">
+  <script src="portal.js?v=20260809icprotect5" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -549,7 +549,8 @@
         </div>
       </section>
 
-      <section class="panel" id="panel-info" hidden>
+      <section class="panel panel-info-protected" id="panel-info" hidden>
+        <div class="panel-info-watermark" id="panelInfoWatermark" aria-hidden="true"></div>
         <header class="panel-head panel-head-lang">
           <div class="panel-head-copy">
             <h2>Information Centre</h2>
@@ -1496,6 +1497,11 @@
               <label>Super admin username <input name="superadminUser" id="settingsSaUser"></label>
               <label>New super admin password <input name="superadminPassword" id="settingsSaPass" type="password" placeholder="leave blank to keep" autocomplete="new-password"></label>
             </div>
+            <label class="check" style="margin-top:0.35rem">
+              <input type="checkbox" id="settingsInfoCentreProtect">
+              Enforce Information Centre view protection
+            </label>
+            <p class="muted" style="margin:0.25rem 0 0">Off by default. When on: no download/new-tab for members, copy/print deterrents, and personal watermarks (screenshots cannot be fully blocked on iPhone).</p>
             <div class="btn-row">
               <button type="submit" class="btn primary" id="settingsSaveBtn">Save settings</button>
             </div>
@@ -1668,6 +1674,10 @@
             Preview is not available for this file type.
             Use Download or Open in new tab, then return here with Go back.
           </p>
+          <div class="doc-viewer-watermark" id="docViewerWatermark" hidden aria-hidden="true"></div>
+          <div class="doc-viewer-protect-shield" id="docViewerProtectShield" hidden aria-hidden="true">
+            Return to this screen to continue reading.
+          </div>
         </div>
       </div>
     </dialog>

@@ -161,7 +161,289 @@
   let docViewerStreamUrl = '';
   // Non-modal doc viewer sits under modal top-layer dialogs (vault). Park them while viewing.
   let docViewerResumeVaultHouseId = '';
+  let docViewerProtectActive = false;
+  let infoCentreProtectBound = false;
+  let infoWatermarkTimer = 0;
 
+  const INFO_IFRAME_PROTECT_CSS = `
+html,body{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
+@media print{body{visibility:hidden!important}body::before{content:"Printing Information Centre documents is not allowed.";visibility:visible;display:block;padding:2rem;font:600 1rem/1.4 system-ui,sans-serif}}
+#ic-protect-shield{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;padding:1.5rem;text-align:center;background:#0e182c;color:#f3f1ea;font:600 1rem/1.45 system-ui,sans-serif}
+html.is-capture-guard #ic-protect-shield{display:flex}
+html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important}
+#ic-reader-watermark{position:fixed;inset:0;z-index:99990;pointer-events:none;overflow:hidden;opacity:.28}
+#ic-reader-watermark .tiles{position:absolute;inset:-12%;display:grid;grid-template-columns:repeat(3,1fr);gap:2.2rem 1rem;transform:rotate(-28deg);color:#0e182c;font:700 12px/1.35 system-ui,sans-serif;text-align:center}
+#ic-reader-watermark .tiles span{white-space:nowrap}
+`;
+
+  function infoProtectMarkText() {
+    const r = state.session?.resident || {};
+    const plot = String(r.houseId || r.plotNo || (r.superAdmin ? 'EC' : 'member')).trim();
+    const name = String(r.name || '').trim();
+    const when = new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `HBC Sanyard · Plot ${plot}${name ? ` · ${name}` : ''} · ${when} · view only`;
+  }
+
+  function fillWatermarkNode(node, mark) {
+    if (!node) return;
+    const text = mark || infoProtectMarkText();
+    node.setAttribute('data-mark', text);
+    const tiles = Array.from({ length: 24 }, () => `<span>${escapeHtml(text)}</span>`).join('');
+    node.innerHTML = `<div class="doc-viewer-watermark-tiles tiles">${tiles}</div>`;
+  }
+
+  function clearInfoWatermarks() {
+    if (infoWatermarkTimer) {
+      window.clearInterval(infoWatermarkTimer);
+      infoWatermarkTimer = 0;
+    }
+    const panel = el('panel-info');
+    panel?.classList.remove('is-watermarked');
+    const panelWm = el('panelInfoWatermark');
+    if (panelWm) {
+      panelWm.innerHTML = '';
+      panelWm.removeAttribute('data-mark');
+    }
+    const docWm = el('docViewerWatermark');
+    if (docWm) {
+      docWm.hidden = true;
+      docWm.innerHTML = '';
+      docWm.removeAttribute('data-mark');
+      docWm.setAttribute('aria-hidden', 'true');
+    }
+    el('docViewerDialog')?.classList.remove('is-content-protected', 'is-capture-guard');
+    try {
+      const frame = el('docViewerFrame');
+      const doc = frame?.contentDocument;
+      const iframeWm = doc?.getElementById('ic-reader-watermark');
+      if (iframeWm) iframeWm.remove();
+      doc?.documentElement?.classList.remove('is-capture-guard');
+    } catch (_err) { /* ignore */ }
+  }
+
+  function refreshInfoWatermarks() {
+    if (!isInfoCentreProtectEnforced()) {
+      clearInfoWatermarks();
+      return;
+    }
+    const mark = infoProtectMarkText();
+    fillWatermarkNode(el('docViewerWatermark'), mark);
+    const panelWm = el('panelInfoWatermark');
+    const panel = el('panel-info');
+    if (panelWm && panel && !panel.hidden) {
+      fillWatermarkNode(panelWm, mark);
+      panel.classList.add('is-watermarked');
+    }
+    try {
+      const frame = el('docViewerFrame');
+      const doc = frame && !frame.hidden ? frame.contentDocument : null;
+      const iframeWm = doc?.getElementById('ic-reader-watermark');
+      if (iframeWm) {
+        const tiles = Array.from({ length: 24 }, () => `<span>${escapeHtml(mark)}</span>`).join('');
+        iframeWm.innerHTML = `<div class="tiles">${tiles}</div>`;
+      }
+    } catch (_err) { /* ignore */ }
+  }
+
+  function startInfoWatermarkClock() {
+    if (!isInfoCentreProtectEnforced()) {
+      clearInfoWatermarks();
+      return;
+    }
+    refreshInfoWatermarks();
+    if (infoWatermarkTimer) window.clearInterval(infoWatermarkTimer);
+    infoWatermarkTimer = window.setInterval(refreshInfoWatermarks, 60_000);
+  }
+
+  function stopInfoWatermarkClockIfIdle() {
+    if (!isInfoCentreProtectEnforced()) {
+      clearInfoWatermarks();
+      return;
+    }
+    const infoOpen = Boolean(el('panel-info') && !el('panel-info').hidden);
+    if (infoOpen || docViewerProtectActive) {
+      refreshInfoWatermarks();
+      return;
+    }
+    clearInfoWatermarks();
+  }
+
+  function isInfoCentreProtectEnforced() {
+    return Boolean(state.session?.features?.infoCentreProtect);
+  }
+
+  function setInfoCentreProtectFeature(on) {
+    if (!state.session) return;
+    state.session.features = { ...(state.session.features || {}), infoCentreProtect: Boolean(on) };
+    applyInfoCentreProtectMode();
+  }
+
+  function applyInfoCentreProtectMode() {
+    const on = isInfoCentreProtectEnforced();
+    document.body.classList.toggle('info-protect-enforced', on);
+    if (!on) {
+      document.body.classList.remove('is-info-capture-guard');
+      docViewerProtectActive = false;
+      clearInfoWatermarks();
+      return;
+    }
+    if (el('panel-info') && !el('panel-info').hidden) startInfoWatermarkClock();
+    syncInfoCentreCaptureGuard();
+  }
+
+  function syncInfoCentreCaptureGuard() {
+    if (!isInfoCentreProtectEnforced()) {
+      document.body.classList.remove('is-info-capture-guard');
+      el('docViewerDialog')?.classList.remove('is-capture-guard');
+      const shield = el('docViewerProtectShield');
+      if (shield) {
+        shield.hidden = true;
+        shield.setAttribute('aria-hidden', 'true');
+      }
+      return;
+    }
+    const infoOpen = Boolean(el('panel-info') && !el('panel-info').hidden);
+    const viewerProtected = Boolean(
+      docViewerProtectActive && el('docViewerDialog')?.open,
+    );
+    // Only when the browser tab is actually hidden — not on blur/iframe focus
+    // (iframes steal parent focus and were blanking the page while reading).
+    const away = document.visibilityState !== 'visible';
+    document.body.classList.toggle('is-info-capture-guard', infoOpen && away && !viewerProtected);
+    const dialog = el('docViewerDialog');
+    if (dialog) {
+      dialog.classList.toggle('is-capture-guard', viewerProtected && away);
+    }
+    const shield = el('docViewerProtectShield');
+    if (shield) {
+      const show = viewerProtected && away;
+      shield.hidden = !show;
+      shield.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+  }
+
+  function injectInfoIframeProtect(frame) {
+    if (!isInfoCentreProtectEnforced()) return;
+    try {
+      const doc = frame?.contentDocument;
+      if (!doc?.documentElement) return;
+      if (!doc.getElementById('ic-portal-protect-style')) {
+        const style = doc.createElement('style');
+        style.id = 'ic-portal-protect-style';
+        style.textContent = INFO_IFRAME_PROTECT_CSS;
+        (doc.head || doc.documentElement).appendChild(style);
+      }
+      if (!doc.getElementById('ic-protect-shield')) {
+        const shield = doc.createElement('div');
+        shield.id = 'ic-protect-shield';
+        shield.setAttribute('aria-hidden', 'true');
+        shield.textContent = 'Return to this screen to continue reading.';
+        doc.body?.appendChild(shield);
+      }
+      let wm = doc.getElementById('ic-reader-watermark');
+      if (!wm) {
+        wm = doc.createElement('div');
+        wm.id = 'ic-reader-watermark';
+        wm.setAttribute('aria-hidden', 'true');
+        doc.body?.appendChild(wm);
+      }
+      const mark = infoProtectMarkText();
+      const tiles = Array.from({ length: 24 }, () => `<span>${escapeHtml(mark)}</span>`).join('');
+      wm.innerHTML = `<div class="tiles">${tiles}</div>`;
+      const arm = (on) => {
+        doc.documentElement.classList.toggle('is-capture-guard', Boolean(on));
+        const s = doc.getElementById('ic-protect-shield');
+        if (s) s.setAttribute('aria-hidden', on ? 'false' : 'true');
+      };
+      const sync = () => arm(doc.visibilityState !== 'visible');
+      if (!doc.documentElement.dataset.icProtectBound) {
+        doc.documentElement.dataset.icProtectBound = '1';
+        doc.addEventListener('visibilitychange', sync);
+        doc.addEventListener('contextmenu', (e) => e.preventDefault());
+        doc.addEventListener('copy', (e) => e.preventDefault());
+        doc.addEventListener('cut', (e) => e.preventDefault());
+        doc.addEventListener('dragstart', (e) => e.preventDefault());
+        doc.defaultView?.addEventListener('beforeprint', () => arm(true));
+        doc.defaultView?.addEventListener('afterprint', sync);
+        doc.addEventListener('keydown', (e) => {
+          const key = String(e.key || '').toLowerCase();
+          const mod = e.metaKey || e.ctrlKey;
+          if (mod && (key === 'p' || key === 's')) e.preventDefault();
+        });
+      }
+      sync();
+    } catch (_err) {
+      /* cross-origin or unavailable */
+    }
+  }
+
+  function setDocViewerProtected(on) {
+    docViewerProtectActive = Boolean(on) && isInfoCentreProtectEnforced();
+    const dialog = el('docViewerDialog');
+    dialog?.classList.toggle('is-content-protected', docViewerProtectActive);
+    const wm = el('docViewerWatermark');
+    if (wm) {
+      wm.hidden = !docViewerProtectActive;
+      wm.setAttribute('aria-hidden', docViewerProtectActive ? 'false' : 'true');
+    }
+    if (!docViewerProtectActive) {
+      dialog?.classList.remove('is-capture-guard');
+      const shield = el('docViewerProtectShield');
+      if (shield) {
+        shield.hidden = true;
+        shield.setAttribute('aria-hidden', 'true');
+      }
+      stopInfoWatermarkClockIfIdle();
+    } else {
+      startInfoWatermarkClock();
+    }
+    syncInfoCentreCaptureGuard();
+  }
+
+  function bindInfoCentreProtectOnce() {
+    if (infoCentreProtectBound) return;
+    infoCentreProtectBound = true;
+    document.addEventListener('visibilitychange', syncInfoCentreCaptureGuard);
+    window.addEventListener('beforeprint', () => {
+      if (!isInfoCentreProtectEnforced()) return;
+      if ((el('panel-info') && !el('panel-info').hidden) || docViewerProtectActive) {
+        document.body.classList.add('is-printing-info');
+        syncInfoCentreCaptureGuard();
+      }
+    });
+    window.addEventListener('afterprint', () => {
+      document.body.classList.remove('is-printing-info');
+      syncInfoCentreCaptureGuard();
+    });
+    document.addEventListener('contextmenu', (event) => {
+      if (!isInfoCentreProtectEnforced()) return;
+      if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
+      const t = event.target;
+      if (t?.closest?.('#panel-info, #docViewerDialog')) event.preventDefault();
+    });
+    document.addEventListener('copy', (event) => {
+      if (!isInfoCentreProtectEnforced()) return;
+      if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
+      const t = event.target;
+      if (t?.closest?.('#panel-info, #docViewerDialog') || docViewerProtectActive) {
+        event.preventDefault();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!isInfoCentreProtectEnforced()) return;
+      if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
+      const key = String(event.key || '').toLowerCase();
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && (key === 'p' || key === 's')) event.preventDefault();
+    });
+  }
   function parkModalsForDocViewer() {
     const vault = el('vaultDialog');
     if (vault?.open) {
@@ -225,6 +507,7 @@
       docViewerObjectUrl = '';
     }
     docViewerStreamUrl = '';
+    setDocViewerProtected(false);
     resumeModalsAfterDocViewer();
   }
 
@@ -307,6 +590,7 @@
     downloadUrl = '',
     keepLoading = false,
     newTabUrl = '',
+    protectContent = false,
   } = {}) {
     const dialog = el('docViewerDialog');
     if (!dialog) return;
@@ -328,6 +612,7 @@
     const loading = el('docViewerLoading');
     const { isImage, isPdf, isHtml } = docViewerMimeGuess(mime, filename || srcUrl, title);
     const showFrame = isPdf || isHtml;
+    const protectedView = Boolean(protectContent);
 
     if (loading) {
       if (keepLoading) {
@@ -357,6 +642,7 @@
         }
         frame.onload = () => {
           if (loading) loading.hidden = true;
+          if (protectedView && isHtml) injectInfoIframeProtect(frame);
         };
         if (frame.getAttribute('src') === srcUrl) {
           frame.removeAttribute('src');
@@ -364,6 +650,7 @@
         frame.src = srcUrl;
         window.setTimeout(() => {
           if (loading && !loading.hidden) loading.hidden = true;
+          if (protectedView && isHtml) injectInfoIframeProtect(frame);
         }, 4000);
       } else {
         frame.removeAttribute('src');
@@ -378,32 +665,42 @@
     if (fallback) {
       fallback.hidden = Boolean(showFrame || isImage);
       if (!fallback.hidden) {
-        fallback.innerHTML = 'Preview is not available for this file type. Use <strong>Open in new tab</strong> or Download, then return with Go back.';
+        fallback.innerHTML = protectedView
+          ? 'Preview is not available for this file type in Information Centre.'
+          : 'Preview is not available for this file type. Use <strong>Open in new tab</strong> or Download, then return with Go back.';
       }
     }
+    setDocViewerProtected(protectedView);
     const dl = el('docViewerDownloadBtn');
     if (dl) {
-      dl.hidden = false;
-      const dlHref = downloadUrl || srcUrl;
-      dl.href = dlHref;
-      if (isBlob) dl.setAttribute('download', filename || title || 'document');
-      else dl.removeAttribute('download');
+      if (protectedView || !downloadUrl) {
+        dl.hidden = true;
+        dl.removeAttribute('href');
+        dl.removeAttribute('download');
+      } else {
+        dl.hidden = false;
+        dl.href = downloadUrl || srcUrl;
+        if (isBlob) dl.setAttribute('download', filename || title || 'document');
+        else dl.removeAttribute('download');
+      }
     }
-    setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
+    if (protectedView) setDocViewerNewTab('');
+    else setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
     openDocViewerDialog(dialog);
   }
 
-  function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '', downloadUrl = '' } = {}) {
+  function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '', downloadUrl = '', protectContent = false } = {}) {
     showDocViewerSource(objectUrl, {
       title,
       mime,
       filename,
       isBlob: true,
       downloadUrl,
+      protectContent,
     });
   }
 
-  function prepareDocViewerShell({ title = 'Document', filename = '', mime = '', downloadUrl = '', newTabUrl = '' } = {}) {
+  function prepareDocViewerShell({ title = 'Document', filename = '', mime = '', downloadUrl = '', newTabUrl = '', protectContent = false } = {}) {
     const dialog = el('docViewerDialog');
     if (!dialog) return;
     if (el('docViewerTitle')) el('docViewerTitle').textContent = title || filename || 'Document';
@@ -434,22 +731,28 @@
       loading.hidden = false;
       loading.textContent = isPdf ? 'Opening PDF…' : 'Loading document…';
     }
+    setDocViewerProtected(Boolean(protectContent));
     const dl = el('docViewerDownloadBtn');
     if (dl) {
-      dl.hidden = !downloadUrl;
-      if (downloadUrl) {
+      if (protectContent || !downloadUrl) {
+        dl.hidden = true;
+        dl.removeAttribute('href');
+        dl.removeAttribute('download');
+      } else {
+        dl.hidden = false;
         dl.href = downloadUrl;
         dl.removeAttribute('download');
       }
     }
-    setDocViewerNewTab(newTabUrl || downloadUrl);
+    if (protectContent) setDocViewerNewTab('');
+    else setDocViewerNewTab(newTabUrl || downloadUrl || '');
     openDocViewerDialog(dialog);
   }
 
-  async function openDocViewerFromAuthUrl(url, { title = 'Document', filename = '', mime = '' } = {}) {
+  async function openDocViewerFromAuthUrl(url, { title = 'Document', filename = '', mime = '', protectContent = false } = {}) {
     if (!url) throw new Error('Document URL missing');
     const { effectiveMime, isPdf, isHtml, isImage } = docViewerMimeGuess(mime, filename, title);
-    const downloadUrl = authDocUrl(url, { download: '1' });
+    const downloadUrl = protectContent ? '' : authDocUrl(url, { download: '1' });
 
     // HTML can stream in the iframe (same-origin page). PDFs must use an authenticated
     // blob URL: Chrome's PDF viewer often stays blank for http(s) src inside <dialog>,
@@ -461,6 +764,7 @@
         mime: effectiveMime || 'text/html',
         isBlob: false,
         downloadUrl,
+        protectContent,
       });
       return;
     }
@@ -470,6 +774,7 @@
       filename: filename || title,
       mime: effectiveMime || (isPdf ? 'application/pdf' : mime),
       downloadUrl,
+      protectContent,
     });
 
     const headers = {};
@@ -502,6 +807,7 @@
       filename: filename || title,
       mime: resolvedMime || blob.type || '',
       downloadUrl,
+      protectContent,
     });
   }
 
@@ -527,6 +833,7 @@
         docViewerObjectUrl = '';
       }
       docViewerStreamUrl = '';
+      setDocViewerProtected(false);
     }
   });
   document.addEventListener('click', (event) => {
@@ -1304,6 +1611,7 @@
     state.session = session;
     const isAuthed = Boolean(session?.resident);
     document.body.classList.toggle('is-authed', isAuthed);
+    applyInfoCentreProtectMode();
     const gate = el('gateView');
     const app = el('appView');
     if (gate) gate.hidden = isAuthed;
@@ -4096,9 +4404,9 @@
 
   function infoShareUrl({ folderId = '', docId = '' } = {}) {
     const origin = window.location.origin;
-    // Static nginx HTML cards (not Flask /s/) — WhatsApp previews these reliably.
-    if (docId) return `${origin}/share/doc/${encodeURIComponent(docId)}.html`;
-    if (folderId) return `${origin}/share/folder/${encodeURIComponent(folderId)}.html`;
+    // Static nginx HTML + cache-bust query so WhatsApp scrapes a fresh OG card.
+    if (docId) return `${origin}/share/doc/${encodeURIComponent(docId)}.html?v=wa1`;
+    if (folderId) return `${origin}/share/folder/${encodeURIComponent(folderId)}.html?v=wa1`;
     return `${origin}/#info`;
   }
 
@@ -4548,6 +4856,9 @@
       el('infoFolderFilter').value = folder;
     }
     infoDocsCache = data.documents || [];
+    if (data.features && typeof data.features.infoCentreProtect === 'boolean') {
+      setInfoCentreProtectFeature(data.features.infoCentreProtect);
+    }
     renderInfoDocs();
     if (sectionLang.info === 'hi') renderInfoOverlay();
     if (!opts.skipDeepLink) await consumeInfoDeepLink();
@@ -4555,6 +4866,8 @@
 
   async function openInfoDocument(doc, { lang = 'en' } = {}) {
     if (!doc?.id) return;
+    const protect = isInfoCentreProtectEnforced();
+    if (protect) bindInfoCentreProtectOnce();
 
     // Web-link documents: load the URL inline in the portal viewer (HTML/PDF/image).
     if (doc.docType === 'link') {
@@ -4572,19 +4885,20 @@
       );
       const sameOrigin = abs.startsWith(window.location.origin);
       const fileApi = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file`;
-      // Same-site HTML pages (e.g. /documents/act.html): iframe the page itself so
-      // layout, TOC, and scroll work exactly like opening the uploaded HTML.
-      const viewUrl = (isHtml && sameOrigin)
+      // Same-site HTML: iframe the page itself for layout; use file API when protect is on
+      // so download can be refused for members.
+      const viewUrl = (isHtml && sameOrigin && !protect)
         ? abs
-        : (sameOrigin && (isPdf || isImage) ? authDocUrl(fileApi) : abs);
+        : (sameOrigin ? authDocUrl(fileApi) : abs);
       showDocViewerSource(viewUrl, {
         title: doc.title || 'Document',
         filename: doc.originalName || linkRaw,
         mime: effectiveMime || mime,
         isBlob: false,
-        downloadUrl: sameOrigin ? authDocUrl(fileApi, { download: '1' }) : abs,
-        newTabUrl: abs,
+        downloadUrl: protect ? '' : (sameOrigin ? authDocUrl(fileApi, { download: '1' }) : abs),
+        newTabUrl: protect ? '' : abs,
         keepLoading: true,
+        protectContent: protect,
       });
       return;
     }
@@ -4604,9 +4918,10 @@
         filename,
         mime: 'text/html',
         isBlob: false,
-        downloadUrl: authDocUrl(url, { download: '1' }),
-        newTabUrl: viewUrl,
+        downloadUrl: protect ? '' : authDocUrl(url, { download: '1' }),
+        newTabUrl: protect ? '' : viewUrl,
         keepLoading: true,
+        protectContent: protect,
       });
       return;
     }
@@ -4614,6 +4929,7 @@
       title: doc.title || doc.originalName || 'Document',
       filename,
       mime: doc.mimeType || 'application/pdf',
+      protectContent: protect,
     });
   }
 
@@ -5361,6 +5677,19 @@
     updateAppTopOffset();
     scrollMainToTop();
     trackPanel(name);
+    if (name === 'info') {
+      if (isInfoCentreProtectEnforced()) {
+        bindInfoCentreProtectOnce();
+        startInfoWatermarkClock();
+        syncInfoCentreCaptureGuard();
+      } else {
+        document.body.classList.remove('is-info-capture-guard');
+        stopInfoWatermarkClockIfIdle();
+      }
+    } else {
+      document.body.classList.remove('is-info-capture-guard');
+      stopInfoWatermarkClockIfIdle();
+    }
     if (name === 'home') loadHome().catch(console.error);
     if (name === 'dues') loadDues().catch((e) => { el('duesCard').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
     if (name === 'concerns') loadMailbox().catch((e) => {
@@ -7736,6 +8065,10 @@
     if (el('settingsSmtpPass')) el('settingsSmtpPass').placeholder = smtp.passwordSet ? '•••••••• (leave blank to keep)' : 'Gmail App Password';
     if (el('settingsOtpTtl')) el('settingsOtpTtl').value = s.otpTtl || 600;
     if (el('settingsSaUser')) el('settingsSaUser').value = s.superadminUser || 'admin';
+    if (el('settingsInfoCentreProtect')) {
+      el('settingsInfoCentreProtect').checked = Boolean(s.infoCentreProtect);
+    }
+    setInfoCentreProtectFeature(Boolean(s.infoCentreProtect));
     if (el('settingsStatus')) {
       el('settingsStatus').textContent = smtp.configured
         ? `Configured · file ${s.envFile || 'data/smtp.env'}`
@@ -7922,6 +8255,7 @@
         },
         otpTtl: Number(el('settingsOtpTtl')?.value || 600),
         superadminUser: el('settingsSaUser')?.value.trim() || 'admin',
+        infoCentreProtect: Boolean(el('settingsInfoCentreProtect')?.checked),
         ops: collectOpsSettingsPayload(),
       };
       const pass = el('settingsSmtpPass')?.value || '';
@@ -7931,11 +8265,18 @@
       const data = await api('/api/rwa/settings', { method: 'PUT', body: JSON.stringify(payload) });
       if (el('settingsSmtpPass')) el('settingsSmtpPass').value = '';
       if (el('settingsSaPass')) el('settingsSaPass').value = '';
+      setInfoCentreProtectFeature(Boolean(data.settings?.infoCentreProtect));
+      if (el('settingsInfoCentreProtect')) {
+        el('settingsInfoCentreProtect').checked = Boolean(data.settings?.infoCentreProtect);
+      }
       const smtp = data.settings?.smtp || {};
       if (status) {
+        const protectNote = data.settings?.infoCentreProtect
+          ? ' Info Centre protection ON.'
+          : ' Info Centre protection off.';
         status.textContent = smtp.configured
-          ? 'Settings saved. SMTP ready.'
-          : 'Settings saved. SMTP still needs an App Password.';
+          ? `Settings saved. SMTP ready.${protectNote}`
+          : `Settings saved. SMTP still needs an App Password.${protectNote}`;
       }
       loadSmtpStatus();
       fillOpsSettingsForm(data.settings?.ops || {});

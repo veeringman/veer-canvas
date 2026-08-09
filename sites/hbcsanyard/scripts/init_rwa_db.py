@@ -1222,6 +1222,11 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
             ),
         )
     suit_id = "info_civil_suit_2023_path_right_html"
+    suit_title = "Court Case No 01 — Path / link road dispute (Civil Suit 2023)"
+    suit_summary = (
+        "Pending Senior Civil Judge, Mandi matter (~086/2023): plaint, HIMUDA & colony/Plot 12-A replies, "
+        "and plaintiff replication on the Housing Board Colony Sanyardh path / gate dispute. Further hearings expected."
+    )
     existing_suit = conn.execute(
         "SELECT id FROM info_documents WHERE id = ?", (suit_id,)
     ).fetchone()
@@ -1241,8 +1246,8 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
                 """,
                 (
                     suit_id,
-                    "Civil Suit 2023 — Right of Path through HBC Sanyardh",
-                    "Readable summary of the plaint (Senior Civil Judge, Mandi) for declaration and injunction on the colony link road / path.",
+                    suit_title,
+                    suit_summary,
                     "legal",
                     court_folder_id,
                     "civil-suit-2023-sanyardh-path-right.html",
@@ -1255,14 +1260,29 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
                 ),
             )
     else:
-        # Keep published docs under the Court Case folder if it already exists.
+        # Keep published docs under the Court Case folder and refresh briefing metadata.
         conn.execute(
             """
             UPDATE info_documents
-               SET folder_id = ?, updated_at = ?
-             WHERE id = ? AND (folder_id IS NULL OR folder_id = '' OR folder_id != ?)
+               SET folder_id = ?,
+                   title = ?,
+                   summary = ?,
+                   updated_at = ?
+             WHERE id = ?
             """,
-            (court_folder_id, now, suit_id, court_folder_id),
+            (court_folder_id, suit_title, suit_summary, now, suit_id),
+        )
+        conn.execute(
+            """
+            UPDATE info_folders
+               SET summary = ?, updated_at = ?
+             WHERE id = ?
+            """,
+            (
+                "Pending civil suit on colony path / link road access: plaint, HIMUDA & colony replies, plaintiff replication. Further hearings expected.",
+                now,
+                court_folder_id,
+            ),
         )
     conn.commit()
 
