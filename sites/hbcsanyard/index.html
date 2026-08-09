@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260808noc5">
-  <script src="portal.js?v=20260808noc5" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260809htmlinline1">
+  <script src="portal.js?v=20260809vaultview1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -553,7 +553,7 @@
         <header class="panel-head panel-head-lang">
           <div class="panel-head-copy">
             <h2>Information Centre</h2>
-            <p class="muted">RWA documents, circulars, and guides published for all members.</p>
+            <p class="muted">RWA documents grouped by folder/topic — registration papers, circulars, bye-laws, and drafts in one place.</p>
           </div>
           <div class="lang-toggle" data-lang-section="info" role="group" aria-label="Info language">
             <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
@@ -563,6 +563,13 @@
 
         <div class="lang-section-wrap" data-lang-section="info">
         <div class="mailbox-toolbar info-toolbar">
+          <label>
+            Folder
+            <select id="infoFolderFilter">
+              <option value="">All folders</option>
+              <option value="unfiled">Unfiled</option>
+            </select>
+          </label>
           <label>
             Category
             <select id="infoCategoryFilter">
@@ -587,7 +594,7 @@
           <div class="roster-toolbar">
             <div>
               <h3 id="infoFormTitle">Publish a document</h3>
-              <p class="muted">Upload files or write an HTML page for members.</p>
+              <p class="muted">Upload files, write HTML, or paste a web link for members.</p>
             </div>
           </div>
           <div class="form-lang-row">
@@ -597,7 +604,7 @@
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
             </div>
           </div>
-          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members. Hindi applies to titles/summaries and in-portal HTML only.</p>
+          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members. Put related items in the same folder (e.g. Society Registration). Every saved upload or authored HTML joins the AI Assistant knowledge on the next question (published for members; drafts for Info managers). Hindi applies to titles/summaries and in-portal HTML only.</p>
           <form id="infoDocForm" class="stack">
             <input type="hidden" id="infoEditId" value="">
             <div class="settings-grid">
@@ -606,6 +613,11 @@
               </label>
               <label class="span-2" data-author-pane="info" data-lang="hi" hidden>शीर्षक (Hindi)
                 <input id="infoTitleHiInput" name="titleHi" maxlength="160" placeholder="हिंदी शीर्षक">
+              </label>
+              <label>Folder
+                <select id="infoFolderInput" name="folderId">
+                  <option value="">Unfiled</option>
+                </select>
               </label>
               <label>Category
                 <select id="infoCategoryInput" name="category"></select>
@@ -640,6 +652,10 @@
                 <input type="radio" name="infoSource" value="html">
                 <span>Create HTML content in the portal</span>
               </label>
+              <label class="check">
+                <input type="radio" name="infoSource" value="link">
+                <span>Web link (HTML page, PDF, or image URL)</span>
+              </label>
             </fieldset>
 
             <div id="infoFilePane">
@@ -658,12 +674,32 @@
               </label>
             </div>
 
+            <div id="infoLinkPane" hidden>
+              <label>Web link URL
+                <input id="infoLinkInput" type="url" maxlength="2000" placeholder="https://… or /documents/your-page.html" inputmode="url" autocomplete="off">
+                <span class="field-hint">Paste a public HTML page, PDF, or image link. Same-site paths like <code>/documents/…</code> open inline in the portal viewer.</span>
+              </label>
+            </div>
+
             <div class="btn-row">
               <button type="submit" class="btn primary" id="infoSaveBtn">Publish</button>
               <button type="button" class="btn ghost" id="infoCancelEditBtn" hidden>Cancel edit</button>
             </div>
             <p class="muted" id="infoFormStatus"></p>
           </form>
+
+          <div class="info-folder-manage" id="infoFolderManage">
+            <h4>Manage folders</h4>
+            <p class="muted">Create topics such as “Society Registration” so certificates, resolutions, and drafted HTML sit together.</p>
+            <div class="btn-row" style="align-items:end;flex-wrap:wrap;gap:0.5rem">
+              <label>New folder name
+                <input id="infoFolderNewTitle" maxlength="120" placeholder="e.g. Society Registration">
+              </label>
+              <button type="button" class="btn secondary compact" id="infoFolderCreateBtn">Add folder</button>
+            </div>
+            <div id="infoFolderManageList" class="info-folder-manage-list"></div>
+            <p class="muted" id="infoFolderManageStatus"></p>
+          </div>
         </div>
           <div class="lang-overlay" id="infoLangOverlay" hidden>
             <div class="lang-overlay-scrim" data-lang-close="info" aria-hidden="true"></div>
@@ -1609,14 +1645,17 @@
             <strong id="docViewerTitle">Document</strong>
             <p class="muted" id="docViewerMeta"></p>
           </div>
+          <a class="btn ghost compact" id="docViewerNewTabBtn" hidden target="_blank" rel="noopener">Open in new tab</a>
           <a class="btn ghost compact" id="docViewerDownloadBtn" hidden download>Download</a>
         </header>
         <div class="doc-viewer-stage" id="docViewerStage">
+          <p class="muted doc-viewer-loading" id="docViewerLoading" hidden>Opening PDF…</p>
           <iframe id="docViewerFrame" title="Document preview" hidden></iframe>
+          <embed id="docViewerEmbed" class="doc-viewer-embed" type="application/pdf" hidden>
           <img id="docViewerImage" alt="" hidden>
           <p class="muted doc-viewer-fallback" id="docViewerFallback" hidden>
             Preview is not available for this file type.
-            Use Download, then return here with Go back.
+            Use Download or Open in new tab, then return here with Go back.
           </p>
         </div>
       </div>

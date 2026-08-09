@@ -432,11 +432,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
           summary TEXT,
           category TEXT NOT NULL DEFAULT 'general',
           doc_type TEXT NOT NULL DEFAULT 'file'
-            CHECK(doc_type IN ('file','html')),
+            CHECK(doc_type IN ('file','html','link')),
           filename TEXT,
           original_name TEXT,
           mime_type TEXT,
           size_bytes INTEGER,
+          external_url TEXT,
           status TEXT NOT NULL DEFAULT 'draft'
             CHECK(status IN ('draft','published','archived')),
           audience TEXT NOT NULL DEFAULT 'all'
@@ -958,17 +959,32 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
     """Information Centre: RWA documents for all members."""
     conn.executescript(
         """
+        CREATE TABLE IF NOT EXISTS info_folders (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          title_hi TEXT,
+          summary TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 100,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_info_folders_sort
+          ON info_folders(sort_order, title COLLATE NOCASE);
+
         CREATE TABLE IF NOT EXISTS info_documents (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
           summary TEXT,
           category TEXT NOT NULL DEFAULT 'general',
+          folder_id TEXT,
           doc_type TEXT NOT NULL DEFAULT 'file'
-            CHECK(doc_type IN ('file','html')),
+            CHECK(doc_type IN ('file','html','link')),
           filename TEXT,
           original_name TEXT,
           mime_type TEXT,
           size_bytes INTEGER,
+          external_url TEXT,
           status TEXT NOT NULL DEFAULT 'draft'
             CHECK(status IN ('draft','published','archived')),
           audience TEXT NOT NULL DEFAULT 'all'
@@ -982,11 +998,191 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
           ON info_documents(status, category, published_at DESC);
         """
     )
+    # Existing DBs may predate folder_id — add column before any index on it.
+    # (CREATE INDEX in the script above would fail on older tables that lack the column.)
     cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
     if "audience" not in cols:
         conn.execute(
             "ALTER TABLE info_documents ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'"
         )
+        cols.add("audience")
+    if "folder_id" not in cols:
+        conn.execute("ALTER TABLE info_documents ADD COLUMN folder_id TEXT")
+        cols.add("folder_id")
+    if "external_url" not in cols:
+        conn.execute("ALTER TABLE info_documents ADD COLUMN external_url TEXT")
+        cols.add("external_url")
+    # Older installs only allow file|html in CHECK — rebuild so 'link' is accepted.
+    create_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='info_documents'"
+    ).fetchone()
+    create_sql = (create_row[0] or "") if create_row else ""
+    if create_sql and "'link'" not in create_sql:
+        conn.executescript(
+            """
+            CREATE TABLE info_documents__link (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              summary TEXT,
+              category TEXT NOT NULL DEFAULT 'general',
+              folder_id TEXT,
+              doc_type TEXT NOT NULL DEFAULT 'file'
+                CHECK(doc_type IN ('file','html','link')),
+              filename TEXT,
+              original_name TEXT,
+              mime_type TEXT,
+              size_bytes INTEGER,
+              external_url TEXT,
+              status TEXT NOT NULL DEFAULT 'draft'
+                CHECK(status IN ('draft','published','archived')),
+              audience TEXT NOT NULL DEFAULT 'all'
+                CHECK(audience IN ('all','ec')),
+              published_at TEXT,
+              published_by TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              title_hi TEXT,
+              summary_hi TEXT,
+              has_html_hi INTEGER NOT NULL DEFAULT 0
+            );
+            """
+        )
+        # Copy with optional bilingual columns from older schemas.
+        src_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+        select_bits = [
+            "id",
+            "title",
+            "summary",
+            "category",
+            "folder_id" if "folder_id" in src_cols else "NULL AS folder_id",
+            "doc_type",
+            "filename",
+            "original_name",
+            "mime_type",
+            "size_bytes",
+            "external_url" if "external_url" in src_cols else "NULL AS external_url",
+            "status",
+            "audience" if "audience" in src_cols else "'all' AS audience",
+            "published_at",
+            "published_by",
+            "created_at",
+            "updated_at",
+            "title_hi" if "title_hi" in src_cols else "NULL AS title_hi",
+            "summary_hi" if "summary_hi" in src_cols else "NULL AS summary_hi",
+            "has_html_hi" if "has_html_hi" in src_cols else "0 AS has_html_hi",
+        ]
+        conn.execute(
+            f"""
+            INSERT INTO info_documents__link(
+              id, title, summary, category, folder_id, doc_type, filename, original_name,
+              mime_type, size_bytes, external_url, status, audience, published_at, published_by,
+              created_at, updated_at, title_hi, summary_hi, has_html_hi
+            )
+            SELECT {", ".join(select_bits)} FROM info_documents
+            """
+        )
+        conn.execute("DROP TABLE info_documents")
+        conn.execute("ALTER TABLE info_documents__link RENAME TO info_documents")
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_docs_folder
+          ON info_documents(folder_id, status, published_at DESC)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_docs_status
+          ON info_documents(status, category, published_at DESC)
+        """
+    )
+    # Seed a registration folder once (for bye-laws / registration certificates).
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO info_folders(
+          id, title, title_hi, summary, sort_order, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "folder_registration",
+            "Society Registration",
+            "सोसाइटी पंजीकरण",
+            "Registration certificate, resolutions, member lists, and related drafts.",
+            10,
+            "system",
+            now,
+            now,
+        ),
+    )
+    # Seed readable HTML edition of the HP Societies Registration Act (link → /documents/…).
+    ensure_bilingual_content_columns(conn)
+    act_id = "info_hp_societies_act_2006_html"
+    existing_act = conn.execute(
+        "SELECT id FROM info_documents WHERE id = ?", (act_id,)
+    ).fetchone()
+    if not existing_act:
+        info_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+        if "external_url" in info_cols:
+            conn.execute(
+                """
+                INSERT INTO info_documents(
+                  id, title, summary, category, folder_id, doc_type, filename, original_name,
+                  mime_type, size_bytes, external_url, status, audience, published_at, published_by,
+                  created_at, updated_at, title_hi, summary_hi, has_html_hi
+                ) VALUES (
+                  ?, ?, ?, ?, ?, 'link', NULL, ?, 'text/html', 0, ?, 'published', 'all',
+                  ?, 'system', ?, ?, ?, ?, 0
+                )
+                """,
+                (
+                    act_id,
+                    "The Himachal Pradesh Societies Registration Act, 2006",
+                    "Readable HTML edition of Act No. 25 of 2006 — chapters and sections for browsing in the portal.",
+                    "bylaws",
+                    "folder_registration",
+                    "hp-societies-registration-act-2006.html",
+                    "/documents/hp-societies-registration-act-2006.html",
+                    now,
+                    now,
+                    now,
+                    "हिमाचल प्रदेश सोसाइटी पंजीकरण अधिनियम, 2006",
+                    "अधिनियम की पठनीय HTML प्रति — अध्याय और धाराएँ।",
+                ),
+            )
+    bylaws_id = "info_mhws_sanyard_rules_bylaws_html"
+    existing_bylaws = conn.execute(
+        "SELECT id FROM info_documents WHERE id = ?", (bylaws_id,)
+    ).fetchone()
+    if not existing_bylaws:
+        info_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+        if "external_url" in info_cols:
+            conn.execute(
+                """
+                INSERT INTO info_documents(
+                  id, title, summary, category, folder_id, doc_type, filename, original_name,
+                  mime_type, size_bytes, external_url, status, audience, published_at, published_by,
+                  created_at, updated_at, title_hi, summary_hi, has_html_hi
+                ) VALUES (
+                  ?, ?, ?, ?, ?, 'link', NULL, ?, 'text/html', 0, ?, 'published', 'all',
+                  ?, 'system', ?, ?, ?, ?, 0
+                )
+                """,
+                (
+                    bylaws_id,
+                    "Mandi Housing Welfare Society, Sanyard — Rules & Bye-laws",
+                    "Bilingual (Hindi / English) readable edition of MHWS Sanyard rules and bye-laws.",
+                    "bylaws",
+                    "folder_registration",
+                    "mhws-sanyard-rules-bylaws.html",
+                    "/documents/mhws-sanyard-rules-bylaws.html",
+                    now,
+                    now,
+                    now,
+                    "मण्डी हाऊसिंग वेलफेयर सोसाइटी, सन्यारड — नियम एवं उपनियम",
+                    "एमएचडब्ल्यूएस सन्यारड नियमों व उपनियमों का द्विभाषी पठनीय संस्करण।",
+                ),
+            )
     conn.commit()
 
 

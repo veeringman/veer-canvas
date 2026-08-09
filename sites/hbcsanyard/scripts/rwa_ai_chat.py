@@ -59,6 +59,7 @@ def load_ai_config(site_root: pathlib.Path | None = None) -> dict[str, str]:
 def ai_status(site_root: pathlib.Path, conn=None) -> dict[str, Any]:
     cfg = load_ai_config(site_root)
     published_info = 0
+    draft_info = 0
     if conn is not None:
         try:
             row = conn.execute(
@@ -67,14 +68,27 @@ def ai_status(site_root: pathlib.Path, conn=None) -> dict[str, Any]:
             published_info = int(row["n"] if hasattr(row, "keys") else row[0] or 0)
         except Exception:
             published_info = 0
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM info_documents WHERE status = 'draft'"
+            ).fetchone()
+            draft_info = int(row["n"] if hasattr(row, "keys") else row[0] or 0)
+        except Exception:
+            draft_info = 0
     return {
         "configured": bool(cfg["apiKey"]),
         "model": cfg["model"] if cfg["apiKey"] else None,
         "mode": "llm+rag" if cfg["apiKey"] else "rag-only",
         "avatarUrl": AI_AVATAR_URL,
-        # Corpus is rebuilt from DB + files on every question — no separate reindex step.
+        # Corpus is rebuilt from DB + Info Centre files on every question — no separate reindex.
         "knowledgeLive": True,
         "publishedInfoDocs": published_info,
+        "draftInfoDocs": draft_info,
+        "knowledgeNote": (
+            "Every uploaded or authored Information Centre document is included in "
+            "assistant knowledge on the next question (published for members; drafts "
+            "for Info managers). No separate reindex step."
+        ),
     }
 
 
@@ -91,6 +105,193 @@ def _strip_html(html: str) -> str:
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def _html_to_sections(html: str) -> list[dict[str, str]]:
+    """Split authored HTML into heading → body sections (content hierarchy)."""
+    raw = html or ""
+    raw = re.sub(r"(?is)<script.*?>.*?</script>", " ", raw)
+    raw = re.sub(r"(?is)<style.*?>.*?</style>", " ", raw)
+    m_content = re.search(
+        r'<div class="content">\s*(.*?)\s*</div>\s*</article>',
+        raw,
+        flags=re.I | re.S,
+    )
+    if m_content:
+        raw = m_content.group(1)
+    else:
+        m_body = re.search(r"<body\b[^>]*>(.*)</body>", raw, flags=re.I | re.S)
+        if m_body:
+            raw = m_body.group(1)
+
+    parts = re.split(r"(?is)(?=<h[1-4]\b)", raw)
+    sections: list[dict[str, str]] = []
+    preamble = ""
+    for part in parts:
+        part = (part or "").strip()
+        if not part:
+            continue
+        hm = re.match(r"(?is)<h([1-4])\b[^>]*>(.*?)</h\1>\s*(.*)$", part, flags=re.S)
+        if not hm:
+            preamble = _strip_html(part)
+            continue
+        heading = _strip_html(hm.group(2))
+        body = _strip_html(hm.group(3))
+        if not heading and not body:
+            continue
+        sections.append({
+            "heading": heading or "Section",
+            "text": body,
+            "level": hm.group(1),
+        })
+    if preamble:
+        sections.insert(0, {"heading": "Introduction", "text": preamble, "level": "1"})
+    if not sections:
+        plain = _strip_html(raw)
+        if plain:
+            sections.append({"heading": "Content", "text": plain, "level": "1"})
+    return sections
+
+
+def _plain_to_sections(text: str) -> list[dict[str, str]]:
+    """Split PDF/plain text into rough sections by pages, headings, or numbered rules."""
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    pages = [p.strip() for p in re.split(r"\f+", raw) if p.strip()]
+    if len(pages) > 1:
+        return [
+            {
+                "heading": f"Page {i}",
+                "text": re.sub(r"\s+", " ", page).strip(),
+                "level": "2",
+            }
+            for i, page in enumerate(pages, start=1)
+        ]
+
+    lines = [ln.strip() for ln in raw.splitlines()]
+    sections: list[dict[str, str]] = []
+    cur_heading = "Content"
+    cur_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal cur_heading, cur_lines
+        body = re.sub(r"\s+", " ", " ".join(cur_lines)).strip()
+        if body or cur_heading != "Content":
+            sections.append({
+                "heading": cur_heading,
+                "text": body,
+                "level": "2",
+            })
+        cur_lines = []
+
+    heading_re = re.compile(
+        r"^(?:"
+        r"(?:chapter|part|article|section|rule|clause|annex(?:ure)?)\s+[0-9ivxlcdm.\-]+"
+        r"|[0-9]{1,2}[.)]\s+\S+"
+        r"|[A-Z][A-Z0-9 ,/&\-]{8,80}"
+        r")$",
+        flags=re.I,
+    )
+    for ln in lines:
+        if not ln:
+            continue
+        if heading_re.match(ln) and len(ln) <= 120:
+            flush()
+            cur_heading = ln
+            continue
+        cur_lines.append(ln)
+    flush()
+    if not sections:
+        sections.append({
+            "heading": "Content",
+            "text": re.sub(r"\s+", " ", raw).strip()[:20000],
+            "level": "1",
+        })
+    return sections
+
+
+def _info_doc_section_units(
+    site_root: pathlib.Path,
+    doc_id: str,
+    *,
+    filename: str | None,
+    mime: str | None,
+) -> list[dict[str, str]]:
+    """Return ordered content sections for an Info Centre document."""
+    root = pathlib.Path(site_root) / "data" / "info-centre" / doc_id
+    units: list[dict[str, str]] = []
+
+    for name, lang in (("content.html", "en"), ("content_hi.html", "hi")):
+        html_path = root / name
+        if not html_path.is_file():
+            continue
+        try:
+            raw = html_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for sec in _html_to_sections(raw):
+            heading = sec["heading"]
+            if lang == "hi":
+                heading = f"{heading} (Hindi)" if heading else "Hindi content"
+            units.append({
+                "heading": heading,
+                "text": (sec.get("text") or "")[:12000],
+                "level": sec.get("level") or "2",
+            })
+
+    fname = (filename or "").strip()
+    if fname:
+        fpath = root / fname
+        if fpath.is_file():
+            lower = fname.lower()
+            mime_l = (mime or "").lower()
+            has_wrapped = any((root / n).is_file() for n in ("content.html", "content_hi.html"))
+            if lower.endswith((".html", ".htm")) and not has_wrapped:
+                try:
+                    for sec in _html_to_sections(fpath.read_text(encoding="utf-8", errors="ignore")):
+                        units.append({
+                            "heading": sec["heading"],
+                            "text": (sec.get("text") or "")[:12000],
+                            "level": sec.get("level") or "2",
+                        })
+                except OSError:
+                    pass
+            elif lower.endswith(".pdf") or "pdf" in mime_l:
+                pdf_text = _extract_pdf_text(fpath, max_chars=80000)
+                for sec in _plain_to_sections(pdf_text):
+                    units.append({
+                        "heading": sec["heading"],
+                        "text": (sec.get("text") or "")[:12000],
+                        "level": sec.get("level") or "2",
+                    })
+            elif lower.endswith((".txt", ".md", ".csv")):
+                try:
+                    for sec in _plain_to_sections(
+                        fpath.read_text(encoding="utf-8", errors="ignore")[:40000]
+                    ):
+                        units.append({
+                            "heading": sec["heading"],
+                            "text": (sec.get("text") or "")[:12000],
+                            "level": sec.get("level") or "2",
+                        })
+                except OSError:
+                    pass
+
+    cleaned: list[dict[str, str]] = []
+    for u in units:
+        text = (u.get("text") or "").strip()
+        heading = (u.get("heading") or "Content").strip()
+        if not text and not heading:
+            continue
+        if (
+            cleaned
+            and cleaned[-1]["heading"] == heading
+            and cleaned[-1]["text"][:200] == text[:200]
+        ):
+            continue
+        cleaned.append({"heading": heading, "text": text, "level": u.get("level") or "2"})
+    return cleaned
 
 
 def _chunk(text: str, *, size: int = 700, overlap: int = 80) -> list[str]:
@@ -555,41 +756,20 @@ def _extract_pdf_text(path: pathlib.Path, *, max_chars: int = 60000) -> str:
 
 def _info_doc_body_text(site_root: pathlib.Path, doc_id: str, *, filename: str | None, mime: str | None) -> str:
     """Load searchable text for an Info Centre document (HTML page and/or uploaded file)."""
-    root = pathlib.Path(site_root) / "data" / "info-centre" / doc_id
-    chunks: list[str] = []
-
-    for name in ("content.html", "content_hi.html"):
-        html_path = root / name
-        if html_path.is_file():
-            try:
-                raw = _strip_html(html_path.read_text(encoding="utf-8", errors="ignore"))
-                if raw:
-                    chunks.append(raw[:20000])
-            except OSError:
-                pass
-
-    fname = (filename or "").strip()
-    if fname:
-        fpath = root / fname
-        if fpath.is_file():
-            lower = fname.lower()
-            mime_l = (mime or "").lower()
-            if lower.endswith(".pdf") or "pdf" in mime_l:
-                pdf_text = _extract_pdf_text(fpath)
-                if pdf_text:
-                    chunks.append(pdf_text)
-            elif lower.endswith((".html", ".htm")):
-                try:
-                    chunks.append(_strip_html(fpath.read_text(encoding="utf-8", errors="ignore"))[:20000])
-                except OSError:
-                    pass
-            elif lower.endswith((".txt", ".md", ".csv")):
-                try:
-                    chunks.append(fpath.read_text(encoding="utf-8", errors="ignore")[:20000])
-                except OSError:
-                    pass
-
-    return "\n\n".join(c for c in chunks if c).strip()
+    units = _info_doc_section_units(site_root, doc_id, filename=filename, mime=mime)
+    if not units:
+        return ""
+    parts = []
+    for u in units:
+        heading = (u.get("heading") or "").strip()
+        text = (u.get("text") or "").strip()
+        if heading and text:
+            parts.append(f"{heading}\n{text}")
+        elif text:
+            parts.append(text)
+        elif heading:
+            parts.append(heading)
+    return "\n\n".join(parts).strip()
 
 
 def _actor_can_see_ec_info(actor: dict | None) -> bool:
@@ -606,6 +786,21 @@ def _actor_can_see_ec_info(actor: dict | None) -> bool:
     return False
 
 
+def _actor_can_manage_info(actor: dict | None) -> bool:
+    """True when the actor can see Information Centre drafts (manage_info)."""
+    if not actor:
+        return False
+    if actor.get("superAdmin"):
+        return True
+    ents = actor.get("entitlements")
+    if isinstance(ents, (list, tuple, set)) and "manage_info" in ents:
+        return True
+    # EC admins typically hold manage_info implicitly via entitlement resolver.
+    if actor.get("isEcAdmin") or (actor.get("role") or "") == "admin":
+        return True
+    return False
+
+
 def build_corpus(
     conn,
     site_root: pathlib.Path,
@@ -613,8 +808,10 @@ def build_corpus(
 ) -> list[dict[str, str]]:
     """Build searchable chunks from colony knowledge sources.
 
-    Rebuilt on every assistant question from the live DB and Info Centre files,
-    so newly published documents are included automatically (drafts are not).
+    Rebuilt on every assistant question from the live DB and Info Centre files.
+    Every uploaded PDF/file or authored HTML in Information Centre is included
+    according to visibility: published docs for members; drafts also for Info managers.
+    No separate reindex step.
     """
     docs: list[dict[str, str]] = []
 
@@ -654,15 +851,25 @@ def build_corpus(
         ),
         (
             "Portal FAQ — Information Centre",
-            "The Information Centre tab holds published RWA documents, bylaws, circulars, "
-            "and HTML guides. Newly published or updated documents are added to the assistant "
-            "knowledge automatically on the next question — no separate reindex. "
-            "Drafts are not included until published. Ask about a document by title or topic.",
+            "The Information Centre tab holds RWA documents, bylaws, circulars, and HTML guides "
+            "as a content hierarchy: folder/topic → document → sections/pages. "
+            "Every uploaded file or authored HTML page becomes part of the AI Assistant knowledge "
+            "automatically on the next question — no separate reindex. "
+            "Published documents are available to members; drafts are available to Info managers. "
+            "Ask about a folder, document title, section, or compare bye-laws with the Act.",
         ),
         (
             "Portal FAQ — info and works",
-            "Information Centre holds RWA documents and circulars. Works & Events tracks "
-            "colony projects. Directory lists plots and residents.",
+            "Information Centre content is hierarchical (folder → document → sections). "
+            "Works & Events tracks colony projects. Directory lists plots and residents.",
+        ),
+        (
+            "Portal FAQ — Information Centre analysis",
+            "You can ask the assistant about Information Centre content in plain language, "
+            "including what is in a folder, what a document or section says, "
+            "and analytical questions such as comparing society bye-laws with the "
+            "HP Societies Registration Act, spotting conflicts or gaps, or ideas for reform. "
+            "Answers use portal documents only and are not formal legal advice.",
         ),
     ]
     for title, body in faq:
@@ -689,85 +896,337 @@ def build_corpus(
     except Exception:
         pass
 
-    # --- Information Centre (titles, summaries, HTML body, PDF text) ---
+    # --- Information Centre (folders/topics + titles, summaries, HTML/PDF text) ---
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+        folder_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(info_folders)").fetchall()
+        } if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='info_folders'"
+        ).fetchone() else set()
         if cols:
             audiences = ["all"]
             if _actor_can_see_ec_info(actor):
                 audiences.append("ec")
+            include_drafts = _actor_can_manage_info(actor)
             audience_sql = ",".join("?" for _ in audiences)
             select_cols = [
-                "id", "title", "summary", "category", "status", "filename",
+                "d.id", "d.title", "d.summary", "d.category", "d.status", "d.filename",
             ]
             if "audience" in cols:
-                select_cols.append("audience")
+                select_cols.append("d.audience")
             if "doc_type" in cols:
-                select_cols.append("doc_type")
+                select_cols.append("d.doc_type")
             if "mime_type" in cols:
-                select_cols.append("mime_type")
+                select_cols.append("d.mime_type")
             if "original_name" in cols:
-                select_cols.append("original_name")
+                select_cols.append("d.original_name")
             if "summary_hi" in cols:
-                select_cols.append("summary_hi")
+                select_cols.append("d.summary_hi")
             if "title_hi" in cols:
-                select_cols.append("title_hi")
-            where_aud = f"AND audience IN ({audience_sql})" if "audience" in cols else ""
+                select_cols.append("d.title_hi")
+            if "folder_id" in cols:
+                select_cols.append("d.folder_id")
+            join_sql = ""
+            if folder_cols and "folder_id" in cols:
+                select_cols.extend([
+                    "f.title AS folder_title",
+                    "f.title_hi AS folder_title_hi",
+                    "f.summary AS folder_summary",
+                ])
+                join_sql = "LEFT JOIN info_folders f ON f.id = d.folder_id"
+            where_aud = f"AND d.audience IN ({audience_sql})" if "audience" in cols else ""
+            if include_drafts:
+                where_status = "d.status IN ('published', 'draft')"
+            else:
+                where_status = "d.status = 'published'"
+            if folder_cols and "folder_id" in cols:
+                order_sql = """
+                ORDER BY
+                  CASE WHEN d.folder_id IS NULL OR d.folder_id = '' THEN 1 ELSE 0 END,
+                  COALESCE(f.sort_order, 9999) ASC,
+                  COALESCE(f.title, '') COLLATE NOCASE ASC,
+                  d.updated_at DESC
+                """
+            else:
+                order_sql = "ORDER BY d.updated_at DESC"
             rows = conn.execute(
                 f"""
                 SELECT {", ".join(select_cols)}
-                FROM info_documents
-                WHERE status = 'published' {where_aud}
-                ORDER BY updated_at DESC LIMIT 120
+                FROM info_documents d
+                {join_sql}
+                WHERE {where_status} {where_aud}
+                {order_sql}
+                LIMIT 200
                 """,
                 tuple(audiences) if "audience" in cols else (),
             ).fetchall()
 
-            catalog_lines = ["Published Information Centre documents:"]
+            # Folder map + per-folder inventories for topic questions
+            folder_groups: dict[str, dict[str, Any]] = {}
+            hierarchy_lines = [
+                "Information Centre content hierarchy "
+                "(Folder → Document → Sections/pages with stored content):",
+            ]
             for r in rows:
-                title = (r["title"] or "").strip() or "(untitled)"
-                cat = (r["category"] or "general").strip()
-                catalog_lines.append(f"- {title} (category: {cat})")
-                parts = [
-                    f"Information Centre document: {title}",
-                    f"Category: {cat}",
-                ]
-                if "title_hi" in r.keys() and r["title_hi"]:
-                    parts.append(f"Hindi title: {r['title_hi']}")
-                if r["summary"]:
-                    parts.append(r["summary"])
-                if "summary_hi" in r.keys() and r["summary_hi"]:
-                    parts.append(r["summary_hi"])
-                oname = r["original_name"] if "original_name" in r.keys() else None
-                if r["filename"]:
-                    parts.append(f"File: {oname or r['filename']}")
-                mime = r["mime_type"] if "mime_type" in r.keys() else None
-                body = _info_doc_body_text(
-                    site_root, r["id"], filename=r["filename"], mime=mime
+                folder_id = ""
+                if "folder_id" in r.keys() and r["folder_id"]:
+                    folder_id = str(r["folder_id"]).strip()
+                folder_title = ""
+                if "folder_title" in r.keys() and r["folder_title"]:
+                    folder_title = str(r["folder_title"]).strip()
+                if not folder_title:
+                    folder_title = "Unfiled"
+                    folder_id = folder_id or "__unfiled__"
+                folder_summary = ""
+                if "folder_summary" in r.keys() and r["folder_summary"]:
+                    folder_summary = str(r["folder_summary"]).strip()
+                folder_title_hi = ""
+                if "folder_title_hi" in r.keys() and r["folder_title_hi"]:
+                    folder_title_hi = str(r["folder_title_hi"]).strip()
+                g = folder_groups.setdefault(
+                    folder_id or "__unfiled__",
+                    {
+                        "id": folder_id or "__unfiled__",
+                        "title": folder_title,
+                        "titleHi": folder_title_hi,
+                        "summary": folder_summary,
+                        "docs": [],
+                    },
                 )
-                if body:
-                    parts.append(body)
-                else:
-                    parts.append(
-                        "Full file text could not be extracted; open this document in the "
-                        "Information Centre tab for the original file."
+                g["docs"].append({
+                    "id": r["id"],
+                    "title": (r["title"] or "").strip() or "(untitled)",
+                    "category": (r["category"] or "general").strip(),
+                    "row": r,
+                })
+
+            # Include empty folders so the assistant knows the topic map
+            if folder_cols:
+                try:
+                    for fr in conn.execute(
+                        """
+                        SELECT id, title, title_hi, summary, sort_order
+                        FROM info_folders
+                        ORDER BY sort_order ASC, title COLLATE NOCASE ASC
+                        """
+                    ).fetchall():
+                        fid = str(fr["id"] or "").strip()
+                        if not fid or fid in folder_groups:
+                            continue
+                        folder_groups[fid] = {
+                            "id": fid,
+                            "title": (fr["title"] or "").strip() or fid,
+                            "titleHi": (fr["title_hi"] or "").strip() if "title_hi" in fr.keys() else "",
+                            "summary": (fr["summary"] or "").strip() if "summary" in fr.keys() else "",
+                            "docs": [],
+                        }
+                except Exception:
+                    pass
+
+            catalog_lines = [
+                "Published Information Centre documents (grouped by folder/topic):",
+            ]
+            folder_map_lines = [
+                "Information Centre folders/topics (related documents live together):",
+            ]
+
+            for g in folder_groups.values():
+                doc_entries = g["docs"]
+                titles = [d["title"] for d in doc_entries]
+                folder_map_lines.append(
+                    f"- Folder “{g['title']}”"
+                    + (f" / {g['titleHi']}" if g.get("titleHi") else "")
+                    + (f": {g['summary']}" if g.get("summary") else "")
+                    + f" — {len(titles)} published document"
+                    + ("s" if len(titles) != 1 else "")
+                )
+                if titles:
+                    folder_map_lines.append(
+                        "  Documents: " + "; ".join(titles[:40])
                     )
-                text = "\n".join(p for p in parts if p)
-                # Cap per-doc indexing volume; chunk for retrieval
-                for i, ch in enumerate(_chunk(text[:50000], size=800, overlap=100)):
+
+                hierarchy_lines.append(f"Folder: {g['title']}")
+                if g.get("summary"):
+                    hierarchy_lines.append(f"  Summary: {g['summary']}")
+
+                folder_section_notes: list[str] = []
+
+                for entry in doc_entries:
+                    r = entry["row"]
+                    title = entry["title"]
+                    cat = entry["category"]
+                    folder_title = g["title"]
+                    folder_summary = g.get("summary") or ""
+                    folder_title_hi = g.get("titleHi") or ""
+                    catalog_lines.append(
+                        f"- [{folder_title}] {title} (category: {cat})"
+                    )
+
+                    mime = r["mime_type"] if "mime_type" in r.keys() else None
+                    units = _info_doc_section_units(
+                        site_root,
+                        r["id"],
+                        filename=r["filename"],
+                        mime=mime,
+                    )
+                    section_headings = [
+                        (u.get("heading") or "Content").strip()
+                        for u in units
+                        if (u.get("heading") or "").strip()
+                    ][:30]
+
+                    hierarchy_lines.append(f"  Document: {title} [{cat}]")
+                    doc_status = (r["status"] or "published").strip().lower()
+                    if doc_status == "draft":
+                        hierarchy_lines.append("    Status: DRAFT (Info managers only; not published to all members)")
+                    if r["summary"]:
+                        hierarchy_lines.append(f"    Summary: {str(r['summary']).strip()[:240]}")
+                    if section_headings:
+                        hierarchy_lines.append(
+                            "    Sections: " + " · ".join(section_headings[:20])
+                        )
+                        folder_section_notes.append(
+                            f"- {title}: " + "; ".join(section_headings[:12])
+                        )
+                    else:
+                        hierarchy_lines.append(
+                            "    Sections: (full text not extractable — open original in Information Centre)"
+                        )
+
+                    breadcrumb_root = f"{folder_title} > {title}"
+                    meta_bits = [
+                        f"Information Centre path: {breadcrumb_root}",
+                        f"Folder/topic: {folder_title}",
+                        f"Document: {title}",
+                        f"Category: {cat}",
+                        f"Status: {doc_status}",
+                    ]
+                    if doc_status == "draft":
+                        meta_bits.append(
+                            "This document is a DRAFT — visible to Info managers in AI answers; "
+                            "not yet published to all members."
+                        )
+                    if folder_title_hi:
+                        meta_bits.append(f"Hindi folder name: {folder_title_hi}")
+                    if folder_summary:
+                        meta_bits.append(f"Folder summary: {folder_summary}")
+                    if "title_hi" in r.keys() and r["title_hi"]:
+                        meta_bits.append(f"Hindi title: {r['title_hi']}")
+                    if r["summary"]:
+                        meta_bits.append(str(r["summary"]))
+                    if "summary_hi" in r.keys() and r["summary_hi"]:
+                        meta_bits.append(str(r["summary_hi"]))
+                    oname = r["original_name"] if "original_name" in r.keys() else None
+                    if r["filename"]:
+                        meta_bits.append(f"File: {oname or r['filename']}")
+
+                    # Document overview chunk (path + summary + section index)
+                    overview = "\n".join(meta_bits)
+                    if section_headings:
+                        overview += "\nSections in this document:\n" + "\n".join(
+                            f"- {h}" for h in section_headings
+                        )
                     docs.append({
-                        "id": f"info:{r['id']}:{i}",
-                        "title": f"Info Centre: {title}",
+                        "id": f"info:{r['id']}:overview",
+                        "title": f"Info Centre [{folder_title}]: {title}",
+                        "source": "info",
+                        "text": overview,
+                    })
+
+                    if not units:
+                        docs.append({
+                            "id": f"info:{r['id']}:0",
+                            "title": f"Info Centre [{folder_title}]: {title}",
+                            "source": "info",
+                            "text": (
+                                overview
+                                + "\nFull file text could not be extracted; open this document "
+                                "in the Information Centre tab for the original file."
+                            ),
+                        })
+                        continue
+
+                    # Section-level content chunks with full hierarchy path
+                    for si, unit in enumerate(units):
+                        heading = (unit.get("heading") or "Content").strip()
+                        body = (unit.get("text") or "").strip()
+                        path = f"{breadcrumb_root} > {heading}"
+                        draft_note = (
+                            "Status: DRAFT (Info managers only).\n"
+                            if doc_status == "draft"
+                            else ""
+                        )
+                        base = (
+                            f"Information Centre path: {path}\n"
+                            f"Folder/topic: {folder_title}\n"
+                            f"Document: {title}\n"
+                            f"{draft_note}"
+                            f"Section: {heading}\n"
+                        )
+                        payload = base + (body if body else "(No extractable text in this section.)")
+                        for ci, ch in enumerate(_chunk(payload[:20000], size=900, overlap=120)):
+                            docs.append({
+                                "id": f"info:{r['id']}:s{si}:{ci}",
+                                "title": f"Info Centre [{folder_title}]: {title} · {heading}",
+                                "source": "info",
+                                "text": ch,
+                            })
+
+                # Per-folder inventory including content section outline
+                inv_parts = [
+                    f"Information Centre folder/topic: {g['title']}",
+                ]
+                if g.get("titleHi"):
+                    inv_parts.append(f"Hindi folder name: {g['titleHi']}")
+                if g.get("summary"):
+                    inv_parts.append(g["summary"])
+                if titles:
+                    inv_parts.append(
+                        "Documents in this folder:\n"
+                        + "\n".join(f"- {t}" for t in titles)
+                    )
+                else:
+                    inv_parts.append("No published documents in this folder yet.")
+                if folder_section_notes:
+                    inv_parts.append(
+                        "Content sections inside this folder:\n"
+                        + "\n".join(folder_section_notes)
+                    )
+                inv_parts.append(
+                    "Open the Information Centre tab and choose this folder to view "
+                    "PDFs and HTML drafts together. Ask about a document or section by name."
+                )
+                docs.append({
+                    "id": f"info:folder:{g['id']}",
+                    "title": f"Info Centre folder: {g['title']}",
+                    "source": "info",
+                    "text": "\n".join(inv_parts),
+                })
+
+            if len(hierarchy_lines) > 1:
+                # Keep hierarchy overview within a useful retrieval size
+                hier_text = "\n".join(hierarchy_lines)
+                for i, ch in enumerate(_chunk(hier_text[:24000], size=1200, overlap=100)):
+                    docs.append({
+                        "id": f"info:hierarchy:{i}",
+                        "title": "Information Centre content hierarchy",
                         "source": "info",
                         "text": ch,
                     })
+            if len(folder_map_lines) > 1:
+                docs.append({
+                    "id": "info:folders",
+                    "title": "Information Centre folder map",
+                    "source": "info",
+                    "text": "\n".join(folder_map_lines),
+                })
             if len(catalog_lines) > 1:
                 docs.append({
                     "id": "info:catalog",
                     "title": "Information Centre document list",
                     "source": "info",
                     "text": "\n".join(catalog_lines),
-                    "priority": "normal",
                 })
     except Exception:
         pass
@@ -836,8 +1295,25 @@ def _query_intent(query: str) -> set[str]:
             "info", "information", "document", "documents", "centre", "center",
             "bylaw", "bylaws", "bye", "law", "laws", "rule", "rules", "act",
             "society", "societies", "registration", "circular", "policy",
+            "folder", "folders", "topic", "topics",
+            "compare", "conflict", "conflicts", "gap", "gaps", "reform",
+            "compliance", "versus", "difference", "differences",
         )
     ):
+        intents.add("info")
+    # Analytical questions across Info Centre docs (e.g. bylaws vs Act).
+    if any(
+        t in ql
+        for t in (
+            "compare", "conflict", "conflicts", "gap", "gaps", "reform",
+            "compliance", "versus", "difference", "differences",
+            "inconsistency", "align", "alignment",
+        )
+    ) or (
+        "act" in ql
+        and any(t in ql for t in ("bylaw", "bylaws", "bye", "rule", "rules"))
+    ):
+        intents.add("compare")
         intents.add("info")
     if any(t in ql for t in ("notice", "notices", "circular")):
         intents.add("notice")
@@ -846,14 +1322,95 @@ def _query_intent(query: str) -> set[str]:
     return intents
 
 
+def _info_family(title: str, text: str = "") -> str:
+    """Classify an Info Centre chunk as act / bylaws / other."""
+    blob = f"{title or ''} {(text or '')[:400]}".lower()
+    if any(k in blob for k in ("societies registration act", "registration act 2006", "hp societies")):
+        return "act"
+    if (" act" in blob or blob.startswith("act")) and any(
+        k in blob for k in ("societ", "registration", "2006", "himachal")
+    ):
+        return "act"
+    if any(
+        k in blob
+        for k in (
+            "bye-law", "bye law", "bylaw", "by-law", "rules and bylaws",
+            "rules & bye", "interpretation", "society rules",
+        )
+    ):
+        return "bylaws"
+    return "other"
+
+
+def _is_info_structure_chunk(doc: dict[str, str]) -> bool:
+    """True for catalog/hierarchy/overview inventory chunks (not section body text)."""
+    doc_id = str(doc.get("id") or "")
+    return (
+        doc_id.startswith("info:folder:")
+        or doc_id.startswith("info:hierarchy:")
+        or doc_id.endswith(":overview")
+        or doc_id in {"info:folders", "info:catalog"}
+    )
+
+
+def _is_info_content_chunk(doc: dict[str, str]) -> bool:
+    """True for extractable document/section body chunks."""
+    if (doc.get("source") or "") != "info":
+        return False
+    doc_id = str(doc.get("id") or "")
+    if _is_info_structure_chunk(doc):
+        return False
+    # Section body: info:<id>:s<si>:<ci>  or fallback full-text info:<id>:0
+    return ":s" in doc_id or doc_id.endswith(":0")
+
+
+def _is_info_browse_query(query: str) -> bool:
+    """User is asking what exists (folders/docs), not what a clause says."""
+    raw = (query or "").strip().lower()
+    ql = " ".join(_tokenize(query))
+    if not ql and not raw:
+        return False
+    # Explicit inventory / map asks
+    explicit = (
+        "list documents", "list folders", "list topics",
+        "what documents", "which documents", "available documents",
+        "documents available", "what folders", "which folders",
+        "folder map", "document list", "document catalog", "document catalogue",
+        "content hierarchy", "document hierarchy", "what is available",
+        "whats available", "what's available", "show documents", "all documents",
+        "information centre documents", "info centre documents",
+        "what do we have", "inventory", "catalogue", "catalog",
+    )
+    if any(p in raw for p in explicit):
+        return True
+    if any(t in ql for t in ("hierarchy", "structure", "toc", "outline")) and any(
+        t in ql for t in ("info", "information", "document", "documents", "folder", "folders", "centre", "center")
+    ):
+        return True
+    # "what is in the information centre" / "what's in registration folder"
+    if any(
+        p in raw
+        for p in (
+            "what is in", "whats in", "what's in", "what are in",
+            "contents of", "documents in the", "files in the",
+        )
+    ) and any(
+        t in ql for t in ("info", "information", "centre", "center", "folder", "folders")
+    ):
+        return True
+    return False
+
+
 def retrieve(query: str, corpus: list[dict[str, str]], *, k: int = 4) -> list[dict[str, str]]:
     q_tokens = _tokenize(query)
     if not q_tokens or not corpus:
         return []
     q_set = set(q_tokens)
     intents = _query_intent(query)
-    # Info-centre questions need more passages from long PDFs
-    if "info" in intents:
+    browse = _is_info_browse_query(query)
+    if "compare" in intents:
+        k = max(k, 14)
+    elif "info" in intents:
         k = max(k, 8)
     scored: list[tuple[float, dict[str, str]]] = []
     for doc in corpus:
@@ -867,16 +1424,87 @@ def retrieve(query: str, corpus: list[dict[str, str]], *, k: int = 4) -> list[di
         score = float(len(overlap)) / (len(q_set) ** 0.5)
         title_tokens = set(_tokenize(doc.get("title", "")))
         score += 0.5 * len(q_set & title_tokens)
+        doc_id = doc.get("id") or ""
+        if _is_info_structure_chunk(doc):
+            if browse:
+                score += 2.5
+            elif "compare" in intents:
+                # Structure dumps drown out Act/bylaws passages
+                score -= 2.0
+            else:
+                # Prefer specific section text over inventory for content questions
+                score -= 1.2
+        elif _is_info_content_chunk(doc) and ("info" in intents or "compare" in intents):
+            score += 1.8
+            if not browse:
+                score += 0.6
+        family = _info_family(doc.get("title") or "", doc.get("text") or "")
+        if "compare" in intents and family in {"act", "bylaws"}:
+            score += 2.5
+            if _is_info_content_chunk(doc):
+                score += 1.0
         src = doc.get("source") or ""
         if intents:
-            if src in intents or (src == "me" and "me" in intents):
+            if src in intents or (src == "me" and "me" in intents) or (
+                src == "info" and ("info" in intents or "compare" in intents)
+            ):
                 score += 3.0
-            elif src == "faq" and intents & {"dues", "concerns", "ec", "info"}:
-                score += 0.4
+            elif src == "faq" and intents & {"dues", "concerns", "ec", "info", "compare"}:
+                # FAQ about Information Centre often restates the whole hierarchy
+                if src == "faq" and "info" in intents and not browse:
+                    score -= 1.0
+                else:
+                    score += 0.4
             else:
                 score -= 0.5
         scored.append((score, doc))
     scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Analytical questions: keep both Act and Bylaws passages in the top set.
+    if "compare" in intents:
+        picked: list[dict[str, str]] = []
+        buckets: dict[str, list[dict[str, str]]] = {"act": [], "bylaws": [], "other": []}
+        for _score, doc in scored:
+            if doc.get("source") != "info":
+                continue
+            if _is_info_structure_chunk(doc):
+                continue
+            fam = _info_family(doc.get("title") or "", doc.get("text") or "")
+            buckets.setdefault(fam, []).append(doc)
+        for fam in ("act", "bylaws"):
+            for d in buckets.get(fam, [])[:6]:
+                if d not in picked:
+                    picked.append(d)
+        for _score, doc in scored:
+            if _is_info_structure_chunk(doc) and not browse:
+                continue
+            if doc not in picked:
+                picked.append(doc)
+            if len(picked) >= k:
+                break
+        return picked[:k]
+
+    # Content questions: prefer section body over hierarchy/catalog inventory.
+    if "info" in intents and not browse:
+        content_first = [d for _s, d in scored if _is_info_content_chunk(d)]
+        other = [d for _s, d in scored if not _is_info_structure_chunk(d) and d not in content_first]
+        # Allow at most one overview if no section text matched
+        overviews = [d for _s, d in scored if str(d.get("id") or "").endswith(":overview")]
+        picked: list[dict[str, str]] = []
+        for d in content_first + other:
+            if d not in picked:
+                picked.append(d)
+            if len(picked) >= k:
+                break
+        if not content_first and overviews:
+            for d in overviews[:2]:
+                if d not in picked:
+                    picked.append(d)
+                if len(picked) >= k:
+                    break
+        if picked:
+            return picked[:k]
+
     return [d for _, d in scored[:k]]
 
 
@@ -907,6 +1535,42 @@ def _force_personal_chunks(query: str, personal: list[dict[str, str]]) -> list[d
     return out
 
 
+def _force_info_hierarchy_chunks(corpus: list[dict[str, str]], query: str) -> list[dict[str, str]]:
+    """Only inject folder/catalog maps when the user asked what documents exist."""
+    if "info" not in _query_intent(query):
+        return []
+    browse = _is_info_browse_query(query)
+    q_tokens = set(_tokenize(query))
+    folder_docs = [
+        d for d in corpus
+        if str(d.get("id") or "").startswith("info:folder:")
+    ]
+    scored = []
+    for d in folder_docs:
+        overlap = q_tokens & set(_tokenize((d.get("title") or "") + " " + (d.get("text") or "")[:500]))
+        if overlap:
+            scored.append((len(overlap), d))
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    out: list[dict[str, str]] = []
+    if browse:
+        preferred_ids = ("info:folders", "info:catalog", "info:hierarchy:0")
+        by_id = {d.get("id"): d for d in corpus if d.get("id")}
+        for pid in preferred_ids:
+            doc = by_id.get(pid)
+            if doc:
+                out.append(doc)
+        for _, d in scored[:2]:
+            if d not in out:
+                out.append(d)
+        return out[:3]
+
+    # Content questions: at most one best-matching folder inventory — never the full hierarchy.
+    for _, d in scored[:1]:
+        out.append(d)
+    return out[:1]
+
+
 def _merge_chunks(*groups: list[dict[str, str]], limit: int = 4) -> list[dict[str, str]]:
     seen: set[str] = set()
     out: list[dict[str, str]] = []
@@ -927,6 +1591,7 @@ def _pick_answer_chunks(query: str, chunks: list[dict[str, str]]) -> list[dict[s
     if not chunks:
         return []
     intents = _query_intent(query)
+    browse = _is_info_browse_query(query)
     preferred_order = []
     if "dues" in intents:
         preferred_order.append("dues")
@@ -942,9 +1607,27 @@ def _pick_answer_chunks(query: str, chunks: list[dict[str, str]]) -> list[dict[s
         preferred_order.append("notice")
     if "works" in intents:
         preferred_order.append("works")
-    limit = 4 if "info" in intents else 2
+    if "compare" in intents:
+        limit = 12
+    elif "info" in intents and browse:
+        limit = 4
+    elif "info" in intents:
+        limit = 6
+    else:
+        limit = 2
+
+    pool = list(chunks)
+    if "info" in intents and not browse:
+        content = [c for c in pool if _is_info_content_chunk(c)]
+        non_structure = [c for c in pool if not _is_info_structure_chunk(c)]
+        # Prefer section body; drop hierarchy/catalog unless nothing else matched
+        if content:
+            pool = content + [c for c in non_structure if c not in content]
+        else:
+            pool = non_structure or pool
+
     if preferred_order:
-        matched = [c for c in chunks if (c.get("source") or "") in preferred_order]
+        matched = [c for c in pool if (c.get("source") or "") in preferred_order]
         if matched:
             ordered: list[dict[str, str]] = []
             for src in preferred_order:
@@ -952,7 +1635,8 @@ def _pick_answer_chunks(query: str, chunks: list[dict[str, str]]) -> list[dict[s
                     if c.get("source") == src and c not in ordered:
                         ordered.append(c)
             return ordered[:limit]
-    return chunks[:limit]
+        return pool[:limit]
+    return pool[:limit]
 
 
 def _format_specific_answer(query: str, chunk: dict[str, str]) -> str:
@@ -1001,9 +1685,36 @@ def _format_specific_answer(query: str, chunk: dict[str, str]) -> str:
         lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
         return "\n".join(lines[:8])
 
-    if src in ("me", "info", "notice", "works", "faq"):
+    if src == "info":
+        if _is_info_structure_chunk(chunk) and not _is_info_browse_query(query):
+            # Avoid dumping catalog/hierarchy on content questions in rag-only mode
+            return ""
+        # Prefer section body: drop long path/meta headers when possible
+        lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+        body_lines = [
+            ln for ln in lines
+            if not ln.lower().startswith((
+                "information centre path:",
+                "folder/topic:",
+                "document:",
+                "category:",
+                "status:",
+                "section:",
+                "hindi ",
+                "folder summary:",
+                "file:",
+            ))
+        ]
+        snippet = "\n".join(body_lines or lines)
+        cap = 420 if _is_info_content_chunk(chunk) else 320
+        if len(snippet) > cap:
+            snippet = snippet[: cap - 1] + "…"
+        label = title or "Answer"
+        return f"{label}\n{snippet}"
+
+    if src in ("me", "notice", "works", "faq"):
         snippet = text
-        cap = 520 if src == "info" else 280
+        cap = 280
         if len(snippet) > cap:
             snippet = snippet[: cap - 1] + "…"
         label = title or "Answer"
@@ -1024,18 +1735,36 @@ def _extractive_answer(query: str, chunks: list[dict[str, str]]) -> str:
         )
     parts = [_format_specific_answer(query, ch) for ch in picked]
     answer = "\n\n".join(p for p in parts if p).strip()
-    cap = 1400 if "info" in _query_intent(query) else 900
+    if not answer:
+        return (
+            "I don’t have a specific match for that. Try naming a document or topic "
+            "from the Information Centre, or ask what folders/documents are available."
+        )
+    browse = _is_info_browse_query(query)
+    if "compare" in _query_intent(query):
+        cap = 1400
+    elif "info" in _query_intent(query) and browse:
+        cap = 900
+    elif "info" in _query_intent(query):
+        cap = 900
+    else:
+        cap = 900
     if len(answer) > cap:
         answer = answer[: cap - 1] + "…"
     return answer
 
 
-def _chat_completions(cfg: dict[str, str], messages: list[dict[str, str]]) -> str:
+def _chat_completions(
+    cfg: dict[str, str],
+    messages: list[dict[str, str]],
+    *,
+    max_tokens: int = 350,
+) -> str:
     url = f"{cfg['baseUrl']}/chat/completions"
     payload = {
         "model": cfg["model"],
         "temperature": 0.1,
-        "max_tokens": 350,
+        "max_tokens": max(120, min(int(max_tokens or 350), 1800)),
         "messages": messages,
     }
     req = urllib.request.Request(
@@ -1083,9 +1812,20 @@ def answer_query(
     public = build_corpus(conn, site_root, actor=actor)
     corpus = personal + public
     intents = _query_intent(q)
-    retrieved = retrieve(q, corpus, k=8 if "info" in intents else 4)
+    browse = _is_info_browse_query(q)
+    info_heavy = "info" in intents or "compare" in intents
+    retrieve_k = 14 if "compare" in intents else (10 if info_heavy else 4)
+    merge_limit = 14 if "compare" in intents else (8 if info_heavy else 4)
+    if info_heavy and not browse and "compare" not in intents:
+        merge_limit = 6
+    retrieved = retrieve(q, corpus, k=retrieve_k)
     forced = _force_personal_chunks(q, personal)
-    chunks = _merge_chunks(forced, retrieved, limit=8 if "info" in intents else 4)
+    info_forced = _force_info_hierarchy_chunks(public, q)
+    # Browse: inventory first. Content/compare: retrieved section text first.
+    if browse:
+        chunks = _merge_chunks(forced, info_forced, retrieved, limit=merge_limit)
+    else:
+        chunks = _merge_chunks(forced, retrieved, info_forced, limit=merge_limit)
     answer_chunks = _pick_answer_chunks(q, chunks)
 
     cfg = load_ai_config(site_root)
@@ -1105,17 +1845,66 @@ def answer_query(
         f"[{c.get('title')}]\n{c.get('text')}" for c in answer_chunks
     ) or "(No matching records found.)"
     house = _actor_house(actor) or "unknown"
-    system = (
-        "You are the HBC Sanyard RWA assistant. Answer ONLY the user's question. "
-        "Use only the provided context. Give a short, specific answer (2–6 sentences or a short bullet list). "
-        "Do NOT dump unrelated dues, EC lists, concerns, or FAQ. "
-        "Do NOT invent figures or contact details. "
-        "For EC questions: office bearers may be named with their title; general EC member seats "
-        "are plot-only — never say the plot owner is the EC member unless the context names them "
-        "with an office title. "
-        f"Resident plot: {house}. "
-        "If context is insufficient, say what is missing in one sentence."
-    )
+    if "compare" in intents:
+        system = (
+            "You are the HBC Sanyard RWA assistant. Answer using ONLY the provided "
+            "Information Centre context (document section text). "
+            "For comparison / conflict / gap / reform questions: "
+            "1) cite both sources when present (e.g. society bye-laws/rules AND the HP Societies Registration Act), "
+            "2) list clear alignments, conflicts or gaps as short bullets, "
+            "3) suggest practical reform ideas only where the context supports them, "
+            "4) say when the portal text is incomplete. "
+            "Do NOT paste folder maps, full document inventories, or unrelated sections. "
+            "This is guidance from published portal documents — not formal legal advice. "
+            "Do NOT invent section numbers or clauses that are not in the context. "
+            f"Resident plot: {house}."
+        )
+        user_tail = (
+            "Reply with a structured analysis: Alignments, Conflicts/Gaps, "
+            "Reform ideas (if any), and Limits of available text. "
+            "Do not list the whole Information Centre."
+        )
+        max_tokens = 1100
+    elif info_heavy and browse:
+        system = (
+            "You are the HBC Sanyard RWA assistant. The user asked what is available "
+            "in the Information Centre. Summarize only the relevant folders/documents "
+            "from context as a short list. Do not paste full section text. "
+            f"Resident plot: {house}."
+        )
+        user_tail = "Reply with a short inventory that answers the question."
+        max_tokens = 450
+    elif info_heavy:
+        system = (
+            "You are the HBC Sanyard RWA assistant. Answer ONLY the user's specific question "
+            "using relevant Information Centre section text from the context. "
+            "Cite the document (and section when helpful) that answers the question. "
+            "Keep the reply focused: short paragraphs or a few bullets. "
+            "Do NOT list the full folder/document hierarchy or unrelated documents. "
+            "Do NOT invent clauses not present in context. "
+            "Do NOT dump dues, EC lists, or FAQ. "
+            f"Resident plot: {house}. "
+            "If context is insufficient, say what is missing in one sentence."
+        )
+        user_tail = (
+            "Reply with only the specific answer from the matching document/section. "
+            "Do not dump the document structure."
+        )
+        max_tokens = 550
+    else:
+        system = (
+            "You are the HBC Sanyard RWA assistant. Answer ONLY the user's question. "
+            "Use only the provided context. Give a short, specific answer (2–6 sentences or a short bullet list). "
+            "Do NOT dump unrelated dues, EC lists, concerns, or FAQ. "
+            "Do NOT invent figures or contact details. "
+            "For EC questions: office bearers may be named with their title; general EC member seats "
+            "are plot-only — never say the plot owner is the EC member unless the context names them "
+            "with an office title. "
+            f"Resident plot: {house}. "
+            "If context is insufficient, say what is missing in one sentence."
+        )
+        user_tail = "Reply with only the specific answer."
+        max_tokens = 350
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     for h in (history or [])[-4:]:
         role = "assistant" if h.get("role") == "assistant" else "user"
@@ -1124,10 +1913,10 @@ def answer_query(
             messages.append({"role": role, "content": content[:800]})
     messages.append({
         "role": "user",
-        "content": f"Context:\n{context}\n\nQuestion: {q}\n\nReply with only the specific answer.",
+        "content": f"Context:\n{context}\n\nQuestion: {q}\n\n{user_tail}",
     })
     try:
-        answer = _chat_completions(cfg, messages)
+        answer = _chat_completions(cfg, messages, max_tokens=max_tokens)
         mode = "llm+rag"
     except ValueError:
         answer = _extractive_answer(q, answer_chunks)

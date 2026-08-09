@@ -14,7 +14,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
-
+from urllib.parse import urlparse
 # When imported from admin/, resolve site scripts via SITE_ROOT / VEERCANVAS tree.
 _ADMIN_DIR = pathlib.Path(__file__).resolve().parent
 _ROOT = _ADMIN_DIR.parent
@@ -1828,10 +1828,190 @@ INFO_DOC_MIME = {
 
 INFO_INLINE_EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".html", ".htm", ".txt"}
 INFO_MAX_BYTES = 15_000_000  # 15 MB
+INFO_DOC_TYPES = frozenset({"file", "html", "link"})
+
+
+def normalize_info_external_url(raw: str | None) -> str:
+    """Accept http(s) URLs or same-site root-relative paths for link documents."""
+    text = str(raw or "").strip()
+    if not text:
+        raise ValueError("Web link URL required")
+    if len(text) > 2000:
+        raise ValueError("Web link is too long")
+    lower = text.lower()
+    if lower.startswith(("javascript:", "data:", "vbscript:", "file:")):
+        raise ValueError("Unsupported link type")
+    # Same-site path: /documents/act.html
+    if text.startswith("/") and not text.startswith("//"):
+        if " " in text or "\\" in text or "/../" in f"{text}/":
+            raise ValueError("Enter a valid site path or web link")
+        return text
+    # Allow paste without scheme
+    if re.match(r"^[\w.-]+\.[a-zA-Z]{2,}(/.*)?$", text):
+        text = "https://" + text
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Web link must start with http:// or https:// (or a /site/path)")
+    if not parsed.netloc or " " in text:
+        raise ValueError("Enter a valid web link (URL)")
+    return text
+
+
+def guess_info_link_mime(url: str) -> str:
+    """Guess preview mime from the URL path (pdf / image / html page)."""
+    path = (urlparse(url).path if "://" in url else url).lower()
+    # root-relative
+    if "://" not in url:
+        path = url.split("?", 1)[0].split("#", 1)[0].lower()
+    else:
+        path = (urlparse(url).path or "").lower()
+    ext = pathlib.Path(path).suffix
+    if ext in INFO_DOC_MIME:
+        return INFO_DOC_MIME[ext]
+    return "text/html"
 
 
 def info_centre_categories() -> list[dict]:
     return [{"id": cid, "label": label} for cid, label in INFO_DOC_CATEGORIES]
+
+
+def _info_folder_public(row: sqlite3.Row | dict, *, doc_count: int | None = None) -> dict:
+    if hasattr(row, "keys"):
+        data = {k: row[k] for k in row.keys()}
+    else:
+        data = dict(row)
+    out = {
+        "id": data.get("id"),
+        "title": data.get("title") or "",
+        "titleHi": data.get("title_hi") or data.get("titleHi") or "",
+        "summary": data.get("summary") or "",
+        "sortOrder": int(data.get("sort_order") or data.get("sortOrder") or 100),
+        "createdAt": data.get("created_at") or data.get("createdAt") or "",
+        "updatedAt": data.get("updated_at") or data.get("updatedAt") or "",
+        "createdBy": data.get("created_by") or data.get("createdBy") or "",
+    }
+    if doc_count is not None:
+        out["docCount"] = int(doc_count)
+    return out
+
+
+def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> list[dict]:
+    ensure_info_documents_table(conn)
+    rows = conn.execute(
+        """
+        SELECT f.*,
+               (SELECT COUNT(*) FROM info_documents d WHERE d.folder_id = f.id) AS doc_count
+        FROM info_folders f
+        ORDER BY f.sort_order ASC, f.title COLLATE NOCASE ASC
+        """
+    ).fetchall()
+    out = []
+    for r in rows:
+        count = int(r["doc_count"] or 0) if with_counts else None
+        out.append(_info_folder_public(r, doc_count=count))
+    return out
+
+
+def get_info_folder(conn: sqlite3.Connection, folder_id: str) -> dict | None:
+    ensure_info_documents_table(conn)
+    fid = (folder_id or "").strip()
+    if not fid:
+        return None
+    row = conn.execute("SELECT * FROM info_folders WHERE id = ?", (fid,)).fetchone()
+    if not row:
+        return None
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM info_documents WHERE folder_id = ?",
+        (fid,),
+    ).fetchone()["n"]
+    return _info_folder_public(row, doc_count=int(n or 0))
+
+
+def upsert_info_folder(
+    conn: sqlite3.Connection,
+    payload: dict,
+    *,
+    actor: dict | None = None,
+) -> dict:
+    ensure_info_documents_table(conn)
+    folder_id = (payload.get("id") or "").strip() or f"folder_{secrets.token_hex(6)}"
+    existing = conn.execute("SELECT * FROM info_folders WHERE id = ?", (folder_id,)).fetchone()
+    title = payload.get("title") if "title" in payload else (existing["title"] if existing else None)
+    title = str(title or "").strip()
+    if len(title) < 2:
+        raise ValueError("Folder title required")
+    title_hi = (
+        payload.get("titleHi")
+        if "titleHi" in payload or "title_hi" in payload
+        else (existing["title_hi"] if existing and "title_hi" in existing.keys() else "")
+    )
+    if "title_hi" in payload and "titleHi" not in payload:
+        title_hi = payload.get("title_hi")
+    title_hi = str(title_hi or "").strip()[:160]
+    summary = payload.get("summary") if "summary" in payload else (existing["summary"] if existing else "")
+    summary = str(summary or "").strip()[:400]
+    sort_order = payload.get("sortOrder", payload.get("sort_order"))
+    if sort_order is None:
+        sort_order = existing["sort_order"] if existing else 100
+    try:
+        sort_order = int(sort_order)
+    except (TypeError, ValueError):
+        sort_order = 100
+    now = utc_now()
+    created_at = existing["created_at"] if existing else now
+    created_by = (
+        (existing["created_by"] if existing and existing["created_by"] else None)
+        or (actor or {}).get("houseId")
+        or (actor or {}).get("house_id")
+        or ""
+    )
+    conn.execute(
+        """
+        INSERT INTO info_folders(
+          id, title, title_hi, summary, sort_order, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title=excluded.title,
+          title_hi=excluded.title_hi,
+          summary=excluded.summary,
+          sort_order=excluded.sort_order,
+          updated_at=excluded.updated_at
+        """,
+        (folder_id, title, title_hi, summary, sort_order, created_by, created_at, now),
+    )
+    conn.commit()
+    out = get_info_folder(conn, folder_id)
+    if not out:
+        raise ValueError("Folder not found after save")
+    return out
+
+
+def delete_info_folder(conn: sqlite3.Connection, folder_id: str) -> None:
+    ensure_info_documents_table(conn)
+    fid = (folder_id or "").strip()
+    if not fid:
+        raise ValueError("folder id required")
+    row = conn.execute("SELECT id FROM info_folders WHERE id = ?", (fid,)).fetchone()
+    if not row:
+        raise ValueError("Folder not found")
+    conn.execute("UPDATE info_documents SET folder_id = NULL WHERE folder_id = ?", (fid,))
+    conn.execute("DELETE FROM info_folders WHERE id = ?", (fid,))
+    conn.commit()
+
+
+def _resolve_folder_id(conn: sqlite3.Connection, raw: str | None, *, allow_empty: bool = True) -> str | None:
+    """Validate folder id; empty string clears the folder."""
+    if raw is None:
+        return None
+    fid = str(raw).strip()
+    if not fid or fid in {"", "none", "unfiled", "null"}:
+        if allow_empty:
+            return ""
+        return None
+    row = conn.execute("SELECT id FROM info_folders WHERE id = ?", (fid,)).fetchone()
+    if not row:
+        raise ValueError("Unknown folder")
+    return fid
 
 
 def info_centre_dir(site_root: pathlib.Path) -> pathlib.Path:
@@ -1926,6 +2106,14 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
         path = info_doc_file_path(site_root, str(data.get("id") or ""), filename)
         has_file = path is not None
         file_missing = path is None
+    folder_id = (data.get("folder_id") or data.get("folderId") or "") or None
+    folder_title = data.get("folder_title") or data.get("folderTitle") or ""
+    folder_title_hi = data.get("folder_title_hi") or data.get("folderTitleHi") or ""
+    doc_type = (data.get("doc_type") or "file").strip().lower() or "file"
+    external_url = (data.get("external_url") or data.get("externalUrl") or "").strip()
+    if doc_type == "link":
+        has_file = bool(external_url)
+        file_missing = not bool(external_url)
     return {
         "id": data.get("id"),
         "title": data.get("title") or "",
@@ -1934,11 +2122,15 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
         "summaryHi": data.get("summary_hi") or data.get("summaryHi") or "",
         "category": cat,
         "categoryLabel": label,
-        "docType": data.get("doc_type") or "file",
+        "folderId": folder_id,
+        "folderTitle": folder_title,
+        "folderTitleHi": folder_title_hi,
+        "docType": doc_type,
         "filename": filename,
         "originalName": data.get("original_name") or data.get("filename") or "",
         "mimeType": data.get("mime_type") or "",
         "sizeBytes": int(data.get("size_bytes") or 0),
+        "externalUrl": external_url,
         "status": data.get("status") or "draft",
         "audience": audience,
         "audienceLabel": "EC only" if audience == "ec" else "All members",
@@ -1957,6 +2149,7 @@ def list_info_documents(
     *,
     status: str | None = "published",
     category: str | None = None,
+    folder_id: str | None = None,
     as_admin: bool = False,
     site_root: pathlib.Path | None = None,
 ) -> list[dict]:
@@ -1966,29 +2159,41 @@ def list_info_documents(
     params: list[Any] = []
     if status_key == "all":
         if not as_admin:
-            clauses.append("status = 'published'")
+            clauses.append("d.status = 'published'")
     elif status_key in {"draft", "published", "archived"}:
         if status_key != "published" and not as_admin:
             raise ValueError("Admin access required for drafts")
-        clauses.append("status = ?")
+        clauses.append("d.status = ?")
         params.append(status_key)
     else:
         raise ValueError("Invalid status filter")
     if not as_admin:
         # Residents only see colony-wide published docs (not EC-only).
-        clauses.append("(audience IS NULL OR audience = 'all' OR audience = '')")
+        clauses.append("(d.audience IS NULL OR d.audience = 'all' OR d.audience = '')")
     if category:
-        clauses.append("category = ?")
+        clauses.append("d.category = ?")
         params.append(_info_category(category))
+    if folder_id is not None:
+        fid = str(folder_id).strip()
+        if fid in {"", "unfiled", "none"}:
+            clauses.append("(d.folder_id IS NULL OR d.folder_id = '')")
+        else:
+            clauses.append("d.folder_id = ?")
+            params.append(fid)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"""
-        SELECT * FROM info_documents
+        SELECT d.*, f.title AS folder_title, f.title_hi AS folder_title_hi
+        FROM info_documents d
+        LEFT JOIN info_folders f ON f.id = d.folder_id
         {where}
         ORDER BY
-          CASE status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
-          COALESCE(published_at, updated_at) DESC,
-          id DESC
+          CASE WHEN d.folder_id IS NULL OR d.folder_id = '' THEN 1 ELSE 0 END,
+          COALESCE(f.sort_order, 9999) ASC,
+          COALESCE(f.title, '') COLLATE NOCASE ASC,
+          CASE d.status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END,
+          COALESCE(d.published_at, d.updated_at) DESC,
+          d.id DESC
         """,
         params,
     ).fetchall()
@@ -2003,7 +2208,15 @@ def get_info_document(
     site_root: pathlib.Path | None = None,
 ) -> dict | None:
     ensure_info_documents_table(conn)
-    row = conn.execute("SELECT * FROM info_documents WHERE id = ?", (doc_id,)).fetchone()
+    row = conn.execute(
+        """
+        SELECT d.*, f.title AS folder_title, f.title_hi AS folder_title_hi
+        FROM info_documents d
+        LEFT JOIN info_folders f ON f.id = d.folder_id
+        WHERE d.id = ?
+        """,
+        (doc_id,),
+    ).fetchone()
     if not row:
         return None
     if (row["status"] or "") != "published" and not as_admin:
@@ -2056,26 +2269,168 @@ def _sanitize_upload_name(name: str) -> str:
     return (base or "document")[:120]
 
 
+def _extract_html_body(raw: str) -> str:
+    """Pull authored content from a full HTML document, or return fragment as-is."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    # Prefer inner authored content from our Information Centre shell.
+    m = re.search(
+        r'<div class="content">\s*(.*?)\s*</div>\s*</article>',
+        text,
+        flags=re.I | re.S,
+    )
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"<body\b[^>]*>(.*)</body>", text, flags=re.I | re.S)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"<body\b[^>]*>(.*)$", text, flags=re.I | re.S)
+    if m:
+        inner = m.group(1).strip()
+        return re.sub(r"</html>\s*$", "", inner, flags=re.I).strip()
+    if re.search(r"<html\b", text, flags=re.I):
+        cleaned = re.sub(r"<!DOCTYPE[^>]*>", "", text, flags=re.I)
+        cleaned = re.sub(r"<head\b[^>]*>.*?</head>", "", cleaned, flags=re.I | re.S)
+        cleaned = re.sub(r"</?html\b[^>]*>", "", cleaned, flags=re.I)
+        return cleaned.strip()
+    return text
+
+
+def _normalize_authored_html(body_html: str) -> str:
+    """Turn loose authored text into readable block HTML when needed."""
+    text = (body_html or "").strip()
+    if not text:
+        return "<p></p>"
+    # Already structured with block elements — keep as authored.
+    if re.search(
+        r"<(p|div|h[1-6]|ul|ol|li|table|section|article|header|blockquote|pre)\b",
+        text,
+        flags=re.I,
+    ):
+        return text
+    # Drop a redundant leading <h1>…</h1> if wrap will add the title again.
+    text = re.sub(r"^\s*<h1\b[^>]*>.*?</h1>\s*", "", text, count=1, flags=re.I | re.S)
+    parts = re.split(r"\n\s*\n", text)
+    paras: list[str] = []
+    for part in parts:
+        chunk = part.strip()
+        if not chunk:
+            continue
+        # Preserve light inline markup; convert single newlines to breaks.
+        chunk = re.sub(r"\n+", "<br>\n", chunk)
+        paras.append(f"<p>{chunk}</p>")
+    return "\n".join(paras) if paras else f"<p>{text}</p>"
+
+
 def _wrap_html_document(title: str, body_html: str) -> str:
+    """Readable document shell for Information Centre HTML pages."""
     safe_title = (title or "Document").replace("<", "&lt;").replace(">", "&gt;")
-    # Allow simple authored HTML; wrap in a readable page shell.
+    extracted = _extract_html_body(body_html)
+    # Drop a prior shell title so we don't double-render headings.
+    if title:
+        m = re.match(r"^\s*<h1\b[^>]*>(.*?)</h1>\s*", extracted, flags=re.I | re.S)
+        if m:
+            inner = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+            if not inner or inner.casefold() == title.strip().casefold():
+                extracted = extracted[m.end() :]
+    body = _normalize_authored_html(extracted)
     return (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n'
         f"<title>{safe_title}</title>\n"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         "<style>\n"
-        "body{font-family:Georgia,'Times New Roman',serif;line-height:1.55;max-width:42rem;"
-        "margin:2rem auto;padding:0 1.25rem;color:#1a2332;background:#f7f4ef;}\n"
-        "h1,h2,h3{font-family:'Segoe UI',system-ui,sans-serif;color:#0f2744;}\n"
-        "img{max-width:100%;height:auto;} a{color:#1d4ed8;}\n"
-        "table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ccc;padding:.4rem .55rem;}\n"
+        ":root{--ink:#162033;--muted:#5b6578;--navy:#0f2744;--paper:#f7f3ea;"
+        "--rule:rgba(15,39,68,.12);--accent:#1f4d3a;}\n"
+        "*{box-sizing:border-box;}\n"
+        "html,body{margin:0;padding:0;background:linear-gradient(180deg,#e8eef5,#dfe7f0);}\n"
+        "body{font-family:Georgia,'Iowan Old Style','Palatino Linotype',Palatino,serif;"
+        "line-height:1.65;color:var(--ink);-webkit-font-smoothing:antialiased;}\n"
+        ".sheet{max-width:46rem;margin:1.25rem auto 2.5rem;padding:0 1rem 2rem;}\n"
+        "@media (min-width:720px){.sheet{margin-top:1.75rem;padding:0 1.25rem 2.5rem;}}\n"
+        ".card{background:var(--paper);border:1px solid var(--rule);border-radius:18px;"
+        "box-shadow:0 18px 40px rgba(15,39,68,.08);overflow:hidden;}\n"
+        ".mast{padding:1.35rem 1.4rem 1.15rem;background:linear-gradient(135deg,#123054,#1a3f66);"
+        "color:#f4f1ea;text-align:left;}\n"
+        ".mast .eyebrow{margin:0 0 .35rem;font:600 .72rem/1.2 system-ui,-apple-system,sans-serif;"
+        "letter-spacing:.08em;text-transform:uppercase;opacity:.78;text-align:left;}\n"
+        ".mast h1{margin:0;font:700 1.55rem/1.25 'Segoe UI',system-ui,-apple-system,sans-serif;"
+        "letter-spacing:-.01em;text-align:left;}\n"
+        ".content{padding:1.35rem 1.4rem 1.75rem;text-align:left;}\n"
+        "@media (min-width:720px){.mast,.content{padding-left:1.85rem;padding-right:1.85rem;}"
+        ".mast h1{font-size:1.85rem;}}\n"
+        ".content > :first-child{margin-top:0;}\n"
+        ".content > :last-child{margin-bottom:0;}\n"
+        "h2,h3,h4{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--navy);"
+        "line-height:1.3;margin:1.45rem 0 .55rem;}\n"
+        "h2{font-size:1.25rem;} h3{font-size:1.08rem;} h4{font-size:1rem;}\n"
+        "p{margin:.7rem 0;}\n"
+        "ul,ol{margin:.65rem 0 .9rem;padding-left:1.35rem;}\n"
+        "li{margin:.28rem 0;}\n"
+        "strong,b{font-weight:700;color:var(--navy);}\n"
+        "a{color:#1d4ed8;} a:hover{color:#1e3a8a;}\n"
+        "hr{border:0;border-top:1px solid var(--rule);margin:1.4rem 0;}\n"
+        "blockquote{margin:1rem 0;padding:.55rem 0 .55rem 1rem;border-left:3px solid var(--accent);"
+        "color:var(--muted);font-style:italic;}\n"
+        "img{max-width:100%;height:auto;border-radius:10px;}\n"
+        "table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.95rem;}\n"
+        "th,td{border:1px solid var(--rule);padding:.45rem .6rem;text-align:left;vertical-align:top;}\n"
+        "th{background:rgba(15,39,68,.06);font-family:'Segoe UI',system-ui,sans-serif;}\n"
+        "code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;}\n"
+        "pre{overflow:auto;padding:.85rem 1rem;background:rgba(15,39,68,.04);border-radius:10px;}\n"
+        ".foot{margin:1rem auto 0;max-width:46rem;padding:0 1rem;text-align:center;"
+        "font:500 .72rem/1.4 system-ui,sans-serif;color:#6b7385;}\n"
         "</style>\n</head>\n<body>\n"
-        f"<h1>{safe_title}</h1>\n"
-        f"{body_html}\n"
+        '<div class="sheet"><article class="card">\n'
+        f'<header class="mast"><p class="eyebrow">Information Centre</p>'
+        f"<h1>{safe_title}</h1></header>\n"
+        f'<div class="content">\n{body}\n</div>\n'
+        "</article>\n"
+        '<p class="foot">HBC Sanyard · Residents Welfare Association</p>\n'
+        "</div>\n"
         "</body>\n</html>\n"
     )
+
+
+def _is_complete_html_document(raw: str) -> bool:
+    """True when stored HTML is already a full page (do not re-wrap / strip design)."""
+    text = (raw or "").lstrip()
+    if not text:
+        return False
+    head = text[:4000].lower()
+    if not (head.startswith("<!doctype html") or head.startswith("<html")):
+        return False
+    has_head = "<head" in head
+    has_body = "<body" in text[:12000].lower()
+    if not (has_head and has_body):
+        return False
+    # Standalone designed pages (uploaded Act HTML, linked documents, etc.)
+    if any(
+        marker in head
+        for marker in (
+            "<style",
+            'rel="stylesheet"',
+            "fonts.googleapis",
+            "font-face",
+        )
+    ):
+        return True
+    # Already using our Information Centre shell
+    sample = text[:12000]
+    if 'class="sheet"' in sample and 'class="mast"' in sample:
+        return True
+    if 'class="page"' in sample and ("chapter" in sample.lower() or "toc" in sample.lower()):
+        return True
+    return False
+
+
+def render_info_html_for_view(title: str, raw_html: str) -> str:
+    """Serve complete HTML pages as-is; beautify authored fragments for the viewer."""
+    if _is_complete_html_document(raw_html):
+        return raw_html
+    return _wrap_html_document(title, raw_html)
 
 
 def upsert_info_document(
@@ -2101,6 +2456,16 @@ def upsert_info_document(
     category = _info_category(
         payload.get("category") if "category" in payload else (existing["category"] if existing else "general")
     )
+
+    folder_id_val: str | None
+    if "folderId" in payload or "folder_id" in payload:
+        raw_folder = payload.get("folderId", payload.get("folder_id"))
+        resolved = _resolve_folder_id(conn, "" if raw_folder is None else str(raw_folder))
+        folder_id_val = None if resolved == "" else resolved
+    elif existing and "folder_id" in existing.keys():
+        folder_id_val = existing["folder_id"] or None
+    else:
+        folder_id_val = None
 
     def _pick_hi(field: str, camel: str, *, max_len: int | None = None) -> str | None:
         if camel in payload or field in payload:
@@ -2141,19 +2506,57 @@ def upsert_info_document(
     html_body = payload.get("htmlBody") if "htmlBody" in payload else None
     if "html_body" in payload and html_body is None:
         html_body = payload.get("html_body")
+    external_url_in = None
+    if "externalUrl" in payload or "external_url" in payload:
+        external_url_in = payload.get("externalUrl", payload.get("external_url"))
     if not doc_type:
-        doc_type = "html" if html_body is not None else "file"
+        if html_body is not None:
+            doc_type = "html"
+        elif external_url_in is not None:
+            doc_type = "link"
+        else:
+            doc_type = "file"
     doc_type = str(doc_type or "file").strip().lower()
-    if doc_type not in {"file", "html"}:
-        raise ValueError("docType must be file or html")
+    if doc_type not in INFO_DOC_TYPES:
+        raise ValueError("docType must be file, html, or link")
 
     now = utc_now()
     filename = existing["filename"] if existing else None
     original_name = existing["original_name"] if existing else None
     mime_type = existing["mime_type"] if existing else None
     size_bytes = int(existing["size_bytes"] or 0) if existing else 0
+    external_url = ""
+    if existing and "external_url" in existing.keys() and existing["external_url"]:
+        external_url = str(existing["external_url"]).strip()
 
-    if doc_type == "html" and html_body is not None:
+    if doc_type == "link":
+        if external_url_in is not None or not existing:
+            external_url = normalize_info_external_url(
+                external_url_in if external_url_in is not None else external_url
+            )
+        elif not external_url:
+            raise ValueError("Web link URL required")
+        else:
+            external_url = normalize_info_external_url(external_url)
+        mime_type = guess_info_link_mime(external_url)
+        parsed = urlparse(external_url)
+        path_name = pathlib.Path(parsed.path or "").name
+        original_name = path_name or parsed.netloc or "web-link"
+        filename = None
+        size_bytes = 0
+        has_html_hi = 0
+        # Drop any previously stored upload/HTML files for this id.
+        try:
+            dest = info_doc_dir(site_root, doc_id)
+            if dest.is_dir():
+                for f in dest.iterdir():
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+    elif doc_type == "html" and html_body is not None:
         body = str(html_body).strip()
         if len(body) < 3:
             raise ValueError("HTML content required")
@@ -2165,6 +2568,7 @@ def upsert_info_document(
         original_name = f"{_sanitize_upload_name(title)}.html"
         mime_type = "text/html"
         size_bytes = len(data)
+        external_url = ""
         dest_dir = info_doc_dir(site_root, doc_id)
         _replace_dir_file(dest_dir, filename, data, keep_names={"content_hi.html"})
 
@@ -2195,7 +2599,7 @@ def upsert_info_document(
     elif doc_type != "html":
         has_html_hi = 0
 
-    if file_storage is not None and getattr(file_storage, "filename", None):
+    if doc_type != "link" and file_storage is not None and getattr(file_storage, "filename", None):
         original = _sanitize_upload_name(file_storage.filename)
         ext = pathlib.Path(original).suffix.lower()
         if ext not in INFO_DOC_MIME:
@@ -2211,20 +2615,28 @@ def upsert_info_document(
         original_name = original
         mime_type = INFO_DOC_MIME[ext]
         size_bytes = len(data)
+        external_url = ""
         doc_type = "html" if ext in {".html", ".htm"} else "file"
         dest_dir = info_doc_dir(site_root, doc_id)
         _replace_dir_file(dest_dir, filename, data, keep_names=set())
         has_html_hi = 0
-    elif not existing and not filename:
+    elif doc_type != "link" and not existing and not filename:
         if doc_type == "html":
             raise ValueError("HTML content required")
-        raise ValueError("Upload a document file, or create HTML content")
+        raise ValueError("Upload a document file, create HTML content, or paste a web link")
 
-    if filename and not info_doc_file_path(site_root, doc_id, filename):
+    if doc_type == "link":
+        if not external_url:
+            raise ValueError("Web link URL required")
+    elif filename and not info_doc_file_path(site_root, doc_id, filename):
         raise ValueError("Document file missing on server — please re-upload the file")
 
-    if status == "published" and not filename:
-        raise ValueError("Add a file or HTML content before publishing")
+    if status == "published":
+        if doc_type == "link":
+            if not external_url:
+                raise ValueError("Add a web link before publishing")
+        elif not filename:
+            raise ValueError("Add a file, HTML content, or web link before publishing")
 
     was_pub = bool(existing and (existing["status"] or "") == "published")
     if status == "published" and (not was_pub or not existing):
@@ -2238,22 +2650,29 @@ def upsert_info_document(
     published_by = (existing["published_by"] if existing and existing["published_by"] else None) or publisher
 
     created_at = existing["created_at"] if existing else now
+    # Ensure bilingual columns exist before insert (older DBs).
+    ensure_bilingual_content_columns(conn)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+    if "external_url" not in cols:
+        conn.execute("ALTER TABLE info_documents ADD COLUMN external_url TEXT")
     conn.execute(
         """
         INSERT INTO info_documents(
-          id, title, summary, category, doc_type, filename, original_name, mime_type,
-          size_bytes, status, audience, published_at, published_by, created_at, updated_at,
+          id, title, summary, category, folder_id, doc_type, filename, original_name, mime_type,
+          size_bytes, external_url, status, audience, published_at, published_by, created_at, updated_at,
           title_hi, summary_hi, has_html_hi
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           summary=excluded.summary,
           category=excluded.category,
+          folder_id=excluded.folder_id,
           doc_type=excluded.doc_type,
           filename=excluded.filename,
           original_name=excluded.original_name,
           mime_type=excluded.mime_type,
           size_bytes=excluded.size_bytes,
+          external_url=excluded.external_url,
           status=excluded.status,
           audience=excluded.audience,
           published_at=excluded.published_at,
@@ -2268,11 +2687,13 @@ def upsert_info_document(
             title,
             summary,
             category,
+            folder_id_val,
             doc_type,
             filename,
             original_name,
             mime_type,
             size_bytes,
+            external_url or None,
             status,
             audience,
             published_at,

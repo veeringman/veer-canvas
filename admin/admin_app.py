@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlparse
 
-from flask import Flask, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session, url_for
 import sqlite3
 
 APP_DIR = pathlib.Path(__file__).resolve().parent
@@ -4916,13 +4916,19 @@ def api_rwa_no_dues_request_download(request_id: str):
             return jsonify({"ok": False, "error": str(exc)}), 404
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
-        return send_file(
+        force_download = str(request.args.get("download") or "").strip().lower() in {
+            "1", "true", "yes", "download",
+        }
+        resp = send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
-            as_attachment=True,
+            as_attachment=force_download,
             download_name=download_name,
-            max_age=0,
+            max_age=60,
         )
+        if not force_download:
+            resp.headers["Content-Disposition"] = f'inline; filename="{download_name}"'
+        return resp
     finally:
         conn.close()
 
@@ -5218,13 +5224,19 @@ def api_rwa_no_objection_request_download(request_id: str):
             return jsonify({"ok": False, "error": str(exc)}), 404
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
-        return send_file(
+        force_download = str(request.args.get("download") or "").strip().lower() in {
+            "1", "true", "yes", "download",
+        }
+        resp = send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
-            as_attachment=True,
+            as_attachment=force_download,
             download_name=download_name,
-            max_age=0,
+            max_age=60,
         )
+        if not force_download:
+            resp.headers["Content-Disposition"] = f'inline; filename="{download_name}"'
+        return resp
     finally:
         conn.close()
 
@@ -5746,6 +5758,47 @@ def api_rwa_info_categories():
     return jsonify({"ok": True, "categories": rwa_portal.info_centre_categories()})
 
 
+@app.route("/api/rwa/info-centre/folders", methods=["GET", "POST"])
+def api_rwa_info_folders():
+    """List or create Information Centre folders (topics for grouping related docs)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            return jsonify({"ok": True, "folders": rwa_portal.list_info_folders(conn)})
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        folder = rwa_portal.upsert_info_folder(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "folder": folder})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/info-centre/folders/<folder_id>", methods=["PATCH", "DELETE"])
+def api_rwa_info_folder_item(folder_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        if request.method == "DELETE":
+            rwa_portal.delete_info_folder(conn, folder_id)
+            return jsonify({"ok": True, "deleted": folder_id})
+        payload = request.get_json(force=True, silent=True) or {}
+        payload["id"] = folder_id
+        folder = rwa_portal.upsert_info_folder(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "folder": folder})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/info-centre", methods=["GET", "POST"])
 def api_rwa_info_centre():
     """List / create Information Centre documents."""
@@ -5761,13 +5814,25 @@ def api_rwa_info_centre():
             if status != "published" and not is_admin:
                 return jsonify({"ok": False, "error": "Admin access required"}), 403
             category = (request.args.get("category") or "").strip() or None
+            folder_raw = request.args.get("folderId")
+            folder_id = None if folder_raw is None else (folder_raw.strip() or "unfiled")
+            # Only apply folder filter when the query param is present.
+            kwargs = {}
+            if "folderId" in request.args:
+                kwargs["folder_id"] = folder_id if folder_id != "" else "unfiled"
             docs = rwa_portal.list_info_documents(
-                conn, status=status, category=category, as_admin=is_admin, site_root=SITE_ROOT
+                conn,
+                status=status,
+                category=category,
+                as_admin=is_admin,
+                site_root=SITE_ROOT,
+                **kwargs,
             )
             return jsonify({
                 "ok": True,
                 "documents": docs,
                 "categories": rwa_portal.info_centre_categories(),
+                "folders": rwa_portal.list_info_folders(conn),
             })
 
         if not is_admin:
@@ -5782,6 +5847,7 @@ def api_rwa_info_centre():
                 "titleHi": request.form.get("titleHi"),
                 "summaryHi": request.form.get("summaryHi"),
                 "category": request.form.get("category"),
+                "folderId": request.form.get("folderId"),
                 "status": request.form.get("status") or "published",
                 "audience": request.form.get("audience") or "all",
                 "docType": request.form.get("docType") or "file",
@@ -5836,6 +5902,7 @@ def api_rwa_info_centre_item(doc_id: str):
                 "titleHi": request.form.get("titleHi"),
                 "summaryHi": request.form.get("summaryHi"),
                 "category": request.form.get("category"),
+                "folderId": request.form.get("folderId"),
                 "status": request.form.get("status"),
                 "audience": request.form.get("audience"),
                 "docType": request.form.get("docType"),
@@ -5843,6 +5910,9 @@ def api_rwa_info_centre_item(doc_id: str):
             # Drop empty keys so upsert keeps existing values
             payload = {k: v for k, v in payload.items() if v is not None and str(v).strip() != ""}
             payload["id"] = doc_id
+            # Allow clearing folder with empty string
+            if "folderId" in request.form:
+                payload["folderId"] = request.form.get("folderId") or ""
         else:
             payload = request.get_json(force=True, silent=True) or {}
             payload["id"] = doc_id
@@ -5872,7 +5942,46 @@ def api_rwa_info_centre_file(doc_id: str):
             return jsonify({"ok": False, "error": "Sign in required"}), 401
         is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_info")
         doc = rwa_portal.get_info_document(conn, doc_id, as_admin=is_admin, site_root=SITE_ROOT)
-        if not doc or not doc.get("filename"):
+        if not doc:
+            return jsonify({"ok": False, "error": "Document not found"}), 404
+        # External web link — prefer inline redirect so viewers can embed when framing allows.
+        if doc.get("docType") == "link":
+            url = (doc.get("externalUrl") or "").strip()
+            if not url:
+                return jsonify({"ok": False, "error": "Web link missing"}), 404
+            try:
+                url = rwa_portal.normalize_info_external_url(url)
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            # Same-site relative HTML/PDF/image: serve the static file inline when present.
+            if url.startswith("/") and not url.startswith("//"):
+                rel = url.lstrip("/")
+                candidate = (SITE_ROOT / rel).resolve()
+                site_root = SITE_ROOT.resolve()
+                try:
+                    candidate.relative_to(site_root)
+                except ValueError:
+                    return jsonify({"ok": False, "error": "Invalid link path"}), 400
+                if candidate.is_file():
+                    mime = doc.get("mimeType") or rwa_portal.guess_info_link_mime(url)
+                    force_download = str(request.args.get("download") or "").strip().lower() in {
+                        "1", "true", "yes", "download",
+                    }
+                    resp = send_file(
+                        candidate,
+                        mimetype=mime or None,
+                        as_attachment=force_download,
+                        download_name=candidate.name,
+                        conditional=True,
+                        max_age=300,
+                    )
+                    if not force_download:
+                        resp.headers["Content-Disposition"] = f'inline; filename="{candidate.name}"'
+                    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+                    return resp
+            # Absolute http(s) or unresolved relative path: redirect so the viewer can load it.
+            return redirect(url, code=302)
+        if not doc.get("filename"):
             return jsonify({"ok": False, "error": "Document not found"}), 404
         if doc.get("fileMissing"):
             return jsonify({"ok": False, "error": "File missing on server — please re-upload"}), 404
@@ -5887,14 +5996,58 @@ def api_rwa_info_centre_file(doc_id: str):
         download_name = doc.get("originalName") or path.name
         if lang == "hi" and path.name == "content_hi.html":
             download_name = f"{pathlib.Path(download_name).stem}-hi.html"
-        as_attachment = not rwa_portal.info_doc_should_inline(doc.get("mimeType"), doc.get("filename"))
-        return send_file(
+        # Drafted HTML: serve a beautified page shell in the viewer (and download).
+        is_html = (
+            doc.get("docType") == "html"
+            or path.suffix.lower() in {".html", ".htm"}
+            or str(doc.get("mimeType") or "").lower().startswith("text/html")
+        )
+        force_download = str(request.args.get("download") or "").strip().lower() in {
+            "1", "true", "yes", "download",
+        }
+        if is_html:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            html = rwa_portal.render_info_html_for_view(doc.get("title") or "Document", raw)
+            return Response(
+                html,
+                mimetype="text/html; charset=utf-8",
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{download_name}"'
+                        if force_download
+                        else f'inline; filename="{download_name}"'
+                    ),
+                    "Cache-Control": "private, max-age=120",
+                },
+            )
+        mime = (doc.get("mimeType") or "").strip() or None
+        if not mime:
+            if path.suffix.lower() == ".pdf":
+                mime = "application/pdf"
+            else:
+                import mimetypes
+
+                mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        inline_ok = rwa_portal.info_doc_should_inline(mime, doc.get("filename") or path.name)
+        as_attachment = force_download or not inline_ok
+        # conditional=True enables HTTP Range requests for faster subsequent loads.
+        resp = send_file(
             path,
-            mimetype=doc.get("mimeType") or None,
+            mimetype=mime,
             as_attachment=as_attachment,
             download_name=download_name,
-            max_age=120,
+            conditional=True,
+            etag=True,
+            max_age=300,
         )
+        if not as_attachment:
+            resp.headers["Content-Disposition"] = f'inline; filename="{download_name}"'
+            resp.headers["Accept-Ranges"] = "bytes"
+        resp.headers["Cache-Control"] = "private, max-age=300"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        # Allow embedding in the portal document viewer (<dialog> iframe / blob fallback).
+        resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+        return resp
     finally:
         conn.close()
 

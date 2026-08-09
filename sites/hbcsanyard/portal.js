@@ -158,88 +158,350 @@
   }
 
   let docViewerObjectUrl = '';
+  let docViewerStreamUrl = '';
+  // Non-modal doc viewer sits under modal top-layer dialogs (vault). Park them while viewing.
+  let docViewerResumeVaultHouseId = '';
+
+  function parkModalsForDocViewer() {
+    const vault = el('vaultDialog');
+    if (vault?.open) {
+      docViewerResumeVaultHouseId = vaultActiveHouseId
+        || state.session?.resident?.houseId
+        || docViewerResumeVaultHouseId
+        || '';
+      try { vault.close(); } catch (_err) { /* ignore */ }
+    }
+  }
+
+  function resumeModalsAfterDocViewer() {
+    const houseId = (docViewerResumeVaultHouseId || '').trim();
+    docViewerResumeVaultHouseId = '';
+    if (!houseId) return;
+    // Defer so the viewer finishes leaving the top layer before reopening vault.
+    window.setTimeout(() => {
+      if (typeof openVault === 'function') {
+        openVault(houseId).catch(console.error);
+      }
+    }, 0);
+  }
 
   function closeDocViewer() {
     const dialog = el('docViewerDialog');
     if (dialog?.open) dialog.close();
     const frame = el('docViewerFrame');
     const img = el('docViewerImage');
+    const embed = el('docViewerEmbed');
     const fallback = el('docViewerFallback');
+    const loading = el('docViewerLoading');
     if (frame) {
       frame.hidden = true;
       frame.removeAttribute('src');
+      frame.removeAttribute('sandbox');
+      frame.onload = null;
+    }
+    if (embed) {
+      embed.hidden = true;
+      embed.removeAttribute('src');
     }
     if (img) {
       img.hidden = true;
       img.removeAttribute('src');
     }
     if (fallback) fallback.hidden = true;
+    if (loading) loading.hidden = true;
     const dl = el('docViewerDownloadBtn');
     if (dl) {
       dl.hidden = true;
       dl.removeAttribute('href');
       dl.removeAttribute('download');
     }
+    const nt = el('docViewerNewTabBtn');
+    if (nt) {
+      nt.hidden = true;
+      nt.removeAttribute('href');
+    }
     if (docViewerObjectUrl) {
       URL.revokeObjectURL(docViewerObjectUrl);
       docViewerObjectUrl = '';
     }
+    docViewerStreamUrl = '';
+    resumeModalsAfterDocViewer();
   }
 
-  function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '' } = {}) {
+  function openDocViewerDialog(dialog) {
+    if (!dialog || dialog.open) return;
+    parkModalsForDocViewer();
+    // Non-modal fullscreen sheet: Chrome PDF/HTML scroll works more reliably than showModal().
+    try {
+      if (typeof dialog.show === 'function') dialog.show();
+      else dialog.showModal();
+    } catch (_err) {
+      try {
+        dialog.showModal();
+      } catch (_e2) {
+        resumeModalsAfterDocViewer();
+      }
+    }
+  }
+
+  function resolveDocLinkUrl(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return '';
+    try {
+      return new URL(text, window.location.origin).href;
+    } catch (_err) {
+      return text;
+    }
+  }
+
+  function setDocViewerNewTab(url) {
+    const nt = el('docViewerNewTabBtn');
+    if (!nt) return;
+    if (!url) {
+      nt.hidden = true;
+      nt.removeAttribute('href');
+      return;
+    }
+    nt.hidden = false;
+    nt.href = url;
+  }
+
+  function authDocUrl(url, extraParams = {}) {
+    const u = new URL(url, window.location.origin);
+    if (state.session?.token && !u.searchParams.has('token')) {
+      u.searchParams.set('token', state.session.token);
+    }
+    Object.entries(extraParams || {}).forEach(([k, v]) => {
+      if (v == null || v === '') u.searchParams.delete(k);
+      else u.searchParams.set(k, String(v));
+    });
+    return `${u.pathname}${u.search}${u.hash}`;
+  }
+
+  function docViewerMimeGuess(mime, filename, title) {
+    const nameHint = `${filename || ''} ${title || ''}`;
+    let effectiveMime = String(mime || '').toLowerCase();
+    if (effectiveMime.includes(';')) effectiveMime = effectiveMime.split(';')[0].trim();
+    const isImage = effectiveMime.startsWith('image/')
+      || /\.(jpe?g|png|webp|gif)$/i.test(nameHint);
+    const isPdf = effectiveMime === 'application/pdf'
+      || effectiveMime.includes('pdf')
+      || /\.pdf$/i.test(nameHint);
+    const isHtml = effectiveMime.includes('html')
+      || /\.html?$/i.test(nameHint)
+      || effectiveMime === 'text/plain'
+      || (!isPdf && !isImage && /\/documents\/|\.veerlabs\.|\/$/i.test(nameHint) && !/\.\w{2,5}(\?|#|$)/.test(nameHint));
+    if (!effectiveMime) {
+      if (isPdf) effectiveMime = 'application/pdf';
+      else if (isHtml) effectiveMime = 'text/html';
+      else if (isImage) effectiveMime = 'image/*';
+    }
+    return { effectiveMime, isImage, isPdf, isHtml };
+  }
+
+  function showDocViewerSource(srcUrl, {
+    title = 'Document',
+    mime = '',
+    filename = '',
+    isBlob = false,
+    downloadUrl = '',
+    keepLoading = false,
+    newTabUrl = '',
+  } = {}) {
     const dialog = el('docViewerDialog');
     if (!dialog) return;
-    if (docViewerObjectUrl && docViewerObjectUrl !== objectUrl) {
+    if (docViewerObjectUrl && docViewerObjectUrl !== srcUrl) {
       URL.revokeObjectURL(docViewerObjectUrl);
+      docViewerObjectUrl = '';
     }
-    docViewerObjectUrl = objectUrl;
+    if (isBlob) docViewerObjectUrl = srcUrl;
+    else docViewerStreamUrl = srcUrl;
+
     if (el('docViewerTitle')) el('docViewerTitle').textContent = title || filename || 'Document';
     if (el('docViewerMeta')) {
       el('docViewerMeta').textContent = filename && filename !== title ? filename : (mime || 'Preview');
     }
     const frame = el('docViewerFrame');
     const img = el('docViewerImage');
+    const embed = el('docViewerEmbed');
     const fallback = el('docViewerFallback');
-    const isImage = String(mime || '').startsWith('image/')
-      || /\.(jpe?g|png|webp|gif)$/i.test(filename || title || '');
-    const isPdf = String(mime || '') === 'application/pdf'
-      || /\.pdf$/i.test(filename || title || '')
-      || String(mime || '').includes('pdf');
+    const loading = el('docViewerLoading');
+    const { isImage, isPdf, isHtml } = docViewerMimeGuess(mime, filename || srcUrl, title);
+    const showFrame = isPdf || isHtml;
+
+    if (loading) {
+      if (keepLoading) {
+        loading.hidden = false;
+        loading.textContent = isPdf ? 'Opening PDF…' : 'Loading document…';
+      } else {
+        loading.hidden = true;
+      }
+    }
+    if (embed) {
+      embed.hidden = true;
+      embed.removeAttribute('src');
+    }
     if (frame) {
-      frame.hidden = !isPdf;
-      if (isPdf) frame.src = objectUrl;
-      else frame.removeAttribute('src');
+      frame.hidden = !showFrame;
+      frame.classList.toggle('is-html-doc', Boolean(isHtml && showFrame));
+      frame.onload = null;
+      if (showFrame) {
+        // HTML pages (authored or linked) need scripts/fonts; PDF stays unsandboxed.
+        if (isHtml) {
+          frame.setAttribute(
+            'sandbox',
+            'allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms',
+          );
+        } else {
+          frame.removeAttribute('sandbox');
+        }
+        frame.onload = () => {
+          if (loading) loading.hidden = true;
+        };
+        if (frame.getAttribute('src') === srcUrl) {
+          frame.removeAttribute('src');
+        }
+        frame.src = srcUrl;
+        window.setTimeout(() => {
+          if (loading && !loading.hidden) loading.hidden = true;
+        }, 4000);
+      } else {
+        frame.removeAttribute('src');
+        frame.classList.remove('is-html-doc');
+      }
     }
     if (img) {
       img.hidden = !isImage;
-      if (isImage) img.src = objectUrl;
+      if (isImage) img.src = srcUrl;
       else img.removeAttribute('src');
     }
-    if (fallback) fallback.hidden = Boolean(isPdf || isImage);
+    if (fallback) {
+      fallback.hidden = Boolean(showFrame || isImage);
+      if (!fallback.hidden) {
+        fallback.innerHTML = 'Preview is not available for this file type. Use <strong>Open in new tab</strong> or Download, then return with Go back.';
+      }
+    }
     const dl = el('docViewerDownloadBtn');
     if (dl) {
       dl.hidden = false;
-      dl.href = objectUrl;
-      dl.download = filename || title || 'document';
+      const dlHref = downloadUrl || srcUrl;
+      dl.href = dlHref;
+      if (isBlob) dl.setAttribute('download', filename || title || 'document');
+      else dl.removeAttribute('download');
     }
-    if (!dialog.open) dialog.showModal();
+    setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
+    openDocViewerDialog(dialog);
+  }
+
+  function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '', downloadUrl = '' } = {}) {
+    showDocViewerSource(objectUrl, {
+      title,
+      mime,
+      filename,
+      isBlob: true,
+      downloadUrl,
+    });
+  }
+
+  function prepareDocViewerShell({ title = 'Document', filename = '', mime = '', downloadUrl = '', newTabUrl = '' } = {}) {
+    const dialog = el('docViewerDialog');
+    if (!dialog) return;
+    if (el('docViewerTitle')) el('docViewerTitle').textContent = title || filename || 'Document';
+    if (el('docViewerMeta')) {
+      el('docViewerMeta').textContent = filename && filename !== title ? filename : (mime || 'Preview');
+    }
+    const frame = el('docViewerFrame');
+    const img = el('docViewerImage');
+    const embed = el('docViewerEmbed');
+    const fallback = el('docViewerFallback');
+    const loading = el('docViewerLoading');
+    const { isPdf } = docViewerMimeGuess(mime, filename, title);
+    if (frame) {
+      frame.hidden = true;
+      frame.removeAttribute('src');
+      frame.onload = null;
+    }
+    if (embed) {
+      embed.hidden = true;
+      embed.removeAttribute('src');
+    }
+    if (img) {
+      img.hidden = true;
+      img.removeAttribute('src');
+    }
+    if (fallback) fallback.hidden = true;
+    if (loading) {
+      loading.hidden = false;
+      loading.textContent = isPdf ? 'Opening PDF…' : 'Loading document…';
+    }
+    const dl = el('docViewerDownloadBtn');
+    if (dl) {
+      dl.hidden = !downloadUrl;
+      if (downloadUrl) {
+        dl.href = downloadUrl;
+        dl.removeAttribute('download');
+      }
+    }
+    setDocViewerNewTab(newTabUrl || downloadUrl);
+    openDocViewerDialog(dialog);
   }
 
   async function openDocViewerFromAuthUrl(url, { title = 'Document', filename = '', mime = '' } = {}) {
     if (!url) throw new Error('Document URL missing');
+    const { effectiveMime, isPdf, isHtml, isImage } = docViewerMimeGuess(mime, filename, title);
+    const downloadUrl = authDocUrl(url, { download: '1' });
+
+    // HTML can stream in the iframe (same-origin page). PDFs must use an authenticated
+    // blob URL: Chrome's PDF viewer often stays blank for http(s) src inside <dialog>,
+    // and iframe navigations do not send X-RWA-Token.
+    if (isHtml && !isPdf) {
+      showDocViewerSource(authDocUrl(url), {
+        title,
+        filename: filename || title,
+        mime: effectiveMime || 'text/html',
+        isBlob: false,
+        downloadUrl,
+      });
+      return;
+    }
+
+    prepareDocViewerShell({
+      title,
+      filename: filename || title,
+      mime: effectiveMime || (isPdf ? 'application/pdf' : mime),
+      downloadUrl,
+    });
+
     const headers = {};
     if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
-    const res = await fetch(url, { credentials: 'same-origin', headers });
+    let res;
+    try {
+      res = await fetch(url, { credentials: 'same-origin', headers });
+    } catch (err) {
+      const loading = el('docViewerLoading');
+      if (loading) loading.hidden = true;
+      throw new Error(err?.message || 'Could not open document');
+    }
     if (!res.ok) {
+      const loading = el('docViewerLoading');
+      if (loading) loading.hidden = true;
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || res.statusText || 'Could not open document');
     }
-    const blob = await res.blob();
+    let blob = await res.blob();
+    let resolvedMime = effectiveMime || blob.type || res.headers.get('Content-Type') || '';
+    if (resolvedMime.includes(';')) resolvedMime = resolvedMime.split(';')[0].trim();
+    if (isPdf) resolvedMime = 'application/pdf';
+    else if (!resolvedMime && isImage) resolvedMime = blob.type || 'image/*';
+    if (resolvedMime && blob.type !== resolvedMime) {
+      blob = new Blob([blob], { type: resolvedMime });
+    }
     const objectUrl = URL.createObjectURL(blob);
     showDocViewerBlob(objectUrl, {
       title,
       filename: filename || title,
-      mime: mime || blob.type || '',
+      mime: resolvedMime || blob.type || '',
+      downloadUrl,
     });
   }
 
@@ -250,26 +512,38 @@
   });
   el('docViewerDialog')?.addEventListener('close', () => {
     // Ensure blob URLs are released even if closed via Esc after cancel handler.
-    if (!el('docViewerDialog')?.open && docViewerObjectUrl) {
+    if (!el('docViewerDialog')?.open) {
       const frame = el('docViewerFrame');
       const img = el('docViewerImage');
-      if (frame) frame.removeAttribute('src');
+      const loading = el('docViewerLoading');
+      if (frame) {
+        frame.removeAttribute('src');
+        frame.onload = null;
+      }
       if (img) img.removeAttribute('src');
-      URL.revokeObjectURL(docViewerObjectUrl);
-      docViewerObjectUrl = '';
+      if (loading) loading.hidden = true;
+      if (docViewerObjectUrl) {
+        URL.revokeObjectURL(docViewerObjectUrl);
+        docViewerObjectUrl = '';
+      }
+      docViewerStreamUrl = '';
     }
   });
   document.addEventListener('click', (event) => {
     const btn = event.target.closest('.doc-open');
     if (!btn) return;
     event.preventDefault();
+    event.stopPropagation();
     const url = btn.getAttribute('data-url') || '';
     if (!url || url === '#') return;
     openDocViewerFromAuthUrl(url, {
       title: btn.getAttribute('data-title') || 'Document',
       filename: btn.getAttribute('data-filename') || '',
       mime: btn.getAttribute('data-mime') || '',
-    }).catch((err) => window.alert(err.message || 'Could not open document'));
+    }).catch((err) => {
+      closeDocViewer();
+      window.alert(err.message || 'Could not open document');
+    });
   });
 
   function inr(n) {
@@ -803,15 +1077,23 @@
     for (const d of infoDocsCache) {
       const title = await hiOrAuto(d.title, d.titleHi);
       const summary = await hiOrAuto(d.summary, d.summaryHi);
+      const folderLabel = d.folderTitle
+        ? await hiOrAuto(d.folderTitle, d.folderTitleHi)
+        : null;
       const openBtn = d.docType === 'html' && d.hasHtmlHi
         ? `<button type="button" class="btn primary compact info-doc-open-hi" data-id="${escapeHtml(d.id)}">Open Hindi HTML</button>`
         : (d.docType === 'html'
           ? `<button type="button" class="btn secondary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open English HTML</button>`
           : `<button type="button" class="btn secondary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open file</button>`);
+      const metaParts = [
+        folderLabel?.text || '',
+        d.categoryLabel || d.category || '',
+        d.docType === 'html' ? 'HTML' : 'File',
+      ].filter(Boolean);
       cards.push(`
         <article class="lang-overlay-card">
-          <h4>${escapeHtml(title.text || d.title || 'Untitled')} ${autoBadge(title.auto || summary.auto)}</h4>
-          <span class="meta">${escapeHtml(d.categoryLabel || d.category || '')}${d.docType === 'html' ? ' · HTML' : ' · File'}</span>
+          <h4>${escapeHtml(title.text || d.title || 'Untitled')} ${autoBadge(title.auto || summary.auto || folderLabel?.auto)}</h4>
+          <span class="meta">${escapeHtml(metaParts.join(' · '))}</span>
           ${summary.text ? `<p class="body">${escapeHtml(summary.text)}</p>` : ''}
           <div class="btn-row" style="margin-top:0.5rem">${openBtn}</div>
         </article>`);
@@ -3702,6 +3984,7 @@
   }
 
   let infoCategoriesCache = [];
+  let infoFoldersCache = [];
   let infoDocsCache = [];
 
   function formatBytes(n) {
@@ -3730,11 +4013,60 @@
     }
   }
 
+  function fillInfoFolderSelects(folders) {
+    infoFoldersCache = folders || [];
+    const filter = el('infoFolderFilter');
+    const formSel = el('infoFolderInput');
+    const opts = infoFoldersCache.map((f) =>
+      `<option value="${escapeHtml(f.id)}">${escapeHtml(f.title)}${f.docCount != null ? ` (${f.docCount})` : ''}</option>`
+    ).join('');
+    if (filter) {
+      const cur = filter.value;
+      filter.innerHTML = `<option value="">All folders</option><option value="unfiled">Unfiled</option>${opts}`;
+      if ([...filter.options].some((o) => o.value === cur)) filter.value = cur;
+    }
+    if (formSel) {
+      const cur = formSel.value || '';
+      formSel.innerHTML = `<option value="">Unfiled</option>${infoFoldersCache.map((f) =>
+        `<option value="${escapeHtml(f.id)}">${escapeHtml(f.title)}</option>`
+      ).join('')}`;
+      if ([...formSel.options].some((o) => o.value === cur)) formSel.value = cur;
+    }
+    renderInfoFolderManageList();
+  }
+
+  function renderInfoFolderManageList() {
+    const box = el('infoFolderManageList');
+    if (!box) return;
+    if (!hasEntitlement('manage_info')) {
+      box.innerHTML = '';
+      return;
+    }
+    if (!infoFoldersCache.length) {
+      box.innerHTML = '<p class="muted">No folders yet.</p>';
+      return;
+    }
+    box.innerHTML = infoFoldersCache.map((f) => `
+      <div class="info-folder-manage-row" data-id="${escapeHtml(f.id)}">
+        <div>
+          <strong>${escapeHtml(f.title)}</strong>
+          <span class="muted">${f.docCount || 0} doc${(f.docCount || 0) === 1 ? '' : 's'}${f.summary ? ` · ${escapeHtml(f.summary)}` : ''}</span>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn ghost compact info-folder-rename" data-id="${escapeHtml(f.id)}">Rename</button>
+          <button type="button" class="btn ghost compact info-folder-delete" data-id="${escapeHtml(f.id)}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
   function syncInfoSourcePanes() {
     const source = document.querySelector('input[name="infoSource"]:checked')?.value || 'file';
     if (el('infoFilePane')) el('infoFilePane').hidden = source !== 'file';
     if (el('infoHtmlPane')) el('infoHtmlPane').hidden = source !== 'html';
+    if (el('infoLinkPane')) el('infoLinkPane').hidden = source !== 'link';
     if (el('infoFileInput')) el('infoFileInput').required = false;
+    if (el('infoLinkInput')) el('infoLinkInput').required = false;
   }
 
   function resetInfoForm() {
@@ -3753,6 +4085,7 @@
     if (el('infoTitleHiInput')) el('infoTitleHiInput').value = '';
     if (el('infoSummaryHiInput')) el('infoSummaryHiInput').value = '';
     if (el('infoHtmlHiInput')) el('infoHtmlHiInput').value = '';
+    if (el('infoLinkInput')) el('infoLinkInput').value = '';
     setAuthorFormLang('info', 'en');
     syncInfoSourcePanes();
   }
@@ -3765,13 +4098,17 @@
     if (el('infoSummaryInput')) el('infoSummaryInput').value = doc.summary || '';
     if (el('infoSummaryHiInput')) el('infoSummaryHiInput').value = doc.summaryHi || '';
     if (el('infoCategoryInput')) el('infoCategoryInput').value = doc.category || 'general';
+    if (el('infoFolderInput')) el('infoFolderInput').value = doc.folderId || '';
     if (el('infoStatusInput')) el('infoStatusInput').value = doc.status || 'draft';
     if (el('infoAudienceInput')) el('infoAudienceInput').value = doc.audience || 'all';
     const htmlRadio = document.querySelector('input[name="infoSource"][value="html"]');
     const fileRadio = document.querySelector('input[name="infoSource"][value="file"]');
+    const linkRadio = document.querySelector('input[name="infoSource"][value="link"]');
     if (doc.docType === 'html' && htmlRadio) htmlRadio.checked = true;
+    else if (doc.docType === 'link' && linkRadio) linkRadio.checked = true;
     else if (fileRadio) fileRadio.checked = true;
     syncInfoSourcePanes();
+    if (el('infoLinkInput')) el('infoLinkInput').value = doc.externalUrl || '';
     if (el('infoHtmlInput') && doc.docType !== 'html') el('infoHtmlInput').value = '';
     if (el('infoHtmlHiInput') && doc.docType !== 'html') el('infoHtmlHiInput').value = '';
     setAuthorFormLang('info', 'en');
@@ -3779,10 +4116,14 @@
     if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Save changes';
     if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = false;
     if (el('infoFormStatus')) {
-      if (doc.fileMissing) {
+      if (doc.fileMissing && doc.docType === 'link') {
+        el('infoFormStatus').textContent = 'Web link missing — paste the URL again and Save.';
+      } else if (doc.fileMissing) {
         el('infoFormStatus').textContent = 'File missing on server — choose the file again and Save to restore it.';
       } else if (doc.docType === 'html') {
         el('infoFormStatus').textContent = 'Editing HTML document — switch EN/हिं for bilingual content. Leave HTML blank to keep existing.';
+      } else if (doc.docType === 'link') {
+        el('infoFormStatus').textContent = `Editing web link — ${doc.externalUrl || 'no URL yet'}.`;
       } else {
         el('infoFormStatus').textContent = `Editing ${doc.originalName || doc.id} — Hindi title/summary optional; file uploads stay single-language.`;
       }
@@ -3801,64 +4142,123 @@
     );
   }
 
+  function renderInfoDocCard(d) {
+    const when = formatIstDate(d.publishedAt || d.updatedAt);
+    const typeLabel = d.docType === 'html' ? 'HTML' : (d.docType === 'link' ? 'Link' : 'File');
+    const typeClass = d.docType === 'html' ? 'is-html' : (d.docType === 'link' ? 'is-link' : 'is-file');
+    const mark = d.docType === 'html'
+      ? 'HTML'
+      : (d.docType === 'link'
+        ? 'LINK'
+        : (/\.pdf$/i.test(d.originalName || d.filename || d.externalUrl || '') || String(d.mimeType || '').includes('pdf') ? 'PDF' : 'FILE'));
+    const badges = [
+      d.folderTitle ? `<span class="info-doc-badge is-folder">${escapeHtml(d.folderTitle)}</span>` : '',
+      `<span class="info-doc-badge">${escapeHtml(d.categoryLabel || d.category || 'general')}</span>`,
+      `<span class="info-doc-badge ${typeClass}">${typeLabel}</span>`,
+      d.fileMissing ? `<span class="info-doc-badge is-draft">${d.docType === 'link' ? 'Link missing' : 'File missing'}</span>` : '',
+      d.status === 'published'
+        ? `<span class="info-doc-badge ${d.audience === 'ec' ? 'is-ec' : 'is-all'}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : 'All members'))}</span>`
+        : '',
+      d.status === 'draft' ? '<span class="info-doc-badge is-draft">Draft</span>' : '',
+    ].filter(Boolean).join('');
+    const metaBits = [
+      d.docType === 'link' ? (d.externalUrl || '') : (d.originalName || ''),
+      d.sizeBytes ? formatBytes(d.sizeBytes) : '',
+      when || '',
+    ].filter(Boolean).join(' · ');
+    const actions = [];
+    if (!d.fileMissing) {
+      actions.push(`<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`);
+    }
+    if (isEcAdmin()) {
+      actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? (d.docType === 'link' ? 'Fix link' : 'Re-upload file') : 'Edit'}</button>`);
+      if (d.status !== 'published') {
+        actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
+        actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
+      } else {
+        actions.push(`<button type="button" class="btn ghost compact info-doc-unpublish" data-id="${escapeHtml(d.id)}">Unpublish</button>`);
+      }
+      actions.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
+    }
+    return `
+      <article class="info-doc-card mobile-fold" data-id="${escapeHtml(d.id)}" data-doc-type="${escapeHtml(d.docType || 'file')}">
+        <button type="button" class="mobile-fold-head" aria-expanded="false">
+          <span class="mobile-fold-head-main info-doc-tablet-face">
+            <span class="info-doc-tablet-mark" aria-hidden="true">${mark}</span>
+            <span class="info-doc-badges">${badges}</span>
+            <span class="info-doc-card-title">${escapeHtml(d.title || 'Untitled')}</span>
+            <span class="meta">${escapeHtml(metaBits)}</span>
+          </span>
+          <span class="mobile-fold-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="mobile-fold-body">
+          ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
+          <div class="btn-row">${actions.join('')}</div>
+        </div>
+      </article>`;
+  }
+
   function renderInfoDocs() {
     const box = el('infoDocList');
     const status = el('infoListStatus');
     if (!box) return;
     if (!infoDocsCache.length) {
-      box.innerHTML = '<p class="muted">No documents yet. EC can publish circulars, bye-laws, forms, and guides here.</p>';
+      box.classList.remove('is-cards');
+      box.innerHTML = '<p class="muted">No documents yet. EC can publish circulars, bye-laws, forms, and guides here — group them in folders such as Society Registration.</p>';
       if (status) status.textContent = '';
       return;
     }
     if (status) {
       status.textContent = `${infoDocsCache.length} document${infoDocsCache.length === 1 ? '' : 's'}`;
     }
-    box.innerHTML = infoDocsCache.map((d) => {
-      const when = formatIstDate(d.publishedAt || d.updatedAt);
-      const badges = [
-        `<span class="info-doc-badge">${escapeHtml(d.categoryLabel || d.category || 'general')}</span>`,
-        `<span class="info-doc-badge ${d.docType === 'html' ? 'is-html' : 'is-file'}">${d.docType === 'html' ? 'HTML' : 'File'}</span>`,
-        d.fileMissing ? '<span class="info-doc-badge is-draft">File missing</span>' : '',
-        d.status === 'published'
-          ? `<span class="info-doc-badge ${d.audience === 'ec' ? 'is-ec' : 'is-all'}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : 'All members'))}</span>`
-          : '',
-        d.status === 'draft' ? '<span class="info-doc-badge is-draft">Draft</span>' : '',
-      ].filter(Boolean).join('');
-      const metaBits = [
-        d.originalName || '',
-        d.sizeBytes ? formatBytes(d.sizeBytes) : '',
-        when || '',
-      ].filter(Boolean).join(' · ');
-      const actions = [];
-      if (!d.fileMissing) {
-        actions.push(`<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`);
+    const folderFilter = el('infoFolderFilter')?.value || '';
+    // When viewing all folders, group by folder; when filtered, flat list.
+    if (folderFilter) {
+      box.classList.add('is-cards');
+      box.innerHTML = infoDocsCache.map(renderInfoDocCard).join('');
+      refreshMobileListUi();
+      return;
+    }
+    box.classList.remove('is-cards');
+    const groups = new Map();
+    for (const d of infoDocsCache) {
+      const key = d.folderId || '__unfiled__';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          id: d.folderId || '',
+          title: d.folderTitle || 'Unfiled',
+          summary: '',
+          docs: [],
+        });
       }
-      if (isEcAdmin()) {
-        actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? 'Re-upload file' : 'Edit'}</button>`);
-        if (d.status !== 'published') {
-          actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
-          actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
-        } else {
-          actions.push(`<button type="button" class="btn ghost compact info-doc-unpublish" data-id="${escapeHtml(d.id)}">Unpublish</button>`);
-        }
-        actions.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
+      groups.get(key).docs.push(d);
+    }
+    // Prefer known folder order from cache
+    const ordered = [];
+    const seen = new Set();
+    for (const f of infoFoldersCache) {
+      if (groups.has(f.id)) {
+        const g = groups.get(f.id);
+        g.summary = f.summary || '';
+        ordered.push(g);
+        seen.add(f.id);
       }
-      return `
-        <article class="info-doc-card mobile-fold" data-id="${escapeHtml(d.id)}">
-          <button type="button" class="mobile-fold-head" aria-expanded="false">
-            <span class="mobile-fold-head-main">
-              <span>${badges}</span>
-              <span class="info-doc-card-title">${escapeHtml(d.title || 'Untitled')}</span>
-              <span class="meta">${escapeHtml(metaBits)}</span>
-            </span>
-            <span class="mobile-fold-chevron" aria-hidden="true"></span>
-          </button>
-          <div class="mobile-fold-body">
-            ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
-            <div class="btn-row">${actions.join('')}</div>
-          </div>
-        </article>`;
-    }).join('');
+    }
+    for (const [key, g] of groups) {
+      if (key !== '__unfiled__' && !seen.has(key)) ordered.push(g);
+    }
+    if (groups.has('__unfiled__')) ordered.push(groups.get('__unfiled__'));
+
+    box.innerHTML = ordered.map((g) => `
+      <section class="info-folder-section" data-folder="${escapeHtml(g.id || 'unfiled')}">
+        <header class="info-folder-head">
+          <h3>${escapeHtml(g.title)}</h3>
+          ${g.summary ? `<p class="muted">${escapeHtml(g.summary)}</p>` : ''}
+          <p class="muted">${g.docs.length} document${g.docs.length === 1 ? '' : 's'}</p>
+        </header>
+        <div class="info-folder-docs">${g.docs.map(renderInfoDocCard).join('')}</div>
+      </section>
+    `).join('');
     refreshMobileListUi();
   }
 
@@ -3868,10 +4268,13 @@
       ? (el('infoStatusFilter')?.value || 'published')
       : 'published';
     const category = el('infoCategoryFilter')?.value || '';
+    const folder = el('infoFolderFilter')?.value || '';
     const qs = new URLSearchParams({ status });
     if (category) qs.set('category', category);
+    if (folder) qs.set('folderId', folder);
     const data = await api(`/api/rwa/info-centre?${qs.toString()}`);
     fillInfoCategorySelects(data.categories || []);
+    fillInfoFolderSelects(data.folders || []);
     infoDocsCache = data.documents || [];
     renderInfoDocs();
     if (sectionLang.info === 'hi') renderInfoOverlay();
@@ -3879,12 +4282,65 @@
 
   async function openInfoDocument(doc, { lang = 'en' } = {}) {
     if (!doc?.id) return;
+
+    // Web-link documents: load the URL inline in the portal viewer (HTML/PDF/image).
+    if (doc.docType === 'link') {
+      const linkRaw = String(doc.externalUrl || '').trim();
+      if (!linkRaw) throw new Error('Web link missing');
+      const abs = resolveDocLinkUrl(linkRaw);
+      const mime = doc.mimeType
+        || (/\.pdf(\?|#|$)/i.test(abs) ? 'application/pdf'
+          : /\.(jpe?g|png|webp|gif)(\?|#|$)/i.test(abs) ? 'image/*'
+            : 'text/html');
+      const { isHtml, isPdf, isImage, effectiveMime } = docViewerMimeGuess(
+        mime,
+        abs,
+        doc.title || '',
+      );
+      const sameOrigin = abs.startsWith(window.location.origin);
+      const fileApi = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file`;
+      // Same-site HTML pages (e.g. /documents/act.html): iframe the page itself so
+      // layout, TOC, and scroll work exactly like opening the uploaded HTML.
+      const viewUrl = (isHtml && sameOrigin)
+        ? abs
+        : (sameOrigin && (isPdf || isImage) ? authDocUrl(fileApi) : abs);
+      showDocViewerSource(viewUrl, {
+        title: doc.title || 'Document',
+        filename: doc.originalName || linkRaw,
+        mime: effectiveMime || mime,
+        isBlob: false,
+        downloadUrl: sameOrigin ? authDocUrl(fileApi, { download: '1' }) : abs,
+        newTabUrl: abs,
+        keepLoading: true,
+      });
+      return;
+    }
+
     const qs = lang === 'hi' ? '?lang=hi' : '';
     const url = `/api/rwa/info-centre/${encodeURIComponent(doc.id)}/file${qs}`;
+    const isHtml = doc.docType === 'html'
+      || String(doc.mimeType || '').toLowerCase().includes('html')
+      || /\.html?$/i.test(doc.originalName || doc.filename || '');
+    const filename = doc.originalName
+      || (isHtml ? `${doc.title || 'document'}.html` : `${doc.title || 'document'}.pdf`);
+    // HTML (authored or uploaded file): always stream into the iframe as a live page.
+    if (isHtml) {
+      const viewUrl = authDocUrl(url);
+      showDocViewerSource(viewUrl, {
+        title: doc.title || doc.originalName || 'Document',
+        filename,
+        mime: 'text/html',
+        isBlob: false,
+        downloadUrl: authDocUrl(url, { download: '1' }),
+        newTabUrl: viewUrl,
+        keepLoading: true,
+      });
+      return;
+    }
     await openDocViewerFromAuthUrl(url, {
       title: doc.title || doc.originalName || 'Document',
-      filename: doc.originalName || doc.title || 'document',
-      mime: doc.mime || '',
+      filename,
+      mime: doc.mimeType || 'application/pdf',
     });
   }
 
@@ -3912,7 +4368,7 @@
       if (source === 'html') {
         const htmlBody = String(el('infoHtmlInput')?.value || '').trim();
         if (!htmlBody && !editId) {
-          if (statusLine) statusLine.textContent = 'Write HTML content, or switch to file upload.';
+          if (statusLine) statusLine.textContent = 'Write HTML content, or switch to file upload / web link.';
           return;
         }
         const payload = {
@@ -3921,6 +4377,7 @@
           summary: el('infoSummaryInput')?.value.trim() || '',
           summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
           category: el('infoCategoryInput')?.value || 'general',
+          folderId: el('infoFolderInput')?.value || '',
           status: statusVal,
           audience: audienceVal,
           docType: 'html',
@@ -3928,9 +4385,37 @@
         if (htmlBody) payload.htmlBody = htmlBody;
         const htmlBodyHi = String(el('infoHtmlHiInput')?.value || '').trim();
         if (htmlBodyHi || el('infoHtmlHiInput')?.value === '') {
-          // Always send when Hindi pane was used / cleared on edit intent.
           if (htmlBodyHi || editId) payload.htmlBodyHi = htmlBodyHi;
         }
+        if (editId) {
+          doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          })).document;
+        } else {
+          doc = (await api('/api/rwa/info-centre', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          })).document;
+        }
+      } else if (source === 'link') {
+        const externalUrl = String(el('infoLinkInput')?.value || '').trim();
+        if (!externalUrl && !editId) {
+          if (statusLine) statusLine.textContent = 'Paste a web link (HTML, PDF, or image URL).';
+          return;
+        }
+        const payload = {
+          title,
+          titleHi: el('infoTitleHiInput')?.value.trim() || '',
+          summary: el('infoSummaryInput')?.value.trim() || '',
+          summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
+          category: el('infoCategoryInput')?.value || 'general',
+          folderId: el('infoFolderInput')?.value || '',
+          status: statusVal,
+          audience: audienceVal,
+          docType: 'link',
+        };
+        if (externalUrl) payload.externalUrl = externalUrl;
         if (editId) {
           doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
             method: 'PATCH',
@@ -3956,6 +4441,7 @@
           body.append('titleHi', el('infoTitleHiInput')?.value.trim() || '');
           body.append('summaryHi', el('infoSummaryHiInput')?.value.trim() || '');
           body.append('category', el('infoCategoryInput')?.value || 'general');
+          body.append('folderId', el('infoFolderInput')?.value || '');
           body.append('status', statusVal);
           body.append('audience', audienceVal);
           body.append('docType', 'file');
@@ -3975,7 +4461,6 @@
           if (!res.ok) throw new Error(data.error || res.statusText || 'Upload failed');
           doc = data.document;
         } else {
-          // Metadata-only update
           doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
             method: 'PATCH',
             body: JSON.stringify({
@@ -3984,6 +4469,7 @@
               summary: el('infoSummaryInput')?.value.trim() || '',
               summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
               category: el('infoCategoryInput')?.value || 'general',
+              folderId: el('infoFolderInput')?.value || '',
               status: statusVal,
               audience: audienceVal,
             }),
@@ -4001,6 +4487,73 @@
       if (statusLine) statusLine.textContent = err.message || 'Save failed';
     } finally {
       if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  async function createInfoFolder() {
+    if (!hasEntitlement('manage_info')) return;
+    const title = String(el('infoFolderNewTitle')?.value || '').trim();
+    const status = el('infoFolderManageStatus');
+    if (title.length < 2) {
+      if (status) status.textContent = 'Folder name required.';
+      return;
+    }
+    if (status) status.textContent = 'Creating…';
+    try {
+      await api('/api/rwa/info-centre/folders', {
+        method: 'POST',
+        body: JSON.stringify({ title }),
+      });
+      if (el('infoFolderNewTitle')) el('infoFolderNewTitle').value = '';
+      if (status) status.textContent = 'Folder created.';
+      await loadInfoCentre();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not create folder';
+    }
+  }
+
+  async function renameInfoFolder(folderId) {
+    if (!hasEntitlement('manage_info') || !folderId) return;
+    const folder = infoFoldersCache.find((f) => f.id === folderId);
+    const next = prompt('Rename folder', folder?.title || '');
+    if (next == null) return;
+    const title = String(next).trim();
+    if (title.length < 2) {
+      alert('Folder name required.');
+      return;
+    }
+    const status = el('infoFolderManageStatus');
+    try {
+      await api(`/api/rwa/info-centre/folders/${encodeURIComponent(folderId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      });
+      if (status) status.textContent = 'Folder renamed.';
+      await loadInfoCentre();
+    } catch (err) {
+      alert(err.message || 'Rename failed');
+    }
+  }
+
+  async function deleteInfoFolder(folderId) {
+    if (!hasEntitlement('manage_info') || !folderId) return;
+    const folder = infoFoldersCache.find((f) => f.id === folderId);
+    const n = folder?.docCount || 0;
+    const msg = n
+      ? `Delete folder “${folder?.title || folderId}”? Its ${n} document${n === 1 ? '' : 's'} will move to Unfiled.`
+      : `Delete folder “${folder?.title || folderId}”?`;
+    if (!confirm(msg)) return;
+    const status = el('infoFolderManageStatus');
+    try {
+      await api(`/api/rwa/info-centre/folders/${encodeURIComponent(folderId)}`, {
+        method: 'DELETE',
+      });
+      if (status) status.textContent = 'Folder deleted.';
+      const filter = el('infoFolderFilter');
+      if (filter && filter.value === folderId) filter.value = '';
+      await loadInfoCentre();
+    } catch (err) {
+      alert(err.message || 'Delete failed');
     }
   }
 
@@ -5841,10 +6394,29 @@
   el('mailboxCategoryFilter')?.addEventListener('change', () => loadMailbox().catch(console.error));
 
   el('infoRefreshBtn')?.addEventListener('click', () => loadInfoCentre().catch(console.error));
+  el('infoFolderFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoCategoryFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoStatusFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
   el('infoCancelEditBtn')?.addEventListener('click', () => resetInfoForm());
+  el('infoFolderCreateBtn')?.addEventListener('click', () => createInfoFolder().catch(console.error));
+  el('infoFolderNewTitle')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      createInfoFolder().catch(console.error);
+    }
+  });
+  el('infoFolderManageList')?.addEventListener('click', (event) => {
+    const renameBtn = event.target.closest('.info-folder-rename');
+    const deleteBtn = event.target.closest('.info-folder-delete');
+    if (renameBtn) {
+      renameInfoFolder(renameBtn.getAttribute('data-id')).catch(console.error);
+      return;
+    }
+    if (deleteBtn) {
+      deleteInfoFolder(deleteBtn.getAttribute('data-id')).catch(console.error);
+    }
+  });
   document.querySelectorAll('input[name="infoSource"]').forEach((input) => {
     input.addEventListener('change', syncInfoSourcePanes);
   });

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandi Housing Welfare Society, Sanyard — Rules &amp; Bye-laws</title>
+<meta name="description" content="Rules and bye-laws of Mandi Housing Welfare Society (Sanyard), Mandi, Himachal Pradesh — bilingual Hindi / English edition for HBC Sanyard Information Centre.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@500;600;700&family=Noto+Sans+Devanagari:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a2438;
+  --muted: #5a6578;
+  --navy: #0f2744;
+  --navy-2: #163a5f;
+  --paper: #fbf7ef;
+  --rule: rgba(15, 39, 68, 0.12);
+  --accent: #1f4d3a;
+  --accent-soft: rgba(31, 77, 58, 0.12);
+  --gold: #b08a3c;
+  --shadow: 0 24px 60px rgba(15, 39, 68, 0.12);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(22, 58, 95, 0.18), transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, rgba(176, 138, 60, 0.16), transparent 55%),
+    linear-gradient(180deg, #e7eef6 0%, #dce5f0 42%, #d5dfeb 100%);
+  font-family: "Source Serif 4", "Noto Sans Devanagari", Georgia, serif;
+  font-optical-sizing: auto;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: #1d4ed8; text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+a:hover { color: #1e3a8a; }
+.page {
+  width: min(1120px, calc(100% - 1.5rem));
+  margin: 1.25rem auto 3rem;
+}
+@media (min-width: 900px) {
+  .page { margin-top: 2rem; display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+}
+.mast {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, var(--navy), var(--navy-2) 52%, #1f4d3a);
+  color: #f7f3ea;
+  border-radius: 22px;
+  padding: 1.55rem 1.45rem 1.4rem;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+.mast::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -40% 40%;
+  height: 180px;
+  background: radial-gradient(circle, rgba(247, 243, 234, 0.16), transparent 70%);
+  pointer-events: none;
+}
+.mast-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+.eyebrow {
+  margin: 0 0 0.45rem;
+  font: 700 0.72rem/1.2 "IBM Plex Sans", system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+.mast h1 {
+  margin: 0;
+  max-width: 22ch;
+  font: 700 clamp(1.45rem, 3vw, 2.2rem)/1.18 Fraunces, Georgia, serif;
+  letter-spacing: -0.02em;
+}
+.mast .lede {
+  margin: 0.75rem 0 0;
+  max-width: 40rem;
+  font: 500 0.98rem/1.5 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  opacity: 0.92;
+}
+.lang-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.16);
+  flex: 0 0 auto;
+}
+.lang-toggle button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(247, 243, 234, 0.82);
+  font: 700 0.78rem/1 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.lang-toggle button.is-active {
+  background: #fff;
+  color: var(--navy);
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.05rem;
+  position: relative;
+  z-index: 1;
+}
+.meta-item {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font: 500 0.78rem/1.2 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+}
+.toc {
+  position: sticky;
+  top: 0.75rem;
+  max-height: calc(100dvh - 1.5rem);
+  overflow: auto;
+  background: rgba(251, 247, 239, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  padding: 1rem 0.9rem 1.1rem;
+  box-shadow: 0 10px 28px rgba(15,39,68,0.06);
+}
+.toc h2 {
+  margin: 0 0 0.65rem;
+  font: 700 0.82rem/1.2 "IBM Plex Sans", system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc a {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+  border-radius: 8px;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+.toc .toc-chapter {
+  margin-top: 0.65rem;
+  font: 700 0.78rem/1.35 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  color: var(--navy);
+}
+.toc .toc-chapter:first-child { margin-top: 0; }
+.toc .n { color: var(--gold); font-weight: 700; margin-right: 0.2rem; font-variant-numeric: tabular-nums; }
+.sheet {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.note {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(90deg, rgba(31,77,58,0.08), transparent);
+  border-bottom: 1px solid var(--rule);
+  font: 500 0.9rem/1.45 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  color: var(--muted);
+}
+.content { padding: 0.35rem 0 1.4rem; }
+.chapter {
+  padding: 0.65rem 1.15rem 0.2rem;
+}
+@media (min-width: 720px) {
+  .chapter { padding-left: 1.75rem; padding-right: 1.75rem; }
+}
+.chapter + .chapter {
+  margin-top: 0.65rem;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.15rem;
+}
+.chapter-head {
+  margin: 0.55rem 0 0.95rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 2px solid rgba(176, 138, 60, 0.35);
+}
+.chapter-kicker {
+  margin: 0 0 0.25rem;
+  font: 700 0.72rem/1.2 "IBM Plex Sans", system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.chapter-head h2 {
+  margin: 0;
+  font: 700 clamp(1.2rem, 2vw, 1.5rem)/1.25 Fraunces, "Noto Sans Devanagari", Georgia, serif;
+  color: var(--navy);
+  letter-spacing: -0.015em;
+}
+.section {
+  margin: 0 0 1.15rem;
+  padding: 0.85rem 0.95rem 0.95rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(243,238,227,0.35));
+  border: 1px solid rgba(15,39,68,0.06);
+}
+.section h3 {
+  margin: 0 0 0.5rem;
+  font: 700 1.02rem/1.35 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  color: var(--navy);
+}
+.sec-num {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.2rem;
+}
+.sec-body > :first-child { margin-top: 0; }
+.sec-body > :last-child { margin-bottom: 0; }
+.sec-body p { margin: 0.5rem 0; }
+.sec-body ul {
+  margin: 0.4rem 0 0.55rem;
+  padding-left: 1.2rem;
+}
+.sec-body li { margin: 0.28rem 0; }
+.sign-block {
+  margin: 1.25rem 0 0.4rem;
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(176, 138, 60, 0.45);
+  background: rgba(255,255,255,0.45);
+}
+.sign-block p {
+  margin: 0;
+  font: 600 0.95rem/1.45 "IBM Plex Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  color: var(--navy);
+}
+.sign-block .hint {
+  margin-top: 0.35rem;
+  font: 500 0.82rem/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  color: var(--muted);
+}
+.footer {
+  grid-column: 1 / -1;
+  margin-top: 0.85rem;
+  color: var(--muted);
+  font: 500 0.82rem/1.4 "IBM Plex Sans", system-ui, sans-serif;
+  text-align: center;
+}
+[data-lang="hi"] .lang-en { display: none !important; }
+[data-lang="en"] .lang-hi { display: none !important; }
+html[data-lang="hi"] body,
+[data-lang="hi"] .section h3,
+[data-lang="hi"] .chapter-head h2,
+[data-lang="hi"] .toc a {
+  font-family: "Noto Sans Devanagari", "Source Serif 4", Georgia, serif;
+}
+@media (max-width: 899px) {
+  .toc { position: relative; top: auto; max-height: none; margin-bottom: 0.85rem; }
+}
+@media print {
+  body { background: #fff; }
+  .page { width: auto; margin: 0; display: block; }
+  .toc, .lang-toggle { display: none; }
+  .mast, .sheet { box-shadow: none; border-radius: 0; }
+  .section { break-inside: avoid; }
+  [data-lang="en"] .lang-hi,
+  [data-lang="hi"] .lang-en { display: none !important; }
+}
+</style>
+</head>
+<body>
+  <div class="page" id="docRoot" data-lang="en">
+    <header class="mast">
+      <div class="mast-top">
+        <div>
+          <p class="eyebrow">MHWS Sanyard · Mandi, Himachal Pradesh</p>
+          <h1>
+            <span class="lang-en">Mandi Housing Welfare Society, Sanyard — Rules &amp; Bye-laws</span>
+            <span class="lang-hi">मण्डी हाऊसिंग वेलफेयर सोसाइटी, सन्यारड — नियम एवं उपनियम</span>
+          </h1>
+          <p class="lede lang-en">Bilingual readable edition of the Society’s name, address, objectives, and bye-laws for the HBC Sanyard Information Centre.</p>
+          <p class="lede lang-hi">सोसाइटी के नाम, पते, उद्देश्यों तथा नियमों-उपनियमों का द्विभाषी पठनीय संस्करण — एचबीसी सन्यारड सूचना केंद्र हेतु।</p>
+        </div>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" class="is-active" data-set-lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-set-lang="hi" aria-pressed="false">हिं</button>
+        </div>
+      </div>
+      <div class="meta-row">
+        <span class="meta-item lang-en">Housing Board Colony Sanyard</span>
+        <span class="meta-item lang-hi">हाउसिंग बोर्ड कॉलोनी सन्यारड</span>
+        <span class="meta-item lang-en">P.O. Talyarh, Mandi</span>
+        <span class="meta-item lang-hi">डाकघर तल्यार, मण्डी</span>
+        <span class="meta-item">11 bye-laws</span>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <h2 class="lang-en">Contents</h2>
+      <h2 class="lang-hi">विषय सूची</h2>
+      <ol>
+        <li class="toc-chapter"><a href="#identity"><span class="lang-en">Identity</span><span class="lang-hi">परिचय</span></a></li>
+        <li><a href="#sec-name"><span class="n">1.</span> <span class="lang-en">Name</span><span class="lang-hi">नाम</span></a></li>
+        <li><a href="#sec-address"><span class="n">2.</span> <span class="lang-en">Address</span><span class="lang-hi">पता</span></a></li>
+        <li class="toc-chapter"><a href="#objectives"><span class="lang-en">Objectives</span><span class="lang-hi">उद्देश्य</span></a></li>
+        <li><a href="#sec-objectives"><span class="n">3.</span> <span class="lang-en">Development Committee objectives</span><span class="lang-hi">विकास समिति के उद्देश्य</span></a></li>
+        <li class="toc-chapter"><a href="#rules"><span class="lang-en">Rules &amp; Bye-laws</span><span class="lang-hi">नियम तथा उपनियम</span></a></li>
+        <li><a href="#rule-1"><span class="n">1.</span> <span class="lang-en">Membership</span><span class="lang-hi">सदस्यता</span></a></li>
+        <li><a href="#rule-2"><span class="n">2.</span> <span class="lang-en">Membership fee</span><span class="lang-hi">सदस्यता शुल्क</span></a></li>
+        <li><a href="#rule-3"><span class="n">3.</span> <span class="lang-en">Non-payment</span><span class="lang-hi">शुल्क न देने के परिणाम</span></a></li>
+        <li><a href="#rule-4"><span class="n">4.</span> <span class="lang-en">General Body</span><span class="lang-hi">साधारण सभा</span></a></li>
+        <li><a href="#rule-5"><span class="n">5.</span> <span class="lang-en">Executive Committee</span><span class="lang-hi">कार्यकारिणी</span></a></li>
+        <li><a href="#rule-6"><span class="n">6.</span> <span class="lang-en">EC duties</span><span class="lang-hi">कार्यकारिणी के कर्तव्य</span></a></li>
+        <li><a href="#rule-7"><span class="n">7.</span> <span class="lang-en">Vacancies</span><span class="lang-hi">रिक्त स्थान</span></a></li>
+        <li><a href="#rule-8"><span class="n">8.</span> <span class="lang-en">EC meetings</span><span class="lang-hi">कार्यकारिणी बैठक</span></a></li>
+        <li><a href="#rule-9"><span class="n">9.</span> <span class="lang-en">President &amp; Secretary</span><span class="lang-hi">अधिकार व कर्तव्य</span></a></li>
+        <li><a href="#rule-10"><span class="n">10.</span> <span class="lang-en">Treasurer</span><span class="lang-hi">कोषाध्यक्ष</span></a></li>
+        <li><a href="#rule-11"><span class="n">11.</span> <span class="lang-en">Dissolution</span><span class="lang-hi">भंग करना</span></a></li>
+      </ol>
+    </nav>
+
+    <main class="sheet">
+      <p class="note lang-en">Unofficial convenience copy for colony reference. Blank fee amounts (Rs ………) are as in the source draft. For formal use, rely on the signed Society document.</p>
+      <p class="note lang-hi">कॉलोनी संदर्भ हेतु अनौपचारिक सुविधा प्रति। रिक्त शुल्क राशि (रु० ………) स्रोत मसौदे के अनुसार है। औपचारिक उपयोग हेतु हस्ताक्षरित सोसाइटी दस्तावेज़ पर निर्भर रहें।</p>
+
+      <div class="content">
+        <section class="chapter" id="identity">
+          <header class="chapter-head">
+            <p class="chapter-kicker lang-en">Part A</p>
+            <p class="chapter-kicker lang-hi">भाग अ</p>
+            <h2><span class="lang-en">Identity of the Society</span><span class="lang-hi">सोसाइटी का परिचय</span></h2>
+          </header>
+
+          <article class="section" id="sec-name">
+            <h3><span class="sec-num">1.</span> <span class="lang-en">Name</span><span class="lang-hi">नाम</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">Mandi Housing Welfare Society Sanyard, Village Sanyard, Mandi, H.P.</p>
+              <p class="lang-hi">मण्डी हाऊसिंग वेलफेयर सोसाइटी सन्यारड, गाँव सन्यारड, मण्डी, हि०प्र०।</p>
+            </div>
+          </article>
+
+          <article class="section" id="sec-address">
+            <h3><span class="sec-num">2.</span> <span class="lang-en">Full address</span><span class="lang-hi">पूरा पता</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">District Mandi, Himachal Pradesh. House No. C-6, Housing Board Colony Sanyard, P.O. Talyarh, Mandi.</p>
+              <p class="lang-hi">जिला मण्डी, हिमाचल प्रदेश। मकान न० C-6, हाउसिंग बोर्ड कॉलोनी सन्यारड, डाकघर तल्यार, मण्डी।</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="chapter" id="objectives">
+          <header class="chapter-head">
+            <p class="chapter-kicker lang-en">Part B</p>
+            <p class="chapter-kicker lang-hi">भाग ब</p>
+            <h2><span class="lang-en">Objectives of the Development Committee</span><span class="lang-hi">विकास समिति के उद्देश्य</span></h2>
+          </header>
+
+          <article class="section" id="sec-objectives">
+            <h3><span class="sec-num">3.</span> <span class="lang-en">Objectives</span><span class="lang-hi">उद्देश्य</span></h3>
+            <div class="sec-body">
+              <ul class="lang-en">
+                <li>To resolve minor problems of the Housing Board Colony.</li>
+                <li>To render public service and strive for equal rights for all in the eyes of society.</li>
+                <li>To bring the problems of the Housing Board Colony to the attention of the Government.</li>
+                <li>To assist the Government in development works.</li>
+                <li>Maintenance and repair of street lights, roads and drains in the Housing Board Colony.</li>
+              </ul>
+              <ul class="lang-hi">
+                <li>हाउसिंग बोर्ड कॉलोनी की छोटी-मोटी समस्याओं का समाधान करना।</li>
+                <li>जनसेवा करना तथा समाज की दृष्टि में सबको समान अधिकार दिलाने का प्रयास करना।</li>
+                <li>हाउसिंग बोर्ड कॉलोनी की समस्याओं को सरकार के सम्मुख रखना।</li>
+                <li>विकास कार्यों में सरकार की सहायता करना।</li>
+                <li>हाउसिंग बोर्ड कॉलोनी में स्ट्रीट लाइट, सड़कों व नालियों का रखरखाव एवं मरम्मत।</li>
+              </ul>
+            </div>
+          </article>
+        </section>
+
+        <section class="chapter" id="rules">
+          <header class="chapter-head">
+            <p class="chapter-kicker lang-en">Part C</p>
+            <p class="chapter-kicker lang-hi">भाग स</p>
+            <h2><span class="lang-en">Rules and Bye-laws of the Society</span><span class="lang-hi">समिति के नियम तथा उपनियम</span></h2>
+          </header>
+
+          <article class="section" id="rule-1">
+            <h3><span class="sec-num">1.</span> <span class="lang-en">Membership</span><span class="lang-hi">सदस्यता</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">Any person residing in the area who is above 18 years of age may become a member, provided he/she is not of unsound mind, insolvent, or convicted by a court of a serious offence.</p>
+              <p class="lang-hi">क्षेत्र में रहने वाला कोई भी व्यक्ति जो 18 वर्ष से अधिक आयु का हो, सदस्य बन सकता है; बशर्ते वह मानसिक रूप से अस्वस्थ, दिवालिया अथवा न्यायालय द्वारा गम्भीर अपराध में दोषसिद्ध न हो।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-2">
+            <h3><span class="sec-num">2.</span> <span class="lang-en">Membership fee</span><span class="lang-hi">सदस्यता शुल्क</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">An entry fee shall be payable at the time of joining. In addition, an annual fee of Rs ……… shall be payable in the month of January.</p>
+              <p class="lang-hi">प्रवेश के समय प्रवेश शुल्क देय होगा। इसके अतिरिक्त वार्षिक शुल्क रु० ……… जनवरी माह में देय होगा।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-3">
+            <h3><span class="sec-num">3.</span> <span class="lang-en">Consequences of non-payment of annual fee</span><span class="lang-hi">वार्षिक शुल्क अदा न करने के परिणाम</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">If the annual fee is not paid within three months of the due date, membership shall stand terminated. The Executive Committee may restore membership within one month on payment of arrears plus a fine of Rs 2/-; otherwise a fresh application with entry fee shall be required.</p>
+              <p class="lang-en">Any member acting against the objectives of the Society may, after being given 15 days to reply to the allegations, have membership terminated by a 2/3 majority.</p>
+              <p class="lang-hi">नियत तिथि से तीन मास तक वार्षिक शुल्क न देने पर सदस्यता समाप्त मानी जायेगी। कार्यकारिणी एक मास के भीतर बकाया तथा रु० 2/- जुर्माना लेकर सदस्यता पुनः बहाल कर सकती है; अन्यथा पुनः प्रवेश शुल्क सहित सदस्यता हेतु आवेदन करना होगा।</p>
+              <p class="lang-hi">समिति के उद्देश्यों के विरुद्ध कार्य करने वाले सदस्य को आरोपों का उत्तर देने हेतु 15 दिन का अवसर देकर 2/3 बहुमत से सदस्यता समाप्त की जा सकती है।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-4">
+            <h3><span class="sec-num">4.</span> <span class="lang-en">General Body</span><span class="lang-hi">साधारण सभा</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">The General Body shall comprise all members. Each member shall have one vote. Members whose annual fee remains unpaid for three months shall not participate in meetings. Quorum shall be 2/3 of total members. In case of a tie, the President shall have a casting vote.</p>
+              <p class="lang-hi">समस्त सदस्यों से साधारण सभा का गठन होगा। प्रत्येक सदस्य को एक मत का अधिकार होगा। तीन मास तक वार्षिक शुल्क न देने वाले सदस्य बैठक में भाग नहीं ले सकेंगे। कोरम कुल सदस्यों का 2/3 होगा। बराबर मतों पर प्रधान को निर्णायक मत का अधिकार होगा।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-5">
+            <h3><span class="sec-num">5.</span> <span class="lang-en">Executive Committee</span><span class="lang-hi">कार्यकारिणी</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">Election shall be held in a general meeting. Office-bearers/members: President, Vice-President, Treasurer, Secretary and one to three members.</p>
+              <p class="lang-hi">साधारण बैठक में चुनाव होगा। पदाधिकारी/सदस्य: प्रधान, उप-प्रधान, कोषाध्यक्ष, सचिव तथा एक से तीन सदस्य।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-6">
+            <h3><span class="sec-num">6.</span> <span class="lang-en">Duties of the Executive Committee</span><span class="lang-hi">कार्यकारिणी के कर्तव्य</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">The Executive Committee shall be responsible for conducting all affairs of the Society.</p>
+              <p class="lang-hi">कार्यकारिणी समिति का समस्त कारोबार चलाने के लिए उत्तरदायी होगी।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-7">
+            <h3><span class="sec-num">7.</span> <span class="lang-en">Filling of vacancies</span><span class="lang-hi">रिक्त स्थानों की पूर्ति</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">Vacancies arising from death, resignation or other causes shall be filled for the remaining term in accordance with the rules / general meeting.</p>
+              <p class="lang-en">No Executive member shall vote on a matter in which he/she is personally interested.</p>
+              <p class="lang-en">The Executive Committee shall have full authority to do all acts for the development of the Society.</p>
+              <p class="lang-hi">मृत्यु, त्यागपत्र आदि से रिक्त स्थान शेष अवधि के लिए साधारण अधिवेशन/नियमों के अनुसार भरे जायेंगे।</p>
+              <p class="lang-hi">जिस मामले में सदस्य स्वयं संलिप्त हो, उसमें मतदान का अधिकार नहीं होगा।</p>
+              <p class="lang-hi">कार्यकारिणी को समिति के विकास हेतु आवश्यक कार्य करने का पूर्ण अधिकार होगा।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-8">
+            <h3><span class="sec-num">8.</span> <span class="lang-en">Meetings of the Executive Committee</span><span class="lang-hi">कार्यकारिणी की बैठक</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">At least one meeting every month; additional meetings as needed. Quorum 2/3. If quorum is not met, the meeting may be adjourned; if at the reconvened meeting quorum is still not complete within one hour, those present may be treated as quorum, but only for items already on the agenda.</p>
+              <p class="lang-hi">प्रति माह कम से कम एक बैठक; आवश्यकतानुसार अतिरिक्त बैठक। कोरम 2/3। कोरम न होने पर स्थगन; पुनः बुलाई बैठक में एक घण्टे में कोरम न हो तो उपस्थित सदस्यों को कोरम माना जा सकता है, परन्तु केवल पूर्व निर्धारित विषयों पर ही निर्णय।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-9">
+            <h3><span class="sec-num">9.</span> <span class="lang-en">Rights and duties</span><span class="lang-hi">अधिकार व कर्तव्य</span></h3>
+            <div class="sec-body">
+              <p class="lang-en"><strong>President:</strong> Shall preside over General Body and Executive meetings; ensure smooth functioning; casting vote in case of a tie.</p>
+              <p class="lang-en"><strong>Secretary:</strong> Shall supervise work; convene meetings as directed by the Chair; maintain the proceedings register; handle correspondence and records; keep records at places fixed by the Managing Committee; may incur expenditure up to Rs 500/- without prior full permission (to be placed for approval at the next meeting).</p>
+              <p class="lang-hi"><strong>प्रधान:</strong> साधारण अधिवेशन व कार्यकारिणी बैठकों की अध्यक्षता; सुचारू संचालन; बराबर मतों पर निर्णायक मत।</p>
+              <p class="lang-hi"><strong>सचिव:</strong> कार्यों की देख-रेख; सभापति के निर्देशानुसार बैठक बुलाना; कार्यवाही रजिस्टर रखना; पत्राचार व अभिलेख रखना; प्रबन्धक समिति द्वारा निश्चित स्थान पर अभिलेख रखना; पूर्ण अनुमति के बिना रु० 500/- तक व्यय (अगली बैठक में अनुमोदन हेतु)।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-10">
+            <h3><span class="sec-num">10.</span> <span class="lang-en">Treasurer</span><span class="lang-hi">कोषाध्यक्ष</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">Shall work under the directions of the Managing Committee. Amounts exceeding Rs 500/- not required for immediate expenditure shall be kept in a bank account approved by the management. The account shall be in the Society’s name and operated by any two among the President, Vice-President, Treasurer and Secretary.</p>
+              <p class="lang-hi">प्रबन्धक समिति के निर्देशानुसार कार्य करेगा। रु० 500/- से अधिक तथा शीघ्र व्यय हेतु अनावश्यक राशि स्वीकृत बैंक में रखी जायेगी। खाता समिति के नाम से होगा तथा प्रधान/उप-प्रधान/कोषाध्यक्ष/सचिव में से किन्हीं दो पदाधिकारियों द्वारा संचालित होगा।</p>
+            </div>
+          </article>
+
+          <article class="section" id="rule-11">
+            <h3><span class="sec-num">11.</span> <span class="lang-en">Dissolution</span><span class="lang-hi">भंग करना</span></h3>
+            <div class="sec-body">
+              <p class="lang-en">At a General Meeting called for that purpose, the Society may be dissolved by a 3/5 majority of members present. Provisions of Sections 13–14 of the Societies Registration Act, 1860 shall apply.</p>
+              <p class="lang-hi">उसी प्रयोजन से बुलाई साधारण बैठक में उपस्थित सदस्यों के 3/5 भाग के विचार से समिति भंग की जा सकती है। भंग हेतु सोसाइटी रजिस्ट्रेशन अधिनियम, 1860 की धारा 13–14 के प्रावधान लागू होंगे।</p>
+            </div>
+          </article>
+
+          <div class="sign-block" id="signatures">
+            <p class="lang-en">Signatures: President / Vice-President / Secretary</p>
+            <p class="lang-hi">हस्ताक्षर: प्रधान / उप-प्रधान / सचिव</p>
+            <p class="hint lang-en">Place for office-bearers’ signatures on the formal Society copy.</p>
+            <p class="hint lang-hi">औपचारिक सोसाइटी प्रति पर पदाधिकारियों के हस्ताक्षर हेतु स्थान।</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <p class="footer">MHWS Sanyard · Rules &amp; Bye-laws · HBC Sanyard Information Centre</p>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById('docRoot');
+      if (!root) return;
+      function setLang(lang) {
+        var next = lang === 'hi' ? 'hi' : 'en';
+        root.setAttribute('data-lang', next);
+        document.documentElement.setAttribute('lang', next === 'hi' ? 'hi' : 'en');
+        document.querySelectorAll('[data-set-lang]').forEach(function (btn) {
+          var on = btn.getAttribute('data-set-lang') === next;
+          btn.classList.toggle('is-active', on);
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        try { localStorage.setItem('mhws-bylaws-lang', next); } catch (e) {}
+      }
+      document.querySelectorAll('[data-set-lang]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          setLang(btn.getAttribute('data-set-lang'));
+        });
+      });
+      var saved = '';
+      try { saved = localStorage.getItem('mhws-bylaws-lang') || ''; } catch (e) {}
+      setLang(saved || 'en');
+    })();
+  </script>
+</body>
+</html>
