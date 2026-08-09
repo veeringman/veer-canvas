@@ -1263,7 +1263,7 @@
     applyMobileListLimit(el('noticeList'), '.notice.mobile-fold', 4);
     applyMobileListLimit(el('mailboxList'), '.grievance-card.mobile-fold', 4);
     applyMobileListLimit(el('ecGrievanceList'), '.grievance-card.mobile-fold', 4);
-    applyMobileListLimit(el('infoDocList'), '.info-doc-card.mobile-fold', 5);
+    applyMobileListLimit(el('infoDocList'), '.info-doc-card', 5);
     applyMobileListLimit(el('noticeDraftList'), '.notice-draft-card.mobile-fold', 4);
     applyMobileListLimit(el('worksList'), '.works-card.mobile-fold', 5);
   }
@@ -1436,8 +1436,9 @@
       const preferred = activePanelName();
       setAuthed(data);
       const hash = (location.hash || '').replace(/^#/, '');
-      if (hash === 'messages' || hash.startsWith('messages/') || hash === 'dues' || hash === 'concerns'
-        || hash === 'profile' || hash === 'directory' || hash === 'info' || hash === 'works' || hash === 'admin') {
+      if (infoDeepLink || hash === 'messages' || hash.startsWith('messages/') || hash === 'dues' || hash === 'concerns'
+        || hash === 'profile' || hash === 'directory' || hash === 'info' || hash.startsWith('info/')
+        || hash === 'works' || hash === 'admin') {
         applyRouteHash();
       } else {
         ensurePanelVisibility(preferred);
@@ -3986,12 +3987,195 @@
   let infoCategoriesCache = [];
   let infoFoldersCache = [];
   let infoDocsCache = [];
+  let infoDeepLink = null;
+  const PENDING_INFO_KEY = 'hbc_pending_info';
+
+  function rememberPendingInfo(link) {
+    if (!link || !link.type || !link.id) return;
+    try {
+      localStorage.setItem(PENDING_INFO_KEY, JSON.stringify({
+        type: link.type,
+        id: link.id,
+        t: Date.now(),
+      }));
+    } catch (_err) { /* ignore */ }
+  }
+
+  function readPendingInfo({ consume = false } = {}) {
+    try {
+      const raw = localStorage.getItem(PENDING_INFO_KEY);
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      if (!o || !o.type || !o.id) return null;
+      if (Date.now() - Number(o.t || 0) > 7 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(PENDING_INFO_KEY);
+        return null;
+      }
+      if (consume) localStorage.removeItem(PENDING_INFO_KEY);
+      return { type: o.type, id: String(o.id) };
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function parseInfoDeepLink(hash) {
+    const h = String(hash || '').replace(/^#/, '');
+    const docM = h.match(/^info\/doc\/(.+)$/);
+    if (docM) return { type: 'doc', id: decodeURIComponent(docM[1]) };
+    const folderM = h.match(/^info\/folder\/(.+)$/);
+    if (folderM) return { type: 'folder', id: decodeURIComponent(folderM[1]) };
+    if (h === 'info') return { type: 'panel' };
+    return null;
+  }
+
+  function captureShareQueryDeepLink() {
+    try {
+      const params = new URLSearchParams(location.search || '');
+      const raw = String(params.get('info') || '').trim();
+      const m = raw.match(/^(doc|folder)\.(.+)$/i);
+      if (!m) {
+        const fromHash = parseInfoDeepLink(location.hash);
+        if (fromHash && fromHash.type !== 'panel') {
+          infoDeepLink = fromHash;
+          rememberPendingInfo(fromHash);
+        } else if (!infoDeepLink) {
+          infoDeepLink = readPendingInfo({ consume: false });
+        }
+        return;
+      }
+      const type = m[1].toLowerCase();
+      const id = decodeURIComponent(m[2]);
+      if (!id) return;
+      infoDeepLink = { type, id };
+      rememberPendingInfo(infoDeepLink);
+      const hash = type === 'folder'
+        ? `#info/folder/${encodeURIComponent(id)}`
+        : `#info/doc/${encodeURIComponent(id)}`;
+      const next = new URL(location.href);
+      next.searchParams.delete('info');
+      if (!next.searchParams.get('source')) next.searchParams.set('source', 'pwa');
+      const q = next.searchParams.toString();
+      history.replaceState(null, '', `${next.pathname}${q ? `?${q}` : ''}${hash}`);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+  captureShareQueryDeepLink();
+
+  if ('launchQueue' in window) {
+    try {
+      window.launchQueue.setConsumer((params) => {
+        const target = params && params.targetURL;
+        if (!target) return;
+        try {
+          const u = new URL(target, location.origin);
+          const raw = String(u.searchParams.get('info') || '').trim();
+          const m = raw.match(/^(doc|folder)\.(.+)$/i);
+          if (m) {
+            infoDeepLink = { type: m[1].toLowerCase(), id: decodeURIComponent(m[2]) };
+            rememberPendingInfo(infoDeepLink);
+          } else {
+            const fromHash = parseInfoDeepLink(u.hash);
+            if (fromHash && fromHash.type !== 'panel') {
+              infoDeepLink = fromHash;
+              rememberPendingInfo(fromHash);
+            }
+          }
+          if (state.session) applyRouteHash();
+        } catch (_err) { /* ignore */ }
+      });
+    } catch (_err) { /* ignore */ }
+  }
 
   function formatBytes(n) {
     const num = Number(n) || 0;
     if (num < 1024) return `${num} B`;
     if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
     return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function infoShareUrl({ folderId = '', docId = '' } = {}) {
+    const origin = window.location.origin;
+    // Static nginx HTML cards (not Flask /s/) — WhatsApp previews these reliably.
+    if (docId) return `${origin}/share/doc/${encodeURIComponent(docId)}.html`;
+    if (folderId) return `${origin}/share/folder/${encodeURIComponent(folderId)}.html`;
+    return `${origin}/#info`;
+  }
+
+  async function copyInfoShareLink({ folderId = '', docId = '', label = 'Link' } = {}) {
+    const url = infoShareUrl({ folderId, docId });
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert(
+        `${label} copied.\n\nChat apps show a title preview for this link.\nRecipients still must sign in to open the document.\n\n${url}`
+      );
+    } catch (_err) {
+      window.prompt('Copy this link (recipients must sign in):', url);
+    }
+  }
+
+  function infoFoldersSortedTree() {
+    const byParent = new Map();
+    for (const f of infoFoldersCache) {
+      const pid = f.parentId || '';
+      if (!byParent.has(pid)) byParent.set(pid, []);
+      byParent.get(pid).push(f);
+    }
+    for (const list of byParent.values()) {
+      list.sort((a, b) => {
+        const so = (a.sortOrder || 100) - (b.sortOrder || 100);
+        if (so) return so;
+        return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+      });
+    }
+    const out = [];
+    const walk = (parentId, depth) => {
+      for (const f of (byParent.get(parentId) || [])) {
+        out.push({ ...f, depth });
+        walk(f.id, depth + 1);
+      }
+    };
+    walk('', 0);
+    const seen = new Set(out.map((f) => f.id));
+    for (const f of infoFoldersCache) {
+      if (!seen.has(f.id)) out.push({ ...f, depth: 0 });
+    }
+    return out;
+  }
+
+  function infoFolderOptionLabel(f, { withCount = false } = {}) {
+    const depth = Number(f.depth || 0);
+    const indent = depth > 0 ? `${'· '.repeat(depth)}` : '';
+    const path = f.pathLabel || f.title || 'Folder';
+    const count = withCount && f.docCount != null ? ` (${f.docCount})` : '';
+    return `${indent}${path}${count}`;
+  }
+
+  function fillInfoFolderParentSelect(selectEl, { excludeId = '', selected = '' } = {}) {
+    if (!selectEl) return;
+    const tree = infoFoldersSortedTree();
+    let blocked = new Set();
+    if (excludeId) {
+      const kids = new Map();
+      for (const f of infoFoldersCache) {
+        const pid = f.parentId || '';
+        if (!kids.has(pid)) kids.set(pid, []);
+        kids.get(pid).push(f.id);
+      }
+      const stack = [excludeId];
+      while (stack.length) {
+        const cur = stack.pop();
+        blocked.add(cur);
+        for (const k of (kids.get(cur) || [])) stack.push(k);
+      }
+    }
+    const opts = tree
+      .filter((f) => !blocked.has(f.id))
+      .map((f) => `<option value="${escapeHtml(f.id)}">${escapeHtml(infoFolderOptionLabel(f))}</option>`)
+      .join('');
+    selectEl.innerHTML = `<option value="">Top level</option>${opts}`;
+    if (selected && [...selectEl.options].some((o) => o.value === selected)) selectEl.value = selected;
+    else selectEl.value = '';
   }
 
   function fillInfoCategorySelects(categories) {
@@ -4015,10 +4199,11 @@
 
   function fillInfoFolderSelects(folders) {
     infoFoldersCache = folders || [];
+    const tree = infoFoldersSortedTree();
     const filter = el('infoFolderFilter');
     const formSel = el('infoFolderInput');
-    const opts = infoFoldersCache.map((f) =>
-      `<option value="${escapeHtml(f.id)}">${escapeHtml(f.title)}${f.docCount != null ? ` (${f.docCount})` : ''}</option>`
+    const opts = tree.map((f) =>
+      `<option value="${escapeHtml(f.id)}">${escapeHtml(infoFolderOptionLabel(f, { withCount: true }))}</option>`
     ).join('');
     if (filter) {
       const cur = filter.value;
@@ -4027,11 +4212,12 @@
     }
     if (formSel) {
       const cur = formSel.value || '';
-      formSel.innerHTML = `<option value="">Unfiled</option>${infoFoldersCache.map((f) =>
-        `<option value="${escapeHtml(f.id)}">${escapeHtml(f.title)}</option>`
+      formSel.innerHTML = `<option value="">Unfiled</option>${tree.map((f) =>
+        `<option value="${escapeHtml(f.id)}">${escapeHtml(infoFolderOptionLabel(f))}</option>`
       ).join('')}`;
       if ([...formSel.options].some((o) => o.value === cur)) formSel.value = cur;
     }
+    fillInfoFolderParentSelect(el('infoFolderNewParent'));
     renderInfoFolderManageList();
   }
 
@@ -4042,17 +4228,21 @@
       box.innerHTML = '';
       return;
     }
-    if (!infoFoldersCache.length) {
+    const tree = infoFoldersSortedTree();
+    if (!tree.length) {
       box.innerHTML = '<p class="muted">No folders yet.</p>';
       return;
     }
-    box.innerHTML = infoFoldersCache.map((f) => `
-      <div class="info-folder-manage-row" data-id="${escapeHtml(f.id)}">
+    box.innerHTML = tree.map((f) => `
+      <div class="info-folder-manage-row ${f.depth ? 'is-nested' : ''}" data-id="${escapeHtml(f.id)}" style="--info-depth:${Number(f.depth) || 0}">
         <div>
           <strong>${escapeHtml(f.title)}</strong>
-          <span class="muted">${f.docCount || 0} doc${(f.docCount || 0) === 1 ? '' : 's'}${f.summary ? ` · ${escapeHtml(f.summary)}` : ''}</span>
+          <span class="muted">${f.docCount || 0} doc${(f.docCount || 0) === 1 ? '' : 's'}${f.pathLabel && f.pathLabel !== f.title ? ` · ${escapeHtml(f.pathLabel)}` : ''}${f.summary ? ` · ${escapeHtml(f.summary)}` : ''}</span>
         </div>
         <div class="btn-row">
+          <button type="button" class="btn ghost compact info-folder-share" data-id="${escapeHtml(f.id)}">Copy link</button>
+          <button type="button" class="btn ghost compact info-folder-add-child" data-id="${escapeHtml(f.id)}">Add subfolder</button>
+          <button type="button" class="btn ghost compact info-folder-move" data-id="${escapeHtml(f.id)}">Move</button>
           <button type="button" class="btn ghost compact info-folder-rename" data-id="${escapeHtml(f.id)}">Rename</button>
           <button type="button" class="btn ghost compact info-folder-delete" data-id="${escapeHtml(f.id)}">Delete</button>
         </div>
@@ -4128,6 +4318,8 @@
         el('infoFormStatus').textContent = `Editing ${doc.originalName || doc.id} — Hindi title/summary optional; file uploads stay single-language.`;
       }
     }
+    const details = el('infoManageDetails');
+    if (details) details.open = true;
     el('infoManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -4162,47 +4354,78 @@
       d.status === 'draft' ? '<span class="info-doc-badge is-draft">Draft</span>' : '',
     ].filter(Boolean).join('');
     const metaBits = [
-      d.docType === 'link' ? (d.externalUrl || '') : (d.originalName || ''),
       d.sizeBytes ? formatBytes(d.sizeBytes) : '',
       when || '',
     ].filter(Boolean).join(' · ');
-    const actions = [];
+    const primary = [];
     if (!d.fileMissing) {
-      actions.push(`<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`);
+      primary.push(`<button type="button" class="btn primary compact info-doc-open" data-id="${escapeHtml(d.id)}">Open</button>`);
     }
+    const more = [];
+    more.push(`<button type="button" class="btn ghost compact info-doc-share" data-id="${escapeHtml(d.id)}">Copy link</button>`);
     if (isEcAdmin()) {
-      actions.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? (d.docType === 'link' ? 'Fix link' : 'Re-upload file') : 'Edit'}</button>`);
+      more.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? (d.docType === 'link' ? 'Fix link' : 'Re-upload file') : 'Edit'}</button>`);
+      more.push(`<button type="button" class="btn ghost compact info-doc-move" data-id="${escapeHtml(d.id)}">Move</button>`);
       if (d.status !== 'published') {
-        actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
-        actions.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
+        more.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="all">Publish to all</button>`);
+        more.push(`<button type="button" class="btn ghost compact info-doc-publish" data-id="${escapeHtml(d.id)}" data-audience="ec">Publish to EC</button>`);
       } else {
-        actions.push(`<button type="button" class="btn ghost compact info-doc-unpublish" data-id="${escapeHtml(d.id)}">Unpublish</button>`);
+        more.push(`<button type="button" class="btn ghost compact info-doc-unpublish" data-id="${escapeHtml(d.id)}">Unpublish</button>`);
       }
-      actions.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
+      more.push(`<button type="button" class="btn ghost compact info-doc-delete" data-id="${escapeHtml(d.id)}">Delete</button>`);
     }
+    const detailsBits = [
+      badges ? `<div class="info-doc-badges">${badges}</div>` : '',
+      metaBits ? `<p class="meta">${escapeHtml(metaBits)}</p>` : '',
+    ].filter(Boolean).join('');
     return `
-      <article class="info-doc-card mobile-fold" data-id="${escapeHtml(d.id)}" data-doc-type="${escapeHtml(d.docType || 'file')}">
-        <button type="button" class="mobile-fold-head" aria-expanded="false">
-          <span class="mobile-fold-head-main info-doc-tablet-face">
-            <span class="info-doc-tablet-mark" aria-hidden="true">${mark}</span>
-            <span class="info-doc-badges">${badges}</span>
-            <span class="info-doc-card-title">${escapeHtml(d.title || 'Untitled')}</span>
-            <span class="meta">${escapeHtml(metaBits)}</span>
-          </span>
-          <span class="mobile-fold-chevron" aria-hidden="true"></span>
-        </button>
-        <div class="mobile-fold-body">
-          ${d.summary ? `<p class="summary">${escapeHtml(d.summary)}</p>` : ''}
-          <div class="btn-row">${actions.join('')}</div>
+      <article class="info-doc-card" data-id="${escapeHtml(d.id)}" data-doc-type="${escapeHtml(d.docType || 'file')}" title="Double-click for more actions">
+        <div class="info-doc-card-row">
+          <span class="info-doc-tablet-mark" aria-hidden="true">${mark}</span>
+          <h4 class="info-doc-card-title">${escapeHtml(d.title || 'Untitled')}</h4>
+          ${detailsBits ? `<button type="button" class="info-doc-info-btn" data-id="${escapeHtml(d.id)}" aria-expanded="false" aria-label="Show document details" title="Details">i</button>` : ''}
+          <div class="info-doc-card-actions-inline">
+            <div class="btn-row info-doc-actions-primary">${primary.join('') || '<span class="muted">Unavailable</span>'}</div>
+          </div>
         </div>
+        ${detailsBits ? `<div class="info-doc-card-details" hidden>${detailsBits}</div>` : ''}
+        <div class="btn-row info-doc-actions-more" hidden>${more.join('')}</div>
       </article>`;
+  }
+
+  function renderInfoFolderSection(folder, docsByFolder, depth) {
+    const docs = docsByFolder.get(folder.id) || [];
+    const kids = infoFoldersCache
+      .filter((f) => (f.parentId || '') === folder.id)
+      .sort((a, b) => {
+        const so = (a.sortOrder || 100) - (b.sortOrder || 100);
+        if (so) return so;
+        return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+      });
+    const childHtml = kids.map((k) => renderInfoFolderSection(k, docsByFolder, depth + 1)).join('');
+    if (!docs.length && !childHtml) return '';
+    return `
+      <section class="info-folder-section ${depth ? 'is-nested' : ''}" data-folder="${escapeHtml(folder.id)}" style="--info-depth:${depth}">
+        <header class="info-folder-head">
+          <div class="info-folder-head-row">
+            <h3>${escapeHtml(folder.title)}</h3>
+            <div class="btn-row">
+              <button type="button" class="btn ghost compact info-folder-share" data-id="${escapeHtml(folder.id)}">Copy link</button>
+            </div>
+          </div>
+          ${folder.summary ? `<p class="muted">${escapeHtml(folder.summary)}</p>` : ''}
+          <p class="muted">${docs.length} document${docs.length === 1 ? '' : 's'}${kids.length ? ` · ${kids.length} subfolder${kids.length === 1 ? '' : 's'}` : ''}</p>
+        </header>
+        ${docs.length ? `<div class="info-folder-docs">${docs.map(renderInfoDocCard).join('')}</div>` : ''}
+        ${childHtml}
+      </section>`;
   }
 
   function renderInfoDocs() {
     const box = el('infoDocList');
     const status = el('infoListStatus');
     if (!box) return;
-    if (!infoDocsCache.length) {
+    if (!infoDocsCache.length && !infoFoldersCache.length) {
       box.classList.remove('is-cards');
       box.innerHTML = '<p class="muted">No documents yet. EC can publish circulars, bye-laws, forms, and guides here — group them in folders such as Society Registration.</p>';
       if (status) status.textContent = '';
@@ -4212,57 +4435,103 @@
       status.textContent = `${infoDocsCache.length} document${infoDocsCache.length === 1 ? '' : 's'}`;
     }
     const folderFilter = el('infoFolderFilter')?.value || '';
-    // When viewing all folders, group by folder; when filtered, flat list.
-    if (folderFilter) {
+    const docsByFolder = new Map();
+    const unfiled = [];
+    for (const d of infoDocsCache) {
+      if (!d.folderId) {
+        unfiled.push(d);
+        continue;
+      }
+      if (!docsByFolder.has(d.folderId)) docsByFolder.set(d.folderId, []);
+      docsByFolder.get(d.folderId).push(d);
+    }
+
+    if (folderFilter === 'unfiled') {
       box.classList.add('is-cards');
-      box.innerHTML = infoDocsCache.map(renderInfoDocCard).join('');
+      box.innerHTML = unfiled.length
+        ? unfiled.map(renderInfoDocCard).join('')
+        : '<p class="muted">No unfiled documents.</p>';
       refreshMobileListUi();
       return;
     }
-    box.classList.remove('is-cards');
-    const groups = new Map();
-    for (const d of infoDocsCache) {
-      const key = d.folderId || '__unfiled__';
-      if (!groups.has(key)) {
-        groups.set(key, {
-          id: d.folderId || '',
-          title: d.folderTitle || 'Unfiled',
-          summary: '',
-          docs: [],
-        });
-      }
-      groups.get(key).docs.push(d);
-    }
-    // Prefer known folder order from cache
-    const ordered = [];
-    const seen = new Set();
-    for (const f of infoFoldersCache) {
-      if (groups.has(f.id)) {
-        const g = groups.get(f.id);
-        g.summary = f.summary || '';
-        ordered.push(g);
-        seen.add(f.id);
-      }
-    }
-    for (const [key, g] of groups) {
-      if (key !== '__unfiled__' && !seen.has(key)) ordered.push(g);
-    }
-    if (groups.has('__unfiled__')) ordered.push(groups.get('__unfiled__'));
 
-    box.innerHTML = ordered.map((g) => `
-      <section class="info-folder-section" data-folder="${escapeHtml(g.id || 'unfiled')}">
-        <header class="info-folder-head">
-          <h3>${escapeHtml(g.title)}</h3>
-          ${g.summary ? `<p class="muted">${escapeHtml(g.summary)}</p>` : ''}
-          <p class="muted">${g.docs.length} document${g.docs.length === 1 ? '' : 's'}</p>
-        </header>
-        <div class="info-folder-docs">${g.docs.map(renderInfoDocCard).join('')}</div>
-      </section>
-    `).join('');
+    if (folderFilter) {
+      const root = infoFoldersCache.find((f) => f.id === folderFilter);
+      box.classList.remove('is-cards');
+      if (!root) {
+        box.classList.add('is-cards');
+        box.innerHTML = infoDocsCache.map(renderInfoDocCard).join('') || '<p class="muted">No documents in this folder.</p>';
+        refreshMobileListUi();
+        return;
+      }
+      const html = renderInfoFolderSection(root, docsByFolder, 0);
+      box.innerHTML = html || '<p class="muted">No documents in this folder.</p>';
+      refreshMobileListUi();
+      return;
+    }
+
+    box.classList.remove('is-cards');
+    const roots = infoFoldersSortedTree().filter((f) => !f.parentId);
+    const sections = roots.map((f) => renderInfoFolderSection(f, docsByFolder, 0)).filter(Boolean);
+    const known = new Set(infoFoldersCache.map((f) => f.id));
+    const orphans = infoDocsCache.filter((d) => d.folderId && !known.has(d.folderId));
+    if (unfiled.length || orphans.length) {
+      sections.push(`
+        <section class="info-folder-section" data-folder="unfiled">
+          <header class="info-folder-head">
+            <div class="info-folder-head-row">
+              <h3>Unfiled</h3>
+            </div>
+            <p class="muted">${unfiled.length + orphans.length} document${(unfiled.length + orphans.length) === 1 ? '' : 's'}</p>
+          </header>
+          <div class="info-folder-docs">${[...unfiled, ...orphans].map(renderInfoDocCard).join('')}</div>
+        </section>`);
+    }
+    box.innerHTML = sections.join('') || '<p class="muted">No documents yet.</p>';
     refreshMobileListUi();
   }
 
-  async function loadInfoCentre() {
+  async function consumeInfoDeepLink() {
+    const link = infoDeepLink || parseInfoDeepLink(location.hash) || readPendingInfo({ consume: false });
+    infoDeepLink = null;
+    if (!link || link.type === 'panel') return;
+    if (link.type === 'folder') {
+      const filter = el('infoFolderFilter');
+      if (filter && [...filter.options].some((o) => o.value === link.id)) {
+        if (filter.value !== link.id) {
+          filter.value = link.id;
+          await loadInfoCentre({ skipDeepLink: true });
+        }
+      }
+      const section = document.querySelector(`.info-folder-section[data-folder="${CSS.escape(link.id)}"]`);
+      section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      readPendingInfo({ consume: true });
+      return;
+    }
+    if (link.type === 'doc') {
+      let doc = infoDocsCache.find((d) => d.id === link.id);
+      if (!doc) {
+        try {
+          const data = await api(`/api/rwa/info-centre/${encodeURIComponent(link.id)}`);
+          doc = data.document || data.doc || null;
+        } catch (_err) {
+          doc = null;
+        }
+      }
+      if (!doc) {
+        window.alert('Document not found or not available to your account.');
+        return;
+      }
+      try {
+        await openInfoDocument(doc);
+        readPendingInfo({ consume: true });
+      } catch (err) {
+        window.alert(err.message || 'Could not open document');
+      }
+    }
+  }
+
+  async function loadInfoCentre(opts = {}) {
     if (el('infoManageBlock')) el('infoManageBlock').hidden = !hasEntitlement('manage_info');
     const status = hasEntitlement('manage_info')
       ? (el('infoStatusFilter')?.value || 'published')
@@ -4275,9 +4544,13 @@
     const data = await api(`/api/rwa/info-centre?${qs.toString()}`);
     fillInfoCategorySelects(data.categories || []);
     fillInfoFolderSelects(data.folders || []);
+    if (folder && el('infoFolderFilter') && [...el('infoFolderFilter').options].some((o) => o.value === folder)) {
+      el('infoFolderFilter').value = folder;
+    }
     infoDocsCache = data.documents || [];
     renderInfoDocs();
     if (sectionLang.info === 'hi') renderInfoOverlay();
+    if (!opts.skipDeepLink) await consumeInfoDeepLink();
   }
 
   async function openInfoDocument(doc, { lang = 'en' } = {}) {
@@ -4490,9 +4763,10 @@
     }
   }
 
-  async function createInfoFolder() {
+  async function createInfoFolder({ parentId = '', title: titleArg = '' } = {}) {
     if (!hasEntitlement('manage_info')) return;
-    const title = String(el('infoFolderNewTitle')?.value || '').trim();
+    const title = String(titleArg || el('infoFolderNewTitle')?.value || '').trim();
+    const parent = String(parentId || el('infoFolderNewParent')?.value || '').trim();
     const status = el('infoFolderManageStatus');
     if (title.length < 2) {
       if (status) status.textContent = 'Folder name required.';
@@ -4502,11 +4776,12 @@
     try {
       await api('/api/rwa/info-centre/folders', {
         method: 'POST',
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, parentId: parent || null }),
       });
       if (el('infoFolderNewTitle')) el('infoFolderNewTitle').value = '';
-      if (status) status.textContent = 'Folder created.';
-      await loadInfoCentre();
+      if (el('infoFolderNewParent')) el('infoFolderNewParent').value = '';
+      if (status) status.textContent = parent ? 'Subfolder created.' : 'Folder created.';
+      await loadInfoCentre({ skipDeepLink: true });
     } catch (err) {
       if (status) status.textContent = err.message || 'Could not create folder';
     }
@@ -4529,9 +4804,88 @@
         body: JSON.stringify({ title }),
       });
       if (status) status.textContent = 'Folder renamed.';
-      await loadInfoCentre();
+      await loadInfoCentre({ skipDeepLink: true });
     } catch (err) {
       alert(err.message || 'Rename failed');
+    }
+  }
+
+  async function moveInfoFolder(folderId) {
+    if (!hasEntitlement('manage_info') || !folderId) return;
+    const folder = infoFoldersCache.find((f) => f.id === folderId);
+    if (!folder) return;
+    const tree = infoFoldersSortedTree().filter((f) => f.id !== folderId);
+    // Exclude self + descendants from choices (server also validates)
+    const blocked = new Set([folderId]);
+    const kids = new Map();
+    for (const f of infoFoldersCache) {
+      const pid = f.parentId || '';
+      if (!kids.has(pid)) kids.set(pid, []);
+      kids.get(pid).push(f.id);
+    }
+    const stack = [folderId];
+    while (stack.length) {
+      const cur = stack.pop();
+      for (const k of (kids.get(cur) || [])) {
+        blocked.add(k);
+        stack.push(k);
+      }
+    }
+    const choices = [{ id: '', label: 'Top level' }].concat(
+      tree.filter((f) => !blocked.has(f.id)).map((f) => ({ id: f.id, label: f.pathLabel || f.title }))
+    );
+    const labels = choices.map((c, i) => `${i}: ${c.label}`).join('\n');
+    const pick = prompt(
+      `Move “${folder.title}” under which folder?\nEnter number:\n${labels}`,
+      '0'
+    );
+    if (pick == null) return;
+    const idx = Number(pick);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= choices.length) {
+      alert('Invalid choice.');
+      return;
+    }
+    const parentId = choices[idx].id || null;
+    const status = el('infoFolderManageStatus');
+    try {
+      await api(`/api/rwa/info-centre/folders/${encodeURIComponent(folderId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ parentId }),
+      });
+      if (status) status.textContent = 'Folder moved.';
+      await loadInfoCentre({ skipDeepLink: true });
+    } catch (err) {
+      alert(err.message || 'Move failed');
+    }
+  }
+
+  async function moveInfoDocument(docId) {
+    if (!hasEntitlement('manage_info') || !docId) return;
+    const doc = infoDocsCache.find((d) => d.id === docId);
+    if (!doc) return;
+    const tree = infoFoldersSortedTree();
+    const choices = [{ id: '', label: 'Unfiled' }].concat(
+      tree.map((f) => ({ id: f.id, label: f.pathLabel || f.title }))
+    );
+    const labels = choices.map((c, i) => `${i}: ${c.label}`).join('\n');
+    const pick = prompt(
+      `Move “${doc.title}” to which folder?\nEnter number:\n${labels}`,
+      '0'
+    );
+    if (pick == null) return;
+    const idx = Number(pick);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= choices.length) {
+      alert('Invalid choice.');
+      return;
+    }
+    try {
+      await api(`/api/rwa/info-centre/${encodeURIComponent(docId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ folderId: choices[idx].id || '' }),
+      });
+      await loadInfoCentre({ skipDeepLink: true });
+    } catch (err) {
+      alert(err.message || 'Move failed');
     }
   }
 
@@ -4539,9 +4893,12 @@
     if (!hasEntitlement('manage_info') || !folderId) return;
     const folder = infoFoldersCache.find((f) => f.id === folderId);
     const n = folder?.docCount || 0;
-    const msg = n
-      ? `Delete folder “${folder?.title || folderId}”? Its ${n} document${n === 1 ? '' : 's'} will move to Unfiled.`
-      : `Delete folder “${folder?.title || folderId}”?`;
+    const childCount = infoFoldersCache.filter((f) => (f.parentId || '') === folderId).length;
+    const msg = [
+      `Delete folder “${folder?.title || folderId}”?`,
+      n ? `Its ${n} document${n === 1 ? '' : 's'} will move to the parent folder (or Unfiled).` : '',
+      childCount ? `Its ${childCount} subfolder${childCount === 1 ? '' : 's'} will move up one level.` : '',
+    ].filter(Boolean).join('\n');
     if (!confirm(msg)) return;
     const status = el('infoFolderManageStatus');
     try {
@@ -4551,7 +4908,7 @@
       if (status) status.textContent = 'Folder deleted.';
       const filter = el('infoFolderFilter');
       if (filter && filter.value === folderId) filter.value = '';
-      await loadInfoCentre();
+      await loadInfoCentre({ skipDeepLink: true });
     } catch (err) {
       alert(err.message || 'Delete failed');
     }
@@ -5114,6 +5471,7 @@
       el('adminPassInput').value = '';
       setAuthed(data);
       ensurePanelVisibility('admin');
+      applyRouteHash();
     } catch (err) {
       showError(err.message || 'Sign-in failed');
     } finally {
@@ -5299,6 +5657,7 @@
       });
       setAuthed(data);
       ensurePanelVisibility('home');
+      applyRouteHash();
       if (data.contactUpdated) {
         const list = el('noticeList');
         if (list) {
@@ -5611,14 +5970,28 @@
   });
 
   function applyRouteHash() {
+    if (!state.session) return;
+    if (!infoDeepLink) {
+      infoDeepLink = parseInfoDeepLink(location.hash) || readPendingInfo({ consume: false });
+    }
+    if (infoDeepLink) {
+      switchPanel('info');
+      return;
+    }
     const hash = (location.hash || '').replace(/^#/, '');
-    if (!hash || !state.session) return;
+    if (!hash) return;
     if (hash === 'messages' || hash.startsWith('messages/')) {
       switchPanel('messages');
       return;
     }
+    const infoLink = parseInfoDeepLink(hash);
+    if (infoLink) {
+      infoDeepLink = infoLink;
+      switchPanel('info');
+      return;
+    }
     if (hash === 'dues' || hash === 'concerns' || hash === 'profile' || hash === 'home'
-      || hash === 'directory' || hash === 'info' || hash === 'works' || hash === 'admin') {
+      || hash === 'directory' || hash === 'works' || hash === 'admin') {
       switchPanel(hash);
     }
   }
@@ -6407,8 +6780,29 @@
     }
   });
   el('infoFolderManageList')?.addEventListener('click', (event) => {
+    const shareBtn = event.target.closest('.info-folder-share');
+    const addChildBtn = event.target.closest('.info-folder-add-child');
+    const moveBtn = event.target.closest('.info-folder-move');
     const renameBtn = event.target.closest('.info-folder-rename');
     const deleteBtn = event.target.closest('.info-folder-delete');
+    if (shareBtn) {
+      const id = shareBtn.getAttribute('data-id');
+      const folder = infoFoldersCache.find((f) => f.id === id);
+      copyInfoShareLink({ folderId: id, label: `Folder link for “${folder?.title || 'folder'}”` }).catch(console.error);
+      return;
+    }
+    if (addChildBtn) {
+      const parentId = addChildBtn.getAttribute('data-id') || '';
+      const parent = infoFoldersCache.find((f) => f.id === parentId);
+      const title = prompt(`New subfolder inside “${parent?.title || 'folder'}”`, '');
+      if (title == null) return;
+      createInfoFolder({ parentId, title }).catch(console.error);
+      return;
+    }
+    if (moveBtn) {
+      moveInfoFolder(moveBtn.getAttribute('data-id')).catch(console.error);
+      return;
+    }
     if (renameBtn) {
       renameInfoFolder(renameBtn.getAttribute('data-id')).catch(console.error);
       return;
@@ -6417,18 +6811,82 @@
       deleteInfoFolder(deleteBtn.getAttribute('data-id')).catch(console.error);
     }
   });
-  document.querySelectorAll('input[name="infoSource"]').forEach((input) => {
-    input.addEventListener('change', syncInfoSourcePanes);
+  // Folder share buttons also appear in the browse list headers.
+  el('infoDocList')?.addEventListener('dblclick', (event) => {
+    if (event.target.closest('button, a, input, select, textarea')) return;
+    const card = event.target.closest('.info-doc-card');
+    if (!card) return;
+    event.preventDefault();
+    const more = card.querySelector('.info-doc-actions-more');
+    if (!more) return;
+    const open = more.hasAttribute('hidden');
+    // Close others so only one card shows extra actions.
+    el('infoDocList')?.querySelectorAll('.info-doc-card.is-actions-open').forEach((other) => {
+      if (other === card) return;
+      other.classList.remove('is-actions-open');
+      other.querySelector('.info-doc-actions-more')?.setAttribute('hidden', '');
+    });
+    if (open) {
+      more.removeAttribute('hidden');
+      card.classList.add('is-actions-open');
+    } else {
+      more.setAttribute('hidden', '');
+      card.classList.remove('is-actions-open');
+    }
   });
   el('infoDocList')?.addEventListener('click', async (event) => {
+    const infoBtn = event.target.closest('.info-doc-info-btn');
+    if (infoBtn) {
+      const card = infoBtn.closest('.info-doc-card');
+      const details = card?.querySelector('.info-doc-card-details');
+      if (!details) return;
+      const open = details.hasAttribute('hidden');
+      el('infoDocList')?.querySelectorAll('.info-doc-card.is-details-open').forEach((other) => {
+        if (other === card) return;
+        other.classList.remove('is-details-open');
+        other.querySelector('.info-doc-card-details')?.setAttribute('hidden', '');
+        const otherBtn = other.querySelector('.info-doc-info-btn');
+        if (otherBtn) {
+          otherBtn.setAttribute('aria-expanded', 'false');
+          otherBtn.setAttribute('aria-label', 'Show document details');
+        }
+      });
+      if (open) {
+        details.removeAttribute('hidden');
+        card.classList.add('is-details-open');
+        infoBtn.setAttribute('aria-expanded', 'true');
+        infoBtn.setAttribute('aria-label', 'Hide document details');
+      } else {
+        details.setAttribute('hidden', '');
+        card.classList.remove('is-details-open');
+        infoBtn.setAttribute('aria-expanded', 'false');
+        infoBtn.setAttribute('aria-label', 'Show document details');
+      }
+      return;
+    }
+    const folderShare = event.target.closest('.info-folder-share');
+    if (folderShare) {
+      const id = folderShare.getAttribute('data-id');
+      const folder = infoFoldersCache.find((f) => f.id === id);
+      await copyInfoShareLink({ folderId: id, label: `Folder link for “${folder?.title || 'folder'}”` });
+      return;
+    }
     const openBtn = event.target.closest('.info-doc-open');
+    const shareBtn = event.target.closest('.info-doc-share');
     const editBtn = event.target.closest('.info-doc-edit');
+    const moveBtn = event.target.closest('.info-doc-move');
     const pubBtn = event.target.closest('.info-doc-publish');
     const unpubBtn = event.target.closest('.info-doc-unpublish');
     const delBtn = event.target.closest('.info-doc-delete');
-    const id = (openBtn || editBtn || pubBtn || unpubBtn || delBtn)?.getAttribute('data-id');
+    const id = (openBtn || shareBtn || editBtn || moveBtn || pubBtn || unpubBtn || delBtn)?.getAttribute('data-id');
     const doc = infoDocsCache.find((d) => d.id === id);
-    if (!id || !doc) return;
+    if (!id) return;
+
+    if (shareBtn) {
+      await copyInfoShareLink({ docId: id, label: `Document link for “${doc?.title || 'document'}”` });
+      return;
+    }
+    if (!doc && !folderShare) return;
 
     if (openBtn) {
       openBtn.disabled = true;
@@ -6444,6 +6902,10 @@
     if (!isEcAdmin()) return;
     if (editBtn) {
       startInfoEdit(doc);
+      return;
+    }
+    if (moveBtn) {
+      await moveInfoDocument(id);
       return;
     }
     if (pubBtn || unpubBtn) {
@@ -6463,7 +6925,7 @@
           method: 'PATCH',
           body: JSON.stringify(body),
         });
-        await loadInfoCentre();
+        await loadInfoCentre({ skipDeepLink: true });
       } catch (err) {
         alert(err.message || 'Update failed');
         btn.disabled = false;
@@ -6475,12 +6937,17 @@
       delBtn.disabled = true;
       try {
         await api(`/api/rwa/info-centre/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
-        await loadInfoCentre();
+        await loadInfoCentre({ skipDeepLink: true });
       } catch (err) {
         alert(err.message || 'Delete failed');
         delBtn.disabled = false;
       }
     }
+  });
+
+  // Placeholder removed — handlers bound above.
+  document.querySelectorAll('input[name="infoSource"]').forEach((input) => {
+    input.addEventListener('change', syncInfoSourcePanes);
   });
 
   el('ecGrievanceRefreshBtn')?.addEventListener('click', () => loadEcGrievances().catch(console.error));

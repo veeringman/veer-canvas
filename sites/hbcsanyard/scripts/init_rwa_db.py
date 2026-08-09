@@ -964,6 +964,7 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
           title TEXT NOT NULL,
           title_hi TEXT,
           summary TEXT,
+          parent_id TEXT,
           sort_order INTEGER NOT NULL DEFAULT 100,
           created_by TEXT,
           created_at TEXT NOT NULL,
@@ -971,6 +972,8 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_info_folders_sort
           ON info_folders(sort_order, title COLLATE NOCASE);
+        CREATE INDEX IF NOT EXISTS idx_info_folders_parent
+          ON info_folders(parent_id, sort_order, title COLLATE NOCASE);
 
         CREATE TABLE IF NOT EXISTS info_documents (
           id TEXT PRIMARY KEY,
@@ -998,8 +1001,17 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
           ON info_documents(status, category, published_at DESC);
         """
     )
-    # Existing DBs may predate folder_id — add column before any index on it.
-    # (CREATE INDEX in the script above would fail on older tables that lack the column.)
+    # Existing DBs may predate folder_id / parent_id — add columns before indexes that need them.
+    folder_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_folders)").fetchall()}
+    if "parent_id" not in folder_cols:
+        conn.execute("ALTER TABLE info_folders ADD COLUMN parent_id TEXT")
+        folder_cols.add("parent_id")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_folders_parent
+          ON info_folders(parent_id, sort_order, title COLLATE NOCASE)
+        """
+    )
     cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
     if "audience" not in cols:
         conn.execute(
@@ -1183,6 +1195,75 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
                     "एमएचडब्ल्यूएस सन्यारड नियमों व उपनियमों का द्विभाषी पठनीय संस्करण।",
                 ),
             )
+    # Court Case No 01 folder + Civil Suit 2023 path-right summary (link → /documents/…).
+    court_folder_row = conn.execute(
+        "SELECT id FROM info_folders WHERE title = ? COLLATE NOCASE LIMIT 1",
+        ("Court Case No 01",),
+    ).fetchone()
+    if court_folder_row:
+        court_folder_id = court_folder_row[0]
+    else:
+        court_folder_id = "folder_court_case_01"
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO info_folders(
+              id, title, title_hi, summary, sort_order, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                court_folder_id,
+                "Court Case No 01",
+                None,
+                "Civil suit papers and readable summaries related to the colony path / access dispute.",
+                20,
+                "system",
+                now,
+                now,
+            ),
+        )
+    suit_id = "info_civil_suit_2023_path_right_html"
+    existing_suit = conn.execute(
+        "SELECT id FROM info_documents WHERE id = ?", (suit_id,)
+    ).fetchone()
+    if not existing_suit:
+        info_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+        if "external_url" in info_cols:
+            conn.execute(
+                """
+                INSERT INTO info_documents(
+                  id, title, summary, category, folder_id, doc_type, filename, original_name,
+                  mime_type, size_bytes, external_url, status, audience, published_at, published_by,
+                  created_at, updated_at, title_hi, summary_hi, has_html_hi
+                ) VALUES (
+                  ?, ?, ?, ?, ?, 'link', NULL, ?, 'text/html', 0, ?, 'published', 'all',
+                  ?, 'system', ?, ?, ?, ?, 0
+                )
+                """,
+                (
+                    suit_id,
+                    "Civil Suit 2023 — Right of Path through HBC Sanyardh",
+                    "Readable summary of the plaint (Senior Civil Judge, Mandi) for declaration and injunction on the colony link road / path.",
+                    "legal",
+                    court_folder_id,
+                    "civil-suit-2023-sanyardh-path-right.html",
+                    "/documents/civil-suit-2023-sanyardh-path-right.html",
+                    now,
+                    now,
+                    now,
+                    None,
+                    None,
+                ),
+            )
+    else:
+        # Keep published docs under the Court Case folder if it already exists.
+        conn.execute(
+            """
+            UPDATE info_documents
+               SET folder_id = ?, updated_at = ?
+             WHERE id = ? AND (folder_id IS NULL OR folder_id = '' OR folder_id != ?)
+            """,
+            (court_folder_id, now, suit_id, court_folder_id),
+        )
     conn.commit()
 
 

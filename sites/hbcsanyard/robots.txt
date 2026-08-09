@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /s/
+Allow: /share/
+Allow: /assets/
+Allow: /api/rwa/share/
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Facebot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /

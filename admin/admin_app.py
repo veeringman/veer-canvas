@@ -5758,6 +5758,137 @@ def api_rwa_info_categories():
     return jsonify({"ok": True, "categories": rwa_portal.info_centre_categories()})
 
 
+def _rwa_public_origin() -> str:
+    """Public https origin for OG tags — never use localhost/loopback."""
+    configured = (
+        os.environ.get("VEERCANVAS_PUBLIC_ORIGIN")
+        or os.environ.get("VEERCANVAS_SITE_ORIGIN")
+        or os.environ.get("PUBLIC_ORIGIN")
+        or ""
+    ).strip().rstrip("/")
+    if configured.startswith("http://") or configured.startswith("https://"):
+        return configured
+
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip()
+    host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
+    host_l = host.lower()
+    if (not host) or host_l.startswith("127.") or host_l.startswith("localhost") or host_l.endswith(".local"):
+        # Fallbacks for rebuilds / curl against the local admin port.
+        domain = (
+            os.environ.get("VEERCANVAS_SITE_DOMAIN")
+            or os.environ.get("SITE_DOMAIN")
+            or os.environ.get("DOMAIN")
+            or "hbcsanyard.veerlabs.solutions"
+        ).strip()
+        return f"https://{domain}"
+    if proto not in {"http", "https"}:
+        proto = "https"
+    # Prefer https in OG URLs even if the upstream hop was http.
+    if host_l.endswith("veerlabs.solutions"):
+        proto = "https"
+    return f"{proto}://{host}".rstrip("/")
+
+
+def _rwa_share_image_url() -> str:
+    origin = _rwa_public_origin()
+    # Dedicated 1200x630 JPEG (~60KB) — WhatsApp needs >=300px width, prefers landscape.
+    return f"{origin}/assets/og-share-card.jpg"
+
+
+def _rwa_info_share_app_url(*, doc_id: str | None = None, folder_id: str | None = None) -> str:
+    """Absolute in-scope portal URL so Android can hand off to the installed PWA."""
+    origin = _rwa_public_origin().rstrip("/")
+    if doc_id:
+        q = f"info=doc.{doc_id}"
+        h = f"info/doc/{doc_id}"
+        return f"{origin}/?source=pwa&{q}#{h}"
+    if folder_id:
+        q = f"info=folder.{folder_id}"
+        h = f"info/folder/{folder_id}"
+        return f"{origin}/?source=pwa&{q}#{h}"
+    return f"{origin}/?source=pwa#info"
+
+
+def _rwa_info_share_response(*, doc_id: str | None = None, folder_id: str | None = None):
+    # Prefer nginx-served static HTML under /share/… (WhatsApp scrapes this more
+    # reliably than the Flask-proxied /s/… route). Keep /s/ as a writer+redirect.
+    conn = _rwa_conn()
+    try:
+        meta = rwa_portal.get_info_share_meta(
+            conn,
+            doc_id=doc_id,
+            folder_id=folder_id,
+            site_root=SITE_ROOT,
+        )
+        if not meta:
+            return Response("Not found", status=404, content_type="text/plain; charset=utf-8")
+        origin = _rwa_public_origin()
+        meta = dict(meta)
+        if doc_id:
+            static_url = f"{origin}/share/doc/{meta.get('id') or doc_id}.html"
+            meta["deepLink"] = _rwa_info_share_app_url(doc_id=doc_id)
+        else:
+            static_url = f"{origin}/share/folder/{meta.get('id') or folder_id}.html"
+            meta["deepLink"] = _rwa_info_share_app_url(folder_id=folder_id)
+        try:
+            rwa_portal.write_info_share_static(
+                SITE_ROOT,
+                meta,
+                page_url=static_url,
+                image_url=_rwa_share_image_url(),
+                image_width=1200,
+                image_height=630,
+            )
+        except OSError:
+            pass
+        # Serve OG HTML directly (no redirect). WhatsApp often drops previews on 302.
+        html_page = rwa_portal.render_info_share_page(
+            meta,
+            page_url=static_url,
+            image_url=_rwa_share_image_url(),
+            image_width=1200,
+            image_height=630,
+            auto_open_app=False,
+        )
+        resp = Response(html_page, content_type="text/html; charset=utf-8")
+        resp.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        return resp
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/share/rebuild", methods=["POST"])
+def api_rwa_share_rebuild():
+    """EC helper: rebuild all static /share/*.html cards."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        n = rwa_portal.rebuild_all_info_share_static(
+            conn,
+            SITE_ROOT,
+            origin=_rwa_public_origin() or "https://hbcsanyard.veerlabs.solutions",
+        )
+        return jsonify({"ok": True, "written": n})
+    finally:
+        conn.close()
+
+
+@app.route("/s/doc/<doc_id>", methods=["GET"])
+@app.route("/api/rwa/share/doc/<doc_id>", methods=["GET"])
+def rwa_share_doc(doc_id: str):
+    """Public OG preview card for an Information Centre document (no auth)."""
+    return _rwa_info_share_response(doc_id=doc_id)
+
+
+@app.route("/s/folder/<folder_id>", methods=["GET"])
+@app.route("/api/rwa/share/folder/<folder_id>", methods=["GET"])
+def rwa_share_folder(folder_id: str):
+    """Public OG preview card for an Information Centre folder (no auth)."""
+    return _rwa_info_share_response(folder_id=folder_id)
+
+
 @app.route("/api/rwa/info-centre/folders", methods=["GET", "POST"])
 def api_rwa_info_folders():
     """List or create Information Centre folders (topics for grouping related docs)."""

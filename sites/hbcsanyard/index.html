@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260809htmlinline1">
-  <script src="portal.js?v=20260809vaultview1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260809deeplink1">
+  <script src="portal.js?v=20260809deeplink1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -58,7 +58,7 @@
       <div id="plotLoginPane">
         <h2>Residents</h2>
         <p class="muted">Sign in with your house / plot number as registered with the RWA. A one-time code is emailed when an address is on file.</p>
-        <form id="otpRequestForm" class="stack">
+        <form id="otpRequestForm" class="stack" method="post" action="#" onsubmit="return false;">
           <label>
             House / plot number
             <input id="houseIdInput" name="houseId" autocomplete="username" placeholder="e.g. 43 or 12B-1 or B-1" required>
@@ -71,7 +71,7 @@
           <div id="otpMemberList" class="member-pick-list" role="listbox" aria-label="Household members"></div>
           <button type="button" class="btn ghost" id="otpMemberBackBtn">Use a different plot</button>
         </form>
-        <form id="otpContactForm" class="stack" hidden>
+        <form id="otpContactForm" class="stack" hidden method="post" action="#" onsubmit="return false;">
           <p class="muted" id="otpContactHint">This plot is missing contact details. Enter them to receive a login code. They are saved only after you verify the code.</p>
           <label id="otpContactEmailWrap">
             Email address
@@ -85,7 +85,7 @@
           <button type="submit" class="btn primary" id="otpContactSubmitBtn">Send verification code</button>
           <button type="button" class="btn ghost" id="otpContactBackBtn">Back</button>
         </form>
-        <form id="otpVerifyForm" class="stack" hidden>
+        <form id="otpVerifyForm" class="stack" hidden method="post" action="#" onsubmit="return false;">
           <p class="muted" id="otpHint"></p>
           <label>
             One-time code
@@ -591,6 +591,11 @@
         <p class="muted" id="infoListStatus"></p>
 
         <div class="roster-block admin-only info-manage" id="infoManageBlock" data-entitlement="manage_info" hidden>
+          <details class="sensitive-ops info-manage-details" id="infoManageDetails">
+            <summary>
+              <span>Publish &amp; organise</span>
+              <span class="muted">Upload documents · nested folders · move &amp; share links</span>
+            </summary>
           <div class="roster-toolbar">
             <div>
               <h3 id="infoFormTitle">Publish a document</h3>
@@ -690,16 +695,22 @@
 
           <div class="info-folder-manage" id="infoFolderManage">
             <h4>Manage folders</h4>
-            <p class="muted">Create topics such as “Society Registration” so certificates, resolutions, and drafted HTML sit together.</p>
-            <div class="btn-row" style="align-items:end;flex-wrap:wrap;gap:0.5rem">
+            <p class="muted">Create nested topics, move folders, and copy shareable links (recipients must sign in).</p>
+            <div class="btn-row info-folder-create-row">
               <label>New folder name
                 <input id="infoFolderNewTitle" maxlength="120" placeholder="e.g. Society Registration">
+              </label>
+              <label>Inside folder
+                <select id="infoFolderNewParent">
+                  <option value="">Top level</option>
+                </select>
               </label>
               <button type="button" class="btn secondary compact" id="infoFolderCreateBtn">Add folder</button>
             </div>
             <div id="infoFolderManageList" class="info-folder-manage-list"></div>
             <p class="muted" id="infoFolderManageStatus"></p>
           </div>
+          </details>
         </div>
           <div class="lang-overlay" id="infoLangOverlay" hidden>
             <div class="lang-overlay-scrim" data-lang-close="info" aria-hidden="true"></div>

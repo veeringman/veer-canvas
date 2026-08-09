@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import pathlib
@@ -14,7 +15,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 # When imported from admin/, resolve site scripts via SITE_ROOT / VEERCANVAS tree.
 _ADMIN_DIR = pathlib.Path(__file__).resolve().parent
 _ROOT = _ADMIN_DIR.parent
@@ -1880,11 +1881,13 @@ def _info_folder_public(row: sqlite3.Row | dict, *, doc_count: int | None = None
         data = {k: row[k] for k in row.keys()}
     else:
         data = dict(row)
+    parent_id = data.get("parent_id") or data.get("parentId") or ""
     out = {
         "id": data.get("id"),
         "title": data.get("title") or "",
         "titleHi": data.get("title_hi") or data.get("titleHi") or "",
         "summary": data.get("summary") or "",
+        "parentId": parent_id or None,
         "sortOrder": int(data.get("sort_order") or data.get("sortOrder") or 100),
         "createdAt": data.get("created_at") or data.get("createdAt") or "",
         "updatedAt": data.get("updated_at") or data.get("updatedAt") or "",
@@ -1895,8 +1898,77 @@ def _info_folder_public(row: sqlite3.Row | dict, *, doc_count: int | None = None
     return out
 
 
+def _ensure_info_folder_parent_column(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(info_folders)").fetchall()}
+    if "parent_id" not in cols:
+        conn.execute("ALTER TABLE info_folders ADD COLUMN parent_id TEXT")
+        conn.commit()
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_folders_parent
+          ON info_folders(parent_id, sort_order, title COLLATE NOCASE)
+        """
+    )
+
+
+def _folder_parent_map(conn: sqlite3.Connection) -> dict[str, str | None]:
+    _ensure_info_folder_parent_column(conn)
+    rows = conn.execute("SELECT id, parent_id FROM info_folders").fetchall()
+    out: dict[str, str | None] = {}
+    for r in rows:
+        pid = (r["parent_id"] or "").strip() or None
+        out[r["id"]] = pid
+    return out
+
+
+def _folder_subtree_ids(conn: sqlite3.Connection, folder_id: str) -> list[str]:
+    """Return folder_id plus all descendant folder ids."""
+    fid = (folder_id or "").strip()
+    if not fid:
+        return []
+    parents = _folder_parent_map(conn)
+    if fid not in parents:
+        return [fid]
+    children: dict[str | None, list[str]] = {}
+    for child_id, parent_id in parents.items():
+        children.setdefault(parent_id, []).append(child_id)
+    out: list[str] = []
+    stack = [fid]
+    seen: set[str] = set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        out.append(cur)
+        for kid in sorted(children.get(cur) or []):
+            stack.append(kid)
+    return out
+
+
+def _folder_would_cycle(conn: sqlite3.Connection, folder_id: str, new_parent_id: str | None) -> bool:
+    fid = (folder_id or "").strip()
+    parent = (new_parent_id or "").strip() or None
+    if not fid or not parent:
+        return False
+    if parent == fid:
+        return True
+    parents = _folder_parent_map(conn)
+    seen: set[str] = set()
+    cur: str | None = parent
+    while cur:
+        if cur == fid:
+            return True
+        if cur in seen:
+            break
+        seen.add(cur)
+        cur = parents.get(cur)
+    return False
+
+
 def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> list[dict]:
     ensure_info_documents_table(conn)
+    _ensure_info_folder_parent_column(conn)
     rows = conn.execute(
         """
         SELECT f.*,
@@ -1905,15 +1977,26 @@ def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> 
         ORDER BY f.sort_order ASC, f.title COLLATE NOCASE ASC
         """
     ).fetchall()
-    out = []
+    by_id: dict[str, dict] = {}
     for r in rows:
         count = int(r["doc_count"] or 0) if with_counts else None
-        out.append(_info_folder_public(r, doc_count=count))
-    return out
+        by_id[r["id"]] = _info_folder_public(r, doc_count=count)
+    for folder in by_id.values():
+        parts = [folder["title"]]
+        cur = folder.get("parentId")
+        guard = 0
+        while cur and cur in by_id and guard < 40:
+            parts.append(by_id[cur]["title"])
+            cur = by_id[cur].get("parentId")
+            guard += 1
+        folder["pathLabel"] = " / ".join(reversed(parts))
+        folder["depth"] = max(0, len(parts) - 1)
+    return list(by_id.values())
 
 
 def get_info_folder(conn: sqlite3.Connection, folder_id: str) -> dict | None:
     ensure_info_documents_table(conn)
+    _ensure_info_folder_parent_column(conn)
     fid = (folder_id or "").strip()
     if not fid:
         return None
@@ -1924,7 +2007,13 @@ def get_info_folder(conn: sqlite3.Connection, folder_id: str) -> dict | None:
         "SELECT COUNT(*) AS n FROM info_documents WHERE folder_id = ?",
         (fid,),
     ).fetchone()["n"]
-    return _info_folder_public(row, doc_count=int(n or 0))
+    out = _info_folder_public(row, doc_count=int(n or 0))
+    folders = {f["id"]: f for f in list_info_folders(conn, with_counts=False)}
+    if fid in folders:
+        out["pathLabel"] = folders[fid].get("pathLabel") or out["title"]
+        out["depth"] = folders[fid].get("depth") or 0
+        out["parentId"] = folders[fid].get("parentId")
+    return out
 
 
 def upsert_info_folder(
@@ -1934,6 +2023,7 @@ def upsert_info_folder(
     actor: dict | None = None,
 ) -> dict:
     ensure_info_documents_table(conn)
+    _ensure_info_folder_parent_column(conn)
     folder_id = (payload.get("id") or "").strip() or f"folder_{secrets.token_hex(6)}"
     existing = conn.execute("SELECT * FROM info_folders WHERE id = ?", (folder_id,)).fetchone()
     title = payload.get("title") if "title" in payload else (existing["title"] if existing else None)
@@ -1957,6 +2047,22 @@ def upsert_info_folder(
         sort_order = int(sort_order)
     except (TypeError, ValueError):
         sort_order = 100
+
+    parent_raw = None
+    if "parentId" in payload or "parent_id" in payload:
+        parent_raw = payload.get("parentId", payload.get("parent_id"))
+    elif existing and "parent_id" in existing.keys():
+        parent_raw = existing["parent_id"]
+    parent_id = str(parent_raw or "").strip() or None
+    if parent_id in {"", "none", "unfiled", "null", "root"}:
+        parent_id = None
+    if parent_id:
+        parent_row = conn.execute("SELECT id FROM info_folders WHERE id = ?", (parent_id,)).fetchone()
+        if not parent_row:
+            raise ValueError("Parent folder not found")
+        if _folder_would_cycle(conn, folder_id, parent_id):
+            raise ValueError("Cannot move a folder into itself or its subfolder")
+
     now = utc_now()
     created_at = existing["created_at"] if existing else now
     created_by = (
@@ -1968,16 +2074,17 @@ def upsert_info_folder(
     conn.execute(
         """
         INSERT INTO info_folders(
-          id, title, title_hi, summary, sort_order, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          id, title, title_hi, summary, parent_id, sort_order, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           title_hi=excluded.title_hi,
           summary=excluded.summary,
+          parent_id=excluded.parent_id,
           sort_order=excluded.sort_order,
           updated_at=excluded.updated_at
         """,
-        (folder_id, title, title_hi, summary, sort_order, created_by, created_at, now),
+        (folder_id, title, title_hi, summary, parent_id, sort_order, created_by, created_at, now),
     )
     conn.commit()
     out = get_info_folder(conn, folder_id)
@@ -1988,13 +2095,24 @@ def upsert_info_folder(
 
 def delete_info_folder(conn: sqlite3.Connection, folder_id: str) -> None:
     ensure_info_documents_table(conn)
+    _ensure_info_folder_parent_column(conn)
     fid = (folder_id or "").strip()
     if not fid:
         raise ValueError("folder id required")
-    row = conn.execute("SELECT id FROM info_folders WHERE id = ?", (fid,)).fetchone()
+    row = conn.execute("SELECT id, parent_id FROM info_folders WHERE id = ?", (fid,)).fetchone()
     if not row:
         raise ValueError("Folder not found")
-    conn.execute("UPDATE info_documents SET folder_id = NULL WHERE folder_id = ?", (fid,))
+    parent_id = (row["parent_id"] or "").strip() or None
+    # Re-home direct child folders under this folder's parent (or root).
+    conn.execute(
+        "UPDATE info_folders SET parent_id = ?, updated_at = ? WHERE parent_id = ?",
+        (parent_id, utc_now(), fid),
+    )
+    # Move documents in this folder to the parent folder (or Unfiled).
+    conn.execute(
+        "UPDATE info_documents SET folder_id = ? WHERE folder_id = ?",
+        (parent_id, fid),
+    )
     conn.execute("DELETE FROM info_folders WHERE id = ?", (fid,))
     conn.commit()
 
@@ -2178,8 +2296,14 @@ def list_info_documents(
         if fid in {"", "unfiled", "none"}:
             clauses.append("(d.folder_id IS NULL OR d.folder_id = '')")
         else:
-            clauses.append("d.folder_id = ?")
-            params.append(fid)
+            subtree = _folder_subtree_ids(conn, fid)
+            if len(subtree) == 1:
+                clauses.append("d.folder_id = ?")
+                params.append(subtree[0])
+            else:
+                placeholders = ",".join("?" for _ in subtree)
+                clauses.append(f"d.folder_id IN ({placeholders})")
+                params.extend(subtree)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"""
@@ -2225,6 +2349,447 @@ def get_info_document(
     if audience == "ec" and not as_admin:
         return None
     return _info_public(row, site_root=site_root)
+
+
+def get_info_share_meta(
+    conn: sqlite3.Connection,
+    *,
+    doc_id: str | None = None,
+    folder_id: str | None = None,
+    site_root: pathlib.Path | None = None,
+) -> dict | None:
+    """Public metadata for link previews (title/summary only; no file body).
+
+    Published docs (including EC-only) get a titled card so WhatsApp/iMessage
+    can unfurl. Drafts and unknown ids return a generic gated card.
+    """
+    ensure_info_documents_table(conn)
+    if doc_id:
+        did = (doc_id or "").strip()
+        if not did:
+            return None
+        row = conn.execute(
+            """
+            SELECT d.*, f.title AS folder_title, f.title_hi AS folder_title_hi
+            FROM info_documents d
+            LEFT JOIN info_folders f ON f.id = d.folder_id
+            WHERE d.id = ?
+            """,
+            (did,),
+        ).fetchone()
+        if not row or (row["status"] or "") != "published":
+            return {
+                "kind": "doc",
+                "available": False,
+                "title": "HBC Sanyard · Information Centre",
+                "description": "Sign in to the residents portal to open this document.",
+                "deepLink": f"/#info/doc/{did}" if did else "/#info",
+                "badge": "Members only",
+            }
+        doc = _info_public(row, site_root=site_root)
+        summary = (doc.get("summary") or "").strip()
+        bits = [
+            doc.get("folderTitle") or "",
+            doc.get("categoryLabel") or "",
+            doc.get("audienceLabel") or "",
+            "HBC Sanyard Information Centre",
+        ]
+        fallback = " · ".join(b for b in bits if b)
+        return {
+            "kind": "doc",
+            "available": True,
+            "id": doc["id"],
+            "title": doc.get("title") or "Document",
+            "description": summary or fallback,
+            "badge": doc.get("audienceLabel") or "All members",
+            "category": doc.get("categoryLabel") or "",
+            "folderTitle": doc.get("folderTitle") or "",
+            "docType": doc.get("docType") or "file",
+            "deepLink": f"/#info/doc/{doc['id']}",
+        }
+
+    if folder_id:
+        folder = get_info_folder(conn, folder_id)
+        if not folder:
+            return {
+                "kind": "folder",
+                "available": False,
+                "title": "HBC Sanyard · Information Centre",
+                "description": "Sign in to the residents portal to open this folder.",
+                "deepLink": "/#info",
+                "badge": "Members only",
+            }
+        summary = (folder.get("summary") or "").strip()
+        path_label = folder.get("pathLabel") or folder.get("title") or "Folder"
+        count = int(folder.get("docCount") or 0)
+        desc = summary or (
+            f"{count} document{'s' if count != 1 else ''} in Information Centre · HBC Sanyard"
+        )
+        return {
+            "kind": "folder",
+            "available": True,
+            "id": folder["id"],
+            "title": folder.get("title") or "Folder",
+            "description": desc,
+            "badge": path_label if path_label != folder.get("title") else "Folder",
+            "deepLink": f"/#info/folder/{folder['id']}",
+        }
+    return None
+
+
+def render_info_share_page(
+    meta: dict,
+    *,
+    page_url: str,
+    image_url: str,
+    site_name: str = "HBC Sanyard",
+    image_width: int = 480,
+    image_height: int = 480,
+    auto_open_app: bool = True,
+) -> str:
+    """Self-contained HTML card with Open Graph / Twitter tags for crawlers."""
+    title = (meta.get("title") or site_name).strip() or site_name
+    description = (meta.get("description") or "Residents Welfare Association portal.").strip()
+    # WhatsApp is picky about exotic punctuation in scraped titles.
+    title = (
+        title.replace("\u2014", "-")
+        .replace("\u2013", "-")
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u00a0", " ")
+    )
+    description = (
+        description.replace("\u2014", "-")
+        .replace("\u2013", "-")
+        .replace("\u00a0", " ")
+    )
+    if len(title) > 70:
+        title = title[:67].rstrip() + "..."
+    if len(description) > 160:
+        description = description[:157].rstrip() + "..."
+    badge = (meta.get("badge") or "Members only").strip()
+    deep = meta.get("deepLink") or "/?source=pwa#info"
+    # Prefer absolute https app URL for PWA link capture (Android).
+    if deep.startswith("/"):
+        # Caller should pass absolute; keep relative as last resort.
+        pass
+    available = bool(meta.get("available"))
+    kind = meta.get("kind") or "doc"
+    eyebrow = "Information Centre document" if kind == "doc" else "Information Centre folder"
+    if not available:
+        eyebrow = "Members-only link"
+
+    et = html.escape(title, quote=True)
+    ed = html.escape(description, quote=True)
+    eb = html.escape(badge)
+    eu = html.escape(page_url, quote=True)
+    ei = html.escape(image_url, quote=True)
+    es = html.escape(site_name, quote=True)
+    edeep = html.escape(deep, quote=True)
+    eeyebrow = html.escape(eyebrow)
+    cta = "Open in HBC Sanyard app" if available else "Sign in to continue"
+    deep_js = json.dumps(deep)
+    # Android Intent — opens installed Chrome PWA when link handling is enabled.
+    # Fragment cannot appear before #Intent, so deep link is carried in ?info=.
+    intent_url = ""
+    if deep.startswith("https://"):
+        base = deep.split("#", 1)[0]
+        without_scheme = base[len("https://") :]
+        intent_url = (
+            "intent://"
+            + without_scheme
+            + "#Intent;scheme=https;action=android.intent.action.VIEW;S.browser_fallback_url="
+            + quote(deep, safe="")
+            + ";end"
+        )
+    intent_js = json.dumps(intent_url)
+    auto_script = ""
+    if auto_open_app:
+        auto_script = f"""
+  <script>
+    (function () {{
+      var ua = navigator.userAgent || '';
+      if (/bot|crawl|spider|slurp|whatsapp|facebook|facebot|telegram|twitter|linkedin|slack|discord|applebot|preview|embedly|pinterest|skype|meta-externalagent/i.test(ua)) return;
+      location.replace({deep_js});
+    }})();
+  </script>"""
+
+    open_script = f"""
+  <script>
+    (function () {{
+      var appUrl = {deep_js};
+      var intentUrl = {intent_js};
+      function remember() {{
+        try {{
+          var m = String(appUrl).match(/[?&]info=((?:doc|folder)\\.[^&#]+)/i);
+          if (!m) return;
+          var parts = m[1].split('.');
+          localStorage.setItem('hbc_pending_info', JSON.stringify({{
+            type: parts[0].toLowerCase(),
+            id: decodeURIComponent(parts.slice(1).join('.')),
+            t: Date.now()
+          }}));
+        }} catch (e) {{}}
+      }}
+      function openApp(ev) {{
+        remember();
+        var ua = navigator.userAgent || '';
+        if (intentUrl && /Android/i.test(ua)) {{
+          if (ev) ev.preventDefault();
+          location.href = intentUrl;
+          setTimeout(function () {{ location.href = appUrl; }}, 900);
+          return false;
+        }}
+        // iOS / desktop: same-origin https URL (may open installed PWA on some browsers)
+        if (ev) ev.preventDefault();
+        location.href = appUrl;
+        return false;
+      }}
+      document.addEventListener('DOMContentLoaded', function () {{
+        var btn = document.getElementById('openAppBtn');
+        if (btn) btn.addEventListener('click', openApp);
+        remember();
+      }});
+    }})();
+  </script>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{et} · {es}</title>
+  <meta name="description" content="{ed}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{eu}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_IN">
+  <meta property="og:site_name" content="{es}">
+  <meta property="og:title" content="{et}">
+  <meta property="og:description" content="{ed}">
+  <meta property="og:url" content="{eu}">
+  <meta property="og:image" content="{ei}">
+  <meta property="og:image:secure_url" content="{ei}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="{int(image_width)}">
+  <meta property="og:image:height" content="{int(image_height)}">
+  <meta property="og:image:alt" content="{es}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{et}">
+  <meta name="twitter:description" content="{ed}">
+  <meta name="twitter:image" content="{ei}">
+  <link rel="image_src" href="{ei}">
+  <link rel="icon" href="/assets/favicon-192.png" type="image/png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  {auto_script}
+  {open_script}
+  <style>
+    :root {{
+      --navy: #15233f;
+      --ink: #1c2434;
+      --muted: #5b6578;
+      --line: rgba(21, 35, 63, 0.14);
+      --cream: #f6f1e7;
+      --card: #fffdf8;
+      --green: #1f4d3a;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(176, 138, 60, 0.18), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 100% 0%, rgba(31, 77, 58, 0.14), transparent 50%),
+        linear-gradient(180deg, #eef2f7, var(--cream) 55%, #e8e2d4);
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+    }}
+    .card {{
+      width: min(100%, 28rem);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(21, 35, 63, 0.12);
+      overflow: hidden;
+    }}
+    .hero {{
+      display: flex;
+      gap: 0.9rem;
+      align-items: center;
+      padding: 1.15rem 1.2rem 0.95rem;
+      background: linear-gradient(135deg, rgba(21, 35, 63, 0.96), rgba(31, 77, 58, 0.92));
+      color: #f7f3ea;
+    }}
+    .hero img {{
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      object-fit: cover;
+      background: #fff;
+      flex: 0 0 auto;
+    }}
+    .hero .eyebrow {{
+      margin: 0 0 0.2rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.78;
+    }}
+    .hero h1 {{
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.3;
+      font-weight: 700;
+    }}
+    .body {{ padding: 1rem 1.2rem 1.25rem; }}
+    .badge {{
+      display: inline-block;
+      margin: 0 0 0.65rem;
+      padding: 0.22rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: rgba(31, 77, 58, 0.12);
+      color: var(--green);
+    }}
+    .desc {{
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }}
+    .cta {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 999px;
+      background: var(--navy);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .note {{
+      margin: 0.75rem 0 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: center;
+    }}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="hero">
+      <img src="{ei}" width="64" height="64" alt="{es}">
+      <div>
+        <p class="eyebrow">{eeyebrow}</p>
+        <h1>{et}</h1>
+      </div>
+    </div>
+    <div class="body">
+      <span class="badge">{eb}</span>
+      <p class="desc">{ed}</p>
+      <a class="cta" id="openAppBtn" href="{edeep}">{html.escape(cta)}</a>
+      <p class="note">Android: tap the button — Chrome can open the installed HBC Sanyard app.<br>
+      iPhone: WhatsApp cannot open Home Screen apps directly; tap <b>··· → Open in Safari</b>, then the button, or open the app and sign in.</p>
+      <p class="note">Residents must sign in with their house / plot number to open the full document.</p>
+    </div>
+  </main>
+</body>
+</html>
+"""
+
+
+def info_share_static_relpath(*, doc_id: str | None = None, folder_id: str | None = None) -> str:
+    if doc_id:
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "", str(doc_id)) or "doc"
+        return f"share/doc/{safe}.html"
+    if folder_id:
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "", str(folder_id)) or "folder"
+        return f"share/folder/{safe}.html"
+    return "share/index.html"
+
+
+def write_info_share_static(
+    site_root: pathlib.Path,
+    meta: dict,
+    *,
+    page_url: str,
+    image_url: str,
+    image_width: int = 1200,
+    image_height: int = 630,
+) -> pathlib.Path:
+    """Write a plain HTML share card under the site web root for nginx (no Flask)."""
+    kind = meta.get("kind") or "doc"
+    if kind == "folder":
+        rel = info_share_static_relpath(folder_id=str(meta.get("id") or ""))
+    else:
+        rel = info_share_static_relpath(doc_id=str(meta.get("id") or ""))
+    path = pathlib.Path(site_root) / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    html_page = render_info_share_page(
+        meta,
+        page_url=page_url,
+        image_url=image_url,
+        image_width=image_width,
+        image_height=image_height,
+        auto_open_app=False,
+    )
+    path.write_text(html_page, encoding="utf-8")
+    return path
+
+
+def rebuild_all_info_share_static(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    origin: str,
+) -> int:
+    """Regenerate /share/doc/*.html and /share/folder/*.html for published items."""
+    ensure_info_documents_table(conn)
+    origin = (origin or "").rstrip("/")
+    image_url = f"{origin}/assets/og-share-card.jpg"
+    written = 0
+    rows = conn.execute(
+        "SELECT id FROM info_documents WHERE status = 'published'"
+    ).fetchall()
+    for row in rows:
+        meta = get_info_share_meta(conn, doc_id=row["id"], site_root=site_root)
+        if not meta or not meta.get("available"):
+            continue
+        page_url = f"{origin}/share/doc/{meta['id']}.html"
+        meta = dict(meta)
+        meta["deepLink"] = f"{origin}/?source=pwa&info=doc.{meta['id']}#info/doc/{meta['id']}"
+        write_info_share_static(
+            site_root,
+            meta,
+            page_url=page_url,
+            image_url=image_url,
+        )
+        written += 1
+    for folder in list_info_folders(conn, with_counts=True):
+        meta = get_info_share_meta(conn, folder_id=folder["id"], site_root=site_root)
+        if not meta:
+            continue
+        page_url = f"{origin}/share/folder/{meta['id']}.html"
+        meta = dict(meta)
+        meta["deepLink"] = f"{origin}/?source=pwa&info=folder.{meta['id']}#info/folder/{meta['id']}"
+        write_info_share_static(
+            site_root,
+            meta,
+            page_url=page_url,
+            image_url=image_url,
+        )
+        written += 1
+    return written
 
 
 def repair_missing_info_files(conn: sqlite3.Connection, site_root: pathlib.Path) -> int:

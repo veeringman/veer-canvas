@@ -1,18 +1,19 @@
 /* HBC Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v80-vaultview1';
+const CACHE = 'hbc-sanyard-v91-deeplink1';
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/apple-touch-icon.png',
-  '/portal.css?v=20260809htmlinline1',
-  '/portal.js?v=20260809htmlinline1',
+  '/portal.css?v=20260809deeplink1',
+  '/portal.js?v=20260809deeplink1',
   '/assets/favicon-192.png',
   '/assets/apple-touch-icon.png',
   '/assets/rwa-assistant-avatar.svg',
   '/assets/hbcs-sanyard-seal-240.webp',
   '/assets/hbcs-sanyard-seal-240.jpg',
   '/assets/hbcs-sanyard-seal-mark.jpg',
+  '/assets/og-share-card.jpg',
 ];
 
 self.addEventListener('install', (event) => {
@@ -85,22 +86,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Share/OG cards must never be rewritten to the app shell — WhatsApp + browsers
+  // need the real HTML + image assets.
+  if (url.pathname.startsWith('/share/') || url.pathname.startsWith('/s/')) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
   // HTML + JS/CSS: network-first so updates land without stale cache
   const path = url.pathname;
-  const isDoc = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+  const isNavigate = req.mode === 'navigate';
   const isAppShell = /\.(?:js|css)(?:$|\?)/.test(path) || path.endsWith('manifest.webmanifest');
-  if (isDoc || isAppShell) {
+  const isHtmlDoc = isNavigate || path === '/' || path.endsWith('.html') || path.endsWith('/index.html');
+  if (isHtmlDoc || isAppShell) {
     event.respondWith(
       fetch(req)
         .then((res) => {
           if (res && res.status === 200 && res.type === 'basic') {
             const copy = res.clone();
-            const key = isDoc ? '/index.html' : req;
+            // Only the app shell maps to /index.html — never overwrite it with other HTML.
+            const key = (isNavigate && (path === '/' || path === '/index.html')) ? '/index.html' : req;
             caches.open(CACHE).then((cache) => cache.put(key, copy));
           }
           return res;
         })
-        .catch(() => caches.match(isDoc ? '/index.html' : req))
+        .catch(() => caches.match(isNavigate ? '/index.html' : req))
     );
     return;
   }

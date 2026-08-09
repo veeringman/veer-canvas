@@ -1083,9 +1083,9 @@ body.is-view-only #grievanceForm {
 .info-doc-list.is-cards,
 .info-folder-docs {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 15rem));
-  grid-auto-rows: 15.25rem;
-  gap: 0.9rem;
+  grid-template-columns: 1fr;
+  grid-auto-rows: auto;
+  gap: 0.55rem;
   align-items: stretch;
   justify-content: start;
   width: 100%;
@@ -1095,71 +1095,93 @@ body.is-view-only #grievanceForm {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
   min-height: 0;
   min-width: 0;
   max-width: 100%;
   padding: 0;
-  border-radius: 18px;
+  border-radius: 12px;
   border: 1px solid rgba(15, 40, 80, 0.12);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 55%),
     linear-gradient(155deg, #fffdf8 0%, #f3eee3 52%, #e8e0d0 100%);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 12px 28px rgba(15, 39, 68, 0.1);
+    0 6px 16px rgba(15, 39, 68, 0.08);
   overflow: hidden;
   text-align: left;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
 }
 .info-doc-card:hover {
-  transform: translateY(-3px);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.75) inset,
-    0 18px 36px rgba(15, 39, 68, 0.14);
+    0 10px 22px rgba(15, 39, 68, 0.12);
 }
-.info-doc-card .mobile-fold-head {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 0.4rem;
-  width: 100%;
-  margin: 0;
-  padding: 0.85rem 0.9rem 0.6rem;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  flex: 1 1 auto;
-  min-height: 0;
+.info-doc-card.is-actions-open,
+.info-doc-card.is-details-open {
+  border-color: rgba(31, 77, 58, 0.35);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 10px 22px rgba(15, 39, 68, 0.14);
 }
-.info-doc-tablet-face {
+.info-doc-card-row {
   display: grid;
-  gap: 0.4rem;
-  flex: 1 1 auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+  padding: 0.55rem 0.65rem;
   min-width: 0;
-  align-content: start;
-  text-align: left;
-  justify-items: start;
 }
 .info-doc-tablet-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.6rem;
-  padding: 0.28rem 0.55rem;
+  min-width: 2.15rem;
+  padding: 0.2rem 0.4rem;
   border-radius: 999px;
-  font: 700 0.68rem/1 system-ui, -apple-system, sans-serif;
+  font: 700 0.62rem/1 system-ui, -apple-system, sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #f7f3ea;
   background: linear-gradient(135deg, #123054, #1f4d3a);
-  box-shadow: 0 4px 12px rgba(18, 48, 84, 0.22);
+  box-shadow: 0 2px 8px rgba(18, 48, 84, 0.18);
 }
 .info-doc-card[data-doc-type="html"] .info-doc-tablet-mark {
   background: linear-gradient(135deg, #1a3f66, #2a5f8a);
+}
+.info-doc-card[data-doc-type="link"] .info-doc-tablet-mark {
+  background: linear-gradient(135deg, #3a2a12, #7a5a28);
+}
+.info-doc-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 40, 80, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--navy);
+  font: 700 0.78rem/1 Georgia, "Times New Roman", serif;
+  font-style: italic;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.info-doc-info-btn:hover,
+.info-doc-card.is-details-open .info-doc-info-btn {
+  border-color: rgba(31, 77, 58, 0.45);
+  background: rgba(31, 77, 58, 0.1);
+  color: #14532d;
+}
+.info-doc-card-details {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0 0.65rem 0.55rem;
+  min-width: 0;
+}
+.info-doc-card-details[hidden] {
+  display: none;
 }
 .info-doc-badges {
   display: flex;
@@ -1167,23 +1189,24 @@ body.is-view-only #grievanceForm {
   gap: 0.28rem;
   justify-content: flex-start;
   text-align: left;
-  max-height: 2.4rem;
-  overflow: hidden;
 }
 .info-doc-card .info-doc-card-title {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   margin: 0;
-  width: 100%;
+  min-width: 0;
   text-align: left;
   font-family: var(--display);
-  font-size: 1.02rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--navy);
-  line-height: 1.28;
+  line-height: 1.25;
   letter-spacing: -0.01em;
+  white-space: normal;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .info-doc-card .meta {
   margin: 0;
@@ -1191,40 +1214,38 @@ body.is-view-only #grievanceForm {
   text-align: left;
   font-size: 0.72rem;
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.info-doc-card .mobile-fold-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 0 0 auto;
-  margin-top: auto;
-  padding: 0.45rem 0.9rem 0.85rem;
-  border-top: 1px solid rgba(15, 40, 80, 0.08);
-  text-align: left;
-  min-height: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .info-doc-card .summary {
-  margin: 0;
+  margin: 0.1rem 0 0;
   font-size: 0.82rem;
   line-height: 1.4;
   color: #3d4658;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.info-doc-card-actions-inline {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
 .info-doc-card .btn-row {
   margin: 0;
-  margin-top: auto;
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 0.35rem;
 }
-.info-doc-card .mobile-fold-chevron {
-  display: none;
+.info-doc-actions-more {
+  padding: 0 0.65rem 0.55rem;
+}
+.info-doc-actions-more:not([hidden]) {
+  display: flex;
+  padding-top: 0.35rem;
+  border-top: 1px dashed rgba(15, 40, 80, 0.12);
 }
 .info-doc-badge {
   display: inline-block;
@@ -1276,6 +1297,11 @@ body.is-view-only #grievanceForm {
   padding-bottom: 1.1rem;
   border-bottom: 1px dashed rgba(15, 40, 80, 0.12);
 }
+.info-folder-section.is-nested {
+  margin-left: calc(var(--info-depth, 1) * 0.75rem);
+  padding-left: 0.55rem;
+  border-left: 2px solid rgba(176, 138, 60, 0.28);
+}
 .info-folder-section:last-child {
   border-bottom: 0;
   padding-bottom: 0;
@@ -1283,6 +1309,13 @@ body.is-view-only #grievanceForm {
 .info-folder-head {
   text-align: left;
   width: 100%;
+}
+.info-folder-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  align-items: center;
+  justify-content: space-between;
 }
 .info-folder-head h3 {
   margin: 0 0 0.2rem;
@@ -1296,27 +1329,17 @@ body.is-view-only #grievanceForm {
   font-size: 0.85rem;
   text-align: left;
 }
-@media (max-width: 720px) {
-  .info-doc-list.is-cards,
-  .info-folder-docs {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr));
-    grid-auto-rows: 14.5rem;
-    gap: 0.75rem;
+@media (max-width: 520px) {
+  .info-doc-card-row {
+    gap: 0.35rem 0.4rem;
+    padding: 0.45rem 0.5rem;
   }
-}
-@media (max-width: 420px) {
-  .info-doc-list.is-cards,
-  .info-folder-docs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: 13.75rem;
-    gap: 0.65rem;
+  .info-doc-card .info-doc-card-title {
+    font-size: 0.9rem;
   }
-}
-@media (max-width: 340px) {
   .info-doc-list.is-cards,
   .info-folder-docs {
-    grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: 13.5rem;
+    gap: 0.45rem;
   }
 }
 .info-folder-manage {
@@ -1329,6 +1352,12 @@ body.is-view-only #grievanceForm {
   font-family: var(--display);
   color: var(--navy);
 }
+.info-folder-create-row {
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
 .info-folder-manage-list {
   display: grid;
   gap: 0.45rem;
@@ -1336,7 +1365,7 @@ body.is-view-only #grievanceForm {
 }
 .info-folder-manage-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
@@ -1344,6 +1373,10 @@ body.is-view-only #grievanceForm {
   border-radius: 12px;
   border: 1px solid rgba(15, 40, 80, 0.08);
   background: rgba(255, 255, 255, 0.55);
+}
+.info-folder-manage-row.is-nested {
+  margin-left: calc(var(--info-depth, 0) * 0.9rem);
+  border-left: 3px solid rgba(176, 138, 60, 0.35);
 }
 .info-folder-manage-row .muted {
   display: block;
@@ -1354,6 +1387,16 @@ body.is-view-only #grievanceForm {
   margin-top: 1.75rem;
   padding-top: 1.25rem;
   border-top: 1px dashed rgba(15, 40, 80, 0.15);
+}
+.info-manage-details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.info-manage-details > summary {
+  margin-bottom: 0.85rem;
 }
 .info-source {
   border: 1px solid rgba(15, 40, 80, 0.1);
@@ -3203,20 +3246,8 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
     border-top: 1px solid var(--line);
   }
 
-  .info-doc-card.mobile-fold .mobile-fold-head {
-    padding: 0.8rem 0.85rem 0.65rem;
-  }
-  .info-doc-card.mobile-fold .mobile-fold-body {
-    padding: 0.65rem 0.85rem 0.85rem;
-  }
-  .info-doc-card.mobile-fold:not(.is-open) .mobile-fold-body {
-    display: none;
-  }
-  .info-doc-card.mobile-fold.is-open .mobile-fold-body {
-    display: flex;
-  }
   .info-doc-card .info-doc-card-title,
-  .info-doc-tablet-face,
+  .info-doc-card-row,
   .info-doc-badges,
   .info-doc-card .meta {
     text-align: left;
