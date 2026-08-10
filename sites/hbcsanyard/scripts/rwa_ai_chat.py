@@ -905,16 +905,14 @@ def build_corpus(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='info_folders'"
         ).fetchone() else set()
         if cols:
-            audiences = ["all"]
-            if _actor_can_see_ec_info(actor):
-                audiences.append("ec")
             include_drafts = _actor_can_manage_info(actor)
-            audience_sql = ",".join("?" for _ in audiences)
             select_cols = [
                 "d.id", "d.title", "d.summary", "d.category", "d.status", "d.filename",
             ]
             if "audience" in cols:
                 select_cols.append("d.audience")
+            if "allowed_member_ids" in cols:
+                select_cols.append("d.allowed_member_ids")
             if "doc_type" in cols:
                 select_cols.append("d.doc_type")
             if "mime_type" in cols:
@@ -934,8 +932,11 @@ def build_corpus(
                     "f.title_hi AS folder_title_hi",
                     "f.summary AS folder_summary",
                 ])
+                if "audience" in folder_cols:
+                    select_cols.append("f.audience AS folder_audience")
+                if "allowed_member_ids" in folder_cols:
+                    select_cols.append("f.allowed_member_ids AS folder_allowed_member_ids")
                 join_sql = "LEFT JOIN info_folders f ON f.id = d.folder_id"
-            where_aud = f"AND d.audience IN ({audience_sql})" if "audience" in cols else ""
             if include_drafts:
                 where_status = "d.status IN ('published', 'draft')"
             else:
@@ -955,12 +956,47 @@ def build_corpus(
                 SELECT {", ".join(select_cols)}
                 FROM info_documents d
                 {join_sql}
-                WHERE {where_status} {where_aud}
+                WHERE {where_status}
                 {order_sql}
                 LIMIT 200
                 """,
-                tuple(audiences) if "audience" in cols else (),
             ).fetchall()
+
+            # Enforce the same folder∩document ACL as the Info Centre API.
+            try:
+                import rwa_portal as _info_acl  # type: ignore
+            except ImportError:
+                _info_acl = None
+            filtered_rows = []
+            if _info_acl is not None and actor is not None:
+                manage_info = _actor_can_manage_info(actor)
+                folders_by_id = {
+                    r["id"]: r
+                    for r in conn.execute("SELECT * FROM info_folders").fetchall()
+                } if folder_cols else {}
+                for r in rows:
+                    if manage_info:
+                        filtered_rows.append(r)
+                        continue
+                    if (r["status"] or "") != "published":
+                        continue
+                    if _info_acl.can_view_info_document(
+                        conn, actor, r, manage_info=False, folders_by_id=folders_by_id
+                    ):
+                        filtered_rows.append(r)
+                rows = filtered_rows
+            elif not include_drafts:
+                # Fallback without portal helpers: all + EC only (legacy).
+                keep = []
+                for r in rows:
+                    aud = "all"
+                    if "audience" in r.keys() and r["audience"]:
+                        aud = str(r["audience"]).strip().lower()
+                    if aud == "all":
+                        keep.append(r)
+                    elif aud == "ec" and _actor_can_see_ec_info(actor):
+                        keep.append(r)
+                rows = keep
 
             # Folder map + per-folder inventories for topic questions
             folder_groups: dict[str, dict[str, Any]] = {}
@@ -1260,7 +1296,7 @@ def build_corpus(
             "id": "dir:stats",
             "title": "Directory overview",
             "source": "directory",
-            "text": f"HBC Sanyard active plots in the directory: {int(n)}. "
+            "text": f"Himuda Housing Colony Sanyard active plots in the directory: {int(n)}. "
             "Use the Directory tab to browse plot holders. Contact details are limited for privacy.",
         })
     except Exception:
@@ -1847,7 +1883,7 @@ def answer_query(
     house = _actor_house(actor) or "unknown"
     if "compare" in intents:
         system = (
-            "You are the HBC Sanyard RWA assistant. Answer using ONLY the provided "
+            "You are the Himuda Housing Colony Sanyard RWA assistant. Answer using ONLY the provided "
             "Information Centre context (document section text). "
             "For comparison / conflict / gap / reform questions: "
             "1) cite both sources when present (e.g. society bye-laws/rules AND the HP Societies Registration Act), "
@@ -1867,7 +1903,7 @@ def answer_query(
         max_tokens = 1100
     elif info_heavy and browse:
         system = (
-            "You are the HBC Sanyard RWA assistant. The user asked what is available "
+            "You are the Himuda Housing Colony Sanyard RWA assistant. The user asked what is available "
             "in the Information Centre. Summarize only the relevant folders/documents "
             "from context as a short list. Do not paste full section text. "
             f"Resident plot: {house}."
@@ -1876,7 +1912,7 @@ def answer_query(
         max_tokens = 450
     elif info_heavy:
         system = (
-            "You are the HBC Sanyard RWA assistant. Answer ONLY the user's specific question "
+            "You are the Himuda Housing Colony Sanyard RWA assistant. Answer ONLY the user's specific question "
             "using relevant Information Centre section text from the context. "
             "Cite the document (and section when helpful) that answers the question. "
             "Keep the reply focused: short paragraphs or a few bullets. "
@@ -1893,7 +1929,7 @@ def answer_query(
         max_tokens = 550
     else:
         system = (
-            "You are the HBC Sanyard RWA assistant. Answer ONLY the user's question. "
+            "You are the Himuda Housing Colony Sanyard RWA assistant. Answer ONLY the user's question. "
             "Use only the provided context. Give a short, specific answer (2–6 sentences or a short bullet list). "
             "Do NOT dump unrelated dues, EC lists, concerns, or FAQ. "
             "Do NOT invent figures or contact details. "

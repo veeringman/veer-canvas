@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Himuda Housing Colony Sanyard — Cash Receipt Booklet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4 portrait; margin: 6mm; }
+    * { box-sizing: border-box; }
+    :root {
+      --navy: #0b2a56;
+      --navy-2: #143a6e;
+      --green: #1a6b3a;
+      --gold: #c9a227;
+      --ink: #12233f;
+      --muted: #5a6a80;
+      --line: rgba(11, 42, 86, 0.28);
+      --paper: #ffffff;
+      --soft: #f3f6fa;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #cfd8e6;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }
+    .screen-hint {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 10px 14px;
+      text-align: center;
+      font: 500 13px/1.45 system-ui, sans-serif;
+      color: #445;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 18px;
+      padding: 5mm 6mm;
+      background: var(--paper);
+      border: 1.25pt solid var(--navy);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* Three tear-off receipts per A4 page */
+    .receipt {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border: 1pt solid var(--navy);
+      padding: 3.2mm 4.5mm 3mm;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(11, 42, 86, 0.03), transparent 18mm);
+    }
+    .receipt + .receipt {
+      margin-top: 3.5mm;
+      border-style: dashed solid solid solid;
+      border-top-style: dashed;
+    }
+    .receipt::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      width: 52mm;
+      height: 52mm;
+      transform: translate(-50%, -50%);
+      background: url("../assets/mhws-logo/mhws-logo-watermark.png") center / contain no-repeat;
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .receipt > * { position: relative; z-index: 1; }
+
+    .r-top {
+      display: grid;
+      grid-template-columns: 16mm 1fr auto;
+      gap: 3mm;
+      align-items: center;
+      padding-bottom: 2mm;
+      border-bottom: 1pt solid var(--navy);
+    }
+    .r-logo {
+      width: 15mm;
+      height: auto;
+      display: block;
+    }
+    .r-org h1 {
+      margin: 0;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 11pt;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--navy);
+      text-transform: uppercase;
+      line-height: 1.05;
+    }
+    .r-org .colony {
+      margin: 0.4mm 0 0;
+      font-size: 8pt;
+      font-weight: 700;
+      color: var(--navy-2, #143a6e);
+    }
+    .r-org .addr {
+      margin: 0.6mm 0 0;
+      font-size: 7pt;
+      font-weight: 600;
+      color: var(--green);
+    }
+    .r-meta {
+      text-align: right;
+      font-size: 7.2pt;
+      line-height: 1.35;
+      color: var(--muted);
+      min-width: 42mm;
+    }
+    .r-meta strong {
+      display: block;
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--navy);
+      margin-bottom: 1.2mm;
+    }
+    .r-meta .fill {
+      display: inline-block;
+      min-width: 28mm;
+      border-bottom: 1px solid rgba(11, 42, 86, 0.45);
+      height: 3.2mm;
+      vertical-align: bottom;
+      margin-left: 1mm;
+    }
+
+    .r-banner {
+      margin: 2mm 0 2.2mm;
+      text-align: center;
+      background: linear-gradient(90deg, var(--navy), var(--navy-2));
+      color: #f7f3ea;
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 1.4mm 3mm;
+    }
+    .r-banner .gold { color: var(--gold); margin: 0 1.5mm; }
+
+    .fields {
+      display: grid;
+      gap: 1.8mm;
+      font-size: 8pt;
+      flex: 1;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 28mm 1fr;
+      gap: 2mm;
+      align-items: end;
+    }
+    .row.two {
+      grid-template-columns: 28mm 1fr 22mm 1fr;
+    }
+    .lbl {
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--green);
+      padding-bottom: 0.4mm;
+    }
+    .line {
+      border-bottom: 1px solid rgba(11, 42, 86, 0.42);
+      min-height: 4.2mm;
+    }
+    .amount-box {
+      display: grid;
+      grid-template-columns: 28mm 1fr;
+      gap: 2mm;
+      align-items: stretch;
+      margin-top: 0.5mm;
+    }
+    .amount-value {
+      border: 1pt solid var(--navy);
+      background: var(--soft);
+      min-height: 8mm;
+      display: flex;
+      align-items: center;
+      padding: 1mm 2.5mm;
+      font-weight: 700;
+      font-size: 11pt;
+      color: var(--navy);
+      letter-spacing: 0.02em;
+    }
+    .amount-value::before {
+      content: "₹";
+      margin-right: 2mm;
+      color: var(--green);
+      font-size: 10pt;
+    }
+    .purpose {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2mm 4mm;
+      align-items: center;
+      margin-top: 0.4mm;
+      font-size: 7.4pt;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .purpose .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 1.2mm;
+    }
+    .purpose .box {
+      width: 3.2mm;
+      height: 3.2mm;
+      border: 1px solid var(--navy);
+      display: inline-block;
+    }
+
+    .r-foot {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 4mm;
+      margin-top: 2.5mm;
+      padding-top: 2mm;
+      border-top: 0.8pt solid var(--line);
+      align-items: end;
+    }
+    .note {
+      font-size: 6.6pt;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .note strong {
+      color: var(--navy);
+      font-weight: 700;
+    }
+    .sign {
+      text-align: center;
+      font-size: 7pt;
+      color: var(--muted);
+    }
+    .sign .space {
+      height: 9mm;
+      border-bottom: 1px solid rgba(11, 42, 86, 0.4);
+      margin-bottom: 1mm;
+    }
+    .sign .who {
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 7.2pt;
+    }
+    .sign .role {
+      font-size: 6.6pt;
+      color: var(--green);
+      font-weight: 600;
+    }
+    .copy-tag {
+      position: absolute;
+      top: 3mm;
+      right: 4mm;
+      font-size: 6pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(11, 42, 86, 0.45);
+      border: 0.7pt solid rgba(11, 42, 86, 0.25);
+      padding: 0.4mm 1.6mm;
+      background: rgba(255, 255, 255, 0.75);
+      z-index: 2;
+    }
+    .perf {
+      text-align: center;
+      font-size: 6pt;
+      letter-spacing: 0.2em;
+      color: rgba(11, 42, 86, 0.35);
+      margin: 1.2mm 0 0;
+      text-transform: uppercase;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .screen-hint { display: none !important; }
+      .sheet {
+        margin: 0;
+        border: 0;
+        min-height: 100vh;
+        padding: 0;
+      }
+      .receipt + .receipt { margin-top: 4mm; }
+    }
+  </style>
+</head>
+<body>
+  <p class="screen-hint">
+    Cash receipt booklet — 3 slips per A4 page. Print multiple copies for a bound book
+    (office copy / member copy). Number receipts by hand or stamp before issue.
+  </p>
+
+  <div class="sheet" aria-label="Cash receipt booklet page">
+    <!-- Receipt 1 -->
+    <article class="receipt">
+      <span class="copy-tag">Original</span>
+      <header class="r-top">
+        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-print.png" alt="">
+        <div class="r-org">
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+        </div>
+        <div class="r-meta">
+          <strong>Cash Receipt</strong>
+          No.<span class="fill"></span><br>
+          Date<span class="fill"></span>
+        </div>
+      </header>
+      <div class="r-banner">Received with thanks <span class="gold">·</span> Unity · Harmony · Progress</div>
+      <div class="fields">
+        <div class="row">
+          <span class="lbl">Received from</span>
+          <span class="line"></span>
+        </div>
+        <div class="row two">
+          <span class="lbl">Plot / House</span>
+          <span class="line"></span>
+          <span class="lbl">Block</span>
+          <span class="line"></span>
+        </div>
+        <div class="amount-box">
+          <span class="lbl">Amount (₹)</span>
+          <div class="amount-value"></div>
+        </div>
+        <div class="row">
+          <span class="lbl">In words</span>
+          <span class="line"></span>
+        </div>
+        <div class="row">
+          <span class="lbl">Towards</span>
+          <div class="purpose">
+            <span class="chk"><span class="box"></span> Maintenance / dues</span>
+            <span class="chk"><span class="box"></span> Membership</span>
+            <span class="chk"><span class="box"></span> Works / donation</span>
+            <span class="chk"><span class="box"></span> Other ________</span>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl">Period / note</span>
+          <span class="line"></span>
+        </div>
+      </div>
+      <footer class="r-foot">
+        <p class="note">
+          <strong>Mode:</strong> Cash only on this slip.<br>
+          Subject to verification by the Society. Keep this as your acknowledgement.
+        </p>
+        <div class="sign">
+          <div class="space"></div>
+          <div class="who">Authorised signatory</div>
+          <div class="role">Treasurer / Office bearer</div>
+        </div>
+      </footer>
+    </article>
+    <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
+
+    <!-- Receipt 2 -->
+    <article class="receipt">
+      <span class="copy-tag">Original</span>
+      <header class="r-top">
+        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-print.png" alt="">
+        <div class="r-org">
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+        </div>
+        <div class="r-meta">
+          <strong>Cash Receipt</strong>
+          No.<span class="fill"></span><br>
+          Date<span class="fill"></span>
+        </div>
+      </header>
+      <div class="r-banner">Received with thanks <span class="gold">·</span> Unity · Harmony · Progress</div>
+      <div class="fields">
+        <div class="row">
+          <span class="lbl">Received from</span>
+          <span class="line"></span>
+        </div>
+        <div class="row two">
+          <span class="lbl">Plot / House</span>
+          <span class="line"></span>
+          <span class="lbl">Block</span>
+          <span class="line"></span>
+        </div>
+        <div class="amount-box">
+          <span class="lbl">Amount (₹)</span>
+          <div class="amount-value"></div>
+        </div>
+        <div class="row">
+          <span class="lbl">In words</span>
+          <span class="line"></span>
+        </div>
+        <div class="row">
+          <span class="lbl">Towards</span>
+          <div class="purpose">
+            <span class="chk"><span class="box"></span> Maintenance / dues</span>
+            <span class="chk"><span class="box"></span> Membership</span>
+            <span class="chk"><span class="box"></span> Works / donation</span>
+            <span class="chk"><span class="box"></span> Other ________</span>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl">Period / note</span>
+          <span class="line"></span>
+        </div>
+      </div>
+      <footer class="r-foot">
+        <p class="note">
+          <strong>Mode:</strong> Cash only on this slip.<br>
+          Subject to verification by the Society. Keep this as your acknowledgement.
+        </p>
+        <div class="sign">
+          <div class="space"></div>
+          <div class="who">Authorised signatory</div>
+          <div class="role">Treasurer / Office bearer</div>
+        </div>
+      </footer>
+    </article>
+    <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
+
+    <!-- Receipt 3 -->
+    <article class="receipt">
+      <span class="copy-tag">Original</span>
+      <header class="r-top">
+        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-print.png" alt="">
+        <div class="r-org">
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+        </div>
+        <div class="r-meta">
+          <strong>Cash Receipt</strong>
+          No.<span class="fill"></span><br>
+          Date<span class="fill"></span>
+        </div>
+      </header>
+      <div class="r-banner">Received with thanks <span class="gold">·</span> Unity · Harmony · Progress</div>
+      <div class="fields">
+        <div class="row">
+          <span class="lbl">Received from</span>
+          <span class="line"></span>
+        </div>
+        <div class="row two">
+          <span class="lbl">Plot / House</span>
+          <span class="line"></span>
+          <span class="lbl">Block</span>
+          <span class="line"></span>
+        </div>
+        <div class="amount-box">
+          <span class="lbl">Amount (₹)</span>
+          <div class="amount-value"></div>
+        </div>
+        <div class="row">
+          <span class="lbl">In words</span>
+          <span class="line"></span>
+        </div>
+        <div class="row">
+          <span class="lbl">Towards</span>
+          <div class="purpose">
+            <span class="chk"><span class="box"></span> Maintenance / dues</span>
+            <span class="chk"><span class="box"></span> Membership</span>
+            <span class="chk"><span class="box"></span> Works / donation</span>
+            <span class="chk"><span class="box"></span> Other ________</span>
+          </div>
+        </div>
+        <div class="row">
+          <span class="lbl">Period / note</span>
+          <span class="line"></span>
+        </div>
+      </div>
+      <footer class="r-foot">
+        <p class="note">
+          <strong>Mode:</strong> Cash only on this slip.<br>
+          Subject to verification by the Society. Keep this as your acknowledgement.
+        </p>
+        <div class="sign">
+          <div class="space"></div>
+          <div class="who">Authorised signatory</div>
+          <div class="role">Treasurer / Office bearer</div>
+        </div>
+      </footer>
+    </article>
+  </div>
+</body>
+</html>

@@ -211,7 +211,10 @@ rsync -az --delete \
   --filter 'P visitor-access.json' \
   --filter 'P data/' \
   --filter 'P data/***' \
+  --filter 'P share/' \
+  --filter 'P share/***' \
   --exclude 'data/' \
+  --exclude 'share/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
@@ -220,7 +223,7 @@ rsync -az --delete \
 
 # First-deploy bootstrap only: create empty runtime dirs + seed DB/example if missing (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' '$WEB_ROOT/data/templates' '$WEB_ROOT/share/doc' '$WEB_ROOT/share/folder' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data' '$WEB_ROOT/share'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \
@@ -373,6 +376,35 @@ else
   echo
   ADMIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "http://${SITE_DOMAIN}/admin/" || true)
   echo "Admin HTTP status (http): $ADMIN_CODE"
+fi
+
+# Rebuild Info Centre OG share cards (static /share/*.html) so WhatsApp links do not 404.
+if [[ "$SITE_ID" == "hbcsanyard" ]]; then
+  echo "Rebuilding Info Centre share OG cards ..."
+  ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s <<EOF
+set -euo pipefail
+ROOT='$WEB_ROOT'
+mkdir -p "\$ROOT/share/doc" "\$ROOT/share/folder"
+export VEERCANVAS_SITE_ID=hbcsanyard
+export VEERCANVAS_SITE_ROOT="\$ROOT"
+export VEERCANVAS_PUBLIC_ORIGIN='https://$SITE_DOMAIN'
+"\$ROOT/venv/bin/python" - <<'PY'
+import os, sqlite3, sys
+from pathlib import Path
+root = Path(os.environ["VEERCANVAS_SITE_ROOT"])
+sys.path.insert(0, str(root / "veercanvas" / "admin"))
+sys.path.insert(0, str(root / "scripts"))
+import rwa_portal
+db = root / "data" / "rwa.db"
+conn = sqlite3.connect(db)
+conn.row_factory = sqlite3.Row
+n = rwa_portal.rebuild_all_info_share_static(
+    conn, root, origin=os.environ.get("VEERCANVAS_PUBLIC_ORIGIN") or "https://hbcsanyard.veerlabs.solutions"
+)
+conn.close()
+print(f"wrote {n} share cards")
+PY
+EOF
 fi
 
 echo "Deploy complete."

@@ -2,136 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HBC Sanyard RWA — Letterhead (blank pad)</title>
+  <title>Himuda Housing Colony Sanyard — Letterhead (blank pad)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Source+Sans+3:wght@600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 12mm; }
+    @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
+    :root {
+      --navy: #0b2a56;
+      --green: #1a6b3a;
+      --gold: #c9a227;
+    }
     body {
       margin: 0;
-      font-family: "Times New Roman", Times, Georgia, serif;
-      color: #1a1208;
-      background: #e8e0d0;
+      color: #12233f;
+      background: #cfd8e6;
+      font-family: "Source Sans 3", system-ui, sans-serif;
+    }
+    .screen-hint {
+      text-align: center;
+      padding: 10px;
+      font: 500 13px/1.4 system-ui, sans-serif;
+      color: #555;
     }
     .sheet {
+      position: relative;
       width: 210mm;
       min-height: 297mm;
-      margin: 0 auto;
-      padding: 10mm 12mm 14mm;
-      background: #fdfaf3;
-      border: 2px solid #6b4a2e;
-      position: relative;
+      margin: 0 auto 16px;
+      padding: 10mm 14mm 0;
+      background: #fff;
+      border: 1.25pt solid var(--navy);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .sheet::before,
     .sheet::after {
       content: "";
       position: absolute;
-      width: 18mm;
-      height: 18mm;
-      border: 2px solid #6b4a2e;
+      top: 0;
+      height: 3mm;
     }
-    .sheet::before { top: 6mm; left: 6mm; border-right: 0; border-bottom: 0; }
-    .sheet::after { bottom: 6mm; right: 6mm; border-left: 0; border-top: 0; }
-    .corner-bl, .corner-tr {
-      position: absolute;
-      width: 18mm;
-      height: 18mm;
-      border: 2px solid #6b4a2e;
-    }
-    .corner-bl { bottom: 6mm; left: 6mm; border-right: 0; border-top: 0; }
-    .corner-tr { top: 6mm; right: 6mm; border-left: 0; border-bottom: 0; }
+    .sheet::before { left: 0; width: 42%; background: var(--navy); }
+    .sheet::after { right: 0; width: 42%; background: var(--green); }
     .head {
       display: grid;
       grid-template-columns: 28mm 1fr;
-      gap: 8mm;
+      gap: 7mm;
       align-items: center;
-      padding-bottom: 5mm;
-      border-bottom: 2px solid #6b4a2e;
-      margin-bottom: 4mm;
+      padding-bottom: 4mm;
+      border-bottom: 1.1pt solid var(--navy);
     }
     .seal {
       width: 26mm;
-      height: 26mm;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid #9e7d3a;
+      height: auto;
+      display: block;
     }
     .org h1 {
       margin: 0;
+      font-family: "Cormorant Garamond", Georgia, serif;
       font-size: 17pt;
-      letter-spacing: 0.02em;
-      color: #3d2914;
-      line-height: 1.15;
+      letter-spacing: 0.04em;
+      color: var(--navy);
+      text-transform: uppercase;
+      line-height: 1.1;
     }
     .org .sub {
       margin: 2mm 0 0;
-      font-size: 10.5pt;
-      color: #4a3728;
-      line-height: 1.35;
-    }
-    .org .tag {
-      margin: 2mm 0 0;
-      font-size: 9.5pt;
-      font-weight: 700;
-      color: #6b4a2e;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-    .banner {
-      text-align: center;
-      background: linear-gradient(180deg, #4a3728, #3d2914);
-      color: #fdf6e8;
       font-size: 10pt;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      padding: 2.5mm 4mm;
-      margin-bottom: 8mm;
+      font-weight: 600;
+      color: var(--green);
     }
     .body-area {
-      min-height: 195mm;
-      border: 1px dashed rgba(107, 74, 46, 0.35);
-      border-radius: 2mm;
+      flex: 1;
+      min-height: 210mm;
     }
-    .footer {
-      margin-top: 6mm;
+    .slogan-bar {
+      margin: 0 -14mm;
+      background: var(--navy);
+      color: #f7f3ea;
       text-align: center;
-      font-size: 8.5pt;
-      color: #6b4a2e;
-      letter-spacing: 0.08em;
-      border-top: 1px solid rgba(107, 74, 46, 0.35);
-      padding-top: 3mm;
+      padding: 2.5mm 10mm;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
     }
-    .screen-hint {
-      text-align: center;
-      padding: 8px;
-      font-family: system-ui, sans-serif;
-      font-size: 13px;
-      color: #555;
-    }
+    .slogan-bar .sep { color: var(--gold); margin: 0 1.5mm; letter-spacing: 0; }
     @media print {
       body { background: #fff; }
       .screen-hint { display: none; }
-      .sheet { border-width: 1.5pt; margin: 0; box-shadow: none; }
-      .body-area { border-color: transparent; }
+      .sheet { margin: 0; }
     }
   </style>
 </head>
 <body>
-  <p class="screen-hint">Print on A4 — use for blank letterhead pads. File: documents/rwa-letterhead-blank.html</p>
+  <p class="screen-hint">Blank A4 letterhead pad — Housing Colony Sanyard, Mandi HP 175001</p>
   <div class="sheet">
-    <span class="corner-bl" aria-hidden="true"></span>
-    <span class="corner-tr" aria-hidden="true"></span>
     <header class="head">
-      <img class="seal" src="../assets/hbcs-sanyard-seal-mark.jpg" alt="HBC Sanyard seal" width="98" height="98">
+      <img class="seal" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
       <div class="org">
-        <h1>Housing Board Colony Sanyard<br>Residents Welfare Association</h1>
-        <p class="sub">HIMUDA Housing Colony Sanyard · Mandi (H.P.)</p>
-        <p class="tag">Registered residents welfare association</p>
+        <h1>Mandi Housing Welfare Society</h1>
+        <p class="colony">Himuda Housing Colony Sanyard</p>
+        <p class="sub">Housing Colony Sanyard, Mandi HP 175001</p>
       </div>
     </header>
-    <div class="banner">Executive Committee · HBC Sanyard RWA</div>
     <div class="body-area" aria-label="Writing area"></div>
-    <footer class="footer">Service to the Colony · Collective Strength · Cooperation for All</footer>
+    <div class="slogan-bar">
+      Unity<span class="sep">·</span>Harmony<span class="sep">·</span>Progress
+    </div>
   </div>
 </body>
 </html>

@@ -1,0 +1,352 @@
+{
+  "version": "20260810final1",
+  "updated": "2026-08-10",
+  "master": "assets/mhws-logo/mhws-logo-official.png",
+  "locked": "assets/mhws-logo/mhws-logo-official-locked-20260810.png",
+  "archive": "assets/mhws-logo/mhws-logo-official-archive-20260810.png",
+  "howtoChange": [
+    "1. Edit / regenerate master: python3 scripts/regenerate_official_logo.py",
+    "2. Export variants: python3 scripts/export_logo_variants.py",
+    "3. Verify every consumer: python3 scripts/check_logo_refs.py",
+    "4. Bump logo.manifest.json version + portal cache (?v=…) if browsers stick",
+    "5. Deploy site assets + documents + scripts"
+  ],
+  "roles": {
+    "official": {
+      "path": "assets/mhws-logo/mhws-logo-official.png",
+      "use": "Canonical transparent seal — portal hero, mini seal, proceedings UI"
+    },
+    "print": {
+      "path": "assets/mhws-logo/mhws-logo-print.png",
+      "use": "Print / PDF headers — letterheads, receipts, certificates, pads"
+    },
+    "watermark": {
+      "path": "assets/mhws-logo/mhws-logo-watermark.png",
+      "use": "Pre-faded watermark for pads, receipts, PDF letterhead chrome"
+    },
+    "web512": {
+      "path": "assets/mhws-logo/mhws-logo-web-512.png",
+      "use": "Large web / site-meta brand web mark"
+    },
+    "web256": {
+      "path": "assets/mhws-logo/mhws-logo-web-256.png",
+      "use": "Info Centre HTML mastheads, attest page"
+    },
+    "icon128": {
+      "path": "assets/mhws-logo/mhws-logo-icon-128.png",
+      "use": "Compact UI icons"
+    },
+    "icon64": {
+      "path": "assets/mhws-logo/mhws-logo-icon-64.png",
+      "use": "Tiny chrome / lists"
+    },
+    "ogSquare": {
+      "path": "assets/mhws-logo/mhws-logo-og-square.png",
+      "use": "Square share / OG-style mark on cream"
+    },
+    "favicon": {
+      "path": "assets/favicon-192.png",
+      "use": "Browser favicon + PWA shortcut icons"
+    },
+    "appleTouch": {
+      "path": "assets/apple-touch-icon.png",
+      "use": "Apple touch 180 (also mirrored at /apple-touch-icon.png)"
+    },
+    "appleTouchRoot": {
+      "path": "apple-touch-icon.png",
+      "use": "Root apple-touch for iOS home screen"
+    },
+    "appleTouch167": {
+      "path": "assets/apple-touch-icon-167.png",
+      "use": "Apple touch 167"
+    },
+    "appleTouch152": {
+      "path": "assets/apple-touch-icon-152.png",
+      "use": "Apple touch 152"
+    },
+    "pwa512": {
+      "path": "assets/hbcs-sanyard-seal-512.png",
+      "use": "PWA any-purpose 512"
+    },
+    "pwaMaskable": {
+      "path": "assets/hbcs-sanyard-seal-512-maskable.png",
+      "use": "PWA maskable 512 (navy plate)"
+    },
+    "sealMark": {
+      "path": "assets/hbcs-sanyard-seal-mark.png",
+      "use": "Legacy transparent mark path (kept in sync)"
+    },
+    "seal240": {
+      "path": "assets/hbcs-sanyard-seal-240.png",
+      "use": "Legacy 240 seal (kept in sync)"
+    }
+  },
+  "consumers": [
+    {
+      "id": "portal-gate",
+      "file": "index.html",
+      "role": "official",
+      "kind": "img",
+      "note": "Gate hero seal"
+    },
+    {
+      "id": "portal-mini",
+      "file": "index.html",
+      "role": "official",
+      "kind": "img",
+      "note": "Signed-in brand mini seal"
+    },
+    {
+      "id": "portal-favicon",
+      "file": "index.html",
+      "role": "favicon",
+      "kind": "link",
+      "note": "Portal favicon"
+    },
+    {
+      "id": "portal-apple-touch",
+      "file": "index.html",
+      "role": "appleTouch",
+      "kind": "link",
+      "note": "Apple touch icons (180/167/152 + root)"
+    },
+    {
+      "id": "portal-proceedings-seal",
+      "file": "portal.js",
+      "role": "official",
+      "kind": "img",
+      "note": "Proceedings modal seal markup"
+    },
+    {
+      "id": "sw-precache-official",
+      "file": "sw.js",
+      "role": "official",
+      "kind": "precache",
+      "note": "Service worker precache"
+    },
+    {
+      "id": "sw-precache-web256",
+      "file": "sw.js",
+      "role": "web256",
+      "kind": "precache",
+      "note": "Service worker precache"
+    },
+    {
+      "id": "sw-precache-favicon",
+      "file": "sw.js",
+      "role": "favicon",
+      "kind": "precache",
+      "note": "Push / precache favicon"
+    },
+    {
+      "id": "sw-precache-pwa512",
+      "file": "sw.js",
+      "role": "pwa512",
+      "kind": "precache",
+      "note": "PWA 512 precache"
+    },
+    {
+      "id": "sw-precache-maskable",
+      "file": "sw.js",
+      "role": "pwaMaskable",
+      "kind": "precache",
+      "note": "PWA maskable precache"
+    },
+    {
+      "id": "manifest-favicon",
+      "file": "manifest.webmanifest",
+      "role": "favicon",
+      "kind": "manifest",
+      "note": "Web app manifest icons / shortcuts"
+    },
+    {
+      "id": "manifest-pwa512",
+      "file": "manifest.webmanifest",
+      "role": "pwa512",
+      "kind": "manifest",
+      "note": "PWA any 512"
+    },
+    {
+      "id": "manifest-maskable",
+      "file": "manifest.webmanifest",
+      "role": "pwaMaskable",
+      "kind": "manifest",
+      "note": "PWA maskable 512"
+    },
+    {
+      "id": "manifest-apple-root",
+      "file": "manifest.webmanifest",
+      "role": "appleTouchRoot",
+      "kind": "manifest",
+      "note": "Root apple-touch in manifest"
+    },
+    {
+      "id": "site-meta-brand",
+      "file": "site-meta.json",
+      "role": "official",
+      "kind": "meta",
+      "note": "brandMark"
+    },
+    {
+      "id": "site-meta-favicon",
+      "file": "site-meta.json",
+      "role": "favicon",
+      "kind": "meta",
+      "note": "favicon"
+    },
+    {
+      "id": "site-meta-print",
+      "file": "site-meta.json",
+      "role": "print",
+      "kind": "meta",
+      "note": "logoPrint"
+    },
+    {
+      "id": "site-meta-watermark",
+      "file": "site-meta.json",
+      "role": "watermark",
+      "kind": "meta",
+      "note": "logoWatermark"
+    },
+    {
+      "id": "site-meta-web",
+      "file": "site-meta.json",
+      "role": "web512",
+      "kind": "meta",
+      "note": "logoWeb"
+    },
+    {
+      "id": "attest-mark",
+      "file": "attest.html",
+      "role": "web256",
+      "kind": "img",
+      "note": "Attestation verify page seal"
+    },
+    {
+      "id": "attest-favicon",
+      "file": "attest.html",
+      "role": "favicon",
+      "kind": "link",
+      "note": "Attest favicon"
+    },
+    {
+      "id": "pdf-reports-header",
+      "file": "scripts/rwa_reports.py",
+      "role": "print",
+      "kind": "python",
+      "note": "PDF report / certificate / receipt headers (LOGO_CANDIDATES)"
+    },
+    {
+      "id": "pdf-reports-watermark",
+      "file": "scripts/rwa_reports.py",
+      "role": "watermark",
+      "kind": "python",
+      "note": "PDF letterhead watermark (WATERMARK_CANDIDATES)"
+    },
+    {
+      "id": "export-ec-pad",
+      "file": "scripts/export_ec_pad.py",
+      "role": "print",
+      "kind": "img",
+      "note": "EC chart HTML generator seal src"
+    },
+    {
+      "id": "doc-letterhead-logo",
+      "file": "documents/mhws-letterhead-pad.html",
+      "role": "print",
+      "kind": "img",
+      "note": "Letterhead header logo"
+    },
+    {
+      "id": "doc-letterhead-wm",
+      "file": "documents/mhws-letterhead-pad.html",
+      "role": "watermark",
+      "kind": "img",
+      "note": "Letterhead watermark"
+    },
+    {
+      "id": "doc-receipt-logo",
+      "file": "documents/mhws-cash-receipt-booklet.html",
+      "role": "print",
+      "kind": "img",
+      "note": "Cash receipt slip logos (×3)"
+    },
+    {
+      "id": "doc-receipt-wm",
+      "file": "documents/mhws-cash-receipt-booklet.html",
+      "role": "watermark",
+      "kind": "css-url",
+      "note": "Cash receipt watermark background"
+    },
+    {
+      "id": "doc-letterhead-blank",
+      "file": "documents/rwa-letterhead-blank.html",
+      "role": "print",
+      "kind": "img",
+      "note": "Blank letterhead seal"
+    },
+    {
+      "id": "doc-ec-pad",
+      "file": "documents/ec-committee-pad.html",
+      "role": "print",
+      "kind": "img",
+      "note": "EC committee pad seal"
+    },
+    {
+      "id": "doc-proceedings-ec",
+      "file": "documents/proceedings-ec-mom-pad.html",
+      "role": "print",
+      "kind": "img",
+      "note": "EC MoM pad seal"
+    },
+    {
+      "id": "doc-proceedings-gh",
+      "file": "documents/proceedings-gh-mom-pad.html",
+      "role": "print",
+      "kind": "img",
+      "note": "GH MoM pad seal"
+    },
+    {
+      "id": "info-bylaws-mast",
+      "file": "documents/mhws-sanyard-rules-bylaws.html",
+      "role": "web256",
+      "kind": "img",
+      "note": "Info Centre — Rules & Bye-laws masthead"
+    },
+    {
+      "id": "info-bylaws-favicon",
+      "file": "documents/mhws-sanyard-rules-bylaws.html",
+      "role": "favicon",
+      "kind": "link",
+      "note": "Info Centre — Rules favicon"
+    },
+    {
+      "id": "info-act-mast",
+      "file": "documents/hp-societies-registration-act-2006.html",
+      "role": "web256",
+      "kind": "img",
+      "note": "Info Centre — HP Societies Act masthead"
+    },
+    {
+      "id": "info-act-favicon",
+      "file": "documents/hp-societies-registration-act-2006.html",
+      "role": "favicon",
+      "kind": "link",
+      "note": "Info Centre — Act favicon"
+    },
+    {
+      "id": "info-civil-mast",
+      "file": "documents/civil-suit-2023-sanyardh-path-right.html",
+      "role": "web256",
+      "kind": "img",
+      "note": "Info Centre — Civil Suit case file masthead"
+    },
+    {
+      "id": "info-civil-favicon",
+      "file": "documents/civil-suit-2023-sanyardh-path-right.html",
+      "role": "favicon",
+      "kind": "link",
+      "note": "Info Centre — Civil Suit favicon"
+    }
+  ]
+}

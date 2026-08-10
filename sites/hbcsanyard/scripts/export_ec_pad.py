@@ -143,7 +143,7 @@ def render(office: list[dict], general: list[dict]) -> str:
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HBC Sanyard RWA — Executive Committee Pad</title>
+  <title>Himuda Housing Colony Sanyard — Executive Committee Pad</title>
   <style>
     @page {{ size: A4 portrait; margin: 10mm; }}
     * {{ box-sizing: border-box; }}
@@ -299,10 +299,11 @@ def render(office: list[dict], general: list[dict]) -> str:
     <span class="corner c-br" aria-hidden="true"></span>
 
     <header class="head">
-      <img class="seal" src="../assets/hbcs-sanyard-seal-mark.jpg" alt="HBC Sanyard seal">
+      <img class="seal" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
       <div class="org">
-        <h1>Housing Board Colony Sanyard<br>Residents Welfare Association</h1>
-        <p>HIMUDA Housing Colony Sanyard · Mandi (H.P.)</p>
+        <h1>Himuda Housing Colony Sanyard</h1>
+        <p>Housing Colony Sanyard, Mandi HP 175001</p>
+        <p>Unity · Harmony · Progress</p>
         <p><strong>Executive Committee</strong></p>
       </div>
     </header>
@@ -322,8 +323,8 @@ def render(office: list[dict], general: list[dict]) -> str:
     <div class="members-heading"><span>Executive Committee Members</span></div>
     {member_tables(general_for_members, member_start)}
 
-    <footer class="footer">Service to the Colony · Collective Strength · Cooperation for All</footer>
-    <p class="meta">Chart generated {html.escape(generated)} · HBC Sanyard RWA</p>
+    <footer class="footer">Unity · Harmony · Progress</footer>
+    <p class="meta">Chart generated {html.escape(generated)} · Himuda Housing Colony Sanyard</p>
   </div>
 </body>
 </html>

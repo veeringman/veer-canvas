@@ -128,7 +128,7 @@ def append_attestation_to_story(
     story.append(Spacer(1, 6 * mm))
     story.append(
         Paragraph(
-            "<b>Portal attestation</b> - Digitally attested by HBC Sanyard RWA "
+            "<b>Portal attestation</b> - Digitally attested by Himuda Housing Colony Sanyard "
             "(not an IT Act eSign). Verify authenticity on the colony portal:",
             foot,
         )

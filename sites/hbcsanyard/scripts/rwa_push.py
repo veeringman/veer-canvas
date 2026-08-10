@@ -91,7 +91,7 @@ def ensure_vapid_keys(site_root: pathlib.Path) -> dict[str, str]:
             existing = ""
     # Preserve unrelated keys
     lines = [
-        "# Web Push VAPID keys for HBC Sanyard (do NOT commit real keys).",
+        "# Web Push VAPID keys for Himuda Housing Colony Sanyard (do NOT commit real keys).",
         "# Generated automatically on first use; redeploy preserves this file.",
         f"RWA_VAPID_PUBLIC_KEY={pub}",
         f"RWA_VAPID_PRIVATE_KEY={priv}",
@@ -424,7 +424,7 @@ def enqueue_push(
     ensure_vapid_keys(site_root)
     et = (event_type or "test").strip()
     pref_key = EVENT_PREF.get(et, "messages")
-    title = (title or "HBC Sanyard").strip()[:120]
+    title = (title or "Himuda Housing Colony Sanyard").strip()[:120]
     body = (body or "").strip()[:240]
     url = (url or "/").strip()[:400]
     now = utc_now()
@@ -508,7 +508,7 @@ def send_test_push(conn: sqlite3.Connection, site_root: pathlib.Path, actor: dic
         site_root,
         event_type="test",
         audience=audience,
-        title="HBC Sanyard",
+        title="Himuda Housing Colony Sanyard",
         body="Test notification — push is working on this device.",
         url="/#profile",
     )

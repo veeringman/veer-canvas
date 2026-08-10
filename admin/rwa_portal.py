@@ -53,6 +53,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
+    ensure_meeting_proceedings_table,
     migrate_roman_plot_ids,
     ensure_otp_pending_columns,
     ensure_resident_profile_columns,
@@ -112,7 +113,7 @@ def load_smtp_config(site_root: pathlib.Path | None = None) -> dict:
     sender = (
         os.environ.get("RWA_SMTP_FROM")
         or os.environ.get("RWA_SMTP_USER")
-        or "vij.ksh@gmail.com"
+        or "housingcolonysanyard@gmail.com"
     ).strip()
     user = (os.environ.get("RWA_SMTP_USER") or sender).strip()
     password = (os.environ.get("RWA_SMTP_PASS") or os.environ.get("RWA_SMTP_APP_PASSWORD") or "").strip()
@@ -407,8 +408,8 @@ def read_platform_settings(site_root: pathlib.Path) -> dict:
             "provider": status["provider"] or "gmail",
             "host": status["host"] or "smtp.gmail.com",
             "port": status["port"] or 587,
-            "user": status["user"] or "vij.ksh@gmail.com",
-            "from": status["from"] or "vij.ksh@gmail.com",
+            "user": status["user"] or "housingcolonysanyard@gmail.com",
+            "from": status["from"] or "housingcolonysanyard@gmail.com",
             "passwordSet": status["passwordSet"],
             "configured": status["configured"],
         },
@@ -440,8 +441,8 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
         "RWA_SMTP_PROVIDER": str(smtp.get("provider") or payload.get("provider") or existing.get("RWA_SMTP_PROVIDER") or "gmail").strip(),
         "RWA_SMTP_HOST": str(smtp.get("host") or payload.get("host") or existing.get("RWA_SMTP_HOST") or "smtp.gmail.com").strip(),
         "RWA_SMTP_PORT": str(smtp.get("port") or payload.get("port") or existing.get("RWA_SMTP_PORT") or "587").strip(),
-        "RWA_SMTP_USER": str(smtp.get("user") or payload.get("user") or existing.get("RWA_SMTP_USER") or "vij.ksh@gmail.com").strip(),
-        "RWA_SMTP_FROM": str(smtp.get("from") or payload.get("from") or existing.get("RWA_SMTP_FROM") or "vij.ksh@gmail.com").strip(),
+        "RWA_SMTP_USER": str(smtp.get("user") or payload.get("user") or existing.get("RWA_SMTP_USER") or "housingcolonysanyard@gmail.com").strip(),
+        "RWA_SMTP_FROM": str(smtp.get("from") or payload.get("from") or existing.get("RWA_SMTP_FROM") or "housingcolonysanyard@gmail.com").strip(),
         "RWA_OTP_TTL": str(payload.get("otpTtl") or existing.get("RWA_OTP_TTL") or "600").strip(),
     }
     if payload.get("superadminUser"):
@@ -583,6 +584,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
         ensure_colony_works_table(conn)
+        ensure_meeting_proceedings_table(conn)
         ensure_entitlements_schema(conn)
         ensure_report_templates_table(conn)
         ensure_bilingual_content_columns(conn)
@@ -848,7 +850,7 @@ def send_otp_email(email: str | None, code: str, house_id: str, site_root: pathl
             f"It expires in {OTP_TTL_SECONDS // 60} minutes.\n"
             "If you did not request this, ignore this email.\n\n"
             "— Residents Welfare Association\n"
-            "  Housing Board Colony Sanyard, Mandi\n"
+            "  Housing Colony Sanyard, Mandi\n"
         )
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=25) as smtp:
             smtp.ehlo()
@@ -1892,12 +1894,23 @@ def info_centre_categories() -> list[dict]:
     return [{"id": cid, "label": label} for cid, label in INFO_DOC_CATEGORIES]
 
 
-def _info_folder_public(row: sqlite3.Row | dict, *, doc_count: int | None = None) -> dict:
+def _info_folder_public(
+    row: sqlite3.Row | dict,
+    *,
+    doc_count: int | None = None,
+    include_allowlist: bool = False,
+) -> dict:
     if hasattr(row, "keys"):
         data = {k: row[k] for k in row.keys()}
     else:
         data = dict(row)
     parent_id = data.get("parent_id") or data.get("parentId") or ""
+    audience = _info_audience(data.get("audience"))
+    allowed = _parse_member_ids(
+        data.get("allowed_member_ids")
+        if "allowed_member_ids" in data
+        else data.get("allowedMemberIds")
+    )
     out = {
         "id": data.get("id"),
         "title": data.get("title") or "",
@@ -1905,12 +1918,289 @@ def _info_folder_public(row: sqlite3.Row | dict, *, doc_count: int | None = None
         "summary": data.get("summary") or "",
         "parentId": parent_id or None,
         "sortOrder": int(data.get("sort_order") or data.get("sortOrder") or 100),
+        "audience": audience,
+        "audienceLabel": _info_audience_label(audience),
         "createdAt": data.get("created_at") or data.get("createdAt") or "",
         "updatedAt": data.get("updated_at") or data.get("updatedAt") or "",
         "createdBy": data.get("created_by") or data.get("createdBy") or "",
     }
+    if include_allowlist:
+        out["allowedMemberIds"] = allowed
     if doc_count is not None:
         out["docCount"] = int(doc_count)
+    return out
+
+
+def _parse_member_ids(raw: Any) -> list[str]:
+    """Normalize allowed_member_ids from JSON text, list, or comma-separated string."""
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        items = list(raw)
+    else:
+        text = str(raw).strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                items = parsed
+            else:
+                items = [x.strip() for x in text.split(",") if x.strip()]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            items = [x.strip() for x in text.split(",") if x.strip()]
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        mid = str(item or "").strip()
+        if not mid or mid in seen:
+            continue
+        seen.add(mid)
+        out.append(mid)
+    return out
+
+
+def _info_audience(raw: str | None) -> str:
+    key = (raw or "all").strip().lower()
+    return key if key in {"all", "ec", "restricted"} else "all"
+
+
+def _info_audience_label(audience: str) -> str:
+    if audience == "ec":
+        return "EC only"
+    if audience == "restricted":
+        return "Restricted"
+    return "All members"
+
+
+def _validate_member_ids(conn: sqlite3.Connection, member_ids: list[str]) -> list[str]:
+    """Keep only active household member ids; raise if any unknown."""
+    ensure_household_members_table(conn)
+    ids = _parse_member_ids(member_ids)
+    if not ids:
+        return []
+    placeholders = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"""
+        SELECT id FROM household_members
+        WHERE id IN ({placeholders}) AND status = 'active'
+        """,
+        ids,
+    ).fetchall()
+    found = {r["id"] for r in rows}
+    missing = [mid for mid in ids if mid not in found]
+    if missing:
+        raise ValueError(f"Unknown or inactive member id(s): {', '.join(missing[:5])}")
+    return [mid for mid in ids if mid in found]
+
+
+def _resolve_info_audience_payload(
+    conn: sqlite3.Connection,
+    payload: dict,
+    existing: sqlite3.Row | None,
+    *,
+    audience_key: str = "audience",
+    members_key: str = "allowed_member_ids",
+) -> tuple[str, str]:
+    """Return (audience, allowed_member_ids_json) for upsert."""
+    if "audience" in payload:
+        audience = _info_audience(payload.get("audience"))
+    elif existing and audience_key in existing.keys():
+        audience = _info_audience(existing[audience_key])
+    else:
+        audience = "all"
+
+    raw_ids = None
+    if "allowedMemberIds" in payload or "allowed_member_ids" in payload:
+        raw_ids = payload.get("allowedMemberIds", payload.get("allowed_member_ids"))
+    elif existing and members_key in existing.keys():
+        raw_ids = existing[members_key]
+
+    if audience != "restricted":
+        return audience, "[]"
+    allowed = _validate_member_ids(conn, _parse_member_ids(raw_ids))
+    return audience, json.dumps(allowed)
+
+
+def actor_info_member_id(conn: sqlite3.Connection, actor: dict | None) -> str | None:
+    """Resolve the member id used for Info Centre ACL grants."""
+    if not actor:
+        return None
+    mid = (actor.get("memberId") or actor.get("member_id") or "").strip()
+    if mid:
+        return mid
+    house_id = (actor.get("houseId") or actor.get("house_id") or "").strip()
+    if not house_id or actor.get("superAdmin"):
+        return None
+    primary = household.primary_member(conn, house_id)
+    if not primary:
+        return None
+    return str(primary.get("id") or "").strip() or None
+
+
+def can_view_info_acl(
+    conn: sqlite3.Connection,
+    actor: dict | None,
+    *,
+    audience: str,
+    allowed_member_ids: Any,
+    manage_info: bool = False,
+) -> bool:
+    if manage_info or (actor and actor.get("superAdmin")):
+        return True
+    if not actor:
+        return False
+    aud = _info_audience(audience)
+    if aud == "all":
+        return True
+    if aud == "ec":
+        return entitlements.is_ec_member(actor)
+    if aud == "restricted":
+        mid = actor_info_member_id(conn, actor)
+        if not mid:
+            return False
+        return mid in set(_parse_member_ids(allowed_member_ids))
+    return False
+
+
+def _folder_chain_ids(conn: sqlite3.Connection, folder_id: str | None) -> list[str]:
+    """Folder id plus ancestors (child → … → root)."""
+    fid = (folder_id or "").strip()
+    if not fid:
+        return []
+    parents = _folder_parent_map(conn)
+    chain: list[str] = []
+    seen: set[str] = set()
+    cur: str | None = fid
+    while cur:
+        if cur in seen:
+            break
+        seen.add(cur)
+        chain.append(cur)
+        cur = parents.get(cur)
+    return chain
+
+
+def can_view_info_folder(
+    conn: sqlite3.Connection,
+    actor: dict | None,
+    folder_row: sqlite3.Row | dict | None,
+    *,
+    manage_info: bool = False,
+    folders_by_id: dict[str, sqlite3.Row | dict] | None = None,
+) -> bool:
+    """True when actor may browse this folder (including ancestor ACLs)."""
+    if manage_info or (actor and actor.get("superAdmin")):
+        return True
+    if not folder_row:
+        return False
+    if hasattr(folder_row, "keys"):
+        data = {k: folder_row[k] for k in folder_row.keys()}
+    else:
+        data = dict(folder_row)
+    folder_id = str(data.get("id") or "").strip()
+    if not folder_id:
+        return False
+
+    by_id = folders_by_id
+    if by_id is None:
+        rows = conn.execute("SELECT * FROM info_folders").fetchall()
+        by_id = {r["id"]: r for r in rows}
+
+    for fid in _folder_chain_ids(conn, folder_id):
+        row = by_id.get(fid)
+        if row is None:
+            return False
+        if hasattr(row, "keys"):
+            fdata = {k: row[k] for k in row.keys()}
+        else:
+            fdata = dict(row)
+        if not can_view_info_acl(
+            conn,
+            actor,
+            audience=fdata.get("audience") or "all",
+            allowed_member_ids=fdata.get("allowed_member_ids") or "[]",
+            manage_info=False,
+        ):
+            return False
+    return True
+
+
+def can_view_info_document(
+    conn: sqlite3.Connection,
+    actor: dict | None,
+    doc_row: sqlite3.Row | dict,
+    *,
+    manage_info: bool = False,
+    folders_by_id: dict[str, sqlite3.Row | dict] | None = None,
+) -> bool:
+    """True when actor may see this document (folder chain ∩ document ACL)."""
+    if manage_info or (actor and actor.get("superAdmin")):
+        return True
+    if not actor:
+        return False
+    if hasattr(doc_row, "keys"):
+        data = {k: doc_row[k] for k in doc_row.keys()}
+    else:
+        data = dict(doc_row)
+    if (data.get("status") or "") != "published":
+        return False
+    folder_id = (data.get("folder_id") or data.get("folderId") or "").strip() or None
+    if folder_id:
+        by_id = folders_by_id
+        if by_id is None:
+            rows = conn.execute("SELECT * FROM info_folders").fetchall()
+            by_id = {r["id"]: r for r in rows}
+        folder_row = by_id.get(folder_id)
+        if folder_row is None:
+            return False
+        if not can_view_info_folder(
+            conn, actor, folder_row, manage_info=False, folders_by_id=by_id
+        ):
+            return False
+    return can_view_info_acl(
+        conn,
+        actor,
+        audience=data.get("audience") or "all",
+        allowed_member_ids=(
+            data.get("allowed_member_ids")
+            if "allowed_member_ids" in data
+            else data.get("allowedMemberIds")
+        ),
+        manage_info=False,
+    )
+
+
+def list_info_access_candidates(conn: sqlite3.Connection) -> list[dict]:
+    """Active household members for the restricted-access picker."""
+    ensure_household_members_table(conn)
+    rows = conn.execute(
+        """
+        SELECT m.id, m.house_id, m.name, m.relation, m.is_primary
+        FROM household_members m
+        WHERE m.status = 'active'
+          AND m.house_id != ?
+        ORDER BY m.house_id COLLATE NOCASE,
+          m.is_primary DESC,
+          CASE m.relation
+            WHEN 'owner' THEN 0 WHEN 'spouse' THEN 1 WHEN 'parent' THEN 2
+            WHEN 'child' THEN 3 ELSE 4 END,
+          m.name COLLATE NOCASE
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        pub = household.public_member(r, include_contacts=False)
+        out.append({
+            "id": pub.get("id"),
+            "houseId": pub.get("houseId"),
+            "name": pub.get("name") or "",
+            "relation": pub.get("relation") or "",
+            "relationLabel": pub.get("relationLabel") or "",
+            "isPrimary": bool(pub.get("isPrimary")),
+            "label": f"{pub.get('houseId') or ''} — {pub.get('name') or ''} ({pub.get('relationLabel') or ''})".strip(" —"),
+        })
     return out
 
 
@@ -1982,7 +2272,14 @@ def _folder_would_cycle(conn: sqlite3.Connection, folder_id: str, new_parent_id:
     return False
 
 
-def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> list[dict]:
+def list_info_folders(
+    conn: sqlite3.Connection,
+    *,
+    with_counts: bool = True,
+    actor: dict | None = None,
+    manage_info: bool = False,
+    include_allowlist: bool = False,
+) -> list[dict]:
     ensure_info_documents_table(conn)
     _ensure_info_folder_parent_column(conn)
     rows = conn.execute(
@@ -1993,10 +2290,19 @@ def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> 
         ORDER BY f.sort_order ASC, f.title COLLATE NOCASE ASC
         """
     ).fetchall()
+    folders_by_id = {r["id"]: r for r in rows}
+    show_allowlist = include_allowlist or manage_info
     by_id: dict[str, dict] = {}
     for r in rows:
+        if actor is not None and not manage_info:
+            if not can_view_info_folder(
+                conn, actor, r, manage_info=False, folders_by_id=folders_by_id
+            ):
+                continue
         count = int(r["doc_count"] or 0) if with_counts else None
-        by_id[r["id"]] = _info_folder_public(r, doc_count=count)
+        by_id[r["id"]] = _info_folder_public(
+            r, doc_count=count, include_allowlist=show_allowlist
+        )
     for folder in by_id.values():
         parts = [folder["title"]]
         cur = folder.get("parentId")
@@ -2010,7 +2316,14 @@ def list_info_folders(conn: sqlite3.Connection, *, with_counts: bool = True) -> 
     return list(by_id.values())
 
 
-def get_info_folder(conn: sqlite3.Connection, folder_id: str) -> dict | None:
+def get_info_folder(
+    conn: sqlite3.Connection,
+    folder_id: str,
+    *,
+    actor: dict | None = None,
+    manage_info: bool = False,
+    include_allowlist: bool = False,
+) -> dict | None:
     ensure_info_documents_table(conn)
     _ensure_info_folder_parent_column(conn)
     fid = (folder_id or "").strip()
@@ -2019,12 +2332,28 @@ def get_info_folder(conn: sqlite3.Connection, folder_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM info_folders WHERE id = ?", (fid,)).fetchone()
     if not row:
         return None
+    if actor is not None and not manage_info:
+        if not can_view_info_folder(conn, actor, row, manage_info=False):
+            return None
     n = conn.execute(
         "SELECT COUNT(*) AS n FROM info_documents WHERE folder_id = ?",
         (fid,),
     ).fetchone()["n"]
-    out = _info_folder_public(row, doc_count=int(n or 0))
-    folders = {f["id"]: f for f in list_info_folders(conn, with_counts=False)}
+    out = _info_folder_public(
+        row,
+        doc_count=int(n or 0),
+        include_allowlist=include_allowlist or manage_info,
+    )
+    folders = {
+        f["id"]: f
+        for f in list_info_folders(
+            conn,
+            with_counts=False,
+            actor=actor if not manage_info else None,
+            manage_info=manage_info,
+            include_allowlist=False,
+        )
+    }
     if fid in folders:
         out["pathLabel"] = folders[fid].get("pathLabel") or out["title"]
         out["depth"] = folders[fid].get("depth") or 0
@@ -2079,6 +2408,8 @@ def upsert_info_folder(
         if _folder_would_cycle(conn, folder_id, parent_id):
             raise ValueError("Cannot move a folder into itself or its subfolder")
 
+    audience, allowed_json = _resolve_info_audience_payload(conn, payload, existing)
+
     now = utc_now()
     created_at = existing["created_at"] if existing else now
     created_by = (
@@ -2090,26 +2421,46 @@ def upsert_info_folder(
     conn.execute(
         """
         INSERT INTO info_folders(
-          id, title, title_hi, summary, parent_id, sort_order, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, title, title_hi, summary, parent_id, sort_order,
+          audience, allowed_member_ids, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           title_hi=excluded.title_hi,
           summary=excluded.summary,
           parent_id=excluded.parent_id,
           sort_order=excluded.sort_order,
+          audience=excluded.audience,
+          allowed_member_ids=excluded.allowed_member_ids,
           updated_at=excluded.updated_at
         """,
-        (folder_id, title, title_hi, summary, parent_id, sort_order, created_by, created_at, now),
+        (
+            folder_id,
+            title,
+            title_hi,
+            summary,
+            parent_id,
+            sort_order,
+            audience,
+            allowed_json,
+            created_by,
+            created_at,
+            now,
+        ),
     )
     conn.commit()
-    out = get_info_folder(conn, folder_id)
+    out = get_info_folder(conn, folder_id, manage_info=True, include_allowlist=True)
     if not out:
         raise ValueError("Folder not found after save")
     return out
 
 
-def delete_info_folder(conn: sqlite3.Connection, folder_id: str) -> None:
+def delete_info_folder(
+    conn: sqlite3.Connection,
+    folder_id: str,
+    *,
+    site_root: pathlib.Path | None = None,
+) -> None:
     ensure_info_documents_table(conn)
     _ensure_info_folder_parent_column(conn)
     fid = (folder_id or "").strip()
@@ -2131,6 +2482,13 @@ def delete_info_folder(conn: sqlite3.Connection, folder_id: str) -> None:
     )
     conn.execute("DELETE FROM info_folders WHERE id = ?", (fid,))
     conn.commit()
+    if site_root is not None:
+        try:
+            share = pathlib.Path(site_root) / info_share_static_relpath(folder_id=fid)
+            if share.is_file():
+                share.unlink()
+        except Exception:
+            pass
 
 
 def _resolve_folder_id(conn: sqlite3.Connection, raw: str | None, *, allow_empty: bool = True) -> str | None:
@@ -2220,12 +2578,12 @@ def _info_category(raw: str | None) -> str:
     return key if key in allowed else "general"
 
 
-def _info_audience(raw: str | None) -> str:
-    key = (raw or "all").strip().lower()
-    return key if key in {"all", "ec"} else "all"
-
-
-def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -> dict:
+def _info_public(
+    r: sqlite3.Row | dict,
+    site_root: pathlib.Path | None = None,
+    *,
+    include_allowlist: bool = False,
+) -> dict:
     if hasattr(r, "keys"):
         data = {k: r[k] for k in r.keys()}
     else:
@@ -2233,6 +2591,11 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
     cat = data.get("category") or "general"
     label = next((lbl for cid, lbl in INFO_DOC_CATEGORIES if cid == cat), cat)
     audience = _info_audience(data.get("audience"))
+    allowed = _parse_member_ids(
+        data.get("allowed_member_ids")
+        if "allowed_member_ids" in data
+        else data.get("allowedMemberIds")
+    )
     filename = data.get("filename")
     file_missing = False
     has_file = bool(filename)
@@ -2248,7 +2611,7 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
     if doc_type == "link":
         has_file = bool(external_url)
         file_missing = not bool(external_url)
-    return {
+    out = {
         "id": data.get("id"),
         "title": data.get("title") or "",
         "titleHi": data.get("title_hi") or data.get("titleHi") or "",
@@ -2267,7 +2630,7 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
         "externalUrl": external_url,
         "status": data.get("status") or "draft",
         "audience": audience,
-        "audienceLabel": "EC only" if audience == "ec" else "All members",
+        "audienceLabel": _info_audience_label(audience),
         "publishedAt": data.get("published_at"),
         "publishedBy": data.get("published_by"),
         "createdAt": data.get("created_at"),
@@ -2276,6 +2639,9 @@ def _info_public(r: sqlite3.Row | dict, site_root: pathlib.Path | None = None) -
         "fileMissing": file_missing,
         "hasHtmlHi": bool(int(data.get("has_html_hi") or data.get("hasHtmlHi") or 0)),
     }
+    if include_allowlist:
+        out["allowedMemberIds"] = allowed
+    return out
 
 
 def list_info_documents(
@@ -2285,6 +2651,7 @@ def list_info_documents(
     category: str | None = None,
     folder_id: str | None = None,
     as_admin: bool = False,
+    actor: dict | None = None,
     site_root: pathlib.Path | None = None,
 ) -> list[dict]:
     ensure_info_documents_table(conn)
@@ -2301,9 +2668,6 @@ def list_info_documents(
         params.append(status_key)
     else:
         raise ValueError("Invalid status filter")
-    if not as_admin:
-        # Residents only see colony-wide published docs (not EC-only).
-        clauses.append("(d.audience IS NULL OR d.audience = 'all' OR d.audience = '')")
     if category:
         clauses.append("d.category = ?")
         params.append(_info_category(category))
@@ -2337,7 +2701,16 @@ def list_info_documents(
         """,
         params,
     ).fetchall()
-    return [_info_public(r, site_root=site_root) for r in rows]
+    folders_by_id = {r["id"]: r for r in conn.execute("SELECT * FROM info_folders").fetchall()}
+    out: list[dict] = []
+    for r in rows:
+        if not as_admin:
+            if not can_view_info_document(
+                conn, actor, r, manage_info=False, folders_by_id=folders_by_id
+            ):
+                continue
+        out.append(_info_public(r, site_root=site_root, include_allowlist=as_admin))
+    return out
 
 
 def get_info_document(
@@ -2345,6 +2718,7 @@ def get_info_document(
     doc_id: str,
     *,
     as_admin: bool = False,
+    actor: dict | None = None,
     site_root: pathlib.Path | None = None,
 ) -> dict | None:
     ensure_info_documents_table(conn)
@@ -2359,12 +2733,11 @@ def get_info_document(
     ).fetchone()
     if not row:
         return None
-    if (row["status"] or "") != "published" and not as_admin:
+    if as_admin:
+        return _info_public(row, site_root=site_root, include_allowlist=True)
+    if not can_view_info_document(conn, actor, row, manage_info=False):
         return None
-    audience = _info_audience(row["audience"] if "audience" in row.keys() else "all")
-    if audience == "ec" and not as_admin:
-        return None
-    return _info_public(row, site_root=site_root)
+    return _info_public(row, site_root=site_root, include_allowlist=False)
 
 
 def get_info_share_meta(
@@ -2397,12 +2770,29 @@ def get_info_share_meta(
             return {
                 "kind": "doc",
                 "available": False,
+                "id": did,
                 "title": "HBC Sanyard · Information Centre",
                 "description": "Sign in to the residents portal to open this document.",
                 "deepLink": f"/#info/doc/{did}" if did else "/#info",
                 "badge": "Members only",
             }
         doc = _info_public(row, site_root=site_root)
+        audience = doc.get("audience") or "all"
+        # Do not leak titles of EC/restricted docs on public OG cards.
+        if audience in {"ec", "restricted"}:
+            return {
+                "kind": "doc",
+                "available": True,
+                "id": doc["id"],
+                "title": "HBC Sanyard · Information Centre",
+                "description": "Members-only document — sign in to the residents portal to open it.",
+                "badge": "Members only",
+                "category": "",
+                "folderTitle": "",
+                "docType": doc.get("docType") or "file",
+                "deepLink": f"/#info/doc/{doc['id']}",
+                "gated": True,
+            }
         summary = (doc.get("summary") or "").strip()
         bits = [
             doc.get("folderTitle") or "",
@@ -2425,30 +2815,50 @@ def get_info_share_meta(
         }
 
     if folder_id:
-        folder = get_info_folder(conn, folder_id)
-        if not folder:
+        # Share meta must not require actor ACL — load raw folder for managers' cards.
+        ensure_info_documents_table(conn)
+        fid = (folder_id or "").strip()
+        raw = conn.execute("SELECT * FROM info_folders WHERE id = ?", (fid,)).fetchone() if fid else None
+        if not raw:
             return {
                 "kind": "folder",
                 "available": False,
+                "id": fid,
                 "title": "HBC Sanyard · Information Centre",
                 "description": "Sign in to the residents portal to open this folder.",
                 "deepLink": "/#info",
                 "badge": "Members only",
             }
-        summary = (folder.get("summary") or "").strip()
-        path_label = folder.get("pathLabel") or folder.get("title") or "Folder"
-        count = int(folder.get("docCount") or 0)
+        folder = _info_folder_public(raw, doc_count=None, include_allowlist=False)
+        aud = folder.get("audience") or "all"
+        if aud in {"ec", "restricted"}:
+            return {
+                "kind": "folder",
+                "available": True,
+                "id": folder["id"],
+                "title": "HBC Sanyard · Information Centre",
+                "description": "Members-only folder — sign in to the residents portal to open it.",
+                "badge": "Members only",
+                "deepLink": f"/#info/folder/{folder['id']}",
+                "gated": True,
+            }
+        folder_full = get_info_folder(conn, fid, manage_info=True)
+        if not folder_full:
+            folder_full = folder
+        summary = (folder_full.get("summary") or "").strip()
+        path_label = folder_full.get("pathLabel") or folder_full.get("title") or "Folder"
+        count = int(folder_full.get("docCount") or 0)
         desc = summary or (
             f"{count} document{'s' if count != 1 else ''} in Information Centre · HBC Sanyard"
         )
         return {
             "kind": "folder",
             "available": True,
-            "id": folder["id"],
-            "title": folder.get("title") or "Folder",
+            "id": folder_full["id"],
+            "title": folder_full.get("title") or "Folder",
             "description": desc,
-            "badge": path_label if path_label != folder.get("title") else "Folder",
-            "deepLink": f"/#info/folder/{folder['id']}",
+            "badge": path_label if path_label != folder_full.get("title") else "Folder",
+            "deepLink": f"/#info/folder/{folder_full['id']}",
         }
     return None
 
@@ -2771,7 +3181,7 @@ def rebuild_all_info_share_static(
     """Regenerate /share/doc/*.html and /share/folder/*.html for published items."""
     ensure_info_documents_table(conn)
     origin = (origin or "").rstrip("/")
-    image_url = f"{origin}/assets/og-share-card.jpg"
+    image_url = f"{origin}/assets/og-share-card.jpg?v=20260810-mhws"
     written = 0
     rows = conn.execute(
         "SELECT id FROM info_documents WHERE status = 'published'"
@@ -3071,12 +3481,19 @@ def upsert_info_document(
     if status not in {"draft", "published", "archived"}:
         raise ValueError("Invalid status")
 
-    if "audience" in payload:
-        audience = _info_audience(payload.get("audience"))
+    if "audience" in payload or "allowedMemberIds" in payload or "allowed_member_ids" in payload:
+        audience, allowed_json = _resolve_info_audience_payload(conn, payload, existing)
     elif existing and "audience" in existing.keys():
         audience = _info_audience(existing["audience"])
+        if "allowed_member_ids" in existing.keys():
+            allowed_json = existing["allowed_member_ids"] or "[]"
+            if audience != "restricted":
+                allowed_json = "[]"
+        else:
+            allowed_json = "[]"
     else:
         audience = "all"
+        allowed_json = "[]"
 
     doc_type = None
     if "docType" in payload or "doc_type" in payload:
@@ -3239,9 +3656,9 @@ def upsert_info_document(
         """
         INSERT INTO info_documents(
           id, title, summary, category, folder_id, doc_type, filename, original_name, mime_type,
-          size_bytes, external_url, status, audience, published_at, published_by, created_at, updated_at,
-          title_hi, summary_hi, has_html_hi
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          size_bytes, external_url, status, audience, allowed_member_ids, published_at, published_by,
+          created_at, updated_at, title_hi, summary_hi, has_html_hi
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           summary=excluded.summary,
@@ -3255,6 +3672,7 @@ def upsert_info_document(
           external_url=excluded.external_url,
           status=excluded.status,
           audience=excluded.audience,
+          allowed_member_ids=excluded.allowed_member_ids,
           published_at=excluded.published_at,
           published_by=excluded.published_by,
           updated_at=excluded.updated_at,
@@ -3276,6 +3694,7 @@ def upsert_info_document(
             external_url or None,
             status,
             audience,
+            allowed_json,
             published_at,
             published_by,
             created_at,
@@ -3286,7 +3705,60 @@ def upsert_info_document(
         ),
     )
     conn.commit()
-    return get_info_document(conn, doc_id, as_admin=True, site_root=site_root) or {"id": doc_id}
+    doc = get_info_document(conn, doc_id, as_admin=True, site_root=site_root) or {"id": doc_id}
+    try:
+        _sync_info_share_card(conn, site_root, doc_id=doc_id)
+    except Exception:
+        pass
+    return doc
+
+
+def _public_origin_for_share(site_root: pathlib.Path | None = None) -> str:
+    return (
+        os.environ.get("VEERCANVAS_PUBLIC_ORIGIN")
+        or os.environ.get("RWA_PUBLIC_ORIGIN")
+        or "https://hbcsanyard.veerlabs.solutions"
+    ).rstrip("/")
+
+
+def _sync_info_share_card(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    doc_id: str | None = None,
+    folder_id: str | None = None,
+) -> None:
+    """Write or refresh nginx-served /share/*.html for WhatsApp OG previews."""
+    meta = get_info_share_meta(
+        conn,
+        doc_id=doc_id,
+        folder_id=folder_id,
+        site_root=site_root,
+    )
+    if not meta:
+        return
+    origin = _public_origin_for_share(site_root)
+    meta = dict(meta)
+    if doc_id:
+        tid = str(meta.get("id") or doc_id)
+        meta["id"] = tid
+        page_url = f"{origin}/share/doc/{tid}.html"
+        meta["deepLink"] = f"{origin}/?source=pwa&info=doc.{tid}#info/doc/{tid}"
+    else:
+        tid = str(meta.get("id") or folder_id or "")
+        if not tid:
+            return
+        meta["id"] = tid
+        page_url = f"{origin}/share/folder/{tid}.html"
+        meta["deepLink"] = f"{origin}/?source=pwa&info=folder.{tid}#info/folder/{tid}"
+    write_info_share_static(
+        site_root,
+        meta,
+        page_url=page_url,
+        image_url=f"{origin}/assets/og-share-card.jpg?v=20260810-mhws",
+        image_width=1200,
+        image_height=630,
+    )
 
 
 def delete_info_document(conn: sqlite3.Connection, site_root: pathlib.Path, doc_id: str) -> None:
@@ -3314,6 +3786,12 @@ def delete_info_document(conn: sqlite3.Connection, site_root: pathlib.Path, doc_
                 dest.rmdir()
             except OSError:
                 pass
+    except Exception:
+        pass
+    try:
+        share = pathlib.Path(site_root) / info_share_static_relpath(doc_id=nid)
+        if share.is_file():
+            share.unlink()
     except Exception:
         pass
 
@@ -5087,10 +5565,19 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^PATCH /api/rwa/info-centre/[^/]+$"), "Update Information Centre doc"),
     (re.compile(r"^DELETE /api/rwa/info-centre/[^/]+$"), "Delete Information Centre doc"),
     (re.compile(r"^GET /api/rwa/info-centre/[^/]+/file$"), "Open Information Centre file"),
+    (re.compile(r"^GET /api/rwa/templates$"), "Browse printable templates"),
+    (re.compile(r"^POST /api/rwa/templates$"), "Create printable template"),
+    (re.compile(r"^PATCH /api/rwa/templates/[^/]+$"), "Update printable template"),
+    (re.compile(r"^DELETE /api/rwa/templates/[^/]+$"), "Delete printable template"),
+    (re.compile(r"^GET /api/rwa/templates/[^/]+/file$"), "Open printable template"),
     (re.compile(r"^GET /api/rwa/works$"), "Browse Works & Events"),
     (re.compile(r"^POST /api/rwa/works$"), "Create Works & Events item"),
     (re.compile(r"^PATCH /api/rwa/works/[^/]+$"), "Update Works & Events item"),
     (re.compile(r"^DELETE /api/rwa/works/[^/]+$"), "Delete Works & Events item"),
+    (re.compile(r"^GET /api/rwa/proceedings$"), "Browse Proceedings register"),
+    (re.compile(r"^POST /api/rwa/proceedings$"), "Create Proceedings entry"),
+    (re.compile(r"^PATCH /api/rwa/proceedings/[^/]+$"), "Update Proceedings entry"),
+    (re.compile(r"^DELETE /api/rwa/proceedings/[^/]+$"), "Delete Proceedings entry"),
 ]
 
 _PANEL_LABELS = {

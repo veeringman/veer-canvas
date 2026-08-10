@@ -1,4 +1,4 @@
-# HBC Sanyard — feature backlog
+# Himuda Housing Colony Sanyard — feature backlog
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
@@ -78,7 +78,7 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 ## Ops / reliability
 
 - [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (14-day retention). See `deploy/OPS-BACKUP.md`
-- [ ] **Google Drive upload** — Phase 2 scripts ready (`deploy/ops/sync-to-drive.*`); enable when hbcsanyard Gmail + service account are configured (see OPS-BACKUP.md)
+- [ ] **Google Drive upload** — Phase 2 scripts ready (`deploy/ops/sync-to-drive.*`); SMTP/alerts use `housingcolonysanyard@gmail.com`; enable Drive when service account + folder share are configured (see OPS-BACKUP.md)
 - [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging *(on-box restore steps in OPS-BACKUP.md)*
 - [x] **Log / event stream rollover** — journald 200M/14d + nginx logrotate 14d + backup log rotate
 - [x] **Observability event pruning** — purge `access_events` older than 90 days with each backup run
@@ -99,7 +99,7 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 
 ## Platformization / white-label (multi-RWA)
 
-Take the HBC Sanyard resident portal beyond one colony — configurable product for other RWAs / housing societies.
+Take the Himuda Housing Colony Sanyard resident portal beyond one colony — configurable product for other RWAs / housing societies.
 
 - [ ] **Tenant / society config** — name, seal/logo, colours, domain, address, motto, registration line (no hard-coded “Sanyard” in core)
 - [ ] **Site template** — VeerCanvas site type e.g. `rwa-portal` spun from Studio; clone schema + empty DB per society

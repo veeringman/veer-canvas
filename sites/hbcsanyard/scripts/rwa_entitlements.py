@@ -8,6 +8,7 @@ Roles (nested):
 - EC Admins get most entitlements implicitly; sensitive_ops / manage_roles are EC-Admin-only.
 - issue_no_dues / issue_no_objection are explicit (not auto for EC Admins); default seed grants them to President.
 - treasury is explicit; default seed grants it to Treasurer.
+- manage_proceedings default seed grants it to General Secretary (EC Committee register).
 """
 
 from __future__ import annotations
@@ -46,8 +47,18 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
     {"id": "manage_concerns", "label": "Concerns mailbox", "description": "Respond to resident concerns"},
     {"id": "manage_info", "label": "Info centre", "description": "Manage documents"},
     {"id": "manage_works", "label": "Works & events", "description": "Manage colony works"},
+    {
+        "id": "manage_proceedings",
+        "label": "Proceedings / MOM",
+        "description": "Record General House and EC meeting minutes (default: General Secretary)",
+    },
     {"id": "manage_bank", "label": "Bank / UPI", "description": "Update collection account"},
     {"id": "generate_reports", "label": "Reports", "description": "Generate PDF reports"},
+    {
+        "id": "manage_templates",
+        "label": "Templates",
+        "description": "Upload and manage printable letterheads, receipts, and forms",
+    },
     {"id": "manage_roles", "label": "Roles & entitlements", "description": "Designate EC members / office bearers, elevate EC Admin, grant access (EC Admin / sensitive ops only)"},
     {"id": "sensitive_ops", "label": "Sensitive ops", "description": "Roles, revision history, and ledger import (EC Admin only)"},
 ]
@@ -83,6 +94,7 @@ def ensure_ready(conn: sqlite3.Connection) -> None:
     ensure_default_no_dues_issuer(conn)
     ensure_default_no_objection_issuer(conn)
     ensure_default_treasury(conn)
+    ensure_default_proceedings_secretary(conn)
 
 
 def _seed_explicit_grant_for_title(
@@ -169,6 +181,20 @@ def ensure_default_treasury(conn: sqlite3.Connection) -> None:
         entitlement="treasury",
         meta_key="treasury_defaulted",
         title_match=_is_treasurer,
+    )
+
+
+def _is_general_secretary_title(title: str) -> bool:
+    return title == "general secretary" or bool(re.fullmatch(r"general secretary(\s+rwa)?", title))
+
+
+def ensure_default_proceedings_secretary(conn: sqlite3.Connection) -> None:
+    """Once: grant manage_proceedings to General Secretary (MOM register keeper)."""
+    _seed_explicit_grant_for_title(
+        conn,
+        entitlement="manage_proceedings",
+        meta_key="proceedings_secretary_defaulted",
+        title_match=_is_general_secretary_title,
     )
 
 

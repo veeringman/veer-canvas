@@ -38,6 +38,8 @@ import rwa_no_objection  # noqa: E402
 import rwa_treasury  # noqa: E402
 import rwa_messages  # noqa: E402
 import rwa_push  # noqa: E402
+import rwa_templates  # noqa: E402
+import rwa_proceedings  # noqa: E402
 
 VEERCANVAS_ROOT = pathlib.Path(
     os.environ.get("VEERCANVAS_ROOT", str(APP_DIR.parent))
@@ -5692,6 +5694,128 @@ def api_rwa_report_template_item(template_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/templates", methods=["GET", "POST"])
+def api_rwa_print_templates():
+    """List / create EC printable templates (letterhead, receipts, forms)."""
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        if request.method == "GET":
+            status = (request.args.get("status") or "all").strip().lower()
+            category = (request.args.get("category") or "").strip() or None
+            docs = rwa_templates.list_templates(
+                conn,
+                site_root=SITE_ROOT,
+                status=status,
+                category=category,
+            )
+            return jsonify({
+                "ok": True,
+                "templates": docs,
+                "categories": rwa_templates.categories(),
+            })
+
+        upload = request.files.get("file") or request.files.get("document")
+        if upload is not None:
+            payload = {
+                "title": request.form.get("title"),
+                "description": request.form.get("description"),
+                "category": request.form.get("category"),
+                "tags": request.form.get("tags"),
+                "status": request.form.get("status") or "published",
+                "staticPath": request.form.get("staticPath"),
+                "id": request.form.get("id") or None,
+            }
+        else:
+            payload = request.get_json(force=True, silent=True) or {}
+            upload = None
+        doc = rwa_templates.upsert_template(
+            conn,
+            SITE_ROOT,
+            payload,
+            actor_house_id=sess["resident"].get("houseId"),
+            file_storage=upload,
+        )
+        return jsonify({"ok": True, "template": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/<template_id>", methods=["GET", "PATCH", "DELETE"])
+def api_rwa_print_template_item(template_id: str):
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        if request.method == "GET":
+            doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
+            if not doc:
+                return jsonify({"ok": False, "error": "Template not found"}), 404
+            return jsonify({"ok": True, "template": doc})
+
+        if request.method == "DELETE":
+            rwa_templates.delete_template(conn, SITE_ROOT, template_id)
+            return jsonify({"ok": True, "deleted": template_id})
+
+        upload = request.files.get("file") or request.files.get("document")
+        if upload is not None:
+            payload = {
+                "title": request.form.get("title"),
+                "description": request.form.get("description"),
+                "category": request.form.get("category"),
+                "tags": request.form.get("tags"),
+                "status": request.form.get("status") or "published",
+                "staticPath": request.form.get("staticPath"),
+                "id": template_id,
+            }
+        else:
+            payload = request.get_json(force=True, silent=True) or {}
+            payload["id"] = template_id
+            upload = None
+        doc = rwa_templates.upsert_template(
+            conn,
+            SITE_ROOT,
+            payload,
+            actor_house_id=sess["resident"].get("houseId"),
+            file_storage=upload,
+        )
+        return jsonify({"ok": True, "template": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/<template_id>/file", methods=["GET"])
+def api_rwa_print_template_file(template_id: str):
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
+        if not doc:
+            return jsonify({"ok": False, "error": "Template not found"}), 404
+        path = rwa_templates.resolve_template_file(SITE_ROOT, doc)
+        if not path or not path.is_file():
+            return jsonify({"ok": False, "error": "File missing"}), 404
+        download = (request.args.get("download") or "").strip() in ("1", "true", "yes")
+        return send_file(
+            path,
+            mimetype=doc.get("mimeType") or None,
+            as_attachment=download,
+            download_name=doc.get("originalName") or path.name,
+            max_age=0,
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/payments/<path:house_id>", methods=["PATCH"])
 def api_rwa_payment_patch(house_id: str):
     """EC: update / curate a household payment ledger row."""
@@ -5806,8 +5930,9 @@ def _rwa_public_origin() -> str:
 
 def _rwa_share_image_url() -> str:
     origin = _rwa_public_origin()
-    # Dedicated 1200x630 JPEG (~60KB) — WhatsApp needs >=300px width, prefers landscape.
-    return f"{origin}/assets/og-share-card.jpg"
+    # Dedicated 1200x630 JPEG — WhatsApp needs >=300px width, prefers landscape.
+    # Bump ?v= when the asset changes so crawlers refresh their cached preview.
+    return f"{origin}/assets/og-share-card.jpg?v=20260810-mhws"
 
 
 def _rwa_info_share_app_url(*, doc_id: str | None = None, folder_id: str | None = None) -> str:
@@ -5840,11 +5965,15 @@ def _rwa_info_share_response(*, doc_id: str | None = None, folder_id: str | None
         origin = _rwa_public_origin()
         meta = dict(meta)
         if doc_id:
-            static_url = f"{origin}/share/doc/{meta.get('id') or doc_id}.html"
-            meta["deepLink"] = _rwa_info_share_app_url(doc_id=doc_id)
+            tid = str(meta.get("id") or doc_id)
+            meta["id"] = tid
+            static_url = f"{origin}/share/doc/{tid}.html"
+            meta["deepLink"] = _rwa_info_share_app_url(doc_id=tid)
         else:
-            static_url = f"{origin}/share/folder/{meta.get('id') or folder_id}.html"
-            meta["deepLink"] = _rwa_info_share_app_url(folder_id=folder_id)
+            tid = str(meta.get("id") or folder_id or "")
+            meta["id"] = tid
+            static_url = f"{origin}/share/folder/{tid}.html"
+            meta["deepLink"] = _rwa_info_share_app_url(folder_id=tid)
         try:
             rwa_portal.write_info_share_static(
                 SITE_ROOT,
@@ -5904,6 +6033,40 @@ def rwa_share_folder(folder_id: str):
     return _rwa_info_share_response(folder_id=folder_id)
 
 
+@app.route("/api/rwa/info-centre/access-candidates", methods=["GET"])
+def api_rwa_info_access_candidates():
+    """Active household members for restricted Info Centre access pickers."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        return jsonify({
+            "ok": True,
+            "members": rwa_portal.list_info_access_candidates(conn),
+        })
+    finally:
+        conn.close()
+
+
+def _rwa_parse_allowed_member_ids(raw):
+    """Parse allowedMemberIds from JSON body or multipart form (JSON string / CSV)."""
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        return raw
+    text = str(raw).strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    return [x.strip() for x in text.split(",") if x.strip()]
+
+
 @app.route("/api/rwa/info-centre/folders", methods=["GET", "POST"])
 def api_rwa_info_folders():
     """List or create Information Centre folders (topics for grouping related docs)."""
@@ -5912,12 +6075,25 @@ def api_rwa_info_folders():
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_info")
         if request.method == "GET":
-            return jsonify({"ok": True, "folders": rwa_portal.list_info_folders(conn)})
-        if not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
+            return jsonify({
+                "ok": True,
+                "folders": rwa_portal.list_info_folders(
+                    conn,
+                    actor=sess["resident"],
+                    manage_info=is_admin,
+                    include_allowlist=is_admin,
+                ),
+            })
+        if not is_admin:
             return jsonify({"ok": False, "error": "Admin access required"}), 403
         payload = request.get_json(force=True, silent=True) or {}
         folder = rwa_portal.upsert_info_folder(conn, payload, actor=sess["resident"])
+        try:
+            rwa_portal._sync_info_share_card(conn, SITE_ROOT, folder_id=folder.get("id"))
+        except Exception:
+            pass
         return jsonify({"ok": True, "folder": folder})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
@@ -5933,11 +6109,15 @@ def api_rwa_info_folder_item(folder_id: str):
         if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_info"):
             return jsonify({"ok": False, "error": "Admin access required"}), 403
         if request.method == "DELETE":
-            rwa_portal.delete_info_folder(conn, folder_id)
+            rwa_portal.delete_info_folder(conn, folder_id, site_root=SITE_ROOT)
             return jsonify({"ok": True, "deleted": folder_id})
         payload = request.get_json(force=True, silent=True) or {}
         payload["id"] = folder_id
         folder = rwa_portal.upsert_info_folder(conn, payload, actor=sess["resident"])
+        try:
+            rwa_portal._sync_info_share_card(conn, SITE_ROOT, folder_id=folder.get("id"))
+        except Exception:
+            pass
         return jsonify({"ok": True, "folder": folder})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
@@ -5971,6 +6151,7 @@ def api_rwa_info_centre():
                 status=status,
                 category=category,
                 as_admin=is_admin,
+                actor=sess["resident"],
                 site_root=SITE_ROOT,
                 **kwargs,
             )
@@ -5978,7 +6159,12 @@ def api_rwa_info_centre():
                 "ok": True,
                 "documents": docs,
                 "categories": rwa_portal.info_centre_categories(),
-                "folders": rwa_portal.list_info_folders(conn),
+                "folders": rwa_portal.list_info_folders(
+                    conn,
+                    actor=sess["resident"],
+                    manage_info=is_admin,
+                    include_allowlist=is_admin,
+                ),
                 "features": {
                     "infoCentreProtect": rwa_portal.info_centre_protect_enabled(SITE_ROOT),
                 },
@@ -6002,6 +6188,9 @@ def api_rwa_info_centre():
                 "docType": request.form.get("docType") or "file",
                 "id": request.form.get("id") or None,
             }
+            allowed = _rwa_parse_allowed_member_ids(request.form.get("allowedMemberIds"))
+            if allowed is not None:
+                payload["allowedMemberIds"] = allowed
         else:
             payload = request.get_json(force=True, silent=True) or {}
             upload = None
@@ -6030,7 +6219,13 @@ def api_rwa_info_centre_item(doc_id: str):
         is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_info")
 
         if request.method == "GET":
-            doc = rwa_portal.get_info_document(conn, doc_id, as_admin=is_admin, site_root=SITE_ROOT)
+            doc = rwa_portal.get_info_document(
+                conn,
+                doc_id,
+                as_admin=is_admin,
+                actor=sess["resident"],
+                site_root=SITE_ROOT,
+            )
             if not doc:
                 return jsonify({"ok": False, "error": "Document not found"}), 404
             return jsonify({"ok": True, "document": doc})
@@ -6062,6 +6257,10 @@ def api_rwa_info_centre_item(doc_id: str):
             # Allow clearing folder with empty string
             if "folderId" in request.form:
                 payload["folderId"] = request.form.get("folderId") or ""
+            if "allowedMemberIds" in request.form:
+                payload["allowedMemberIds"] = _rwa_parse_allowed_member_ids(
+                    request.form.get("allowedMemberIds")
+                ) or []
         else:
             payload = request.get_json(force=True, silent=True) or {}
             payload["id"] = doc_id
@@ -6090,7 +6289,13 @@ def api_rwa_info_centre_file(doc_id: str):
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
         is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_info")
-        doc = rwa_portal.get_info_document(conn, doc_id, as_admin=is_admin, site_root=SITE_ROOT)
+        doc = rwa_portal.get_info_document(
+            conn,
+            doc_id,
+            as_admin=is_admin,
+            actor=sess["resident"],
+            site_root=SITE_ROOT,
+        )
         if not doc:
             return jsonify({"ok": False, "error": "Document not found"}), 404
         # External web link — prefer inline redirect so viewers can embed when framing allows.
@@ -6283,6 +6488,94 @@ def api_rwa_works_item(work_id: str):
         payload["id"] = work_id
         work = rwa_portal.upsert_colony_work(conn, payload, actor=sess["resident"])
         return jsonify({"ok": True, "work": work})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/proceedings/meta", methods=["GET"])
+def api_rwa_proceedings_meta():
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.is_ec_member(sess["resident"]):
+            return jsonify({"ok": False, "error": "EC Committee access required"}), 403
+        return jsonify({"ok": True, **rwa_proceedings.proceedings_meta()})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/proceedings", methods=["GET", "POST"])
+def api_rwa_proceedings():
+    """List / create meeting proceedings (MOM register)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.is_ec_member(sess["resident"]):
+            return jsonify({"ok": False, "error": "EC Committee access required"}), 403
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_proceedings")
+
+        if request.method == "GET":
+            meeting_type = (request.args.get("meetingType") or request.args.get("type") or "").strip() or None
+            year = (request.args.get("year") or "").strip() or None
+            status = (request.args.get("status") or "").strip() or None
+            search = (request.args.get("search") or "").strip() or None
+            if status and status != "published" and not is_admin:
+                return jsonify({"ok": False, "error": "Admin access required"}), 403
+            proceedings = rwa_proceedings.list_meeting_proceedings(
+                conn,
+                meeting_type=meeting_type,
+                year=year,
+                status=status,
+                search=search,
+                as_admin=is_admin,
+            )
+            return jsonify({"ok": True, "proceedings": proceedings, **rwa_proceedings.proceedings_meta()})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        proceeding = rwa_proceedings.upsert_meeting_proceeding(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "proceeding": proceeding})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/proceedings/<proceeding_id>", methods=["GET", "PATCH", "DELETE"])
+def api_rwa_proceedings_item(proceeding_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.is_ec_member(sess["resident"]):
+            return jsonify({"ok": False, "error": "EC Committee access required"}), 403
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_proceedings")
+
+        if request.method == "GET":
+            proceeding = rwa_proceedings.get_meeting_proceeding(conn, proceeding_id, as_admin=is_admin)
+            if not proceeding:
+                return jsonify({"ok": False, "error": "Not found"}), 404
+            return jsonify({"ok": True, "proceeding": proceeding})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+
+        if request.method == "DELETE":
+            rwa_proceedings.delete_meeting_proceeding(conn, proceeding_id)
+            return jsonify({"ok": True, "deleted": proceeding_id})
+
+        payload = request.get_json(force=True, silent=True) or {}
+        payload["id"] = proceeding_id
+        proceeding = rwa_proceedings.upsert_meeting_proceeding(conn, payload, actor=sess["resident"])
+        return jsonify({"ok": True, "proceeding": proceeding})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

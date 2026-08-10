@@ -1,6 +1,6 @@
 # HBCS Sanyard RWA
 
-Residents Welfare Association — **Housing Board Colony Sanyard, Mandi** (HIMUDA).
+Residents Welfare Association — **Himuda Housing Colony Sanyard, Mandi** (HIMUDA).
 
 | | |
 |--|--|
@@ -24,7 +24,7 @@ EC members with `role=admin` also see an **EC desk** tab inside the portal for n
 - **admin** (Executive Committee) — publish notices, import PDF ledger, view full dues, promote members
 - **resident** — view notices, own dues, directory, edit own profile
 
-Login: **plot / house number** + **email OTP** via Gmail SMTP (`vij.ksh@gmail.com`). Without App Password configured, API returns `devCode`. AuthBuddy planned later.
+Login: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. AuthBuddy planned later.
 
 ## Database + PDF import
 
@@ -50,7 +50,7 @@ cp sites/hbcsanyard/data/smtp.env.example sites/hbcsanyard/data/smtp.env
 # edit RWA_SMTP_PASS=xxxx xxxx xxxx xxxx
 ```
 
-Defaults: `smtp.gmail.com:587`, from/user `vij.ksh@gmail.com`.  
+Defaults: `smtp.gmail.com:587`, from/user `housingcolonysanyard@gmail.com` (OTP, alerts, ops).  
 On the server, `data/smtp.env` is loaded by systemd (`EnvironmentFile`) and preserved across deploys.
 
 ## Local run

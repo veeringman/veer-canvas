@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>HBC Sanyard RWA</title>
-  <meta name="description" content="Residents Welfare Association — Housing Board Colony Sanyard. Notices, dues, directory, and household profile.">
+  <title>Himuda Housing Colony Sanyard</title>
+  <meta name="description" content="Residents Welfare Association — Himuda Housing Colony Sanyard. Notices, dues, directory, and household profile.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
@@ -15,42 +15,37 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="HBC Sanyard">
-  <meta name="application-name" content="HBC Sanyard">
+  <meta name="apple-mobile-web-app-title" content="Himuda Housing Colony Sanyard">
+  <meta name="application-name" content="Himuda Housing Colony Sanyard">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260809icprotect5">
-  <script src="portal.js?v=20260809icprotect5" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260810final1">
+  <script src="portal.js?v=20260810final1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
 
   <div id="gateView" class="shell gate-shell">
     <header class="gate-brand" id="gateBrand">
-      <picture>
-        <source
-          type="image/webp"
-          srcset="assets/hbcs-sanyard-seal-240.webp 240w, assets/hbcs-sanyard-seal-480.webp 480w"
-          sizes="(max-width: 720px) 52vw, 236px"
-        >
-        <img
-          class="seal"
-          id="gateSeal"
-          src="assets/hbcs-sanyard-seal-240.jpg"
-          srcset="assets/hbcs-sanyard-seal-240.jpg 240w, assets/hbcs-sanyard-seal-480.jpg 480w"
-          sizes="(max-width: 720px) 52vw, 236px"
-          width="236"
-          height="236"
-          alt="HIMUDA Housing Colony Sanyard"
-          decoding="async"
-          fetchpriority="high"
-        >
-      </picture>
+      <div class="seal-ring">
+        <picture>
+          <img
+            class="seal"
+            id="gateSeal"
+            src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1"
+            width="248"
+            height="248"
+            alt="Himuda Housing Colony Sanyard"
+            decoding="async"
+            fetchpriority="high"
+          >
+        </picture>
+      </div>
       <div>
-        <p class="eyebrow">Residents Welfare Association · Mandi</p>
-        <h1>HBC Sanyard</h1>
-        <p class="lede">Notices, directory, dues, and your household profile for Housing Board Colony Sanyard.</p>
+        <p class="eyebrow">Mandi Housing Welfare Society · RWA · Mandi</p>
+        <h1>Himuda Housing Colony Sanyard</h1>
+        <p class="lede">Notices, directory, dues, and your household profile for Himuda Housing Colony Sanyard.</p>
       </div>
     </header>
 
@@ -130,9 +125,9 @@
     <header class="app-top">
       <div class="app-top-bar">
         <div class="brand-mini">
-          <img class="seal-mini" src="assets/hbcs-sanyard-seal-mark.jpg" alt="" width="42" height="42" decoding="async">
+          <img class="seal-mini" src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1" alt="" width="42" height="42" decoding="async">
           <div class="brand-mini-text">
-            <strong>HBC Sanyard</strong>
+            <strong>Himuda Housing Colony Sanyard</strong>
             <span class="user-chip-row">
               <span class="chip-avatar" id="userChipAvatar" aria-hidden="true">
                 <img id="userChipAvatarImg" alt="" hidden>
@@ -162,6 +157,9 @@
           </button>
           <button type="button" class="tab" data-panel="works" aria-selected="false" aria-label="Works and Events">
             <span class="tab-long">Works &amp; Events</span><span class="tab-short" aria-hidden="true">Works</span>
+          </button>
+          <button type="button" class="tab ec-only" data-panel="proceedings" hidden aria-selected="false" aria-label="Proceedings register">
+            <span class="tab-long">Proceedings</span><span class="tab-short" aria-hidden="true">MOM</span>
           </button>
           <button type="button" class="tab" data-panel="directory" aria-selected="false">Directory</button>
           <button type="button" class="tab" data-panel="profile" aria-selected="false">Profile</button>
@@ -638,8 +636,16 @@
                 <select id="infoAudienceInput" name="audience">
                   <option value="all">All members</option>
                   <option value="ec">EC members only</option>
+                  <option value="restricted">Specific members</option>
                 </select>
               </label>
+              <div class="span-2 info-access-picker" id="infoDocAccessPicker" hidden>
+                <label>Who can access
+                  <input type="search" id="infoDocAccessSearch" placeholder="Search house or name…" autocomplete="off">
+                </label>
+                <div id="infoDocAccessList" class="info-access-list" role="group" aria-label="Allowed members"></div>
+                <p class="muted compact" id="infoDocAccessHint">Select one or more household members. Managers can always open this document.</p>
+              </div>
               <label class="span-2" data-author-pane="info" data-lang="en">Short summary
                 <input id="infoSummaryInput" name="summary" maxlength="800" placeholder="One line shown in the list">
               </label>
@@ -696,7 +702,7 @@
 
           <div class="info-folder-manage" id="infoFolderManage">
             <h4>Manage folders</h4>
-            <p class="muted">Create nested topics, move folders, and copy shareable links (recipients must sign in).</p>
+            <p class="muted">Create nested topics, move folders, set who can browse them, and copy shareable links (recipients must sign in).</p>
             <div class="btn-row info-folder-create-row">
               <label>New folder name
                 <input id="infoFolderNewTitle" maxlength="120" placeholder="e.g. Society Registration">
@@ -706,7 +712,40 @@
                   <option value="">Top level</option>
                 </select>
               </label>
+              <label>Audience
+                <select id="infoFolderNewAudience">
+                  <option value="all">All members</option>
+                  <option value="ec">EC members only</option>
+                  <option value="restricted">Specific members</option>
+                </select>
+              </label>
               <button type="button" class="btn secondary compact" id="infoFolderCreateBtn">Add folder</button>
+            </div>
+            <div class="info-access-picker" id="infoFolderNewAccessPicker" hidden>
+              <label>Who can browse
+                <input type="search" id="infoFolderNewAccessSearch" placeholder="Search house or name…" autocomplete="off">
+              </label>
+              <div id="infoFolderNewAccessList" class="info-access-list" role="group" aria-label="Allowed members for new folder"></div>
+            </div>
+            <div class="info-access-picker info-folder-edit-access" id="infoFolderEditAccess" hidden>
+              <p class="info-folder-edit-access-title" id="infoFolderEditAccessTitle">Edit folder access</p>
+              <label>Audience
+                <select id="infoFolderEditAudience">
+                  <option value="all">All members</option>
+                  <option value="ec">EC members only</option>
+                  <option value="restricted">Specific members</option>
+                </select>
+              </label>
+              <div id="infoFolderEditAccessPicker" hidden>
+                <label>Who can browse
+                  <input type="search" id="infoFolderEditAccessSearch" placeholder="Search house or name…" autocomplete="off">
+                </label>
+                <div id="infoFolderEditAccessList" class="info-access-list" role="group" aria-label="Allowed members for folder"></div>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn primary compact" id="infoFolderEditAccessSave">Save access</button>
+                <button type="button" class="btn ghost compact" id="infoFolderEditAccessCancel">Cancel</button>
+              </div>
             </div>
             <div id="infoFolderManageList" class="info-folder-manage-list"></div>
             <p class="muted" id="infoFolderManageStatus"></p>
@@ -873,10 +912,153 @@
         </div>
       </section>
 
+      <section class="panel" id="panel-proceedings" hidden>
+        <header class="panel-head">
+          <h2>Proceedings register</h2>
+          <p class="muted">Minutes of General House and Executive Committee meetings — EC register, searchable by year.</p>
+        </header>
+
+        <div class="proceedings-register-shell">
+          <div class="proceedings-register-tabs" role="tablist" aria-label="Register type">
+            <button type="button" class="proceedings-register-tab is-active" data-proceedings-type="gh" aria-selected="true">General House register</button>
+            <button type="button" class="proceedings-register-tab" data-proceedings-type="ec" aria-selected="false">Executive Committee register</button>
+          </div>
+
+          <div class="proceedings-register-cover">
+            <div class="proceedings-register-toolbar">
+              <label>
+                Year
+                <select id="proceedingsYearFilter"></select>
+              </label>
+              <label class="admin-only" hidden>
+                Status
+                <select id="proceedingsStatusFilter">
+                  <option value="">Published + drafts</option>
+                  <option value="published">Published only</option>
+                  <option value="draft">Drafts only</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label>
+                Search
+                <input id="proceedingsSearchInput" type="search" placeholder="Title, agenda, chair…" autocomplete="off">
+              </label>
+              <button type="button" class="btn ghost compact" id="proceedingsRefreshBtn">Refresh</button>
+              <a class="btn ghost compact" id="proceedingsTemplateLink" href="/documents/proceedings-gh-mom-pad.html" target="_blank" rel="noopener">Print blank form</a>
+            </div>
+
+            <div id="proceedingsList" class="proceedings-list" aria-live="polite"></div>
+            <p class="muted" id="proceedingsListStatus"></p>
+          </div>
+        </div>
+
+        <div id="proceedingsDetail" class="proceedings-detail" hidden>
+          <div class="proceedings-detail-head">
+            <button type="button" class="btn ghost compact" id="proceedingsBackBtn">← Back to register</button>
+            <div class="proceedings-detail-actions admin-only" data-entitlement="manage_proceedings" hidden>
+              <button type="button" class="btn secondary compact" id="proceedingsEditBtn">Edit entry</button>
+              <button type="button" class="btn ghost compact" id="proceedingsPrintBtn">Print</button>
+            </div>
+          </div>
+          <article id="proceedingsDetailBody" class="proceedings-page"></article>
+        </div>
+
+        <div class="roster-block admin-only proceedings-manage" id="proceedingsManageBlock" data-entitlement="manage_proceedings" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3 id="proceedingsFormTitle">New register entry</h3>
+              <p class="muted">Record meeting proceedings using the standard MOM template fields.</p>
+            </div>
+          </div>
+          <form id="proceedingsForm" class="stack">
+            <input type="hidden" id="proceedingsEditId" value="">
+            <div class="settings-grid">
+              <label>Register
+                <select id="proceedingsTypeInput" required>
+                  <option value="gh">General House Meeting</option>
+                  <option value="ec">Executive Committee Meeting</option>
+                </select>
+              </label>
+              <label>Meeting subtype
+                <select id="proceedingsSubtypeInput"></select>
+              </label>
+              <label>Meeting date
+                <input id="proceedingsDateInput" type="date" required>
+              </label>
+              <label>Time
+                <input id="proceedingsTimeInput" type="text" maxlength="40" placeholder="e.g. 10:30 AM">
+              </label>
+              <label class="span-2">Subject / title
+                <input id="proceedingsTitleInput" maxlength="200" required placeholder="e.g. Monthly EC meeting — March 2026">
+              </label>
+              <label>Venue
+                <input id="proceedingsVenueInput" maxlength="200" placeholder="Community hall / EC office">
+              </label>
+              <label>Chair / presiding
+                <input id="proceedingsChairInput" maxlength="120" placeholder="President / Chairman">
+              </label>
+              <label class="span-2">Members present
+                <textarea id="proceedingsPresentInput" rows="2" placeholder="Names or plot numbers present"></textarea>
+              </label>
+              <label class="span-2">Members absent / regrets
+                <textarea id="proceedingsAbsentInput" rows="2" placeholder="Apologies / absentees"></textarea>
+              </label>
+              <label class="proceedings-quorum-field">Quorum met
+                <select id="proceedingsQuorumInput">
+                  <option value="">—</option>
+                  <option value="1">Yes</option>
+                  <option value="0">No</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="proceedingsStatusInput">
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label class="span-2">Agenda
+                <textarea id="proceedingsAgendaInput" rows="3" placeholder="Numbered agenda items…"></textarea>
+              </label>
+              <label class="span-2">Proceedings / minutes
+                <textarea id="proceedingsBodyInput" rows="8" placeholder="Detailed minutes of discussion and decisions…"></textarea>
+              </label>
+            </div>
+
+            <fieldset class="works-fieldset">
+              <legend>Resolutions</legend>
+              <div id="proceedingsResolutionsList" class="proceedings-rows"></div>
+              <button type="button" class="btn ghost compact" id="proceedingsAddResolutionBtn">Add resolution</button>
+            </fieldset>
+
+            <fieldset class="works-fieldset">
+              <legend>Action items</legend>
+              <div id="proceedingsActionsList" class="proceedings-rows"></div>
+              <button type="button" class="btn ghost compact" id="proceedingsAddActionBtn">Add action item</button>
+            </fieldset>
+
+            <div class="settings-grid">
+              <label>Next meeting date
+                <input id="proceedingsNextDateInput" type="date">
+              </label>
+              <label>Signed / approved by
+                <input id="proceedingsSignedInput" maxlength="200" placeholder="President / Secretary">
+              </label>
+            </div>
+
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="proceedingsSaveBtn">Save to register</button>
+              <button type="button" class="btn ghost" id="proceedingsCancelEditBtn" hidden>Cancel edit</button>
+            </div>
+            <p class="muted" id="proceedingsFormStatus"></p>
+          </form>
+        </div>
+      </section>
+
       <section class="panel" id="panel-directory" hidden>
         <header class="panel-head">
           <h2>Resident directory</h2>
-          <p class="muted">Active plots in Housing Board Colony Sanyard.</p>
+          <p class="muted">Active plots in Himuda Housing Colony Sanyard.</p>
         </header>
         <div class="table-wrap directory-wrap">
           <table class="directory-table cardable-table">
@@ -1022,7 +1204,7 @@
               <span class="ec-desk-role-chip" id="ecDeskRoleChip" hidden></span>
             </div>
             <h2>EC desk</h2>
-            <p class="ec-desk-colony">HBC Sanyard · Residents Welfare Association</p>
+            <p class="ec-desk-colony">Mandi Housing Welfare Society · Himuda Housing Colony Sanyard</p>
             <p class="ec-desk-motto" id="ecDeskMotto">With great power comes great responsibility.</p>
             <p class="muted ec-desk-lede">Manage colony operations by entitlement. EC Admins have full access; office bearers and EC members may receive a subset.<span class="superadmin-only" hidden> CMS at <a href="/admin/">/admin</a>.</span></p>
           </div>
@@ -1402,6 +1584,65 @@
           </form>
         </div>
 
+        <div class="roster-block templates-section" data-entitlement="manage_templates" id="templatesBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Templates</h3>
+              <p class="muted">Printable letterheads, cash receipts, and forms for EC / press use. Upload files with title, category, and tags.</p>
+            </div>
+            <button type="button" class="btn ghost compact" id="templatesRefreshBtn">Refresh</button>
+          </div>
+          <div class="settings-grid" style="margin-bottom:0.75rem">
+            <label>Filter category
+              <select id="templatesCategoryFilter">
+                <option value="">All categories</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="templatesStatusFilter">
+                <option value="all" selected>All</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+          </div>
+          <div id="templatesList" class="info-doc-list is-cards"></div>
+          <form id="templatesForm" class="stack" style="margin-top:1rem">
+            <input type="hidden" id="templatesEditId" value="">
+            <div class="settings-grid">
+              <label class="span-2">Title
+                <input type="text" id="templatesTitleInput" maxlength="160" required placeholder="e.g. Official Letterhead" autocomplete="off">
+              </label>
+              <label class="span-2">Description
+                <textarea id="templatesDescInput" rows="2" maxlength="600" placeholder="Short note for EC (optional)"></textarea>
+              </label>
+              <label>Category
+                <select id="templatesCategoryInput"></select>
+              </label>
+              <label>Status
+                <select id="templatesStatusInput">
+                  <option value="published" selected>Published</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label class="span-2">Tags
+                <input type="text" id="templatesTagsInput" maxlength="200" placeholder="comma-separated, e.g. a4, print, cash" autocomplete="off">
+              </label>
+              <label class="span-2">Upload file
+                <input type="file" id="templatesFileInput" accept=".html,.htm,.pdf,.png,.jpg,.jpeg,.webp,.svg,.doc,.docx,application/pdf,text/html,image/*">
+              </label>
+            </div>
+            <p class="muted">Supported: HTML, PDF, images, DOC/DOCX (max 20 MB). Seeded pads open from the site documents folder.</p>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="templatesSaveBtn">Save template</button>
+              <button type="button" class="btn ghost" id="templatesResetBtn">Clear form</button>
+            </div>
+            <p class="muted" id="templatesStatus"></p>
+          </form>
+        </div>
+
         <details class="sensitive-ops" id="sensitiveOpsBlock" data-entitlement="sensitive_ops" hidden>
           <summary>
             <strong>Sensitive ops</strong>
@@ -1490,8 +1731,8 @@
               </label>
               <label>SMTP host <input name="host" id="settingsSmtpHost" placeholder="smtp.gmail.com"></label>
               <label>SMTP port <input name="port" id="settingsSmtpPort" type="number" placeholder="587"></label>
-              <label>SMTP user <input name="user" id="settingsSmtpUser" placeholder="vij.ksh@gmail.com"></label>
-              <label>From address <input name="from" id="settingsSmtpFrom" placeholder="vij.ksh@gmail.com"></label>
+              <label>SMTP user <input name="user" id="settingsSmtpUser" placeholder="housingcolonysanyard@gmail.com"></label>
+              <label>From address <input name="from" id="settingsSmtpFrom" placeholder="housingcolonysanyard@gmail.com"></label>
               <label>App password <input name="password" id="settingsSmtpPass" type="password" placeholder="leave blank to keep" autocomplete="new-password"></label>
               <label>OTP TTL (seconds) <input name="otpTtl" id="settingsOtpTtl" type="number" min="60" max="3600"></label>
               <label>Super admin username <input name="superadminUser" id="settingsSaUser"></label>
@@ -1798,7 +2039,7 @@
           </label>
           <label>
             UPI display name
-            <input id="bankEditUpiName" name="upiName" type="text" maxlength="80" placeholder="HBC Sanyard RWA">
+            <input id="bankEditUpiName" name="upiName" type="text" maxlength="80" placeholder="Himuda Housing Colony Sanyard RWA">
           </label>
           <label class="span-2">
             UPI QR code image
@@ -1858,7 +2099,7 @@
         </div>
       </form>
     </dialog>
-    <footer class="app-foot">Managed on VeerCanvas · HBC Sanyard RWA</footer>
+    <footer class="app-foot">Managed on VeerCanvas · Himuda Housing Colony Sanyard RWA</footer>
   </div>
 </body>
 </html>

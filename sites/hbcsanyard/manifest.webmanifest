@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "HBC Sanyard RWA",
-  "short_name": "HBC Sanyard",
-  "description": "Residents Welfare Association — Housing Board Colony Sanyard. Notices, dues, directory, and household profile.",
+  "name": "Himuda Housing Colony Sanyard",
+  "short_name": "Himuda Housing Colony Sanyard",
+  "description": "Residents Welfare Association — Himuda Housing Colony Sanyard. Notices, dues, directory, and household profile.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -36,7 +36,7 @@
       "purpose": "any"
     },
     {
-      "src": "/assets/hbcs-sanyard-seal-512.png",
+      "src": "/assets/hbcs-sanyard-seal-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Himuda Housing Colony Sanyard — Official Letterhead Pad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4 portrait; margin: 6mm; }
+    * { box-sizing: border-box; }
+    :root {
+      --navy: #0b2a56;
+      --navy-2: #143a6e;
+      --green: #1a6b3a;
+      --gold: #c9a227;
+      --ink: #12233f;
+      --muted: #5a6a80;
+      --line: rgba(11, 42, 86, 0.18);
+      --paper: #ffffff;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #cfd8e6;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }
+    .screen-hint {
+      text-align: center;
+      padding: 10px 14px;
+      font: 500 13px/1.45 system-ui, sans-serif;
+      color: #445;
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+    .sheet {
+      position: relative;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 18px;
+      padding: 0;
+      background: var(--paper);
+      border: 1pt solid rgba(11, 42, 86, 0.55);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Full-width triad: equal navy / gold / green — no floating stubs */
+    .accent-edge {
+      display: grid;
+      grid-template-columns: 1fr 7mm 1fr;
+      height: 2.6mm;
+      flex: 0 0 auto;
+    }
+    .accent-edge .n { background: var(--navy); }
+    .accent-edge .g { background: var(--gold); }
+    .accent-edge .e { background: var(--green); }
+    .accent-edge-thin {
+      height: 0.4mm;
+      background: rgba(11, 42, 86, 0.12);
+      flex: 0 0 auto;
+    }
+
+    .wm {
+      position: absolute;
+      left: 50%;
+      top: 55%;
+      transform: translate(-50%, -50%);
+      width: 112mm;
+      height: auto;
+      opacity: 0.72;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .pad {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 5mm 12mm 0;
+      min-height: 0;
+    }
+
+    /* —— Brand —— */
+    .brand {
+      display: grid;
+      grid-template-columns: 24mm 1fr;
+      gap: 5mm;
+      align-items: center;
+      padding: 0 0 3mm;
+    }
+    .brand .logo {
+      width: 24mm;
+      height: auto;
+      display: block;
+    }
+    .brand-text { min-width: 0; }
+    .brand h1 {
+      margin: 0;
+      font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+      font-size: 16pt;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      color: var(--navy);
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+    .brand .colony {
+      margin: 0.8mm 0 0;
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--navy-2);
+      letter-spacing: 0.03em;
+    }
+    .brand .addr {
+      margin: 1.2mm 0 0;
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: 0.01em;
+    }
+
+    .rule {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 3mm;
+      margin: 0 0 3mm;
+    }
+    .rule::before,
+    .rule::after {
+      content: "";
+      height: 0;
+      border-top: 1pt solid var(--navy);
+    }
+    .rule .pip {
+      width: 2.2mm;
+      height: 2.2mm;
+      background: var(--gold);
+      transform: rotate(45deg);
+      box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
+    }
+
+    /* —— Officers: open centered 2×2 (no table frame) —— */
+    .officers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 10mm;
+      row-gap: 2.8mm;
+      margin: 0 auto 3mm;
+      max-width: 168mm;
+      padding: 0 2mm;
+    }
+    .role {
+      text-align: center;
+      min-width: 0;
+      padding: 0 2mm;
+      position: relative;
+    }
+    .role:nth-child(odd)::after {
+      content: "";
+      position: absolute;
+      top: 15%;
+      bottom: 15%;
+      right: -5mm;
+      width: 0;
+      border-right: 0.7pt solid rgba(11, 42, 86, 0.14);
+    }
+    .role .title {
+      display: block;
+      font-size: 6.4pt;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.7mm;
+    }
+    .role .name {
+      display: block;
+      font-size: 8.8pt;
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.035em;
+      line-height: 1.15;
+    }
+    .role .ph {
+      display: block;
+      margin-top: 0.6mm;
+      font-size: 7.4pt;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .role .ph .lbl {
+      color: var(--green);
+      font-weight: 700;
+      margin-right: 1.2mm;
+      letter-spacing: 0.04em;
+    }
+    .officers-foot {
+      width: 36mm;
+      height: 0;
+      margin: 0 auto 1mm;
+      border-top: 0.7pt solid rgba(201, 162, 39, 0.55);
+    }
+
+    .body-area {
+      flex: 1;
+      min-height: 168mm;
+    }
+
+    .foot {
+      margin-top: auto;
+      padding: 0;
+    }
+    .contacts {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 4mm;
+      padding: 2.8mm 0 2.6mm;
+      border-top: 1pt solid rgba(11, 42, 86, 0.45);
+      font-size: 7.4pt;
+      align-items: start;
+    }
+    .contact {
+      display: grid;
+      grid-template-columns: 4.2mm 1fr;
+      gap: 1.6mm;
+      align-items: start;
+    }
+    .contact svg {
+      width: 3.6mm;
+      height: 3.6mm;
+      margin-top: 0.4mm;
+      stroke: var(--green);
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .contact .k {
+      display: block;
+      font-size: 6.2pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.5mm;
+    }
+    .contact .v {
+      color: var(--navy);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .contact .blank {
+      display: block;
+      border-bottom: 1px solid rgba(11, 42, 86, 0.28);
+      min-height: 3.4mm;
+      margin-top: 0.4mm;
+    }
+    .slogan-bar {
+      margin: 0 -12mm;
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+      color: #f7f3ea;
+      text-align: center;
+      padding: 2.3mm 10mm;
+      font-size: 8.2pt;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+    .slogan-bar .sep {
+      color: var(--gold);
+      margin: 0 1.6mm;
+      letter-spacing: 0;
+    }
+    .slogan-bar .u { color: #dbe7ff; }
+    .slogan-bar .h { color: #b8e6c6; }
+    .slogan-bar .p { color: #f0d48a; }
+
+    @media print {
+      body { background: #fff; }
+      .screen-hint { display: none !important; }
+      .sheet {
+        margin: 0;
+        border-width: 0.8pt;
+        min-height: 100vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="screen-hint">
+    Official A4 letterhead pad — Himuda Housing Colony Sanyard.<br>
+    Open → Print → A4. Office-bearer names from EC chart; blank phone lines where not on file.
+  </p>
+
+  <div class="sheet">
+    <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
+    <div class="accent-edge-thin" aria-hidden="true"></div>
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
+
+    <div class="pad">
+      <header class="brand">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
+        <div class="brand-text">
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+        </div>
+      </header>
+
+      <div class="rule" aria-hidden="true"><span class="pip"></span></div>
+
+      <section class="officers" aria-label="Office bearers">
+        <div class="role">
+          <span class="title">President</span>
+          <span class="name">Anup Vaidya</span>
+          <span class="ph"><span class="lbl">Ph</span>94184 95449</span>
+        </div>
+        <div class="role">
+          <span class="title">General Secretary</span>
+          <span class="name">Vijay Kumar Sharma</span>
+          <span class="ph"><span class="lbl">Ph</span>82197 88139</span>
+        </div>
+        <div class="role">
+          <span class="title">Vice President</span>
+          <span class="name">Murari Lal Modgil</span>
+          <span class="ph"><span class="lbl">Ph</span>94181 68784</span>
+        </div>
+        <div class="role">
+          <span class="title">Treasurer</span>
+          <span class="name">Parveen Kumar Thakur</span>
+          <span class="ph"><span class="lbl">Ph</span>94180 71187</span>
+        </div>
+      </section>
+      <div class="officers-foot" aria-hidden="true"></div>
+
+      <div class="body-area" aria-label="Letter writing area"></div>
+
+      <footer class="foot">
+        <div class="contacts">
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            <div>
+              <span class="k">Address</span>
+              <span class="v">Housing Colony Sanyard, Mandi HP 175001</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1.5"/><path d="M4 7l8 6 8-6"/></svg>
+            <div>
+              <span class="k">Email</span>
+              <span class="v">housingcolonysanyard@gmail.com</span>
+            </div>
+          </div>
+        </div>
+        <div class="slogan-bar" aria-label="Society slogan">
+          <span class="u">Unity</span><span class="sep">·</span>
+          <span class="h">Harmony</span><span class="sep">·</span>
+          <span class="p">Progress</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

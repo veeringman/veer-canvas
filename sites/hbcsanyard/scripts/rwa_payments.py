@@ -1,4 +1,4 @@
-"""Payment records + receipt vault for HBC Sanyard RWA."""
+"""Payment records + receipt vault for Himuda Housing Colony Sanyard RWA."""
 
 from __future__ import annotations
 

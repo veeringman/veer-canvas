@@ -118,15 +118,15 @@ Verify login + a notice/dues read. Prefer copying `latest` aside first so you ca
 - Encrypted archives for Drive (optional later)
 - Formal quarterly restore drill checklist (basic restore steps above only)
 
-## Phase 2 — Google Drive (official HBC Gmail)
+## Phase 2 — Google Drive (colony Gmail)
 
-Use a dedicated Gmail (e.g. colony ops address) for **SMTP + Drive backup**.
+Official ops mailbox: **`housingcolonysanyard@gmail.com`** — used for **SMTP (OTP / alerts)** and **Drive backup**.
 
 ### Setup checklist
 
-1. Create the Gmail → App Password → set SMTP in master admin **Platform settings**.
+1. Gmail App Password for `housingcolonysanyard@gmail.com` → set SMTP in master admin **Platform settings** (`RWA_SMTP_USER` / `RWA_SMTP_FROM` / `BACKUP_ALERT_TO`).
 2. Google Cloud project → enable **Drive API** → create a **service account** → download JSON to `data/drive-sa.json` on the server (`chmod 600`; never commit).
-3. In Drive (signed in as that Gmail), create folder **HBC Sanyard Backups**, share it with the service account email (**Editor**).
+3. In Drive (signed in as `housingcolonysanyard@gmail.com`), create folder **Housing Colony Sanyard Backups**, share it with the service account email (**Editor**).
 4. In `data/smtp.env` or `data/drive.env`:
 
 ```bash
@@ -141,7 +141,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/var/www/hbcsanyard.veerlabs.solutions/data/drive
 Drive layout:
 
 ```
-HBC Sanyard Backups/
+Housing Colony Sanyard Backups/
   backups/<site>-latest.tgz
   assets/<site>/{receipts,profile-photos,info-centre,payments}/*.tgz
 ```

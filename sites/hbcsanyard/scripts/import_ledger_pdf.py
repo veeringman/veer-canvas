@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import HIMUDA Housing Colony Sanyard ledger PDF into rwa.db."""
+"""Import Himuda Housing Colony Sanyard ledger PDF into rwa.db."""
 
 from __future__ import annotations
 

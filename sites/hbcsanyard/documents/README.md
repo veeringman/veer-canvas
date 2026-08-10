@@ -1,13 +1,19 @@
-# Printable pads — HBC Sanyard RWA
+# Printable pads — Himuda Housing Colony Sanyard RWA
 
 These files are **for print production only**. They are not linked from the resident portal.
+
+**Logo:** managed registry — [`../assets/mhws-logo/logo.manifest.json`](../assets/mhws-logo/logo.manifest.json) lists every place the logo is applied. Roles: `print` (headers), `watermark`, `web256` (Info Centre mastheads). After changing artwork: `python3 scripts/export_logo_variants.py && python3 scripts/check_logo_refs.py`.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
+| `mhws-letterhead-pad.html` | Official **letterhead pad** — compact header, office bearers, watermark |
+| `mhws-cash-receipt-booklet.html` | **Cash receipt booklet** — 3 tear-off slips per A4 |
 | `rwa-letterhead-blank.html` | Blank **letterhead pad** — org header + empty writing area |
 | `ec-committee-pad.html` | **Executive Committee chart** — office bearers + member list (regenerate from DB) |
+
+These are also catalogued under **EC Desk → Templates** (upload more with title / category / tags).
 
 ## Regenerate EC chart from database
 

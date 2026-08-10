@@ -15,6 +15,53 @@ from init_rwa_db import SUPERADMIN_HOUSE_ID, section_plot_sort_key
 IST = ZoneInfo("Asia/Kolkata")
 _RL = None  # lazy reportlab bundle
 
+# Registered society + colony branding for all portal PDFs.
+ORG_SOCIETY = "Mandi Housing Welfare Society"
+ORG_COLONY = "Himuda Housing Colony Sanyard"
+ORG_NAME = ORG_COLONY
+ORG_NAME_HTML = ORG_COLONY
+ORG_NAME_MULTILINE = ORG_COLONY
+ORG_SUBTITLE = "Housing Colony Sanyard, Mandi HP 175001"
+ORG_SLOGAN = "Unity · Harmony · Progress"
+ORG_SHORT = ORG_COLONY
+ORG_AUTHOR = ORG_SOCIETY
+def _logo_candidates_from_manifest() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Prefer paths from assets/mhws-logo/logo.manifest.json (managed registry)."""
+    fallback_logo = (
+        "assets/mhws-logo/mhws-logo-print.png",
+        "assets/mhws-logo/mhws-logo-official.png",
+        "assets/mhws-logo/mhws-logo-web-512.png",
+        "assets/hbcs-sanyard-seal-mark.png",
+        "assets/hbcs-sanyard-seal-512.png",
+    )
+    fallback_wm = (
+        "assets/mhws-logo/mhws-logo-watermark.png",
+        "assets/mhws-logo/mhws-logo-print.png",
+        "assets/mhws-logo/mhws-logo-official.png",
+    )
+    try:
+        from logo_registry import load_manifest, role_path
+
+        m = load_manifest()
+        logos = (
+            role_path(m, "print"),
+            role_path(m, "official"),
+            role_path(m, "web512"),
+            role_path(m, "sealMark"),
+            role_path(m, "pwa512"),
+        )
+        wms = (
+            role_path(m, "watermark"),
+            role_path(m, "print"),
+            role_path(m, "official"),
+        )
+        return logos, wms
+    except Exception:
+        return fallback_logo, fallback_wm
+
+
+LOGO_CANDIDATES, WATERMARK_CANDIDATES = _logo_candidates_from_manifest()
+
 
 def _now_ist() -> datetime:
     return datetime.now(IST)
@@ -464,16 +511,464 @@ def _resolve_fields(field_ids: list[str] | None) -> list[dict]:
 
 
 def _seal_path(site_root: Path) -> Path | None:
-    for name in (
-        "assets/hbcs-sanyard-seal-mark.png",
-        "assets/hbcs-sanyard-seal-mark.jpg",
-        "assets/hbcs-sanyard-seal-240.jpg",
-        "assets/hbcs-sanyard-seal-512.png",
-    ):
+    """Prefer official society logo; fall back to legacy HBC seals if missing."""
+    for name in LOGO_CANDIDATES:
         path = site_root / name
         if path.is_file():
             return path
     return None
+
+
+def _watermark_path(site_root: Path) -> Path | None:
+    """Prefer pre-faded watermark asset for reportlab letterhead pages."""
+    for name in WATERMARK_CANDIDATES:
+        path = site_root / name
+        if path.is_file():
+            return path
+    return _seal_path(site_root)
+
+
+def _org_title_default(*, html: bool = False) -> str:
+    return ORG_NAME_HTML if html else ORG_NAME_MULTILINE
+
+
+def _org_subtitle_default() -> str:
+    return ORG_SUBTITLE
+
+
+# Colours matching documents/mhws-letterhead-pad.html / cash-receipt booklet.
+BRAND_NAVY = "#0b2a56"
+BRAND_NAVY_2 = "#143a6e"
+BRAND_GREEN = "#1a6b3a"
+BRAND_GOLD = "#c9a227"
+BRAND_INK = "#12233f"
+BRAND_MUTED = "#5a6a80"
+ORG_EMAIL = "housingcolonysanyard@gmail.com"
+ORG_WEB = ""  # leave blank until a public site URL is ready
+
+# Letterhead pad officer order (matches Templates folder pad).
+_LETTERHEAD_ROLE_ORDER = (
+    "president",
+    "general secretary",
+    "vice president",
+    "vice-president",
+    "treasurer",
+)
+
+
+def _letterhead_officers(conn) -> list[dict]:
+    """Four office-bearer slots for letterhead chrome."""
+    bearers = office_bearers_for_header(conn) if conn is not None else []
+    by_key: dict[str, dict] = {}
+    for b in bearers:
+        title = (b.get("officialTitle") or "").strip().lower()
+        for key in _LETTERHEAD_ROLE_ORDER:
+            if key in title and key not in by_key:
+                by_key[key] = b
+                break
+    # Prefer canonical titles for labels.
+    slots = [
+        ("President", "president"),
+        ("General Secretary", "general secretary"),
+        ("Vice President", "vice president"),
+        ("Treasurer", "treasurer"),
+    ]
+    out: list[dict] = []
+    for label, key in slots:
+        hit = by_key.get(key)
+        if not hit and key == "vice president":
+            hit = by_key.get("vice-president")
+        if hit:
+            out.append({
+                "title": label,
+                "name": hit.get("name") or "",
+                "phone": hit.get("phone") or "",
+            })
+        else:
+            out.append({"title": label, "name": "", "phone": ""})
+    return out
+
+
+def _amount_in_words_inr(amount: int) -> str:
+    """Simple Indian-English amount-in-words for cash receipts."""
+    n = int(amount or 0)
+    if n < 0:
+        n = abs(n)
+    ones = [
+        "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+        "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+        "Seventeen", "Eighteen", "Nineteen",
+    ]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    def under_thousand(x: int) -> str:
+        if x == 0:
+            return ""
+        if x < 20:
+            return ones[x]
+        if x < 100:
+            return (tens[x // 10] + (" " + ones[x % 10] if x % 10 else "")).strip()
+        return (ones[x // 100] + " Hundred" + ((" " + under_thousand(x % 100)) if x % 100 else "")).strip()
+
+    if n == 0:
+        return "Zero Rupees Only"
+    crore = n // 10000000
+    n %= 10000000
+    lakh = n // 100000
+    n %= 100000
+    thousand = n // 1000
+    rem = n % 1000
+    parts: list[str] = []
+    if crore:
+        parts.append(f"{under_thousand(crore)} Crore")
+    if lakh:
+        parts.append(f"{under_thousand(lakh)} Lakh")
+    if thousand:
+        parts.append(f"{under_thousand(thousand)} Thousand")
+    if rem:
+        parts.append(under_thousand(rem))
+    return (" ".join(parts) + " Rupees Only").strip()
+
+
+def _draw_mhws_watermark(
+    canvas,
+    site_root: Path,
+    *,
+    page_w: float,
+    page_h: float,
+    size_mm: float = 112,
+    cy_frac: float = 0.45,
+    alpha: float = 0.065,
+) -> None:
+    seal = _watermark_path(site_root)
+    if not seal:
+        return
+    rl = _reportlab()
+    mm = rl["mm"]
+    # Pre-faded watermark PNG already carries opacity; avoid double-fading.
+    use_alpha = 1.0 if "watermark" in seal.name else alpha
+    try:
+        canvas.saveState()
+        if hasattr(canvas, "setFillAlpha") and use_alpha < 1.0:
+            canvas.setFillAlpha(use_alpha)
+        w = size_mm * mm
+        h = size_mm * mm
+        x = (page_w - w) / 2
+        y = page_h * cy_frac - h / 2
+        canvas.drawImage(
+            str(seal),
+            x,
+            y,
+            width=w,
+            height=h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        canvas.restoreState()
+    except Exception:
+        try:
+            canvas.restoreState()
+        except Exception:
+            pass
+
+
+def _draw_report_page_chrome(
+    canvas,
+    site_root: Path,
+    *,
+    page_w: float,
+    page_h: float,
+    mm,
+    footer_left: str,
+    page_num: int,
+) -> None:
+    """Standard letterhead watermark + report footer on every page."""
+    from reportlab.lib import colors
+
+    seal_mm = min(112.0, (page_h / mm) * 0.62)
+    _draw_mhws_watermark(
+        canvas,
+        site_root,
+        page_w=page_w,
+        page_h=page_h,
+        size_mm=seal_mm,
+        cy_frac=0.5,
+        alpha=0.065,
+    )
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(colors.HexColor("#666666"))
+    canvas.drawString(12 * mm, 8 * mm, footer_left)
+    canvas.drawRightString(page_w - 12 * mm, 8 * mm, f"Page {page_num}")
+    canvas.restoreState()
+
+
+def _draw_accent_edge(canvas, page_w: float, *, y_top: float, mm) -> float:
+    """Draw navy/gold/green triad at top; return y below the thin rule."""
+    from reportlab.lib import colors
+
+    bar_h = 2.6 * mm
+    gold_w = 7 * mm
+    side = (page_w - gold_w) / 2
+    y = y_top - bar_h
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.rect(0, y, side, bar_h, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor(BRAND_GOLD))
+    canvas.rect(side, y, gold_w, bar_h, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+    canvas.rect(side + gold_w, y, side, bar_h, fill=1, stroke=0)
+    thin = 0.4 * mm
+    y2 = y - thin
+    canvas.setFillColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.12))
+    canvas.rect(0, y2, page_w, thin, fill=1, stroke=0)
+    return y2
+
+
+def _draw_mhws_letterhead_chrome(
+    canvas,
+    site_root: Path,
+    officers: list[dict],
+    *,
+    page_w: float,
+    page_h: float,
+    mm,
+    doc_label: str = "",
+) -> None:
+    """Paint the official letterhead pad frame (matches Templates folder HTML)."""
+    from reportlab.lib import colors
+
+    # Outer border
+    canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.55))
+    canvas.setLineWidth(0.8)
+    canvas.rect(3 * mm, 3 * mm, page_w - 6 * mm, page_h - 6 * mm, fill=0, stroke=1)
+
+    y = _draw_accent_edge(canvas, page_w, y_top=page_h - 3 * mm, mm=mm)
+    _draw_mhws_watermark(
+        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=112, cy_frac=0.48, alpha=0.065
+    )
+
+    pad_x = 12 * mm
+    # Brand row
+    seal = _seal_path(site_root)
+    brand_top = y - 5 * mm
+    logo_w = 24 * mm
+    if seal:
+        try:
+            canvas.drawImage(
+                str(seal),
+                pad_x,
+                brand_top - logo_w,
+                width=logo_w,
+                height=logo_w,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception:
+            pass
+    text_x = pad_x + logo_w + 5 * mm
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.setFont("Times-Bold", 13)
+    canvas.drawString(text_x, brand_top - 8 * mm, ORG_SOCIETY.upper())
+    canvas.setFont("Times-Bold", 11)
+    canvas.drawString(text_x, brand_top - 13 * mm, ORG_COLONY.upper())
+    canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+    canvas.setFont("Helvetica-Bold", 8.5)
+    canvas.drawString(text_x, brand_top - 17 * mm, ORG_SUBTITLE)
+
+    # Gold pip rule
+    rule_y = brand_top - logo_w - 3 * mm
+    canvas.setStrokeColor(colors.HexColor(BRAND_NAVY))
+    canvas.setLineWidth(0.9)
+    mid = page_w / 2
+    canvas.line(pad_x, rule_y, mid - 4 * mm, rule_y)
+    canvas.line(mid + 4 * mm, rule_y, page_w - pad_x, rule_y)
+    canvas.saveState()
+    canvas.translate(mid, rule_y)
+    canvas.rotate(45)
+    canvas.setFillColor(colors.HexColor(BRAND_GOLD))
+    canvas.rect(-1.1 * mm, -1.1 * mm, 2.2 * mm, 2.2 * mm, fill=1, stroke=0)
+    canvas.restoreState()
+
+    # Officers 2×2
+    slots = officers[:4] if officers else _letterhead_officers(None)
+    while len(slots) < 4:
+        slots.append({"title": "", "name": "", "phone": ""})
+    grid_top = rule_y - 5 * mm
+    col_w = (page_w - 2 * pad_x) / 2
+    for i, slot in enumerate(slots):
+        col = i % 2
+        row = i // 2
+        cx = pad_x + col_w * col + col_w / 2
+        cy = grid_top - row * 12 * mm
+        canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+        canvas.setFont("Helvetica-Bold", 6.2)
+        title = (slot.get("title") or "").upper()
+        canvas.drawCentredString(cx, cy, title)
+        canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+        canvas.setFont("Helvetica-Bold", 8.5)
+        canvas.drawCentredString(cx, cy - 4 * mm, (slot.get("name") or "—").upper())
+        phone = (slot.get("phone") or "").strip()
+        canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+        canvas.setFont("Helvetica", 7.2)
+        ph = f"Ph {phone}" if phone else "Ph —"
+        canvas.drawCentredString(cx, cy - 7.5 * mm, ph)
+        if col == 0:
+            canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.14))
+            canvas.setLineWidth(0.6)
+            canvas.line(pad_x + col_w, cy - 8 * mm, pad_x + col_w, cy + 1 * mm)
+
+    # Officers foot gold rule
+    foot_rule_y = grid_top - 26 * mm
+    canvas.setStrokeColor(colors.Color(201 / 255, 162 / 255, 39 / 255, alpha=0.55))
+    canvas.setLineWidth(0.7)
+    canvas.line(mid - 18 * mm, foot_rule_y, mid + 18 * mm, foot_rule_y)
+
+    if doc_label:
+        canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+        canvas.setFont("Helvetica", 7)
+        canvas.drawRightString(page_w - pad_x, foot_rule_y + 2 * mm, doc_label)
+
+    # Footer contacts + slogan bar
+    slogan_h = 8 * mm
+    slogan_y = 3 * mm
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.rect(3 * mm, slogan_y, page_w - 6 * mm, slogan_h, fill=1, stroke=0)
+    # soft gradient mimic: right greenish strip
+    canvas.setFillColor(colors.HexColor("#124a38"))
+    canvas.rect(page_w * 0.62, slogan_y, page_w * 0.38 - 3 * mm, slogan_h, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor("#f7f3ea"))
+    canvas.setFont("Helvetica-Bold", 8)
+    slogan = "UNITY   ·   HARMONY   ·   PROGRESS"
+    canvas.drawCentredString(page_w / 2, slogan_y + 2.8 * mm, slogan)
+
+    contact_y = slogan_y + slogan_h + 3 * mm
+    canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.45))
+    canvas.setLineWidth(0.9)
+    canvas.line(pad_x, contact_y + 8 * mm, page_w - pad_x, contact_y + 8 * mm)
+
+    contacts = [
+        (k, v)
+        for k, v in (
+            ("Address", ORG_SUBTITLE),
+            ("Email", ORG_EMAIL),
+            ("Website", ORG_WEB),
+        )
+        if str(v or "").strip()
+    ]
+    col_gap = (page_w - 2 * pad_x) / max(1, len(contacts))
+    for i, (k, v) in enumerate(contacts):
+        x = pad_x + i * col_gap
+        canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+        canvas.setFont("Helvetica-Bold", 6)
+        canvas.drawString(x, contact_y + 5 * mm, k.upper())
+        canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+        canvas.setFont("Helvetica-Bold", 7)
+        # wrap long address
+        if len(v) > 36:
+            canvas.drawString(x, contact_y + 2.2 * mm, v[:36])
+            canvas.drawString(x, contact_y - 0.5 * mm, v[36:])
+        else:
+            canvas.drawString(x, contact_y + 2.2 * mm, v)
+
+
+def _draw_cash_receipt_leaf_chrome(
+    canvas,
+    site_root: Path,
+    *,
+    page_w: float,
+    page_h: float,
+    mm,
+    receipt_no: str,
+    paid_fmt: str,
+    copy_tag: str = "Original",
+) -> tuple[float, float, float, float]:
+    """Draw one cash-receipt leaf frame; return content box (x, y, w, h)."""
+    from reportlab.lib import colors
+
+    margin = 10 * mm
+    box_x = margin
+    box_y = margin
+    box_w = page_w - 2 * margin
+    box_h = page_h - 2 * margin
+
+    canvas.setStrokeColor(colors.HexColor(BRAND_NAVY))
+    canvas.setLineWidth(1.25)
+    canvas.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
+
+    # Soft top wash
+    canvas.setFillColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.03))
+    canvas.rect(box_x, box_y + box_h - 18 * mm, box_w, 18 * mm, fill=1, stroke=0)
+
+    _draw_mhws_watermark(
+        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=72, cy_frac=0.48, alpha=0.055
+    )
+
+    pad = 5 * mm
+    inner_x = box_x + pad
+    top = box_y + box_h - pad
+
+    # Copy tag
+    canvas.setFillColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
+    canvas.setFont("Helvetica", 6)
+    canvas.drawRightString(box_x + box_w - pad, top - 2 * mm, copy_tag.upper())
+
+    # Header: logo + org + meta
+    seal = _seal_path(site_root)
+    logo_w = 16 * mm
+    if seal:
+        try:
+            canvas.drawImage(
+                str(seal),
+                inner_x,
+                top - logo_w - 1 * mm,
+                width=logo_w,
+                height=logo_w,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception:
+            pass
+    tx = inner_x + logo_w + 3 * mm
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.setFont("Times-Bold", 10)
+    canvas.drawString(tx, top - 6 * mm, ORG_SOCIETY.upper())
+    canvas.setFont("Times-Bold", 9)
+    canvas.drawString(tx, top - 10 * mm, ORG_COLONY.upper())
+    canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+    canvas.setFont("Helvetica-Bold", 7.5)
+    canvas.drawString(tx, top - 13.5 * mm, ORG_SUBTITLE)
+
+    meta_x = box_x + box_w - pad
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.setFont("Helvetica-Bold", 9)
+    canvas.drawRightString(meta_x, top - 5 * mm, "CASH RECEIPT")
+    canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+    canvas.setFont("Helvetica", 8)
+    canvas.drawRightString(meta_x, top - 9.5 * mm, f"No. {receipt_no}")
+    canvas.drawRightString(meta_x, top - 13.5 * mm, f"Date {paid_fmt}")
+
+    # Header rule
+    rule_y = top - logo_w - 3 * mm
+    canvas.setStrokeColor(colors.HexColor(BRAND_NAVY))
+    canvas.setLineWidth(1)
+    canvas.line(inner_x, rule_y, box_x + box_w - pad, rule_y)
+
+    # Banner
+    ban_h = 7 * mm
+    ban_y = rule_y - ban_h - 2 * mm
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.rect(inner_x, ban_y, box_w - 2 * pad, ban_h, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor("#f7f3ea"))
+    canvas.setFont("Helvetica-Bold", 8)
+    canvas.drawCentredString(
+        page_w / 2,
+        ban_y + 2.2 * mm,
+        "RECEIVED WITH THANKS   ·   UNITY · HARMONY · PROGRESS",
+    )
+
+    content_top = ban_y - 4 * mm
+    content_bottom = box_y + 28 * mm
+    return inner_x, content_bottom, box_w - 2 * pad, content_top - content_bottom
 
 
 def _cell(value: str, *, align: str = "left", markup: bool = False):
@@ -524,8 +1019,8 @@ def build_pending_dues_pdf(
     rows = query_pending_dues_rows(conn, enrich_payment_row, filters=filters)
     bearers = office_bearers_for_header(conn)
 
-    org = org_title or "Housing Board Colony Sanyard\nResidents Welfare Association"
-    sub = org_subtitle or "HIMUDA Housing Colony Sanyard · Mandi (H.P.)"
+    org = org_title or _org_title_default(html=False)
+    sub = org_subtitle or _org_subtitle_default()
     generated = _fmt_ist_datetime()
 
     buf = io.BytesIO()
@@ -537,8 +1032,8 @@ def build_pending_dues_pdf(
         rightMargin=12 * mm,
         topMargin=10 * mm,
         bottomMargin=12 * mm,
-        title="Pending Dues Report - HBC Sanyard RWA",
-        author="HBC Sanyard RWA",
+        title=f"Pending Dues Report - {ORG_SHORT}",
+        author=ORG_AUTHOR,
     )
 
     org_style = ParagraphStyle(
@@ -596,6 +1091,7 @@ def build_pending_dues_pdf(
     org_block = [
         Paragraph(org.replace("\n", "<br/>"), org_style),
         Paragraph(sub, sub_style),
+        Paragraph(ORG_SLOGAN, sub_style),
     ]
     if header_left:
         header_table = Table(
@@ -717,18 +1213,21 @@ def build_pending_dues_pdf(
     story.append(Spacer(1, 4 * mm))
     story.append(
         Paragraph(
-            "Service to the Colony · Collective Strength · Cooperation for All - HBC Sanyard RWA",
+            f"{ORG_SLOGAN} — {ORG_SHORT}",
             ParagraphStyle("foot", parent=meta_style, alignment=rl["TA_CENTER"], fontSize=7.5),
         )
     )
 
     def _footer(canvas, _doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(12 * mm, 8 * mm, "HBC Sanyard RWA - Pending Dues Report")
-        canvas.drawRightString(page[0] - 12 * mm, 8 * mm, f"Page {_doc.page}")
-        canvas.restoreState()
+        _draw_report_page_chrome(
+            canvas,
+            site_root,
+            page_w=page[0],
+            page_h=page[1],
+            mm=mm,
+            footer_left=f"{ORG_SHORT} - Pending Dues Report",
+            page_num=_doc.page,
+        )
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return buf.getvalue()
@@ -1098,8 +1597,8 @@ def build_tabular_pdf(
         rightMargin=12 * mm,
         topMargin=10 * mm,
         bottomMargin=12 * mm,
-        title=f"{title} - HBC Sanyard RWA",
-        author="HBC Sanyard RWA",
+        title=f"{title} - {ORG_SHORT}",
+        author=ORG_AUTHOR,
     )
     org_style = ParagraphStyle(
         "org", parent=styles["Heading1"], fontSize=13, leading=16,
@@ -1121,13 +1620,17 @@ def build_tabular_pdf(
     )
     story: list = []
     seal = _seal_path(site_root)
-    org = "Housing Board Colony Sanyard<br/>Residents Welfare Association"
-    sub = "HIMUDA Housing Colony Sanyard · Mandi (H.P.)"
+    org = _org_title_default(html=True)
+    sub = _org_subtitle_default()
     if seal:
         try:
             img = Image(str(seal), width=18 * mm, height=18 * mm)
             header_table = Table(
-                [[img, [Paragraph(org, org_style), Paragraph(sub, sub_style)]]],
+                [[img, [
+                    Paragraph(org, org_style),
+                    Paragraph(sub, sub_style),
+                    Paragraph(ORG_SLOGAN, sub_style),
+                ]]],
                 colWidths=[22 * mm, doc.width - 22 * mm],
             )
             header_table.setStyle(TableStyle([
@@ -1138,9 +1641,11 @@ def build_tabular_pdf(
         except Exception:
             story.append(Paragraph(org, org_style))
             story.append(Paragraph(sub, sub_style))
+            story.append(Paragraph(ORG_SLOGAN, sub_style))
     else:
         story.append(Paragraph(org, org_style))
         story.append(Paragraph(sub, sub_style))
+        story.append(Paragraph(ORG_SLOGAN, sub_style))
     if bearers:
         bits = [f"<b>{b['officialTitle'] or 'Office Bearer'}</b>: {b['name']}" for b in bearers[:6]]
         story.append(Paragraph(" · ".join(bits), bearer_style))
@@ -1210,12 +1715,15 @@ def build_tabular_pdf(
     story.append(table)
 
     def _footer(canvas, _doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(12 * mm, 8 * mm, f"HBC Sanyard RWA - {title}")
-        canvas.drawRightString(page[0] - 12 * mm, 8 * mm, f"Page {_doc.page}")
-        canvas.restoreState()
+        _draw_report_page_chrome(
+            canvas,
+            site_root,
+            page_w=page[0],
+            page_h=page[1],
+            mm=mm,
+            footer_left=f"{ORG_SHORT} - {title}",
+            page_num=_doc.page,
+        )
 
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return buf.getvalue()
@@ -1302,9 +1810,10 @@ def build_no_dues_certificate_pdf(
 ) -> tuple[bytes, str]:
     """Portrait No Dues Certificate PDF for one plot.
 
-    letterhead=True (digital): seal + org header for screen/share.
+    letterhead=True (digital): official letterhead pad layout + watermark
+    (same template as Templates folder letterhead).
     letterhead=False (paper print): omit letterhead; enlarge top/bottom margins
-    so the body fits pre-printed RWA letterhead stationery.
+    so the body fits pre-printed letterhead stationery.
     """
     info = no_dues_eligibility(conn, house_id, enrich_payment_row=enrich_payment_row)
     if require_eligible and not info["eligible"]:
@@ -1316,76 +1825,53 @@ def build_no_dues_certificate_pdf(
     ParagraphStyle = rl["ParagraphStyle"]
     Paragraph = rl["Paragraph"]
     Spacer = rl["Spacer"]
-    Image = rl["Image"]
     styles = rl["getSampleStyleSheet"]()
 
-    bearers = office_bearers_for_header(conn)
+    officers = _letterhead_officers(conn)
     issued = _fmt_ist_date()
     fee_year = info["payment"].get("feeYear") or _now_ist().year
     purpose_text = (purpose or "").strip()[:400] or "Official / banking / transfer purposes"
+    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
 
-    # Paper print leaves room for physical letterhead / stamp area.
-    top_m = 48 * mm if not letterhead else 16 * mm
-    bottom_m = 32 * mm if not letterhead else 16 * mm
+    if letterhead:
+        top_m, bottom_m, left_m, right_m = 78 * mm, 32 * mm, 14 * mm, 14 * mm
+    else:
+        top_m, bottom_m, left_m, right_m = 48 * mm, 32 * mm, 18 * mm, 18 * mm
 
     buf = io.BytesIO()
     page = rl["A4"]
     doc = rl["SimpleDocTemplate"](
         buf,
         pagesize=page,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
+        leftMargin=left_m,
+        rightMargin=right_m,
         topMargin=top_m,
         bottomMargin=bottom_m,
         title=f"No Dues Certificate - House/Plot {info['plotNo']}",
-        author="HBC Sanyard RWA",
+        author=ORG_AUTHOR,
     )
 
-    org_style = ParagraphStyle(
-        "ndOrg", parent=styles["Heading1"], fontSize=14, leading=18,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
-    )
-    sub_style = ParagraphStyle(
-        "ndSub", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
-    )
     title_style = ParagraphStyle(
-        "ndTitle", parent=styles["Heading1"], fontSize=16, leading=20,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
-        spaceBefore=10 if letterhead else 4, spaceAfter=14,
+        "ndTitle", parent=styles["Heading1"], fontSize=15, leading=19,
+        textColor=colors.HexColor(BRAND_NAVY), alignment=rl["TA_CENTER"],
+        spaceBefore=2, spaceAfter=12,
     )
     body_style = ParagraphStyle(
         "ndBody", parent=styles["Normal"], fontSize=11, leading=16,
-        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
+        textColor=colors.HexColor(BRAND_INK), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
     )
     meta_style = ParagraphStyle(
-        "ndMeta", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#444444"), spaceAfter=4,
+        "ndMeta", parent=styles["Normal"], fontSize=9.5, leading=13,
+        textColor=colors.HexColor(BRAND_MUTED), spaceAfter=4,
     )
 
     story = []
-    if letterhead:
-        seal = _seal_path(site_root)
-        if seal:
-            try:
-                img = Image(str(seal), width=22 * mm, height=22 * mm)
-                img.hAlign = "CENTER"
-                story.append(img)
-                story.append(Spacer(1, 4 * mm))
-            except Exception:
-                pass
-
-        story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
-        story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
-
     story.append(Paragraph("<b>NO DUES CERTIFICATE</b>", title_style))
-
-    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
     body = (
         f"This is to certify that <b>{_escape(info['name'])}</b>, "
         f"resident of House/Plot <b>{_escape(house_no)}</b>, "
-        f"Housing Board Colony Sanyard, Mandi, has <b>no outstanding subscription / maintenance dues</b> "
-        f"as per the RWA ledger on record for fee year <b>{fee_year}</b>."
+        f"{ORG_SUBTITLE}, has <b>no outstanding subscription / maintenance dues</b> "
+        f"as per the society ledger on record for fee year <b>{fee_year}</b>."
     )
     story.append(Paragraph(body, body_style))
     story.append(Paragraph(
@@ -1397,23 +1883,11 @@ def build_no_dues_certificate_pdf(
     story.append(Paragraph(f"Issued on: <b>{issued}</b>", meta_style))
     if issued_by:
         story.append(Paragraph(f"Issued by: {_escape(issued_by)}", meta_style))
-    story.append(Spacer(1, 8 * mm))
-
-    if bearers:
-        story.append(Paragraph("<b>Office bearers</b>", meta_style))
-        for b in bearers[:6]:
-            title = b.get("officialTitle") or "Office Bearer"
-            story.append(Paragraph(
-                f"{_escape(title)} - {_escape(b.get('name') or '')}"
-                + (f" · {_escape(b['phone'])}" if b.get("phone") else ""),
-                meta_style,
-            ))
-
-    story.append(Spacer(1, 14 * mm))
+    story.append(Spacer(1, 10 * mm))
     story.append(Paragraph(
-        "This certificate reflects RWA subscription ledger status only and does not cover "
+        "This certificate reflects society subscription ledger status only and does not cover "
         "municipal taxes or utility bills.",
-        ParagraphStyle("ndFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
+        ParagraphStyle("ndFoot", parent=meta_style, fontSize=8, leading=10),
     ))
 
     if attestation_id and verify_url:
@@ -1425,18 +1899,24 @@ def build_no_dues_certificate_pdf(
         except Exception:
             pass
 
-    def _footer(canvas, _doc):
-        # Digital only — paper print leaves the physical letterhead clean.
+    def _page(canvas, _doc):
         if not letterhead:
             return
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(18 * mm, 10 * mm, "HBC Sanyard RWA - No Dues Certificate")
-        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"House/Plot {house_no}")
-        canvas.restoreState()
+        try:
+            _draw_mhws_letterhead_chrome(
+                canvas,
+                site_root,
+                officers,
+                page_w=page[0],
+                page_h=page[1],
+                mm=mm,
+                doc_label=f"No Dues · Plot {house_no}",
+            )
+        finally:
+            canvas.restoreState()
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    doc.build(story, onFirstPage=_page, onLaterPages=_page)
     safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", house_no)
     stamp = _now_ist().strftime("%Y%m%d")
     suffix = "" if letterhead else "-print"
@@ -1482,9 +1962,8 @@ def build_no_objection_certificate_pdf(
 ) -> tuple[bytes, str]:
     """Portrait No Objection Certificate PDF for one plot.
 
-    letterhead=True (digital): seal + org header for screen/share.
-    letterhead=False (paper print): omit letterhead; enlarge top/bottom margins
-    so the body fits pre-printed RWA letterhead stationery.
+    letterhead=True (digital): official letterhead pad layout + watermark.
+    letterhead=False (paper print): omit letterhead for pre-printed stationery.
     """
     info = no_objection_eligibility(conn, house_id)
     if require_eligible and not info["eligible"]:
@@ -1496,75 +1975,53 @@ def build_no_objection_certificate_pdf(
     ParagraphStyle = rl["ParagraphStyle"]
     Paragraph = rl["Paragraph"]
     Spacer = rl["Spacer"]
-    Image = rl["Image"]
     styles = rl["getSampleStyleSheet"]()
 
-    bearers = office_bearers_for_header(conn)
+    officers = _letterhead_officers(conn)
     issued = _fmt_ist_date()
     purpose_text = (
         (purpose or "").strip()[:400]
         or "Property transfer / sale / mortgage / official purposes"
     )
+    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
 
-    top_m = 48 * mm if not letterhead else 16 * mm
-    bottom_m = 32 * mm if not letterhead else 16 * mm
+    if letterhead:
+        top_m, bottom_m, left_m, right_m = 78 * mm, 32 * mm, 14 * mm, 14 * mm
+    else:
+        top_m, bottom_m, left_m, right_m = 48 * mm, 32 * mm, 18 * mm, 18 * mm
 
     buf = io.BytesIO()
     page = rl["A4"]
     doc = rl["SimpleDocTemplate"](
         buf,
         pagesize=page,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
+        leftMargin=left_m,
+        rightMargin=right_m,
         topMargin=top_m,
         bottomMargin=bottom_m,
         title=f"No Objection Certificate - House/Plot {info['plotNo']}",
-        author="HBC Sanyard RWA",
+        author=ORG_AUTHOR,
     )
 
-    org_style = ParagraphStyle(
-        "nocOrg", parent=styles["Heading1"], fontSize=14, leading=18,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
-    )
-    sub_style = ParagraphStyle(
-        "nocSub", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
-    )
     title_style = ParagraphStyle(
-        "nocTitle", parent=styles["Heading1"], fontSize=16, leading=20,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
-        spaceBefore=10 if letterhead else 4, spaceAfter=14,
+        "nocTitle", parent=styles["Heading1"], fontSize=15, leading=19,
+        textColor=colors.HexColor(BRAND_NAVY), alignment=rl["TA_CENTER"],
+        spaceBefore=2, spaceAfter=12,
     )
     body_style = ParagraphStyle(
         "nocBody", parent=styles["Normal"], fontSize=11, leading=16,
-        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
+        textColor=colors.HexColor(BRAND_INK), alignment=rl["TA_JUSTIFY"], spaceAfter=10,
     )
     meta_style = ParagraphStyle(
-        "nocMeta", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#444444"), spaceAfter=4,
+        "nocMeta", parent=styles["Normal"], fontSize=9.5, leading=13,
+        textColor=colors.HexColor(BRAND_MUTED), spaceAfter=4,
     )
 
     story = []
-    if letterhead:
-        seal = _seal_path(site_root)
-        if seal:
-            try:
-                img = Image(str(seal), width=22 * mm, height=22 * mm)
-                img.hAlign = "CENTER"
-                story.append(img)
-                story.append(Spacer(1, 4 * mm))
-            except Exception:
-                pass
-
-        story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
-        story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
-
     story.append(Paragraph("<b>NO OBJECTION CERTIFICATE</b>", title_style))
-
-    house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
     body = (
-        f"This is to certify that the Residents Welfare Association of "
-        f"Housing Board Colony Sanyard, Mandi, has <b>no objection</b> for "
+        f"This is to certify that <b>{ORG_NAME}</b> of "
+        f"{ORG_SUBTITLE} has <b>no objection</b> for "
         f"<b>{_escape(info['name'])}</b>, resident of House/Plot <b>{_escape(house_no)}</b>, "
         f"in respect of the purpose stated below."
     )
@@ -1573,23 +2030,11 @@ def build_no_objection_certificate_pdf(
     story.append(Paragraph(f"Issued on: <b>{issued}</b>", meta_style))
     if issued_by:
         story.append(Paragraph(f"Issued by: {_escape(issued_by)}", meta_style))
-    story.append(Spacer(1, 8 * mm))
-
-    if bearers:
-        story.append(Paragraph("<b>Office bearers</b>", meta_style))
-        for b in bearers[:6]:
-            title = b.get("officialTitle") or "Office Bearer"
-            story.append(Paragraph(
-                f"{_escape(title)} - {_escape(b.get('name') or '')}"
-                + (f" · {_escape(b['phone'])}" if b.get("phone") else ""),
-                meta_style,
-            ))
-
-    story.append(Spacer(1, 14 * mm))
+    story.append(Spacer(1, 10 * mm))
     story.append(Paragraph(
-        "This certificate expresses the RWA's non-objection for the stated purpose only "
+        "This certificate expresses the Society's non-objection for the stated purpose only "
         "and does not constitute a dues clearance, title deed, or municipal approval.",
-        ParagraphStyle("nocFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
+        ParagraphStyle("nocFoot", parent=meta_style, fontSize=8, leading=10),
     ))
 
     if attestation_id and verify_url:
@@ -1601,17 +2046,24 @@ def build_no_objection_certificate_pdf(
         except Exception:
             pass
 
-    def _footer(canvas, _doc):
+    def _page(canvas, _doc):
         if not letterhead:
             return
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(18 * mm, 10 * mm, "HBC Sanyard RWA - No Objection Certificate")
-        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"House/Plot {house_no}")
-        canvas.restoreState()
+        try:
+            _draw_mhws_letterhead_chrome(
+                canvas,
+                site_root,
+                officers,
+                page_w=page[0],
+                page_h=page[1],
+                mm=mm,
+                doc_label=f"NOC · Plot {house_no}",
+            )
+        finally:
+            canvas.restoreState()
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    doc.build(story, onFirstPage=_page, onLaterPages=_page)
     safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", house_no)
     stamp = _now_ist().strftime("%Y%m%d")
     suffix = "" if letterhead else "-print"
@@ -1631,8 +2083,9 @@ def build_cash_received_note_pdf(
     category_label: str = "",
     attestation_id: str | None = None,
     verify_url: str | None = None,
+    receipt_no: str | None = None,
 ) -> tuple[bytes, str]:
-    """Cash Received Note / Cash Payment Voucher PDF (upload as proof, then EC verifies)."""
+    """Cash receipt / voucher PDF matching the Templates folder receipt leaf + watermark."""
     rl = _reportlab()
     colors = rl["colors"]
     mm = rl["mm"]
@@ -1641,16 +2094,9 @@ def build_cash_received_note_pdf(
     Spacer = rl["Spacer"]
     Table = rl["Table"]
     TableStyle = rl["TableStyle"]
-    Image = rl["Image"]
     styles = rl["getSampleStyleSheet"]()
 
     is_claim = (kind or "payment").strip().lower() == "reimbursement"
-    title = "CASH PAYMENT VOUCHER" if is_claim else "CASH RECEIVED NOTE"
-    subtitle = (
-        "Proof of cash paid for colony expense / reimbursement claim"
-        if is_claim
-        else "Proof of cash received toward RWA dues / collection"
-    )
     amount = int(amount or 0)
     if amount < 1:
         raise ValueError("Amount is required")
@@ -1667,128 +2113,199 @@ def build_cash_received_note_pdf(
     receiver_name = str(receiver_name or "").strip() or "-"
     purpose = str(purpose or "").strip()[:400]
     category_label = str(category_label or "").strip()
+    words = _amount_in_words_inr(amount)
+    stamp = _now_ist().strftime("%Y%m%d")
+    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", plot_no) or "plot"
+    receipt_no = (receipt_no or f"CR-{safe_plot}-{stamp}").strip()
 
+    # Split plot into house + block hints when possible (e.g. 12B-1).
+    block = ""
+    house_disp = plot_no
+    if "-" in plot_no:
+        parts = plot_no.rsplit("-", 1)
+        if len(parts) == 2 and parts[0] and parts[1]:
+            house_disp, block = parts[0], parts[1]
+
+    # Purpose checkboxes from the standard leaf.
+    purpose_l = (purpose + " " + category_label).lower()
+    checks = {
+        "dues": any(k in purpose_l for k in ("dues", "maintenance", "subscription", "fee")),
+        "membership": "member" in purpose_l,
+        "works": any(k in purpose_l for k in ("work", "donation", "donat")),
+    }
+    checks["other"] = not (checks["dues"] or checks["membership"] or checks["works"])
+
+    def _box(on: bool) -> str:
+        return "[x]" if on else "[ ]"
+
+    title = "CASH PAYMENT VOUCHER" if is_claim else "CASH RECEIPT"
     buf = io.BytesIO()
     page = rl["A4"]
+
+    if is_claim:
+        # Reimbursement keeps letterhead-style voucher with watermark.
+        officers: list[dict] = []
+        doc = rl["SimpleDocTemplate"](
+            buf,
+            pagesize=page,
+            leftMargin=14 * mm,
+            rightMargin=14 * mm,
+            topMargin=78 * mm,
+            bottomMargin=32 * mm,
+            title=f"{title} - Plot {plot_no}",
+            author=ORG_AUTHOR,
+        )
+        title_style = ParagraphStyle(
+            "crTitle", parent=styles["Heading1"], fontSize=14, leading=18,
+            textColor=colors.HexColor(BRAND_NAVY), alignment=rl["TA_CENTER"],
+            spaceAfter=10,
+        )
+        meta_style = ParagraphStyle(
+            "crMeta", parent=styles["Normal"], fontSize=10, leading=13,
+            textColor=colors.HexColor(BRAND_INK), spaceAfter=3,
+        )
+        story = [Paragraph(f"<b>{title}</b>", title_style)]
+        rows = [
+            [Paragraph("<b>Date</b>", meta_style), Paragraph(_escape(paid_fmt), meta_style)],
+            [Paragraph("<b>Plot</b>", meta_style), Paragraph(_escape(plot_no), meta_style)],
+            [Paragraph("<b>Amount</b>", meta_style), Paragraph(f"Rs {amount:,}", meta_style)],
+            [Paragraph("<b>In words</b>", meta_style), Paragraph(_escape(words), meta_style)],
+            [Paragraph("<b>Paid by</b>", meta_style), Paragraph(_escape(payer_name), meta_style)],
+            [Paragraph("<b>Cash received by</b>", meta_style), Paragraph(_escape(receiver_name), meta_style)],
+        ]
+        if purpose:
+            rows.append([Paragraph("<b>Particulars</b>", meta_style), Paragraph(_escape(purpose), meta_style)])
+        table = Table(rows, colWidths=[45 * mm, 120 * mm])
+        table.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor(BRAND_NAVY)),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.25)),
+            ("BACKGROUND", (0, 0), (0, -1), colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.04)),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph(
+            "This voucher acknowledges cash paid for the stated colony expense. "
+            "Upload as claim proof; an authorised office bearer must verify before reimbursement.",
+            meta_style,
+        ))
+        if attestation_id and verify_url:
+            try:
+                import rwa_attest
+                rwa_attest.append_attestation_to_story(
+                    story, rl, verify_url=verify_url, attestation_id=attestation_id
+                )
+            except Exception:
+                pass
+
+        def _page(canvas, _doc):
+            canvas.saveState()
+            try:
+                _draw_mhws_letterhead_chrome(
+                    canvas, site_root, officers,
+                    page_w=page[0], page_h=page[1], mm=mm,
+                    doc_label=f"Voucher · Plot {plot_no}",
+                )
+            finally:
+                canvas.restoreState()
+
+        doc.build(story, onFirstPage=_page, onLaterPages=_page)
+        return buf.getvalue(), f"cash-voucher-{safe_plot}-{stamp}.pdf"
+
+    # Standard cash receipt leaf (Templates folder booklet design, single filled slip).
     doc = rl["SimpleDocTemplate"](
         buf,
         pagesize=page,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=16 * mm,
-        bottomMargin=18 * mm,
-        title=f"{title} - Plot {plot_no}",
-        author="HBC Sanyard RWA",
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=42 * mm,
+        bottomMargin=36 * mm,
+        title=f"Cash Receipt - Plot {plot_no}",
+        author=ORG_AUTHOR,
     )
-
-    org_style = ParagraphStyle(
-        "crOrg", parent=styles["Heading1"], fontSize=13, leading=17,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceAfter=2,
+    label = ParagraphStyle(
+        "crLbl", parent=styles["Normal"], fontSize=9, leading=12,
+        textColor=colors.HexColor(BRAND_GREEN), fontName="Helvetica-Bold",
     )
-    sub_style = ParagraphStyle(
-        "crSub", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#4a3728"), alignment=rl["TA_CENTER"], spaceAfter=8,
+    value = ParagraphStyle(
+        "crVal", parent=styles["Normal"], fontSize=10.5, leading=14,
+        textColor=colors.HexColor(BRAND_NAVY), fontName="Helvetica-Bold",
     )
-    title_style = ParagraphStyle(
-        "crTitle", parent=styles["Heading1"], fontSize=15, leading=19,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"],
-        spaceBefore=8, spaceAfter=6,
+    note = ParagraphStyle(
+        "crNote", parent=styles["Normal"], fontSize=8, leading=11,
+        textColor=colors.HexColor(BRAND_MUTED),
     )
-    body_style = ParagraphStyle(
-        "crBody", parent=styles["Normal"], fontSize=10.5, leading=15,
-        textColor=colors.HexColor("#1a1a1a"), alignment=rl["TA_LEFT"], spaceAfter=8,
-    )
-    meta_style = ParagraphStyle(
-        "crMeta", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#444444"), spaceAfter=3,
-    )
-    sign_style = ParagraphStyle(
-        "crSign", parent=styles["Normal"], fontSize=9, leading=12,
-        textColor=colors.HexColor("#222222"), spaceBefore=2, spaceAfter=2,
-    )
-
     story = []
-    seal = _seal_path(site_root)
-    if seal:
-        try:
-            img = Image(str(seal), width=20 * mm, height=20 * mm)
-            img.hAlign = "CENTER"
-            story.append(img)
-            story.append(Spacer(1, 3 * mm))
-        except Exception:
-            pass
+    story.append(Paragraph("Received from", label))
+    story.append(Paragraph(_escape(payer_name), value))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Plot / House", label))
+    story.append(Paragraph(_escape(house_disp), value))
+    if block:
+        story.append(Paragraph("Block", label))
+        story.append(Paragraph(_escape(block), value))
+    story.append(Spacer(1, 3 * mm))
 
-    story.append(Paragraph("Housing Board Colony Sanyard<br/>Residents Welfare Association", org_style))
-    story.append(Paragraph("HIMUDA Housing Colony Sanyard · Mandi (H.P.)", sub_style))
-    story.append(Paragraph(f"<b>{title}</b>", title_style))
-    story.append(Paragraph(subtitle, sub_style))
-
-    rows = [
-        [Paragraph("<b>Date</b>", meta_style), Paragraph(_escape(paid_fmt), meta_style)],
-        [Paragraph("<b>Plot</b>", meta_style), Paragraph(_escape(plot_no), meta_style)],
-        [Paragraph("<b>Amount</b>", meta_style), Paragraph(f"Rs {amount:,}", meta_style)],
-    ]
-    if category_label:
-        rows.append([Paragraph("<b>Category</b>", meta_style), Paragraph(_escape(category_label), meta_style)])
-    if is_claim:
-        rows.append([Paragraph("<b>Paid by (resident)</b>", meta_style), Paragraph(_escape(payer_name), meta_style)])
-        rows.append([Paragraph("<b>Cash received by</b>", meta_style), Paragraph(_escape(receiver_name), meta_style)])
-    else:
-        rows.append([Paragraph("<b>Paid by (resident)</b>", meta_style), Paragraph(_escape(payer_name), meta_style)])
-        rows.append([Paragraph("<b>Cash received by (RWA)</b>", meta_style), Paragraph(_escape(receiver_name), meta_style)])
-    if purpose:
-        rows.append([Paragraph("<b>Particulars</b>", meta_style), Paragraph(_escape(purpose), meta_style)])
-
-    table = Table(rows, colWidths=[55 * mm, 110 * mm])
-    table.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#c9b8a0")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2d5c4")),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f1e8")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    amt_table = Table(
+        [[
+            Paragraph("Amount (Rs)", label),
+            Paragraph(f"<font size='16'><b>{amount:,}</b></font>", value),
+        ]],
+        colWidths=[40 * mm, 120 * mm],
+    )
+    amt_table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor(BRAND_NAVY)),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.04)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
-    story.append(table)
-    story.append(Spacer(1, 8 * mm))
-
-    if is_claim:
-        story.append(Paragraph(
-            "This voucher acknowledges that cash was paid for the stated colony expense. "
-            "Attach / upload this note as claim proof. An authorised EC member must verify and approve "
-            "before reimbursement is marked paid.",
-            body_style,
-        ))
-    else:
-        story.append(Paragraph(
-            "This note acknowledges that cash was received toward RWA dues / collection for the plot above. "
-            "The recipient should sign, upload this note as the payment receipt, and another authorised "
-            "EC member must verify it before the ledger is updated.",
-            body_style,
-        ))
-
-    story.append(Spacer(1, 16 * mm))
-    story.append(Paragraph("<b>Signatures</b>", meta_style))
-    story.append(Spacer(1, 10 * mm))
+    story.append(amt_table)
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("In words", label))
+    story.append(Paragraph(_escape(words), value))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph("Towards", label))
+    purpose_line = (
+        f"{_box(checks['dues'])} Maintenance / dues &nbsp;&nbsp; "
+        f"{_box(checks['membership'])} Membership &nbsp;&nbsp; "
+        f"{_box(checks['works'])} Works / donation &nbsp;&nbsp; "
+        f"{_box(checks['other'])} Other"
+    )
+    story.append(Paragraph(purpose_line, value))
+    note_text = purpose or category_label or "—"
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph("Period / note", label))
+    story.append(Paragraph(_escape(note_text), value))
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(
+        "<b>Mode:</b> Cash only on this slip. Subject to verification by the Society. "
+        "Keep this as your acknowledgement.",
+        note,
+    ))
+    story.append(Spacer(1, 14 * mm))
     sig = Table(
         [[
-            Paragraph("_________________________<br/>Payer / Resident", sign_style),
-            Paragraph("_________________________<br/>Cash recipient", sign_style),
+            Paragraph(
+                f"_________________________<br/>Authorised signatory<br/>"
+                f"<font size='8' color='#5a6a80'>{_escape(receiver_name)}</font>",
+                note,
+            ),
+            Paragraph(
+                "_________________________<br/>Member acknowledgement<br/>"
+                f"<font size='8' color='#5a6a80'>{_escape(payer_name)}</font>",
+                note,
+            ),
         ]],
-        colWidths=[85 * mm, 85 * mm],
+        colWidths=[80 * mm, 80 * mm],
     )
     story.append(sig)
-    story.append(Spacer(1, 12 * mm))
-    story.append(Paragraph(
-        "_________________________<br/>EC verifier (after upload)",
-        sign_style,
-    ))
-    story.append(Spacer(1, 10 * mm))
-    story.append(Paragraph(
-        "Generated from the HBC Sanyard RWA portal. Print, sign if needed, then upload as receipt proof.",
-        ParagraphStyle("crFoot", parent=meta_style, fontSize=8, leading=10, textColor=colors.HexColor("#666666")),
-    ))
 
     if attestation_id and verify_url:
         try:
@@ -1799,19 +2316,24 @@ def build_cash_received_note_pdf(
         except Exception:
             pass
 
-    def _footer(canvas, _doc):
+    def _page(canvas, _doc):
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#666666"))
-        canvas.drawString(18 * mm, 10 * mm, f"HBC Sanyard RWA - {title}")
-        canvas.drawRightString(page[0] - 18 * mm, 10 * mm, f"Plot {plot_no} · Rs {amount:,}")
-        canvas.restoreState()
+        try:
+            _draw_cash_receipt_leaf_chrome(
+                canvas,
+                site_root,
+                page_w=page[0],
+                page_h=page[1],
+                mm=mm,
+                receipt_no=receipt_no,
+                paid_fmt=paid_fmt,
+                copy_tag="Original",
+            )
+        finally:
+            canvas.restoreState()
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
-    safe_plot = re.sub(r"[^A-Za-z0-9_-]+", "-", plot_no) or "plot"
-    stamp = _now_ist().strftime("%Y%m%d")
-    prefix = "cash-voucher" if is_claim else "cash-received"
-    return buf.getvalue(), f"{prefix}-{safe_plot}-{stamp}.pdf"
+    doc.build(story, onFirstPage=_page, onLaterPages=_page)
+    return buf.getvalue(), f"cash-received-{safe_plot}-{stamp}.pdf"
 
 
 def _escape(text: str) -> str:

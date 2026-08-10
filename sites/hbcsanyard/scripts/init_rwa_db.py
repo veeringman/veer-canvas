@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HBC Sanyard RWA SQLite schema, seed, and PDF ledger import helpers."""
+"""Himuda Housing Colony Sanyard RWA SQLite schema, seed, and PDF ledger import helpers."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 SUPERADMIN_HOUSE_ID = "__SUPERADMIN__"
 
 # Residential plots A (rows 1–60) then commercial plots B (61–62) from HIMUDA ledger 15-06-2026.
@@ -86,7 +86,7 @@ BANK = {
     "account_no": "09640100004511",
     "ifsc": "BARB0MANDIX",
     "ledger_as_of": "2026-06-15",
-    "colony": "HIMUDA Housing Colony Sanyard, Mandi",
+    "colony": "Himuda Housing Colony Sanyard, Mandi",
 }
 
 
@@ -594,7 +594,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_household_members_table(conn)
     ensure_grievances_table(conn)
     ensure_info_documents_table(conn)
+    ensure_print_templates_table(conn)
     ensure_colony_works_table(conn)
+    ensure_meeting_proceedings_table(conn)
     ensure_entitlements_schema(conn)
     ensure_report_templates_table(conn)
     ensure_bilingual_content_columns(conn)
@@ -698,6 +700,41 @@ def ensure_report_templates_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.commit()
+
+
+def ensure_print_templates_table(conn: sqlite3.Connection) -> None:
+    """EC Desk printable templates (letterhead, receipts, forms)."""
+    try:
+        import rwa_templates as _rwa_templates
+
+        _rwa_templates.ensure_print_templates_table(conn)
+    except Exception:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS print_templates (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              description TEXT,
+              category TEXT NOT NULL DEFAULT 'other',
+              tags_json TEXT NOT NULL DEFAULT '[]',
+              doc_type TEXT NOT NULL DEFAULT 'file'
+                CHECK(doc_type IN ('file','static')),
+              filename TEXT,
+              original_name TEXT,
+              mime_type TEXT,
+              size_bytes INTEGER,
+              static_path TEXT,
+              status TEXT NOT NULL DEFAULT 'published'
+                CHECK(status IN ('draft','published','archived')),
+              created_by TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_print_templates_cat
+              ON print_templates(status, category, updated_at DESC);
+            """
+        )
     conn.commit()
 
 
@@ -966,6 +1003,9 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
           summary TEXT,
           parent_id TEXT,
           sort_order INTEGER NOT NULL DEFAULT 100,
+          audience TEXT NOT NULL DEFAULT 'all'
+            CHECK(audience IN ('all','ec','restricted')),
+          allowed_member_ids TEXT NOT NULL DEFAULT '[]',
           created_by TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
@@ -991,7 +1031,8 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
           status TEXT NOT NULL DEFAULT 'draft'
             CHECK(status IN ('draft','published','archived')),
           audience TEXT NOT NULL DEFAULT 'all'
-            CHECK(audience IN ('all','ec')),
+            CHECK(audience IN ('all','ec','restricted')),
+          allowed_member_ids TEXT NOT NULL DEFAULT '[]',
           published_at TEXT,
           published_by TEXT,
           created_at TEXT NOT NULL,
@@ -1006,6 +1047,16 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
     if "parent_id" not in folder_cols:
         conn.execute("ALTER TABLE info_folders ADD COLUMN parent_id TEXT")
         folder_cols.add("parent_id")
+    if "audience" not in folder_cols:
+        conn.execute(
+            "ALTER TABLE info_folders ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'"
+        )
+        folder_cols.add("audience")
+    if "allowed_member_ids" not in folder_cols:
+        conn.execute(
+            "ALTER TABLE info_folders ADD COLUMN allowed_member_ids TEXT NOT NULL DEFAULT '[]'"
+        )
+        folder_cols.add("allowed_member_ids")
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_info_folders_parent
@@ -1024,15 +1075,28 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
     if "external_url" not in cols:
         conn.execute("ALTER TABLE info_documents ADD COLUMN external_url TEXT")
         cols.add("external_url")
-    # Older installs only allow file|html in CHECK — rebuild so 'link' is accepted.
+    if "allowed_member_ids" not in cols:
+        conn.execute(
+            "ALTER TABLE info_documents ADD COLUMN allowed_member_ids TEXT NOT NULL DEFAULT '[]'"
+        )
+        cols.add("allowed_member_ids")
+    # Older installs may lack 'link' doc_type and/or 'restricted' audience in CHECK — rebuild.
     create_row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='info_documents'"
     ).fetchone()
     create_sql = (create_row[0] or "") if create_row else ""
-    if create_sql and "'link'" not in create_sql:
+    needs_rebuild = bool(
+        create_sql
+        and (
+            "'link'" not in create_sql
+            or "'restricted'" not in create_sql
+            or "allowed_member_ids" not in create_sql
+        )
+    )
+    if needs_rebuild:
         conn.executescript(
             """
-            CREATE TABLE info_documents__link (
+            CREATE TABLE info_documents__acl (
               id TEXT PRIMARY KEY,
               title TEXT NOT NULL,
               summary TEXT,
@@ -1048,7 +1112,8 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
               status TEXT NOT NULL DEFAULT 'draft'
                 CHECK(status IN ('draft','published','archived')),
               audience TEXT NOT NULL DEFAULT 'all'
-                CHECK(audience IN ('all','ec')),
+                CHECK(audience IN ('all','ec','restricted')),
+              allowed_member_ids TEXT NOT NULL DEFAULT '[]',
               published_at TEXT,
               published_by TEXT,
               created_at TEXT NOT NULL,
@@ -1059,7 +1124,7 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
             );
             """
         )
-        # Copy with optional bilingual columns from older schemas.
+        # Copy with optional bilingual / ACL columns from older schemas.
         src_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
         select_bits = [
             "id",
@@ -1075,6 +1140,11 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
             "external_url" if "external_url" in src_cols else "NULL AS external_url",
             "status",
             "audience" if "audience" in src_cols else "'all' AS audience",
+            (
+                "allowed_member_ids"
+                if "allowed_member_ids" in src_cols
+                else "'[]' AS allowed_member_ids"
+            ),
             "published_at",
             "published_by",
             "created_at",
@@ -1085,17 +1155,75 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
         ]
         conn.execute(
             f"""
-            INSERT INTO info_documents__link(
+            INSERT INTO info_documents__acl(
               id, title, summary, category, folder_id, doc_type, filename, original_name,
-              mime_type, size_bytes, external_url, status, audience, published_at, published_by,
-              created_at, updated_at, title_hi, summary_hi, has_html_hi
+              mime_type, size_bytes, external_url, status, audience, allowed_member_ids,
+              published_at, published_by, created_at, updated_at, title_hi, summary_hi, has_html_hi
             )
             SELECT {", ".join(select_bits)} FROM info_documents
             """
         )
         conn.execute("DROP TABLE info_documents")
-        conn.execute("ALTER TABLE info_documents__link RENAME TO info_documents")
+        conn.execute("ALTER TABLE info_documents__acl RENAME TO info_documents")
         cols = {row[1] for row in conn.execute("PRAGMA table_info(info_documents)").fetchall()}
+    # Folders: rebuild CHECK if audience cannot be 'restricted' (ALTER alone does not widen CHECK).
+    folder_create = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='info_folders'"
+    ).fetchone()
+    folder_sql = (folder_create[0] or "") if folder_create else ""
+    if folder_sql and (
+        "audience" not in folder_sql
+        or "'restricted'" not in folder_sql
+        or "allowed_member_ids" not in folder_sql
+    ):
+        conn.executescript(
+            """
+            CREATE TABLE info_folders__acl (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              title_hi TEXT,
+              summary TEXT,
+              parent_id TEXT,
+              sort_order INTEGER NOT NULL DEFAULT 100,
+              audience TEXT NOT NULL DEFAULT 'all'
+                CHECK(audience IN ('all','ec','restricted')),
+              allowed_member_ids TEXT NOT NULL DEFAULT '[]',
+              created_by TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            """
+        )
+        fsrc = {row[1] for row in conn.execute("PRAGMA table_info(info_folders)").fetchall()}
+        fbits = [
+            "id",
+            "title",
+            "title_hi" if "title_hi" in fsrc else "NULL AS title_hi",
+            "summary" if "summary" in fsrc else "NULL AS summary",
+            "parent_id" if "parent_id" in fsrc else "NULL AS parent_id",
+            "sort_order" if "sort_order" in fsrc else "100 AS sort_order",
+            "audience" if "audience" in fsrc else "'all' AS audience",
+            (
+                "allowed_member_ids"
+                if "allowed_member_ids" in fsrc
+                else "'[]' AS allowed_member_ids"
+            ),
+            "created_by" if "created_by" in fsrc else "NULL AS created_by",
+            "created_at",
+            "updated_at",
+        ]
+        conn.execute(
+            f"""
+            INSERT INTO info_folders__acl(
+              id, title, title_hi, summary, parent_id, sort_order,
+              audience, allowed_member_ids, created_by, created_at, updated_at
+            )
+            SELECT {", ".join(fbits)} FROM info_folders
+            """
+        )
+        conn.execute("DROP TABLE info_folders")
+        conn.execute("ALTER TABLE info_folders__acl RENAME TO info_folders")
+        folder_cols = {row[1] for row in conn.execute("PRAGMA table_info(info_folders)").fetchall()}
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_info_docs_folder
@@ -1106,6 +1234,18 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_info_docs_status
           ON info_documents(status, category, published_at DESC)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_folders_parent
+          ON info_folders(parent_id, sort_order, title COLLATE NOCASE)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_info_folders_sort
+          ON info_folders(sort_order, title COLLATE NOCASE)
         """
     )
     # Seed a registration folder once (for bye-laws / registration certificates).
@@ -1182,8 +1322,8 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
                 """,
                 (
                     bylaws_id,
-                    "Mandi Housing Welfare Society, Sanyard — Rules & Bye-laws",
-                    "Bilingual (Hindi / English) readable edition of MHWS Sanyard rules and bye-laws.",
+                    "Himuda Housing Colony Sanyard — Rules & Bye-laws",
+                    "Bilingual (Hindi / English) readable edition of Himuda Housing Colony Sanyard rules and bye-laws.",
                     "bylaws",
                     "folder_registration",
                     "mhws-sanyard-rules-bylaws.html",
@@ -1191,7 +1331,7 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
                     now,
                     now,
                     now,
-                    "मण्डी हाऊसिंग वेलफेयर सोसाइटी, सन्यारड — नियम एवं उपनियम",
+                    "हाउसिंग कॉलोनी सन्यारड — नियम एवं उपनियम",
                     "एमएचडब्ल्यूएस सन्यारड नियमों व उपनियमों का द्विभाषी पठनीय संस्करण।",
                 ),
             )
@@ -1225,7 +1365,7 @@ def ensure_info_documents_table(conn: sqlite3.Connection) -> None:
     suit_title = "Court Case No 01 — Path / link road dispute (Civil Suit 2023)"
     suit_summary = (
         "Pending Senior Civil Judge, Mandi matter (~086/2023): plaint, HIMUDA & colony/Plot 12-A replies, "
-        "and plaintiff replication on the Housing Board Colony Sanyardh path / gate dispute. Further hearings expected."
+        "and plaintiff replication on the Himuda Housing Colony Sanyardh path / gate dispute. Further hearings expected."
     )
     existing_suit = conn.execute(
         "SELECT id FROM info_documents WHERE id = ?", (suit_id,)
@@ -1339,6 +1479,50 @@ def ensure_colony_works_table(conn: sqlite3.Connection) -> None:
     ):
         if name not in cols:
             conn.execute(sql)
+    conn.commit()
+
+
+def ensure_meeting_proceedings_table(conn: sqlite3.Connection) -> None:
+    """Proceedings / MOM register — General House and Executive Committee meetings."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS meeting_proceedings (
+          id TEXT PRIMARY KEY,
+          register_no INTEGER NOT NULL DEFAULT 1,
+          meeting_type TEXT NOT NULL
+            CHECK(meeting_type IN ('gh','ec')),
+          meeting_subtype TEXT NOT NULL DEFAULT 'regular',
+          title TEXT NOT NULL,
+          meeting_date TEXT NOT NULL,
+          meeting_time TEXT,
+          venue TEXT,
+          chair_person TEXT,
+          members_present TEXT,
+          members_absent TEXT,
+          quorum_met INTEGER,
+          agenda TEXT,
+          proceedings_body TEXT,
+          resolutions_json TEXT,
+          action_items_json TEXT,
+          next_meeting_date TEXT,
+          signed_by TEXT,
+          approved_at TEXT,
+          status TEXT NOT NULL DEFAULT 'draft'
+            CHECK(status IN ('draft','published','archived')),
+          visibility TEXT NOT NULL DEFAULT 'published'
+            CHECK(visibility IN ('draft','published')),
+          published_at TEXT,
+          published_by TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_proceedings_type_date
+          ON meeting_proceedings(meeting_type, meeting_date DESC, status);
+        CREATE INDEX IF NOT EXISTS idx_proceedings_register
+          ON meeting_proceedings(meeting_type, substr(meeting_date, 1, 4), register_no);
+        """
+    )
     conn.commit()
 
 
@@ -2090,7 +2274,7 @@ def seed_from_ledger(conn: sqlite3.Connection, *, reset: bool = False) -> dict:
     cur = conn.execute(
         "INSERT INTO payment_ledgers(source, as_of, notes, imported_at) VALUES (?, ?, ?, ?)",
         (
-            "HIMUDA Housing Colony Sanyard LIST.pdf",
+            "Himuda Housing Colony Sanyard LIST.pdf",
             BANK["ledger_as_of"],
             "Registration & subscription fees status as of 15-06-2026",
             now,
@@ -2133,7 +2317,7 @@ def seed_from_ledger(conn: sqlite3.Connection, *, reset: bool = False) -> dict:
         """,
         (
             "n_welcome",
-            "Welcome to the HBC Sanyard resident portal",
+            "Welcome to the Himuda Housing Colony Sanyard resident portal",
             "**Official colony board**\n\n"
             "Use this portal for notices, directory, payment dues, and profile updates.\n\n"
             "**How to sign in**\n"
@@ -2185,7 +2369,7 @@ def main() -> int:
 
     site_root = pathlib.Path(__file__).resolve().parents[1]
     default_db = site_root / "data" / "rwa.db"
-    parser = argparse.ArgumentParser(description="Init / seed HBC Sanyard RWA SQLite DB")
+    parser = argparse.ArgumentParser(description="Init / seed Himuda Housing Colony Sanyard RWA SQLite DB")
     parser.add_argument("--db", default=str(default_db))
     parser.add_argument("--reset", action="store_true")
     args = parser.parse_args()

@@ -188,7 +188,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       minute: '2-digit',
       hour12: true,
     });
-    return `HBC Sanyard · Plot ${plot}${name ? ` · ${name}` : ''} · ${when} · view only`;
+    return `Himuda Housing Colony Sanyard · Plot ${plot}${name ? ` · ${name}` : ''} · ${when} · view only`;
   }
 
   function fillWatermarkNode(node, mark) {
@@ -889,6 +889,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return r.role === 'admin';
   }
 
+  function isEcMember(r = state.session?.resident) {
+    if (!r) return false;
+    if (isSuperAdmin(r)) return true;
+    if (r.viewOnly || r.isPrimary === false) return false;
+    if (isEcAdmin(r)) return true;
+    if (r.isEcMember || r.isOfficeBearer) return true;
+    return Boolean(String(r.officialTitle || '').trim());
+  }
+
   function canOpenEcDesk(r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
@@ -1500,6 +1509,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       '#panel-observability .roster-block',
       '#panel-info > .roster-block',
       '#panel-works > .roster-block',
+      '#panel-proceedings > .roster-block',
       '#panel-concerns .desk-tablet',
       '#panel-profile > .roster-block',
     ].join(', '));
@@ -1665,6 +1675,16 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }
       node.hidden = !canOpenEcDesk(r);
     });
+    document.querySelectorAll('.ec-only').forEach((node) => {
+      if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
+        if (!isEcMember(r)) {
+          node.hidden = true;
+          node.classList.remove('is-active');
+        }
+        return;
+      }
+      node.hidden = !isEcMember(r);
+    });
     applyEntitlementVisibility();
     document.querySelectorAll('.superadmin-only').forEach((node) => {
       if (node.classList.contains('panel') || /^panel-/.test(node.id || '')) {
@@ -1733,6 +1753,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function ensurePanelVisibility(preferred) {
     let name = preferred || activePanelName() || 'home';
     if (name === 'admin' && !canOpenEcDesk()) name = 'home';
+    if (name === 'proceedings' && !isEcMember()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
     switchPanel(name);
@@ -4296,6 +4317,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   let infoFoldersCache = [];
   let infoDocsCache = [];
   let infoDeepLink = null;
+  let infoAccessCandidatesCache = null;
+  let infoFolderAccessEditId = '';
   const PENDING_INFO_KEY = 'hbc_pending_info';
 
   function rememberPendingInfo(link) {
@@ -4412,6 +4435,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function copyInfoShareLink({ folderId = '', docId = '', label = 'Link' } = {}) {
     const url = infoShareUrl({ folderId, docId });
+    // Warm / write the nginx static OG card (deploy used to wipe /share/; Flask /s/ recreates it).
+    try {
+      const warm = docId
+        ? `/s/doc/${encodeURIComponent(docId)}`
+        : (folderId ? `/s/folder/${encodeURIComponent(folderId)}` : '');
+      if (warm) await fetch(warm, { credentials: 'omit', cache: 'no-store' });
+    } catch (_err) { /* still copy the URL; nginx falls back to /s/ */ }
     try {
       await navigator.clipboard.writeText(url);
       window.alert(
@@ -4486,6 +4516,125 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     else selectEl.value = '';
   }
 
+  function infoAudienceBadgeClass(audience) {
+    if (audience === 'ec') return 'is-ec';
+    if (audience === 'restricted') return 'is-restricted';
+    return 'is-all';
+  }
+
+  async function ensureInfoAccessCandidates() {
+    if (infoAccessCandidatesCache) return infoAccessCandidatesCache;
+    if (!hasEntitlement('manage_info')) {
+      infoAccessCandidatesCache = [];
+      return infoAccessCandidatesCache;
+    }
+    try {
+      const data = await api('/api/rwa/info-centre/access-candidates');
+      infoAccessCandidatesCache = data.members || [];
+    } catch (_err) {
+      infoAccessCandidatesCache = [];
+    }
+    return infoAccessCandidatesCache;
+  }
+
+  function selectedInfoAccessIds(listEl) {
+    if (!listEl) return [];
+    return [...listEl.querySelectorAll('input[type="checkbox"][data-member-id]:checked')]
+      .map((cb) => cb.getAttribute('data-member-id'))
+      .filter(Boolean);
+  }
+
+  function setInfoAccessPickerVisibility(pickerEl, audience) {
+    if (!pickerEl) return;
+    pickerEl.hidden = audience !== 'restricted';
+  }
+
+  async function renderInfoAccessList(listEl, {
+    selectedIds = [],
+    search = '',
+  } = {}) {
+    if (!listEl) return;
+    const members = await ensureInfoAccessCandidates();
+    const selected = new Set((selectedIds || []).map(String));
+    const q = String(search || '').trim().toLowerCase();
+    const filtered = !q
+      ? members
+      : members.filter((m) => {
+        const hay = `${m.houseId || ''} ${m.name || ''} ${m.relationLabel || ''} ${m.label || ''}`.toLowerCase();
+        return hay.includes(q);
+      });
+    if (!filtered.length) {
+      listEl.innerHTML = `<p class="muted">${members.length ? 'No matches.' : 'No household members found.'}</p>`;
+      return;
+    }
+    listEl.innerHTML = filtered.map((m) => {
+      const id = String(m.id || '');
+      const checked = selected.has(id) ? ' checked' : '';
+      const label = m.label || `${m.houseId || ''} — ${m.name || ''}`;
+      return `<label class="info-access-option">
+        <input type="checkbox" data-member-id="${escapeHtml(id)}"${checked}>
+        <span>${escapeHtml(label)}</span>
+      </label>`;
+    }).join('');
+  }
+
+  function syncInfoDocAccessPicker() {
+    const audience = el('infoAudienceInput')?.value || 'all';
+    setInfoAccessPickerVisibility(el('infoDocAccessPicker'), audience);
+  }
+
+  function syncInfoFolderNewAccessPicker() {
+    const audience = el('infoFolderNewAudience')?.value || 'all';
+    setInfoAccessPickerVisibility(el('infoFolderNewAccessPicker'), audience);
+  }
+
+  async function editInfoFolderAccess(folderId) {
+    if (!hasEntitlement('manage_info') || !folderId) return;
+    const folder = infoFoldersCache.find((f) => f.id === folderId);
+    if (!folder) return;
+    infoFolderAccessEditId = folderId;
+    const panel = el('infoFolderEditAccess');
+    if (!panel) return;
+    panel.hidden = false;
+    if (el('infoFolderEditAccessTitle')) {
+      el('infoFolderEditAccessTitle').textContent = `Access · ${folder.title}`;
+    }
+    if (el('infoFolderEditAudience')) el('infoFolderEditAudience').value = folder.audience || 'all';
+    setInfoAccessPickerVisibility(
+      el('infoFolderEditAccessPicker'),
+      folder.audience || 'all'
+    );
+    if (el('infoFolderEditAccessSearch')) el('infoFolderEditAccessSearch').value = '';
+    await renderInfoAccessList(el('infoFolderEditAccessList'), {
+      selectedIds: folder.allowedMemberIds || [],
+    });
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function saveInfoFolderAccessEdit() {
+    if (!hasEntitlement('manage_info') || !infoFolderAccessEditId) return;
+    const audience = el('infoFolderEditAudience')?.value || 'all';
+    const payload = { audience };
+    if (audience === 'restricted') {
+      payload.allowedMemberIds = selectedInfoAccessIds(el('infoFolderEditAccessList'));
+    } else {
+      payload.allowedMemberIds = [];
+    }
+    const status = el('infoFolderManageStatus');
+    try {
+      await api(`/api/rwa/info-centre/folders/${encodeURIComponent(infoFolderAccessEditId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      infoFolderAccessEditId = '';
+      if (el('infoFolderEditAccess')) el('infoFolderEditAccess').hidden = true;
+      if (status) status.textContent = 'Folder access updated.';
+      await loadInfoCentre({ skipDeepLink: true });
+    } catch (err) {
+      alert(err.message || 'Could not update folder access');
+    }
+  }
+
   function fillInfoCategorySelects(categories) {
     infoCategoriesCache = categories || [];
     const filter = el('infoCategoryFilter');
@@ -4546,9 +4695,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <div>
           <strong>${escapeHtml(f.title)}</strong>
           <span class="muted">${f.docCount || 0} doc${(f.docCount || 0) === 1 ? '' : 's'}${f.pathLabel && f.pathLabel !== f.title ? ` · ${escapeHtml(f.pathLabel)}` : ''}${f.summary ? ` · ${escapeHtml(f.summary)}` : ''}</span>
+          <span class="info-doc-badge ${infoAudienceBadgeClass(f.audience)}">${escapeHtml(f.audienceLabel || 'All members')}</span>
         </div>
         <div class="btn-row">
           <button type="button" class="btn ghost compact info-folder-share" data-id="${escapeHtml(f.id)}">Copy link</button>
+          <button type="button" class="btn ghost compact info-folder-access" data-id="${escapeHtml(f.id)}">Access</button>
           <button type="button" class="btn ghost compact info-folder-add-child" data-id="${escapeHtml(f.id)}">Add subfolder</button>
           <button type="button" class="btn ghost compact info-folder-move" data-id="${escapeHtml(f.id)}">Move</button>
           <button type="button" class="btn ghost compact info-folder-rename" data-id="${escapeHtml(f.id)}">Rename</button>
@@ -4574,6 +4725,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('infoEditId')) el('infoEditId').value = '';
     if (el('infoStatusInput')) el('infoStatusInput').value = 'published';
     if (el('infoAudienceInput')) el('infoAudienceInput').value = 'all';
+    if (el('infoDocAccessSearch')) el('infoDocAccessSearch').value = '';
+    renderInfoAccessList(el('infoDocAccessList'), { selectedIds: [] }).catch(() => {});
+    syncInfoDocAccessPicker();
     if (el('infoFormTitle')) el('infoFormTitle').textContent = 'Publish a document';
     if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Publish';
     if (el('infoCancelEditBtn')) el('infoCancelEditBtn').hidden = true;
@@ -4599,6 +4753,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('infoFolderInput')) el('infoFolderInput').value = doc.folderId || '';
     if (el('infoStatusInput')) el('infoStatusInput').value = doc.status || 'draft';
     if (el('infoAudienceInput')) el('infoAudienceInput').value = doc.audience || 'all';
+    syncInfoDocAccessPicker();
+    renderInfoAccessList(el('infoDocAccessList'), {
+      selectedIds: doc.allowedMemberIds || [],
+    }).catch(() => {});
     const htmlRadio = document.querySelector('input[name="infoSource"][value="html"]');
     const fileRadio = document.querySelector('input[name="infoSource"][value="file"]');
     const linkRadio = document.querySelector('input[name="infoSource"][value="link"]');
@@ -4637,6 +4795,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         `Are you sure you want to publish “${title}” to EC members only?\n\nRegular residents will not see this document.`
       );
     }
+    if (audience === 'restricted') {
+      return window.confirm(
+        `Are you sure you want to publish “${title}” to specific members only?\n\nOnly the selected people (and Info managers) will see it.`
+      );
+    }
     return window.confirm(
       `Are you sure you want to publish “${title}” to ALL members?\n\nThis will be visible to every signed-in resident.`
     );
@@ -4657,7 +4820,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       `<span class="info-doc-badge ${typeClass}">${typeLabel}</span>`,
       d.fileMissing ? `<span class="info-doc-badge is-draft">${d.docType === 'link' ? 'Link missing' : 'File missing'}</span>` : '',
       d.status === 'published'
-        ? `<span class="info-doc-badge ${d.audience === 'ec' ? 'is-ec' : 'is-all'}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : 'All members'))}</span>`
+        ? `<span class="info-doc-badge ${infoAudienceBadgeClass(d.audience)}">${escapeHtml(d.audienceLabel || (d.audience === 'ec' ? 'EC only' : d.audience === 'restricted' ? 'Restricted' : 'All members'))}</span>`
         : '',
       d.status === 'draft' ? '<span class="info-doc-badge is-draft">Draft</span>' : '',
     ].filter(Boolean).join('');
@@ -4671,7 +4834,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     const more = [];
     more.push(`<button type="button" class="btn ghost compact info-doc-share" data-id="${escapeHtml(d.id)}">Copy link</button>`);
-    if (isEcAdmin()) {
+    if (hasEntitlement('manage_info')) {
       more.push(`<button type="button" class="btn secondary compact info-doc-edit" data-id="${escapeHtml(d.id)}">${d.fileMissing ? (d.docType === 'link' ? 'Fix link' : 'Re-upload file') : 'Edit'}</button>`);
       more.push(`<button type="button" class="btn ghost compact info-doc-move" data-id="${escapeHtml(d.id)}">Move</button>`);
       if (d.status !== 'published') {
@@ -4841,6 +5004,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function loadInfoCentre(opts = {}) {
     if (el('infoManageBlock')) el('infoManageBlock').hidden = !hasEntitlement('manage_info');
+    if (hasEntitlement('manage_info')) {
+      ensureInfoAccessCandidates().then(() => {
+        syncInfoDocAccessPicker();
+        syncInfoFolderNewAccessPicker();
+        if (el('infoDocAccessList') && !(el('infoDocAccessList').children || []).length) {
+          renderInfoAccessList(el('infoDocAccessList'), { selectedIds: [] }).catch(() => {});
+        }
+        if (el('infoFolderNewAccessList') && !(el('infoFolderNewAccessList').children || []).length) {
+          renderInfoAccessList(el('infoFolderNewAccessList'), { selectedIds: [] }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
     const status = hasEntitlement('manage_info')
       ? (el('infoStatusFilter')?.value || 'published')
       : 'published';
@@ -4935,7 +5110,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function saveInfoDocument(event) {
     event.preventDefault();
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('manage_info')) return;
     const statusLine = el('infoFormStatus');
     const saveBtn = el('infoSaveBtn');
     const title = String(el('infoTitleInput')?.value || '').trim();
@@ -4947,6 +5122,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const editId = String(el('infoEditId')?.value || '').trim();
     const statusVal = el('infoStatusInput')?.value || 'published';
     const audienceVal = el('infoAudienceInput')?.value || 'all';
+    const allowedMemberIds = audienceVal === 'restricted'
+      ? selectedInfoAccessIds(el('infoDocAccessList'))
+      : [];
+    if (audienceVal === 'restricted' && !allowedMemberIds.length) {
+      if (statusLine) statusLine.textContent = 'Select at least one member for restricted access.';
+      return;
+    }
     if (statusVal === 'published') {
       if (!confirmInfoPublish(title, audienceVal)) return;
     }
@@ -4954,23 +5136,24 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (statusLine) statusLine.textContent = 'Saving…';
     try {
       let doc;
+      const commonFields = {
+        title,
+        titleHi: el('infoTitleHiInput')?.value.trim() || '',
+        summary: el('infoSummaryInput')?.value.trim() || '',
+        summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
+        category: el('infoCategoryInput')?.value || 'general',
+        folderId: el('infoFolderInput')?.value || '',
+        status: statusVal,
+        audience: audienceVal,
+        allowedMemberIds,
+      };
       if (source === 'html') {
         const htmlBody = String(el('infoHtmlInput')?.value || '').trim();
         if (!htmlBody && !editId) {
           if (statusLine) statusLine.textContent = 'Write HTML content, or switch to file upload / web link.';
           return;
         }
-        const payload = {
-          title,
-          titleHi: el('infoTitleHiInput')?.value.trim() || '',
-          summary: el('infoSummaryInput')?.value.trim() || '',
-          summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
-          category: el('infoCategoryInput')?.value || 'general',
-          folderId: el('infoFolderInput')?.value || '',
-          status: statusVal,
-          audience: audienceVal,
-          docType: 'html',
-        };
+        const payload = { ...commonFields, docType: 'html' };
         if (htmlBody) payload.htmlBody = htmlBody;
         const htmlBodyHi = String(el('infoHtmlHiInput')?.value || '').trim();
         if (htmlBodyHi || el('infoHtmlHiInput')?.value === '') {
@@ -4993,17 +5176,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           if (statusLine) statusLine.textContent = 'Paste a web link (HTML, PDF, or image URL).';
           return;
         }
-        const payload = {
-          title,
-          titleHi: el('infoTitleHiInput')?.value.trim() || '',
-          summary: el('infoSummaryInput')?.value.trim() || '',
-          summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
-          category: el('infoCategoryInput')?.value || 'general',
-          folderId: el('infoFolderInput')?.value || '',
-          status: statusVal,
-          audience: audienceVal,
-          docType: 'link',
-        };
+        const payload = { ...commonFields, docType: 'link' };
         if (externalUrl) payload.externalUrl = externalUrl;
         if (editId) {
           doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
@@ -5033,6 +5206,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           body.append('folderId', el('infoFolderInput')?.value || '');
           body.append('status', statusVal);
           body.append('audience', audienceVal);
+          body.append('allowedMemberIds', JSON.stringify(allowedMemberIds));
           body.append('docType', 'file');
           if (editId) body.append('id', editId);
           const headers = {};
@@ -5052,23 +5226,19 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         } else {
           doc = (await api(`/api/rwa/info-centre/${encodeURIComponent(editId)}`, {
             method: 'PATCH',
-            body: JSON.stringify({
-              title,
-              titleHi: el('infoTitleHiInput')?.value.trim() || '',
-              summary: el('infoSummaryInput')?.value.trim() || '',
-              summaryHi: el('infoSummaryHiInput')?.value.trim() || '',
-              category: el('infoCategoryInput')?.value || 'general',
-              folderId: el('infoFolderInput')?.value || '',
-              status: statusVal,
-              audience: audienceVal,
-            }),
+            body: JSON.stringify(commonFields),
           })).document;
         }
       }
       resetInfoForm();
       if (statusLine) {
+        const aud = doc?.audience || audienceVal;
         statusLine.textContent = doc?.status === 'published'
-          ? (doc.audience === 'ec' ? 'Published to EC only.' : 'Published to all members.')
+          ? (aud === 'ec'
+            ? 'Published to EC only.'
+            : aud === 'restricted'
+              ? 'Published to selected members.'
+              : 'Published to all members.')
           : 'Saved as draft.';
       }
       await loadInfoCentre();
@@ -5083,19 +5253,36 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (!hasEntitlement('manage_info')) return;
     const title = String(titleArg || el('infoFolderNewTitle')?.value || '').trim();
     const parent = String(parentId || el('infoFolderNewParent')?.value || '').trim();
+    const audience = el('infoFolderNewAudience')?.value || 'all';
+    const allowedMemberIds = audience === 'restricted'
+      ? selectedInfoAccessIds(el('infoFolderNewAccessList'))
+      : [];
     const status = el('infoFolderManageStatus');
     if (title.length < 2) {
       if (status) status.textContent = 'Folder name required.';
+      return;
+    }
+    if (audience === 'restricted' && !allowedMemberIds.length) {
+      if (status) status.textContent = 'Select at least one member for restricted folder access.';
       return;
     }
     if (status) status.textContent = 'Creating…';
     try {
       await api('/api/rwa/info-centre/folders', {
         method: 'POST',
-        body: JSON.stringify({ title, parentId: parent || null }),
+        body: JSON.stringify({
+          title,
+          parentId: parent || null,
+          audience,
+          allowedMemberIds,
+        }),
       });
       if (el('infoFolderNewTitle')) el('infoFolderNewTitle').value = '';
       if (el('infoFolderNewParent')) el('infoFolderNewParent').value = '';
+      if (el('infoFolderNewAudience')) el('infoFolderNewAudience').value = 'all';
+      if (el('infoFolderNewAccessSearch')) el('infoFolderNewAccessSearch').value = '';
+      syncInfoFolderNewAccessPicker();
+      renderInfoAccessList(el('infoFolderNewAccessList'), { selectedIds: [] }).catch(() => {});
       if (status) status.textContent = parent ? 'Subfolder created.' : 'Folder created.';
       await loadInfoCentre({ skipDeepLink: true });
     } catch (err) {
@@ -5654,8 +5841,393 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   }
 
+  const proceedingsState = {
+    type: 'gh',
+    meta: null,
+    items: [],
+    selected: null,
+    searchTimer: null,
+  };
+
+  function proceedingsSubtypeOptions(type) {
+    return proceedingsState.meta?.subtypes?.[type || proceedingsState.type] || [];
+  }
+
+  function fillProceedingsSubtypeSelect(type, selected) {
+    const sel = el('proceedingsSubtypeInput');
+    if (!sel) return;
+    const opts = proceedingsSubtypeOptions(type || proceedingsState.type);
+    sel.innerHTML = opts.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
+    if (selected) sel.value = selected;
+  }
+
+  function syncProceedingsQuorumField() {
+    const type = el('proceedingsTypeInput')?.value || proceedingsState.type;
+    document.querySelectorAll('.proceedings-quorum-field').forEach((node) => {
+      node.hidden = type !== 'gh';
+    });
+  }
+
+  function syncProceedingsRegisterTabs() {
+    document.querySelectorAll('.proceedings-register-tab').forEach((btn) => {
+      const on = btn.dataset.proceedingsType === proceedingsState.type;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const link = el('proceedingsTemplateLink');
+    if (link) {
+      link.href = proceedingsState.type === 'ec'
+        ? '/documents/proceedings-ec-mom-pad.html'
+        : '/documents/proceedings-gh-mom-pad.html';
+    }
+    if (el('proceedingsTypeInput')) el('proceedingsTypeInput').value = proceedingsState.type;
+    fillProceedingsSubtypeSelect(proceedingsState.type);
+    syncProceedingsQuorumField();
+  }
+
+  function fillProceedingsYearFilter(items) {
+    const sel = el('proceedingsYearFilter');
+    if (!sel) return;
+    const years = new Set();
+    const now = String(new Date().getFullYear());
+    years.add(now);
+    (items || []).forEach((p) => {
+      if (p.registerYear) years.add(String(p.registerYear));
+      else if (p.meetingDate) years.add(String(p.meetingDate).slice(0, 4));
+    });
+    const sorted = [...years].sort((a, b) => Number(b) - Number(a));
+    const cur = sel.value;
+    sel.innerHTML = ['<option value="">All years</option>']
+      .concat(sorted.map((y) => `<option value="${escapeHtml(y)}">${escapeHtml(y)}</option>`))
+      .join('');
+    if (cur && sorted.includes(cur)) sel.value = cur;
+    else if (!cur && sorted.includes(now)) sel.value = now;
+  }
+
+  function proceedingsStatusBadge(p) {
+    const st = p.status || 'draft';
+    const cls = st === 'published' ? 'is-published' : (st === 'archived' ? 'is-archived' : 'is-draft');
+    return `<span class="proceedings-badge ${cls}">${escapeHtml(p.statusLabel || st)}</span>`;
+  }
+
+  function proceedingsMultiline(text) {
+    if (!text) return '<p class="muted">—</p>';
+    return `<div class="proceedings-multiline">${String(text).split('\n').map((line) => escapeHtml(line)).join('<br>')}</div>`;
+  }
+
+  function renderProceedingsList() {
+    const mount = el('proceedingsList');
+    const statusLine = el('proceedingsListStatus');
+    if (!mount) return;
+    const items = proceedingsState.items || [];
+    if (!items.length) {
+      mount.innerHTML = '<p class="proceedings-empty">No entries in this register yet.</p>';
+      if (statusLine) statusLine.textContent = 'Register empty for selected filters.';
+      return;
+    }
+    const typeLabel = proceedingsState.type === 'ec' ? 'EC' : 'GH';
+    mount.innerHTML = `
+      <div class="proceedings-ledger-head" aria-hidden="true">
+        <span>S.No.</span><span>Date</span><span>Subject</span><span>Chair</span><span>Status</span>
+      </div>
+      ${items.map((p) => `
+        <button type="button" class="proceedings-ledger-row" data-proceedings-id="${escapeHtml(p.id)}">
+          <span class="reg-no">${escapeHtml(p.registerLabel || '—')}</span>
+          <span class="reg-date">${escapeHtml(formatIstDate(p.meetingDate))}</span>
+          <span class="reg-title">${escapeHtml(p.title)}</span>
+          <span class="reg-chair">${escapeHtml(p.chairPerson || '—')}</span>
+          <span class="reg-status">${proceedingsStatusBadge(p)}</span>
+        </button>
+      `).join('')}`;
+    if (statusLine) {
+      statusLine.textContent = `${items.length} ${typeLabel} entr${items.length === 1 ? 'y' : 'ies'} shown.`;
+    }
+  }
+
+  function renderProceedingsDetail(p) {
+    const body = el('proceedingsDetailBody');
+    if (!body || !p) return;
+    const isGh = p.meetingType === 'gh';
+    const registerTitle = isGh ? 'General House Meeting' : 'Executive Committee Meeting';
+    const resolutions = (p.resolutions || []).length
+      ? `<ol class="proceedings-resolutions">${p.resolutions.map((r) => `
+          <li><strong>${escapeHtml(r.no || '')}</strong> ${escapeHtml(r.text)}
+          ${r.votesFor != null ? `<span class="muted"> (For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0})</span>` : ''}
+          ${r.passed === false ? ' <em>Not passed</em>' : ''}</li>`).join('')}</ol>`
+      : '<p class="muted">No resolutions recorded.</p>';
+    const actions = (p.actionItems || []).length
+      ? `<ul class="proceedings-actions">${p.actionItems.map((a) => `
+          <li class="${a.done ? 'is-done' : ''}">${escapeHtml(a.item)}
+          ${a.owner ? ` — <span class="muted">${escapeHtml(a.owner)}</span>` : ''}
+          ${a.dueDate ? ` · due ${escapeHtml(formatIstDate(a.dueDate))}` : ''}</li>`).join('')}</ul>`
+      : '<p class="muted">No action items.</p>';
+
+    body.innerHTML = `
+      <div class="proceedings-page-inner">
+        <span class="proceedings-corner c-tl" aria-hidden="true"></span>
+        <span class="proceedings-corner c-tr" aria-hidden="true"></span>
+        <span class="proceedings-corner c-bl" aria-hidden="true"></span>
+        <span class="proceedings-corner c-br" aria-hidden="true"></span>
+        <header class="proceedings-page-head">
+          <img class="proceedings-seal" src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1" alt="">
+          <div>
+            <p class="proceedings-org">Mandi Housing Welfare Society</p>
+            <h3>${escapeHtml(registerTitle)}</h3>
+            <p class="muted">${escapeHtml(p.meetingSubtypeLabel || '')} · Himuda Housing Colony Sanyard</p>
+          </div>
+          <div class="proceedings-reg-meta">
+            <div><strong>Register No.</strong> ${escapeHtml(p.registerLabel || '—')}</div>
+            <div><strong>Date</strong> ${escapeHtml(formatIstDate(p.meetingDate))}${p.meetingTime ? ` · ${escapeHtml(p.meetingTime)}` : ''}</div>
+          </div>
+        </header>
+        <div class="proceedings-meta-grid">
+          <div><strong>Venue</strong> ${escapeHtml(p.venue || '—')}</div>
+          <div><strong>Chair / presiding</strong> ${escapeHtml(p.chairPerson || '—')}</div>
+          ${isGh ? `<div><strong>Quorum</strong> ${p.quorumMet === true ? 'Met' : (p.quorumMet === false ? 'Not met' : '—')}</div>` : ''}
+          ${p.nextMeetingDate ? `<div><strong>Next meeting</strong> ${escapeHtml(formatIstDate(p.nextMeetingDate))}</div>` : ''}
+        </div>
+        <section><h4>Members present</h4>${proceedingsMultiline(p.membersPresent)}</section>
+        <section><h4>Members absent / regrets</h4>${proceedingsMultiline(p.membersAbsent)}</section>
+        <section><h4>Agenda</h4>${proceedingsMultiline(p.agenda)}</section>
+        <section><h4>Proceedings / minutes</h4>${proceedingsMultiline(p.proceedingsBody)}</section>
+        <section><h4>Resolutions</h4>${resolutions}</section>
+        <section><h4>Action items</h4>${actions}</section>
+        <footer class="proceedings-page-foot">
+          ${p.signedBy ? `<p><strong>Signed / approved:</strong> ${escapeHtml(p.signedBy)}</p>` : ''}
+          ${p.publishedAt ? `<p class="muted">Published ${escapeHtml(formatIstDateTime(p.publishedAt))}</p>` : ''}
+        </footer>
+      </div>`;
+  }
+
+  function showProceedingsDetail(show) {
+    const shell = document.querySelector('.proceedings-register-shell');
+    const detail = el('proceedingsDetail');
+    const manage = el('proceedingsManageBlock');
+    if (shell) shell.hidden = show;
+    if (detail) detail.hidden = !show;
+    if (manage) manage.hidden = show || !hasEntitlement('manage_proceedings');
+    scrollMainToTop();
+  }
+
+  async function openProceedingsDetail(id) {
+    const data = await api(`/api/rwa/proceedings/${encodeURIComponent(id)}`);
+    proceedingsState.selected = data.proceeding;
+    renderProceedingsDetail(data.proceeding);
+    showProceedingsDetail(true);
+  }
+
+  function addProceedingsResolutionRow(data = {}) {
+    const list = el('proceedingsResolutionsList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'proceedings-row works-row';
+    row.innerHTML = `
+      <label>No <input type="text" class="pr-no" maxlength="12" value="${escapeHtml(data.no || '')}"></label>
+      <label class="span-2">Resolution <textarea class="pr-text" rows="2">${escapeHtml(data.text || '')}</textarea></label>
+      <label>For <input type="number" class="pr-for" min="0" value="${data.votesFor ?? ''}"></label>
+      <label>Against <input type="number" class="pr-against" min="0" value="${data.votesAgainst ?? ''}"></label>
+      <label>Abstain <input type="number" class="pr-abstain" min="0" value="${data.abstain ?? ''}"></label>
+      <label class="check compact"><input type="checkbox" class="pr-passed" ${data.passed !== false ? 'checked' : ''}> Passed</label>
+      <button type="button" class="btn ghost compact pr-remove">Remove</button>`;
+    list.appendChild(row);
+  }
+
+  function addProceedingsActionRow(data = {}) {
+    const list = el('proceedingsActionsList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'proceedings-row works-row';
+    row.innerHTML = `
+      <label class="span-2">Action <input type="text" class="pa-item" maxlength="800" value="${escapeHtml(data.item || '')}"></label>
+      <label>Owner <input type="text" class="pa-owner" maxlength="120" value="${escapeHtml(data.owner || '')}"></label>
+      <label>Due date <input type="date" class="pa-due" value="${escapeHtml((data.dueDate || '').slice(0, 10))}"></label>
+      <label class="check compact"><input type="checkbox" class="pa-done" ${data.done ? 'checked' : ''}> Done</label>
+      <button type="button" class="btn ghost compact pa-remove">Remove</button>`;
+    list.appendChild(row);
+  }
+
+  function collectProceedingsResolutions() {
+    return [...(el('proceedingsResolutionsList')?.querySelectorAll('.proceedings-row') || [])].map((row, i) => ({
+      no: row.querySelector('.pr-no')?.value.trim() || String(i + 1),
+      text: row.querySelector('.pr-text')?.value.trim() || '',
+      votesFor: row.querySelector('.pr-for')?.value || null,
+      votesAgainst: row.querySelector('.pr-against')?.value || null,
+      abstain: row.querySelector('.pr-abstain')?.value || null,
+      passed: row.querySelector('.pr-passed')?.checked !== false,
+    })).filter((r) => r.text);
+  }
+
+  function collectProceedingsActions() {
+    return [...(el('proceedingsActionsList')?.querySelectorAll('.proceedings-row') || [])].map((row) => ({
+      item: row.querySelector('.pa-item')?.value.trim() || '',
+      owner: row.querySelector('.pa-owner')?.value.trim() || '',
+      dueDate: row.querySelector('.pa-due')?.value || '',
+      done: row.querySelector('.pa-done')?.checked || false,
+    })).filter((a) => a.item);
+  }
+
+  function resetProceedingsForm() {
+    if (el('proceedingsEditId')) el('proceedingsEditId').value = '';
+    if (el('proceedingsFormTitle')) el('proceedingsFormTitle').textContent = 'New register entry';
+    if (el('proceedingsDateInput')) el('proceedingsDateInput').value = todayIstDate();
+    ['proceedingsTimeInput', 'proceedingsTitleInput', 'proceedingsVenueInput', 'proceedingsChairInput',
+      'proceedingsPresentInput', 'proceedingsAbsentInput', 'proceedingsAgendaInput', 'proceedingsBodyInput',
+      'proceedingsSignedInput', 'proceedingsNextDateInput'].forEach((id) => {
+      const node = el(id);
+      if (node) node.value = '';
+    });
+    if (el('proceedingsQuorumInput')) el('proceedingsQuorumInput').value = '';
+    if (el('proceedingsStatusInput')) el('proceedingsStatusInput').value = 'draft';
+    if (el('proceedingsTypeInput')) el('proceedingsTypeInput').value = proceedingsState.type;
+    fillProceedingsSubtypeSelect(proceedingsState.type, 'regular');
+    syncProceedingsQuorumField();
+    if (el('proceedingsResolutionsList')) el('proceedingsResolutionsList').innerHTML = '';
+    if (el('proceedingsActionsList')) el('proceedingsActionsList').innerHTML = '';
+    if (el('proceedingsCancelEditBtn')) el('proceedingsCancelEditBtn').hidden = true;
+    if (el('proceedingsFormStatus')) el('proceedingsFormStatus').textContent = '';
+  }
+
+  function fillProceedingsForm(p) {
+    if (!p) return;
+    if (el('proceedingsEditId')) el('proceedingsEditId').value = p.id || '';
+    if (el('proceedingsFormTitle')) el('proceedingsFormTitle').textContent = `Edit register entry ${p.registerLabel || ''}`.trim();
+    if (el('proceedingsTypeInput')) el('proceedingsTypeInput').value = p.meetingType || proceedingsState.type;
+    fillProceedingsSubtypeSelect(p.meetingType || proceedingsState.type, p.meetingSubtype || 'regular');
+    syncProceedingsQuorumField();
+    if (el('proceedingsDateInput')) el('proceedingsDateInput').value = (p.meetingDate || '').slice(0, 10);
+    if (el('proceedingsTimeInput')) el('proceedingsTimeInput').value = p.meetingTime || '';
+    if (el('proceedingsTitleInput')) el('proceedingsTitleInput').value = p.title || '';
+    if (el('proceedingsVenueInput')) el('proceedingsVenueInput').value = p.venue || '';
+    if (el('proceedingsChairInput')) el('proceedingsChairInput').value = p.chairPerson || '';
+    if (el('proceedingsPresentInput')) el('proceedingsPresentInput').value = p.membersPresent || '';
+    if (el('proceedingsAbsentInput')) el('proceedingsAbsentInput').value = p.membersAbsent || '';
+    if (el('proceedingsQuorumInput')) {
+      el('proceedingsQuorumInput').value = p.quorumMet === true ? '1' : (p.quorumMet === false ? '0' : '');
+    }
+    if (el('proceedingsStatusInput')) el('proceedingsStatusInput').value = p.status || 'draft';
+    if (el('proceedingsAgendaInput')) el('proceedingsAgendaInput').value = p.agenda || '';
+    if (el('proceedingsBodyInput')) el('proceedingsBodyInput').value = p.proceedingsBody || '';
+    if (el('proceedingsNextDateInput')) el('proceedingsNextDateInput').value = (p.nextMeetingDate || '').slice(0, 10);
+    if (el('proceedingsSignedInput')) el('proceedingsSignedInput').value = p.signedBy || '';
+    if (el('proceedingsResolutionsList')) {
+      el('proceedingsResolutionsList').innerHTML = '';
+      (p.resolutions || []).forEach((r) => addProceedingsResolutionRow(r));
+    }
+    if (el('proceedingsActionsList')) {
+      el('proceedingsActionsList').innerHTML = '';
+      (p.actionItems || []).forEach((a) => addProceedingsActionRow(a));
+    }
+    if (el('proceedingsCancelEditBtn')) el('proceedingsCancelEditBtn').hidden = false;
+    if (el('proceedingsFormStatus')) el('proceedingsFormStatus').textContent = '';
+    showProceedingsDetail(false);
+    el('proceedingsManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function loadProceedings() {
+    if (el('proceedingsManageBlock')) {
+      el('proceedingsManageBlock').hidden = !hasEntitlement('manage_proceedings');
+    }
+    syncProceedingsRegisterTabs();
+    const qs = new URLSearchParams({ meetingType: proceedingsState.type });
+    const year = el('proceedingsYearFilter')?.value || '';
+    const search = el('proceedingsSearchInput')?.value.trim() || '';
+    if (year) qs.set('year', year);
+    if (search) qs.set('search', search);
+    if (hasEntitlement('manage_proceedings')) {
+      const status = el('proceedingsStatusFilter')?.value || '';
+      if (status) qs.set('status', status);
+    }
+    const statusLine = el('proceedingsListStatus');
+    if (statusLine) statusLine.textContent = 'Loading register…';
+    const data = await api(`/api/rwa/proceedings?${qs.toString()}`);
+    proceedingsState.meta = {
+      meetingTypes: data.meetingTypes,
+      subtypes: data.subtypes,
+      statuses: data.statuses,
+    };
+    proceedingsState.items = data.proceedings || [];
+    fillProceedingsYearFilter(proceedingsState.items);
+    renderProceedingsList();
+    showProceedingsDetail(false);
+  }
+
+  async function saveProceedingsForm(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_proceedings')) return;
+    const statusLine = el('proceedingsFormStatus');
+    const saveBtn = el('proceedingsSaveBtn');
+    const title = String(el('proceedingsTitleInput')?.value || '').trim();
+    const meetingDate = el('proceedingsDateInput')?.value || '';
+    if (!title || !meetingDate) {
+      if (statusLine) statusLine.textContent = 'Title and meeting date are required.';
+      return;
+    }
+    const meetingType = el('proceedingsTypeInput')?.value || proceedingsState.type;
+    const quorumVal = el('proceedingsQuorumInput')?.value;
+    const payload = {
+      title,
+      meetingDate,
+      meetingType,
+      meetingSubtype: el('proceedingsSubtypeInput')?.value || 'regular',
+      meetingTime: el('proceedingsTimeInput')?.value.trim() || '',
+      venue: el('proceedingsVenueInput')?.value.trim() || '',
+      chairPerson: el('proceedingsChairInput')?.value.trim() || '',
+      membersPresent: el('proceedingsPresentInput')?.value.trim() || '',
+      membersAbsent: el('proceedingsAbsentInput')?.value.trim() || '',
+      agenda: el('proceedingsAgendaInput')?.value.trim() || '',
+      proceedingsBody: el('proceedingsBodyInput')?.value.trim() || '',
+      nextMeetingDate: el('proceedingsNextDateInput')?.value || '',
+      signedBy: el('proceedingsSignedInput')?.value.trim() || '',
+      status: el('proceedingsStatusInput')?.value || 'draft',
+      resolutions: collectProceedingsResolutions(),
+      actionItems: collectProceedingsActions(),
+    };
+    if (meetingType === 'gh' && quorumVal !== '') payload.quorumMet = quorumVal === '1';
+    const editId = String(el('proceedingsEditId')?.value || '').trim();
+    if (editId) payload.id = editId;
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving to register…';
+    try {
+      const data = editId
+        ? await api(`/api/rwa/proceedings/${encodeURIComponent(editId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+        : await api('/api/rwa/proceedings', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      resetProceedingsForm();
+      proceedingsState.type = data.proceeding?.meetingType || meetingType;
+      syncProceedingsRegisterTabs();
+      await loadProceedings();
+      if (data.proceeding?.id) await openProceedingsDetail(data.proceeding.id);
+      if (statusLine) statusLine.textContent = 'Saved.';
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function printProceedingsDetail() {
+    const p = proceedingsState.selected;
+    if (!p) return;
+    const html = el('proceedingsDetailBody')?.innerHTML || '';
+    const w = window.open('', '_blank', 'noopener');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(p.title)}</title>
+      <link rel="stylesheet" href="${location.origin}/portal.css?v=20260810proceedings1">
+      <style>@page{size:A4;margin:10mm}body{margin:0;background:#fff}.proceedings-page-inner{box-shadow:none}</style>
+      </head><body><article class="proceedings-page">${html}</article></body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   function switchPanel(name) {
     if (name === 'admin' && !canOpenEcDesk()) name = 'home';
+    if (name === 'proceedings' && !isEcMember()) name = 'home';
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
     if (name !== 'messages') stopMsgPolling();
@@ -5706,11 +6278,20 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (name === 'works') loadWorks().catch((e) => {
       if (el('worksList')) el('worksList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
+    if (name === 'proceedings') loadProceedings().catch((e) => {
+      if (el('proceedingsList')) el('proceedingsList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+      if (el('proceedingsListStatus')) el('proceedingsListStatus').textContent = e.message || 'Proceedings failed';
+    });
     if (name === 'admin') {
       prepareMobileSections();
       applyEntitlementVisibility();
       loadSmtpStatus();
       initReportsForm().catch(() => {});
+      if (hasEntitlement('manage_templates')) {
+        loadTemplates().catch((e) => {
+          if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Templates failed';
+        });
+      }
       if (hasEntitlement('manage_notices')) {
         loadNoticeDrafts().catch((e) => {
           if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
@@ -6320,7 +6901,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       return;
     }
     if (hash === 'dues' || hash === 'concerns' || hash === 'profile' || hash === 'home'
-      || hash === 'directory' || hash === 'works' || hash === 'admin') {
+      || hash === 'directory' || hash === 'works' || hash === 'proceedings' || hash === 'admin') {
       switchPanel(hash);
     }
   }
@@ -7099,7 +7680,77 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('infoFolderFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoCategoryFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoStatusFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
+
+  document.querySelectorAll('.proceedings-register-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      proceedingsState.type = btn.dataset.proceedingsType || 'gh';
+      syncProceedingsRegisterTabs();
+      loadProceedings().catch(console.error);
+    });
+  });
+  el('proceedingsRefreshBtn')?.addEventListener('click', () => loadProceedings().catch(console.error));
+  el('proceedingsYearFilter')?.addEventListener('change', () => loadProceedings().catch(console.error));
+  el('proceedingsStatusFilter')?.addEventListener('change', () => loadProceedings().catch(console.error));
+  el('proceedingsSearchInput')?.addEventListener('input', () => {
+    clearTimeout(proceedingsState.searchTimer);
+    proceedingsState.searchTimer = setTimeout(() => loadProceedings().catch(console.error), 320);
+  });
+  el('proceedingsList')?.addEventListener('click', (event) => {
+    const row = event.target.closest('[data-proceedings-id]');
+    if (!row) return;
+    openProceedingsDetail(row.getAttribute('data-proceedings-id')).catch((e) => {
+      if (el('proceedingsListStatus')) el('proceedingsListStatus').textContent = e.message || 'Open failed';
+    });
+  });
+  el('proceedingsBackBtn')?.addEventListener('click', () => {
+    proceedingsState.selected = null;
+    showProceedingsDetail(false);
+  });
+  el('proceedingsEditBtn')?.addEventListener('click', () => {
+    if (proceedingsState.selected) fillProceedingsForm(proceedingsState.selected);
+  });
+  el('proceedingsPrintBtn')?.addEventListener('click', printProceedingsDetail);
+  el('proceedingsForm')?.addEventListener('submit', saveProceedingsForm);
+  el('proceedingsTypeInput')?.addEventListener('change', () => {
+    fillProceedingsSubtypeSelect(el('proceedingsTypeInput').value);
+    syncProceedingsQuorumField();
+  });
+  el('proceedingsAddResolutionBtn')?.addEventListener('click', () => addProceedingsResolutionRow());
+  el('proceedingsAddActionBtn')?.addEventListener('click', () => addProceedingsActionRow());
+  el('proceedingsResolutionsList')?.addEventListener('click', (event) => {
+    if (event.target.closest('.pr-remove')) event.target.closest('.proceedings-row')?.remove();
+  });
+  el('proceedingsActionsList')?.addEventListener('click', (event) => {
+    if (event.target.closest('.pa-remove')) event.target.closest('.proceedings-row')?.remove();
+  });
+  el('proceedingsCancelEditBtn')?.addEventListener('click', resetProceedingsForm);
+
   el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
+  el('templatesRefreshBtn')?.addEventListener('click', () => loadTemplates().catch(console.error));
+  el('templatesCategoryFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
+  el('templatesStatusFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
+  el('templatesForm')?.addEventListener('submit', saveTemplate);
+  el('templatesResetBtn')?.addEventListener('click', () => resetTemplatesForm());
+  el('templatesList')?.addEventListener('click', (event) => {
+    const openBtn = event.target.closest('[data-tpl-open]');
+    const editBtn = event.target.closest('[data-tpl-edit]');
+    const delBtn = event.target.closest('[data-tpl-delete]');
+    if (openBtn) {
+      openTemplate(openBtn.getAttribute('data-tpl-open')).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open failed';
+      });
+      return;
+    }
+    if (editBtn) {
+      beginEditTemplate(editBtn.getAttribute('data-tpl-edit'));
+      return;
+    }
+    if (delBtn) {
+      deleteTemplate(delBtn.getAttribute('data-tpl-delete')).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Delete failed';
+      });
+    }
+  });
   el('infoCancelEditBtn')?.addEventListener('click', () => resetInfoForm());
   el('infoFolderCreateBtn')?.addEventListener('click', () => createInfoFolder().catch(console.error));
   el('infoFolderNewTitle')?.addEventListener('keydown', (event) => {
@@ -7108,8 +7759,63 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       createInfoFolder().catch(console.error);
     }
   });
+  el('infoAudienceInput')?.addEventListener('change', () => {
+    syncInfoDocAccessPicker();
+    if ((el('infoAudienceInput')?.value || '') === 'restricted') {
+      const selected = selectedInfoAccessIds(el('infoDocAccessList'));
+      renderInfoAccessList(el('infoDocAccessList'), {
+        selectedIds: selected,
+        search: el('infoDocAccessSearch')?.value || '',
+      }).catch(() => {});
+    }
+  });
+  el('infoDocAccessSearch')?.addEventListener('input', () => {
+    renderInfoAccessList(el('infoDocAccessList'), {
+      selectedIds: selectedInfoAccessIds(el('infoDocAccessList')),
+      search: el('infoDocAccessSearch')?.value || '',
+    }).catch(() => {});
+  });
+  el('infoFolderNewAudience')?.addEventListener('change', () => {
+    syncInfoFolderNewAccessPicker();
+    if ((el('infoFolderNewAudience')?.value || '') === 'restricted') {
+      renderInfoAccessList(el('infoFolderNewAccessList'), {
+        selectedIds: selectedInfoAccessIds(el('infoFolderNewAccessList')),
+        search: el('infoFolderNewAccessSearch')?.value || '',
+      }).catch(() => {});
+    }
+  });
+  el('infoFolderNewAccessSearch')?.addEventListener('input', () => {
+    renderInfoAccessList(el('infoFolderNewAccessList'), {
+      selectedIds: selectedInfoAccessIds(el('infoFolderNewAccessList')),
+      search: el('infoFolderNewAccessSearch')?.value || '',
+    }).catch(() => {});
+  });
+  el('infoFolderEditAudience')?.addEventListener('change', () => {
+    const audience = el('infoFolderEditAudience')?.value || 'all';
+    setInfoAccessPickerVisibility(el('infoFolderEditAccessPicker'), audience);
+    if (audience === 'restricted') {
+      renderInfoAccessList(el('infoFolderEditAccessList'), {
+        selectedIds: selectedInfoAccessIds(el('infoFolderEditAccessList')),
+        search: el('infoFolderEditAccessSearch')?.value || '',
+      }).catch(() => {});
+    }
+  });
+  el('infoFolderEditAccessSearch')?.addEventListener('input', () => {
+    renderInfoAccessList(el('infoFolderEditAccessList'), {
+      selectedIds: selectedInfoAccessIds(el('infoFolderEditAccessList')),
+      search: el('infoFolderEditAccessSearch')?.value || '',
+    }).catch(() => {});
+  });
+  el('infoFolderEditAccessSave')?.addEventListener('click', () => {
+    saveInfoFolderAccessEdit().catch(console.error);
+  });
+  el('infoFolderEditAccessCancel')?.addEventListener('click', () => {
+    infoFolderAccessEditId = '';
+    if (el('infoFolderEditAccess')) el('infoFolderEditAccess').hidden = true;
+  });
   el('infoFolderManageList')?.addEventListener('click', (event) => {
     const shareBtn = event.target.closest('.info-folder-share');
+    const accessBtn = event.target.closest('.info-folder-access');
     const addChildBtn = event.target.closest('.info-folder-add-child');
     const moveBtn = event.target.closest('.info-folder-move');
     const renameBtn = event.target.closest('.info-folder-rename');
@@ -7118,6 +7824,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const id = shareBtn.getAttribute('data-id');
       const folder = infoFoldersCache.find((f) => f.id === id);
       copyInfoShareLink({ folderId: id, label: `Folder link for “${folder?.title || 'folder'}”` }).catch(console.error);
+      return;
+    }
+    if (accessBtn) {
+      editInfoFolderAccess(accessBtn.getAttribute('data-id')).catch(console.error);
       return;
     }
     if (addChildBtn) {
@@ -7228,7 +7938,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }
       return;
     }
-    if (!isEcAdmin()) return;
+    if (!hasEntitlement('manage_info')) return;
     if (editBtn) {
       startInfoEdit(doc);
       return;
@@ -7353,6 +8063,228 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('reportPendingOnlyWrap')) el('reportPendingOnlyWrap').hidden = !duesLike;
     if (el('reportPlotsWrap')) el('reportPlotsWrap').hidden = concernsLike;
     if (el('reportConcernStatusWrap')) el('reportConcernStatusWrap').hidden = !concernsLike;
+  }
+
+  let templatesCache = [];
+  let templatesCategories = [];
+
+  function fillTemplatesCategorySelects(cats) {
+    templatesCategories = Array.isArray(cats) && cats.length
+      ? cats
+      : [
+        { id: 'letterhead', label: 'Letterhead' },
+        { id: 'receipt', label: 'Cash receipt' },
+        { id: 'form', label: 'Form' },
+        { id: 'certificate', label: 'Certificate' },
+        { id: 'chart', label: 'Chart / roster' },
+        { id: 'other', label: 'Other' },
+      ];
+    const opts = templatesCategories
+      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`)
+      .join('');
+    if (el('templatesCategoryInput')) {
+      const prev = el('templatesCategoryInput').value;
+      el('templatesCategoryInput').innerHTML = opts;
+      if (prev && [...el('templatesCategoryInput').options].some((o) => o.value === prev)) {
+        el('templatesCategoryInput').value = prev;
+      }
+    }
+    if (el('templatesCategoryFilter')) {
+      const prev = el('templatesCategoryFilter').value;
+      el('templatesCategoryFilter').innerHTML = `<option value="">All categories</option>${opts}`;
+      if (prev && [...el('templatesCategoryFilter').options].some((o) => o.value === prev)) {
+        el('templatesCategoryFilter').value = prev;
+      }
+    }
+  }
+
+  function resetTemplatesForm() {
+    if (el('templatesEditId')) el('templatesEditId').value = '';
+    if (el('templatesTitleInput')) el('templatesTitleInput').value = '';
+    if (el('templatesDescInput')) el('templatesDescInput').value = '';
+    if (el('templatesTagsInput')) el('templatesTagsInput').value = '';
+    if (el('templatesStatusInput')) el('templatesStatusInput').value = 'published';
+    if (el('templatesFileInput')) el('templatesFileInput').value = '';
+    if (el('templatesCategoryInput') && templatesCategories[0]) {
+      el('templatesCategoryInput').value = templatesCategories[0].id;
+    }
+    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Save template';
+    if (el('templatesStatus')) el('templatesStatus').textContent = '';
+  }
+
+  function beginEditTemplate(id) {
+    const doc = templatesCache.find((t) => t.id === id);
+    if (!doc) return;
+    if (el('templatesEditId')) el('templatesEditId').value = doc.id;
+    if (el('templatesTitleInput')) el('templatesTitleInput').value = doc.title || '';
+    if (el('templatesDescInput')) el('templatesDescInput').value = doc.description || '';
+    if (el('templatesCategoryInput')) el('templatesCategoryInput').value = doc.category || 'other';
+    if (el('templatesStatusInput')) el('templatesStatusInput').value = doc.status || 'published';
+    if (el('templatesTagsInput')) el('templatesTagsInput').value = (doc.tags || []).join(', ');
+    if (el('templatesFileInput')) el('templatesFileInput').value = '';
+    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Update template';
+    if (el('templatesStatus')) {
+      el('templatesStatus').textContent = doc.docType === 'static'
+        ? 'Editing metadata for a seeded site document. Upload a file to replace with a private copy.'
+        : 'Editing template. Leave file blank to keep the current file.';
+    }
+    el('templatesForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderTemplatesList() {
+    const mount = el('templatesList');
+    if (!mount) return;
+    if (!templatesCache.length) {
+      mount.innerHTML = '<p class="muted">No templates yet. Upload a letterhead, receipt pad, or form below.</p>';
+      return;
+    }
+    mount.innerHTML = templatesCache.map((doc) => {
+      const tags = (doc.tags || []).map((t) => `<span class="info-doc-badge">${escapeHtml(t)}</span>`).join(' ');
+      const updated = doc.updatedAt
+        ? new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '';
+      return `
+        <article class="info-doc-card" data-doc-type="${escapeHtml(doc.docType || 'file')}">
+          <div class="info-doc-card-row">
+            <div>
+              <div class="info-doc-badges">
+                <span class="info-doc-badge">${escapeHtml(doc.categoryLabel || doc.category || 'Other')}</span>
+                <span class="info-doc-badge ${doc.status === 'published' ? '' : 'is-draft'}">${escapeHtml(doc.status || '')}</span>
+                <span class="info-doc-badge ${doc.docType === 'static' ? 'is-link' : 'is-file'}">${escapeHtml(doc.docType === 'static' ? 'site file' : 'upload')}</span>
+              </div>
+              <h4 class="info-doc-card-title">${escapeHtml(doc.title || 'Untitled')}</h4>
+              <p class="meta">${escapeHtml(doc.originalName || doc.staticPath || '')}${updated ? ` · Updated ${escapeHtml(updated)}` : ''}</p>
+              ${doc.description ? `<p class="summary">${escapeHtml(doc.description)}</p>` : ''}
+              ${tags ? `<div class="info-doc-badges" style="margin-top:0.35rem">${tags}</div>` : ''}
+            </div>
+          </div>
+          <div class="btn-row info-doc-card-actions-inline">
+            <button type="button" class="btn secondary compact" data-tpl-open="${escapeHtml(doc.id)}">Open</button>
+            <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
+            <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
+          </div>
+        </article>`;
+    }).join('');
+  }
+
+  async function loadTemplates() {
+    if (!hasEntitlement('manage_templates')) return;
+    const qs = new URLSearchParams();
+    const status = el('templatesStatusFilter')?.value || 'all';
+    const category = el('templatesCategoryFilter')?.value || '';
+    qs.set('status', status);
+    if (category) qs.set('category', category);
+    const data = await api(`/api/rwa/templates?${qs.toString()}`);
+    fillTemplatesCategorySelects(data.categories || []);
+    templatesCache = data.templates || [];
+    renderTemplatesList();
+    if (el('templatesStatus') && !el('templatesEditId')?.value) {
+      el('templatesStatus').textContent = `${templatesCache.length} template${templatesCache.length === 1 ? '' : 's'}`;
+    }
+  }
+
+  async function openTemplate(id) {
+    const doc = templatesCache.find((t) => t.id === id) || (await api(`/api/rwa/templates/${encodeURIComponent(id)}`)).template;
+    if (!doc?.id) throw new Error('Template not found');
+    if (doc.docType === 'static' && doc.publicUrl) {
+      window.open(doc.publicUrl, '_blank', 'noopener');
+      return;
+    }
+    const fileApi = `/api/rwa/templates/${encodeURIComponent(doc.id)}/file`;
+    const viewUrl = authDocUrl(fileApi);
+    const downloadUrl = authDocUrl(fileApi, { download: '1' });
+    const mime = doc.mimeType || 'application/octet-stream';
+    if (typeof showDocViewerSource === 'function') {
+      showDocViewerSource(viewUrl, {
+        title: doc.title || 'Template',
+        filename: doc.originalName || doc.filename || 'template',
+        mime,
+        isBlob: false,
+        downloadUrl,
+        newTabUrl: viewUrl,
+      });
+      return;
+    }
+    window.open(viewUrl, '_blank', 'noopener');
+  }
+
+  async function saveTemplate(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('templatesStatus');
+    const saveBtn = el('templatesSaveBtn');
+    const title = String(el('templatesTitleInput')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title required.';
+      return;
+    }
+    const editId = String(el('templatesEditId')?.value || '').trim();
+    const file = el('templatesFileInput')?.files?.[0];
+    if (!editId && !file) {
+      if (statusLine) statusLine.textContent = 'Choose a file to upload.';
+      return;
+    }
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      let doc;
+      if (file) {
+        const body = new FormData();
+        body.append('file', file);
+        body.append('title', title);
+        body.append('description', el('templatesDescInput')?.value.trim() || '');
+        body.append('category', el('templatesCategoryInput')?.value || 'other');
+        body.append('tags', el('templatesTagsInput')?.value.trim() || '');
+        body.append('status', el('templatesStatusInput')?.value || 'published');
+        if (editId) body.append('id', editId);
+        const headers = {};
+        if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+        const path = editId
+          ? `/api/rwa/templates/${encodeURIComponent(editId)}`
+          : '/api/rwa/templates';
+        const res = await fetch(path, {
+          method: editId ? 'PATCH' : 'POST',
+          credentials: 'same-origin',
+          headers,
+          body,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
+        doc = data.template;
+      } else {
+        const payload = {
+          title,
+          description: el('templatesDescInput')?.value.trim() || '',
+          category: el('templatesCategoryInput')?.value || 'other',
+          tags: el('templatesTagsInput')?.value.trim() || '',
+          status: el('templatesStatusInput')?.value || 'published',
+        };
+        doc = (await api(`/api/rwa/templates/${encodeURIComponent(editId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })).template;
+      }
+      resetTemplatesForm();
+      await loadTemplates();
+      if (statusLine) statusLine.textContent = `Saved “${doc?.title || title}”.`;
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  async function deleteTemplate(id) {
+    const doc = templatesCache.find((t) => t.id === id);
+    if (!doc) return;
+    const label = doc.title || id;
+    if (!window.confirm(`Delete template “${label}”?${doc.docType === 'static' ? ' (Site file stays on disk; only the catalog entry is removed.)' : ''}`)) {
+      return;
+    }
+    await api(`/api/rwa/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (el('templatesEditId')?.value === id) resetTemplatesForm();
+    await loadTemplates();
+    if (el('templatesStatus')) el('templatesStatus').textContent = `Deleted “${label}”.`;
   }
 
   async function initReportsForm() {
@@ -8046,7 +8978,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const data = await api('/api/rwa/smtp/status');
       line.textContent = data.configured
         ? `SMTP ready · ${data.provider} · from ${data.from}`
-        : `SMTP not configured — set App Password in Platform settings (from ${data.from || 'vij.ksh@gmail.com'})`;
+        : `SMTP not configured — set App Password in Platform settings (from ${data.from || 'housingcolonysanyard@gmail.com'})`;
     } catch (_e) {
       line.textContent = 'SMTP status unavailable';
     }
@@ -8342,7 +9274,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     event.preventDefault();
     deferredInstall = event;
     showPwaHint(
-      'Install HBC Sanyard on your phone for one-tap access.' +
+      'Install Himuda Housing Colony Sanyard on your phone for one-tap access.' +
       ' <button type="button" class="btn secondary compact" id="pwaInstallBtn">Add to Home Screen</button>'
     );
     el('pwaInstallBtn')?.addEventListener('click', async () => {
@@ -8359,7 +9291,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const box = el('pwaInstallHint');
     if (box) {
       box.hidden = false;
-      box.textContent = 'Installed. Open HBC Sanyard from your home screen anytime.';
+      box.textContent = 'Installed. Open Himuda Housing Colony Sanyard from your home screen anytime.';
     }
   });
   // iOS Safari has no beforeinstallprompt — show manual tip
@@ -8367,7 +9299,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
     || window.navigator.standalone === true;
   if (isIos && !isStandalone) {
-    showPwaHint('On iPhone: tap Share → <strong>Add to Home Screen</strong> to install HBC Sanyard.');
+    showPwaHint('On iPhone: tap Share → <strong>Add to Home Screen</strong> to install Himuda Housing Colony Sanyard.');
   }
   if ('serviceWorker' in navigator) {
     let refreshing = false;

@@ -1,14 +1,18 @@
-/* HBC Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v97-icprotect5';
+/* Himuda Housing Colony Sanyard PWA service worker — network-first so phones get updates */
+const CACHE = 'hbc-sanyard-v102-logofinal1';
 const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/apple-touch-icon.png',
-  '/portal.css?v=20260809icprotect5',
-  '/portal.js?v=20260809icprotect5',
+  '/portal.css?v=20260810final1',
+  '/portal.js?v=20260810final1',
   '/assets/favicon-192.png',
   '/assets/apple-touch-icon.png',
+  '/assets/hbcs-sanyard-seal-512.png',
+  '/assets/hbcs-sanyard-seal-512-maskable.png',
+  '/assets/mhws-logo/mhws-logo-official.png',
+  '/assets/mhws-logo/mhws-logo-web-256.png',
   '/assets/rwa-assistant-avatar.svg',
   '/assets/hbcs-sanyard-seal-240.webp',
   '/assets/hbcs-sanyard-seal-240.jpg',
@@ -43,7 +47,7 @@ self.addEventListener('push', (event) => {
   } catch (_e) {
     data = { body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'HBC Sanyard';
+  const title = data.title || 'Himuda Housing Colony Sanyard';
   const options = {
     body: data.body || 'New update',
     icon: '/assets/favicon-192.png',

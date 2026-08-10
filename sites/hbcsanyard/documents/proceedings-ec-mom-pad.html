@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Himuda Housing Colony Sanyard — Executive Committee MOM Register (Blank)</title>
+  <style>
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Times New Roman", Times, Georgia, serif;
+      color: #1a1208;
+      background: #e8e0d0;
+    }
+    .screen-hint {
+      text-align: center;
+      padding: 8px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      color: #555;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 16px;
+      padding: 7mm 10mm 10mm;
+      background: #fdfaf3;
+      border: 2px solid #6b4a2e;
+      position: relative;
+    }
+    .corner { position: absolute; width: 14mm; height: 14mm; border: 2px solid #6b4a2e; }
+    .c-tl { top: 4mm; left: 4mm; border-right: 0; border-bottom: 0; }
+    .c-tr { top: 4mm; right: 4mm; border-left: 0; border-bottom: 0; }
+    .c-bl { bottom: 4mm; left: 4mm; border-right: 0; border-top: 0; }
+    .c-br { bottom: 4mm; right: 4mm; border-left: 0; border-top: 0; }
+    .head {
+      display: grid;
+      grid-template-columns: 24mm 1fr auto;
+      gap: 5mm;
+      align-items: start;
+      margin-bottom: 3mm;
+      padding-bottom: 2mm;
+      border-bottom: 1px solid #6b4a2e;
+    }
+    .seal {
+      width: 22mm;
+      height: auto;
+      display: block;
+      border: 1.5px solid #9e7d3a;
+    }
+    .org h1 {
+      margin: 0;
+      font-size: 14pt;
+      color: #3d2914;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .org p { margin: 1mm 0 0; font-size: 9pt; color: #4a3728; }
+    .reg-box {
+      border: 1.5px solid #6b4a2e;
+      padding: 2mm 3mm;
+      min-width: 38mm;
+      font-size: 9pt;
+    }
+    .reg-box strong { display: block; font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; color: #6b4a2e; }
+    .reg-box .line { border-bottom: 1px solid #999; min-height: 5mm; margin-top: 1mm; }
+    .banner {
+      text-align: center;
+      background: #4a3728;
+      color: #fdf6e8;
+      font-size: 10pt;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 2.2mm;
+      margin: 2mm 0 3mm;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2mm 4mm;
+      font-size: 9.5pt;
+      margin-bottom: 3mm;
+    }
+    .field label {
+      display: block;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6b4a2e;
+      margin-bottom: 0.5mm;
+    }
+    .field .ruled {
+      border-bottom: 1px solid rgba(107, 74, 46, 0.55);
+      min-height: 6mm;
+    }
+    .field.span-2 { grid-column: 1 / -1; }
+    .section { margin: 3mm 0; }
+    .section h2 {
+      margin: 0 0 1.5mm;
+      font-size: 9pt;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #3d2914;
+      border-bottom: 1px solid #6b4a2e;
+      padding-bottom: 1mm;
+    }
+    .ruled-block {
+      min-height: 22mm;
+      background: repeating-linear-gradient(
+        transparent,
+        transparent 6.8mm,
+        rgba(107, 74, 46, 0.22) 6.8mm,
+        rgba(107, 74, 46, 0.22) 7mm
+      );
+      border-left: 2px solid rgba(107, 74, 46, 0.35);
+      padding-left: 2mm;
+    }
+    .ruled-block.tall { min-height: 38mm; }
+    .ruled-block.xtall { min-height: 55mm; }
+    table.res-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+      margin-top: 2mm;
+    }
+    table.res-table th, table.res-table td {
+      border: 1px solid #6b4a2e;
+      padding: 1.5mm 2mm;
+      vertical-align: top;
+    }
+    table.res-table th {
+      background: #4a3728;
+      color: #fdf6e8;
+      font-size: 8pt;
+      text-align: center;
+    }
+    .sign-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8mm;
+      margin-top: 8mm;
+      font-size: 9pt;
+    }
+    .sign-row .sig {
+      border-top: 1px solid #6b4a2e;
+      padding-top: 1.5mm;
+      text-align: center;
+    }
+    .footer {
+      margin-top: 5mm;
+      text-align: center;
+      font-size: 8pt;
+      color: #6b4a2e;
+      border-top: 1px solid rgba(107, 74, 46, 0.35);
+      padding-top: 2mm;
+    }
+    @media print {
+      body { background: #fff; }
+      .screen-hint { display: none; }
+      .sheet { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <p class="screen-hint">Blank Executive Committee MOM register leaf — print on A4 for manual recording or EC desk reference.</p>
+  <div class="sheet">
+    <span class="corner c-tl" aria-hidden="true"></span>
+    <span class="corner c-tr" aria-hidden="true"></span>
+    <span class="corner c-bl" aria-hidden="true"></span>
+    <span class="corner c-br" aria-hidden="true"></span>
+
+    <header class="head">
+      <img class="seal" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
+      <div class="org">
+        <h1>Mandi Housing Welfare Society</h1>
+        <p class="colony">Himuda Housing Colony Sanyard</p>
+        <p>Housing Colony Sanyard, Mandi HP 175001</p>
+        <p>Unity · Harmony · Progress · Executive Committee</p>
+      </div>
+      <div class="reg-box">
+        <strong>Register No.</strong>
+        <div class="line"></div>
+        <strong style="margin-top:2mm">Meeting date</strong>
+        <div class="line"></div>
+      </div>
+    </header>
+
+    <div class="banner">Executive Committee Meeting — Minutes of Meeting</div>
+
+    <div class="meta-grid">
+      <div class="field"><label>Meeting type</label><div class="ruled"></div></div>
+      <div class="field"><label>Time</label><div class="ruled"></div></div>
+      <div class="field span-2"><label>Venue</label><div class="ruled"></div></div>
+      <div class="field span-2"><label>Chair / presiding</label><div class="ruled"></div></div>
+    </div>
+
+    <div class="section">
+      <h2>EC members present</h2>
+      <div class="ruled-block"></div>
+    </div>
+    <div class="section">
+      <h2>Members absent / regrets</h2>
+      <div class="ruled-block"></div>
+    </div>
+    <div class="section">
+      <h2>Agenda</h2>
+      <div class="ruled-block tall"></div>
+    </div>
+    <div class="section">
+      <h2>Proceedings / minutes</h2>
+      <div class="ruled-block xtall"></div>
+    </div>
+    <div class="section">
+      <h2>Resolutions / decisions</h2>
+      <table class="res-table">
+        <thead>
+          <tr><th>No.</th><th>Resolution / decision</th><th>Passed</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>&nbsp;</td><td style="height:12mm"></td><td></td></tr>
+          <tr><td>&nbsp;</td><td style="height:12mm"></td><td></td></tr>
+          <tr><td>&nbsp;</td><td style="height:12mm"></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="section">
+      <h2>Action items</h2>
+      <table class="res-table">
+        <thead>
+          <tr><th>Item</th><th>Owner</th><th>Due date</th><th>Done</th></tr>
+        </thead>
+        <tbody>
+          <tr><td style="height:8mm"></td><td></td><td></td><td></td></tr>
+          <tr><td style="height:8mm"></td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="meta-grid" style="margin-top:4mm">
+      <div class="field"><label>Next EC meeting date</label><div class="ruled"></div></div>
+      <div class="field"><label>Signed / approved by</label><div class="ruled"></div></div>
+    </div>
+
+    <div class="sign-row">
+      <div class="sig">President / Chairman</div>
+      <div class="sig">General Secretary</div>
+    </div>
+
+    <footer class="footer">Executive Committee Proceedings Register · Himuda Housing Colony Sanyard</footer>
+  </div>
+</body>
+</html>
