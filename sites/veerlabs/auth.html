@@ -9,8 +9,8 @@
   <link rel="stylesheet" href="style.css?v=20260804pol1">
   <script src="site-utils.js?v=20260724engage1" defer></script>
   <script src="site-meta.js?v=20260804pol1" defer></script>
-  <script src="auth.js?v=20260804pol1" defer></script>
-  <script src="auth-page.js?v=20260804pol1" defer></script>
+  <script src="auth.js?v=20260811pqc1" defer></script>
+  <script src="auth-page.js?v=20260811pqc1" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -119,6 +119,7 @@
               <button type="button" class="auth-tab" data-mfa="hotp">HOTP</button>
               <button type="button" class="auth-tab" data-mfa="qr" id="mfaQrTab" hidden>QR / Approve</button>
               <button type="button" class="auth-tab" data-mfa="passkey" id="mfaPasskeyTab" hidden>Passkey</button>
+              <button type="button" class="auth-tab" data-mfa="hybrid_pqc" id="mfaHybridPqcTab" hidden>Hybrid PQC</button>
             </div>
 
             <div id="mfaVerifyOnly" hidden>
@@ -140,6 +141,13 @@
                 </div>
                 <div class="editor-actions">
                   <button type="button" class="btn secondary" id="mfaRestartQrBtn">Refresh QR</button>
+                </div>
+              </div>
+              <div id="mfaVerifyHybridPqcBlock" hidden>
+                <p class="field-hint">Open BuddyAuthenticator → Settings → Hybrid PQC → sign in as the same user → <strong>Approve pending challenge</strong>.</p>
+                <p class="field-hint" id="mfaHybridPqcStatus">Starting Hybrid PQC challenge…</p>
+                <div class="editor-actions">
+                  <button type="button" class="btn secondary" id="mfaRestartHybridPqcBtn">Refresh challenge</button>
                 </div>
               </div>
             </div>
@@ -164,6 +172,9 @@
                 <div class="editor-actions">
                   <button type="button" class="btn primary" id="startPasskeySetup">Create passkey</button>
                 </div>
+              </div>
+              <div id="mfaHybridPqcSetup" hidden>
+                <p class="field-hint">Hybrid PQC keys live on your phone. In BuddyAuthenticator: Settings → Hybrid PQC → Sign in → Generate &amp; enroll keys.</p>
               </div>
             </div>
 

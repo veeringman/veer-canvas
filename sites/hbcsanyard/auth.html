@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AuthBuddy — HBC Sanyard</title>
+  <meta name="description" content="Link or sign in with AuthBuddy for Himuda Housing Colony Sanyard.">
+  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260811auth1">
+  <link rel="stylesheet" href="style.css?v=20260811auth1">
+  <script src="site-utils.js?v=20260811auth1" defer></script>
+  <script src="site-meta.js?v=20260811auth1" defer></script>
+  <script src="auth.js?v=20260811auth1" defer></script>
+  <script src="auth-page.js?v=20260811auth1" defer></script>
+  <style>
+    .auth-page { max-width: 520px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    .auth-hero h1 { font-size: 1.6rem; margin: 0.25rem 0; }
+    .auth-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+    .auth-tab { border: 1px solid #c5d0de; background: #fff; border-radius: 10px; padding: 0.45rem 0.85rem; cursor: pointer; font: inherit; }
+    .auth-tab.is-active { border-color: #0c7c7a; color: #0c7c7a; font-weight: 600; }
+    .auth-card { background: #fff; border-radius: 16px; padding: 1.25rem; box-shadow: 0 8px 28px rgba(21,35,63,.08); }
+    .auth-card label { display: block; margin: 0.75rem 0 0.35rem; font-weight: 600; font-size: 0.9rem; }
+    .auth-card input { width: 100%; padding: 0.65rem 0.75rem; border-radius: 10px; border: 1px solid #c5d0de; font: inherit; box-sizing: border-box; }
+    .auth-card .btn { margin-top: 0.85rem; }
+    .status-pill { display: inline-block; margin: 0.15rem 0.25rem 0.15rem 0; padding: 0.2rem 0.55rem; border-radius: 999px; background: #e8f5f4; color: #0c7c7a; font-size: 0.75rem; }
+    #authError { color: #b3261e; margin-top: 0.75rem; }
+    #authStatus { color: #0c7c7a; margin-top: 0.75rem; }
+    .auth-back { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <main class="auth-page">
+    <p class="auth-back"><a class="btn ghost compact" href="index.html">← Back to portal</a></p>
+    <header class="auth-hero">
+      <p class="eyebrow">HBC Sanyard · AuthBuddy</p>
+      <h1 id="authTitle">Sign in</h1>
+      <p class="lede muted" id="authSubtitle">Use the same AuthBuddy account as other VeerLabs apps if you already have one. Colony access still starts with your plot + email passcode.</p>
+      <div id="methodPills"></div>
+      <p class="muted" id="policyNotes"></p>
+    </header>
+
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab is-active" data-tab="login">Sign in</button>
+      <button type="button" class="auth-tab" data-tab="register">Register</button>
+    </div>
+
+    <section class="auth-card">
+      <form id="loginForm" class="stack">
+        <div id="loginIdentifyStep">
+          <label>Username<input id="loginUsername" name="username" autocomplete="username" required></label>
+          <button type="button" class="btn primary" id="loginContinueBtn">Continue</button>
+        </div>
+        <div id="loginCredentialStep" hidden>
+          <p class="muted">Signing in as <strong id="loginUserLabel"></strong>
+            <button type="button" class="btn ghost compact" id="loginChangeUserBtn">Change</button>
+          </p>
+          <div id="loginMethodPills"></div>
+          <div id="loginMethodTabs" class="auth-tabs" hidden></div>
+          <div id="loginPasswordBlock" hidden>
+            <label>Password<input id="loginPassword" type="password" autocomplete="current-password"></label>
+          </div>
+          <div id="loginOtpBlock" hidden>
+            <label><span id="loginOtpLabelText">Authenticator code</span>
+              <input id="loginOtpCode" inputmode="numeric" autocomplete="one-time-code">
+            </label>
+            <p class="muted" id="loginOtpHint"></p>
+            <div id="otpTypeSwitch" class="auth-tabs" hidden></div>
+          </div>
+          <div id="loginPasskeyBlock" hidden>
+            <button type="button" class="btn primary" id="loginPasskeyBtn">Use passkey</button>
+          </div>
+          <div id="loginSubmitRow">
+            <button type="submit" class="btn primary" id="loginSubmitBtn">Sign in</button>
+          </div>
+        </div>
+      </form>
+
+      <form id="registerForm" class="stack" hidden>
+        <fieldset id="regTypeFieldset">
+          <legend>Account type</legend>
+          <label class="check"><input type="radio" name="regType" value="password" checked> Password</label>
+          <div id="regPasswordlessRow" hidden>
+            <label class="check"><input type="radio" name="regType" value="passwordless"> Passwordless</label>
+          </div>
+        </fieldset>
+        <label>Username<input name="username" autocomplete="username" required></label>
+        <label>Email<input name="email" type="email" autocomplete="email" required></label>
+        <div id="passwordFields">
+          <label>Password<input name="password" type="password" autocomplete="new-password" required></label>
+          <label>Confirm password<input name="password2" type="password" autocomplete="new-password" required></label>
+        </div>
+        <button type="submit" class="btn primary">Create account</button>
+      </form>
+
+      <div id="mfaPanel" hidden>
+        <h2 id="mfaTitle">Set up authenticator</h2>
+        <p class="muted" id="mfaLead"></p>
+        <div id="mfaKindTabs" class="auth-tabs">
+          <button type="button" class="auth-tab is-active" data-mfa="totp">TOTP</button>
+          <button type="button" class="auth-tab" data-mfa="hotp">HOTP</button>
+          <button type="button" class="auth-tab" data-mfa="passkey">Passkey</button>
+          <button type="button" class="auth-tab" data-mfa="qr">QR / Approve</button>
+          <button type="button" class="auth-tab" data-mfa="hybrid_pqc">Hybrid PQC</button>
+        </div>
+        <div id="mfaSetupBox">
+          <div id="mfaTotpHotpSetup">
+            <button type="button" class="btn primary" id="startMfaSetup">Start setup</button>
+            <div id="mfaQrArea" hidden>
+              <img id="mfaQrImg" alt="Authenticator QR" width="180" height="180">
+              <p class="muted" id="mfaUri" style="word-break:break-all;font-size:0.75rem"></p>
+              <p class="muted" id="mfaCounterHint" hidden></p>
+              <label>Code from BuddyAuthenticator<input id="mfaCode" inputmode="numeric"></label>
+              <button type="button" class="btn primary" id="confirmMfaCode">Confirm &amp; enable</button>
+            </div>
+          </div>
+          <div id="mfaPasskeySetup" hidden>
+            <button type="button" class="btn primary" id="startPasskeySetup">Enroll passkey</button>
+          </div>
+          <div id="mfaHybridPqcSetup" hidden>
+            <p class="muted">Open BuddyAuthenticator → Hybrid PQC → enroll keys, then verify below.</p>
+          </div>
+          <button type="button" class="btn ghost" id="continueAfterAuth">Skip for now / continue</button>
+        </div>
+        <div id="mfaVerifyOnly" hidden>
+          <div id="mfaVerifyCodeBlock">
+            <label>Authenticator code<input id="mfaVerifyCode" inputmode="numeric"></label>
+            <button type="button" class="btn primary" id="confirmMfaVerify">Verify</button>
+          </div>
+          <div id="mfaVerifyQrBlock" hidden>
+            <p>Match number: <strong id="mfaMatchNumber">--</strong></p>
+            <img id="mfaDeviceQrImg" alt="Device challenge QR" width="180" height="180" hidden>
+            <p class="muted" id="mfaDeviceStatus"></p>
+            <button type="button" class="btn ghost" id="mfaRestartQrBtn">Refresh QR</button>
+          </div>
+          <div id="mfaVerifyHybridPqcBlock" hidden>
+            <p class="muted" id="mfaHybridPqcStatus"></p>
+            <button type="button" class="btn ghost" id="mfaRestartHybridPqcBtn">Refresh challenge</button>
+          </div>
+          <button type="button" class="btn ghost" id="mfaVerifyPasskeyBtn" hidden>Verify with passkey</button>
+        </div>
+      </div>
+
+      <p id="authError" hidden></p>
+      <p id="authStatus" hidden></p>
+    </section>
+  </main>
+</body>
+</html>

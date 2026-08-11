@@ -34,7 +34,7 @@
     "agentBaseUrl": "",
     "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
     "gateAllLearnMore": true,
-    "note": "Public site reaches AuthBuddy via EC2 nginx → VeerSetu connect 127.0.0.1:18080 (not LAN 192.168.29.78)"
+    "note": "Public site reaches AuthBuddy via EC2 nginx → local authbuddy.service on 127.0.0.1:18080"
   },
   "ops": false,
   "createdAt": "2026-07-25T17:12:50Z",

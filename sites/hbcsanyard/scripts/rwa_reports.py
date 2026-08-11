@@ -977,6 +977,20 @@ def _draw_mhws_letterhead_chrome(
             canvas.drawString(x, contact_y + 2.2 * mm, v)
 
 
+def _format_cash_receipt_no(receipt_no: str | None, *, fallback: str = "000001") -> str:
+    """Prefer 6-digit red-book style serials (000123); keep longer alphanumeric IDs as-is."""
+    raw = str(receipt_no or "").strip()
+    if not raw:
+        return fallback
+    digits = "".join(c for c in raw if c.isdigit())
+    if digits.isdigit() and len(digits) <= 6 and (raw == digits or raw.upper().startswith("NO")):
+        try:
+            return f"{int(digits):06d}"
+        except ValueError:
+            pass
+    return raw
+
+
 def _draw_cash_receipt_leaf_chrome(
     canvas,
     site_root: Path,
@@ -987,9 +1001,12 @@ def _draw_cash_receipt_leaf_chrome(
     receipt_no: str,
     paid_fmt: str,
     copy_tag: str = "Original",
+    paper_tint: str = "cream",
+    paper_pattern: str = "lines",
 ) -> tuple[float, float, float, float]:
     """Draw one cash-receipt leaf frame; return content box (x, y, w, h)."""
     from reportlab.lib import colors
+    from reportlab.lib.colors import Color
 
     margin = 10 * mm
     box_x = margin
@@ -997,12 +1014,63 @@ def _draw_cash_receipt_leaf_chrome(
     box_w = page_w - 2 * margin
     box_h = page_h - 2 * margin
 
+    tint_map = {
+        "white": colors.white,
+        "cream": colors.HexColor("#fbf6ea"),
+        "ivory": colors.HexColor("#f7f3e8"),
+        "mint": colors.HexColor("#eef8f1"),
+        "sky": colors.HexColor("#eef4fb"),
+        "rose": colors.HexColor("#fbf0f2"),
+    }
+    canvas.setFillColor(tint_map.get(paper_tint, tint_map["cream"]))
+    canvas.rect(box_x, box_y, box_w, box_h, fill=1, stroke=0)
+
+    # Optional background pattern
+    canvas.saveState()
+    canvas.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.06))
+    canvas.setLineWidth(0.4)
+    if paper_pattern == "lines":
+        y = box_y + 4 * mm
+        while y < box_y + box_h - 2 * mm:
+            canvas.line(box_x + 2 * mm, y, box_x + box_w - 2 * mm, y)
+            y += 3.4 * mm
+    elif paper_pattern == "diagonal":
+        step = 5 * mm
+        x0 = box_x - box_h
+        while x0 < box_x + box_w + box_h:
+            canvas.line(x0, box_y, x0 + box_h, box_y + box_h)
+            x0 += step
+    elif paper_pattern == "dots":
+        canvas.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.08))
+        step = 3.4 * mm
+        y = box_y + 3 * mm
+        while y < box_y + box_h - 2 * mm:
+            x = box_x + 3 * mm
+            while x < box_x + box_w - 2 * mm:
+                canvas.circle(x, y, 0.35 * mm, fill=1, stroke=0)
+                x += step
+            y += step
+    elif paper_pattern == "guilloche":
+        canvas.setStrokeColor(Color(26 / 255, 107 / 255, 58 / 255, alpha=0.05))
+        cx, cy = box_x + box_w / 2, box_y + box_h / 2
+        for r in range(8, int(max(box_w, box_h) / mm), 8):
+            canvas.circle(cx, cy, r * mm, fill=0, stroke=1)
+    canvas.restoreState()
+
     canvas.setStrokeColor(colors.HexColor(BRAND_NAVY))
     canvas.setLineWidth(1.25)
     canvas.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
 
+    # Watermark ~70% of receipt height
+    wm_size_mm = (box_h / mm) * 0.70
     _draw_mhws_watermark(
-        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=64, cy_frac=0.48, alpha=0.04
+        canvas,
+        site_root,
+        page_w=page_w,
+        page_h=page_h,
+        size_mm=wm_size_mm,
+        cy_frac=0.48,
+        alpha=0.08,
     )
 
     pad = 5 * mm
@@ -1048,10 +1116,14 @@ def _draw_cash_receipt_leaf_chrome(
     canvas.setFillColor(colors.HexColor(BRAND_NAVY))
     canvas.setFont("Helvetica-Bold", 9)
     canvas.drawRightString(meta_x, top - 5 * mm, "CASH RECEIPT")
+    # Red physical-book style serial
+    display_no = _format_cash_receipt_no(receipt_no)
+    canvas.setFillColor(colors.HexColor("#c62828"))
+    canvas.setFont("Courier-Bold", 14)
+    canvas.drawRightString(meta_x, top - 11 * mm, display_no)
     canvas.setFillColor(colors.HexColor(BRAND_MUTED))
-    canvas.setFont("Helvetica", 8)
-    canvas.drawRightString(meta_x, top - 9.5 * mm, f"No. {receipt_no}")
-    canvas.drawRightString(meta_x, top - 13.5 * mm, f"Date {paid_fmt}")
+    canvas.setFont("Helvetica", 7)
+    canvas.drawRightString(meta_x, top - 14.5 * mm, f"Date {paid_fmt}")
 
     # Header rule
     rule_y = top - logo_w - 3 * mm
@@ -1113,6 +1185,232 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
     if not markup:
         text = text.replace("&", "&amp;").replace("<", "&lt;")
     return rl["Paragraph"](text or "-", style)
+
+
+def build_cash_receipt_booklet_pdf(
+    *,
+    site_root: Path,
+    start_no: int = 1,
+    page_count: int = 1,
+    paper_tint: str = "cream",
+    paper_pattern: str = "lines",
+) -> tuple[bytes, str]:
+    """Blank cash-receipt booklet: 3 slips per A4 page, multi-page series."""
+    from reportlab.lib import colors
+    from reportlab.lib.colors import Color
+    from reportlab.pdfgen import canvas as pdfcanvas
+
+    rl = _reportlab()
+    mm = rl["mm"]
+    page_w, page_h = rl["A4"]
+
+    start_no = max(1, min(999999, int(start_no or 1)))
+    page_count = max(1, min(100, int(page_count or 1)))
+    tint = (paper_tint or "cream").strip().lower()
+    pattern = (paper_pattern or "lines").strip().lower()
+    if tint not in {"white", "cream", "ivory", "mint", "sky", "rose"}:
+        tint = "cream"
+    if pattern not in {"none", "lines", "diagonal", "dots", "guilloche"}:
+        pattern = "lines"
+
+    tint_map = {
+        "white": colors.white,
+        "cream": colors.HexColor("#fbf6ea"),
+        "ivory": colors.HexColor("#f7f3e8"),
+        "mint": colors.HexColor("#eef8f1"),
+        "sky": colors.HexColor("#eef4fb"),
+        "rose": colors.HexColor("#fbf0f2"),
+    }
+
+    buf = io.BytesIO()
+    c = pdfcanvas.Canvas(buf, pagesize=rl["A4"])
+    margin_x = 5 * mm
+    margin_y = 4 * mm
+    gap = 2.2 * mm
+    usable_h = page_h - 2 * margin_y - 2 * gap
+    slip_h = usable_h / 3
+    slip_w = page_w - 2 * margin_x
+    seal = _seal_path(site_root)
+
+    def _draw_pattern(box_x: float, box_y: float, box_w: float, box_h: float) -> None:
+        c.saveState()
+        c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.07))
+        c.setLineWidth(0.35)
+        if pattern == "lines":
+            y = box_y + 3 * mm
+            while y < box_y + box_h - 2 * mm:
+                c.line(box_x + 1.5 * mm, y, box_x + box_w - 1.5 * mm, y)
+                y += 3.2 * mm
+        elif pattern == "diagonal":
+            step = 4.5 * mm
+            x0 = box_x - box_h
+            while x0 < box_x + box_w + box_h:
+                c.line(x0, box_y, x0 + box_h, box_y + box_h)
+                x0 += step
+        elif pattern == "dots":
+            c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.09))
+            step = 3.2 * mm
+            y = box_y + 2.5 * mm
+            while y < box_y + box_h - 2 * mm:
+                x = box_x + 2.5 * mm
+                while x < box_x + box_w - 2 * mm:
+                    c.circle(x, y, 0.3 * mm, fill=1, stroke=0)
+                    x += step
+                y += step
+        elif pattern == "guilloche":
+            c.setStrokeColor(Color(26 / 255, 107 / 255, 58 / 255, alpha=0.06))
+            cx, cy = box_x + box_w / 2, box_y + box_h / 2
+            for r in range(6, int(max(box_w, box_h) / mm), 7):
+                c.circle(cx, cy, r * mm, fill=0, stroke=1)
+        c.restoreState()
+
+    def _draw_slip(box_x: float, box_y: float, box_w: float, box_h: float, serial: int) -> None:
+        # Tint fill — no outer border
+        c.setFillColor(tint_map.get(tint, tint_map["cream"]))
+        c.rect(box_x, box_y, box_w, box_h, fill=1, stroke=0)
+        _draw_pattern(box_x, box_y, box_w, box_h)
+
+        # Watermark ~70% of slip height (clipped to slip)
+        c.saveState()
+        p = c.beginPath()
+        p.rect(box_x, box_y, box_w, box_h)
+        c.clipPath(p, stroke=0)
+        _draw_mhws_watermark(
+            c,
+            site_root,
+            page_w=page_w,
+            page_h=page_h,
+            size_mm=(box_h / mm) * 0.70,
+            cy_frac=(box_y + box_h / 2) / page_h,
+            alpha=0.08,
+        )
+        c.restoreState()
+
+        pad = 3.2 * mm
+        inner_x = box_x + pad
+        top = box_y + box_h - pad
+        right = box_x + box_w - pad
+
+        # Logo + org
+        logo_w = 11 * mm
+        if seal:
+            try:
+                if hasattr(c, "setFillAlpha"):
+                    c.setFillAlpha(1.0)
+                c.drawImage(
+                    _seal_image_reader(seal),
+                    inner_x,
+                    top - logo_w,
+                    width=logo_w,
+                    height=logo_w,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                pass
+        tx = inner_x + logo_w + 2.2 * mm
+        c.setFillColor(colors.HexColor(BRAND_NAVY))
+        c.setFont("Times-Bold", 9)
+        c.drawString(tx, top - 4.2 * mm, ORG_SOCIETY.upper())
+        c.setFont("Times-Bold", 8)
+        c.drawString(tx, top - 7.6 * mm, ORG_COLONY.upper())
+        c.setFillColor(colors.HexColor(BRAND_GREEN))
+        c.setFont("Helvetica-Bold", 6.5)
+        c.drawString(tx, top - 10.5 * mm, ORG_SUBTITLE)
+
+        # Red serial
+        c.setFillColor(colors.HexColor(BRAND_NAVY))
+        c.setFont("Helvetica-Bold", 8)
+        c.drawRightString(right, top - 3.5 * mm, "CASH RECEIPT")
+        c.setFillColor(colors.HexColor("#c62828"))
+        c.setFont("Courier-Bold", 12)
+        c.drawRightString(right, top - 8.5 * mm, f"{serial:06d}")
+        c.setFillColor(colors.HexColor(BRAND_MUTED))
+        c.setFont("Helvetica", 6.5)
+        c.drawRightString(right, top - 11.5 * mm, "Date _______________")
+
+        # Header rule
+        rule_y = top - logo_w - 2 * mm
+        c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
+        c.setLineWidth(0.7)
+        c.line(inner_x, rule_y, right, rule_y)
+
+        # Banner
+        ban_h = 5.5 * mm
+        ban_y = rule_y - ban_h - 1.4 * mm
+        c.setFillColor(colors.HexColor(BRAND_NAVY))
+        c.rect(inner_x, ban_y, right - inner_x, ban_h, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#f7f3ea"))
+        c.setFont("Helvetica-Bold", 7)
+        c.drawCentredString(
+            (inner_x + right) / 2,
+            ban_y + 1.7 * mm,
+            "RECEIVED WITH THANKS   ·   UNITY · HARMONY · PROGRESS",
+        )
+
+        # Ruled fields
+        y = ban_y - 4.5 * mm
+        label_w = 24 * mm
+        line_h = 5.2 * mm
+        fields = [
+            ("Received from", 1.0),
+            ("Plot / House", 0.55),
+            ("Amount (₹)", 0.7),
+            ("In words", 1.0),
+            ("Towards", 1.0),
+            ("Period / note", 1.0),
+        ]
+        c.setFont("Helvetica-Bold", 6.2)
+        for label, _span in fields:
+            c.setFillColor(colors.HexColor(BRAND_GREEN))
+            c.drawString(inner_x, y, label.upper())
+            c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.4))
+            c.setLineWidth(0.55)
+            c.line(inner_x + label_w, y - 0.4 * mm, right, y - 0.4 * mm)
+            if label.startswith("Towards"):
+                c.setFillColor(colors.HexColor(BRAND_INK))
+                c.setFont("Helvetica", 6)
+                c.drawString(inner_x + label_w + 1 * mm, y + 0.8 * mm, "[ ] Maintenance   [ ] Membership   [ ] Works/donation   [ ] Other ____")
+                c.setFont("Helvetica-Bold", 6.2)
+            y -= line_h
+
+        # Footer
+        c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.28))
+        c.setLineWidth(0.5)
+        c.line(inner_x, box_y + 11 * mm, right, box_y + 11 * mm)
+        c.setFillColor(colors.HexColor(BRAND_MUTED))
+        c.setFont("Helvetica", 5.8)
+        c.drawString(inner_x, box_y + 7.5 * mm, "Mode: Cash only. Subject to verification by the Society.")
+        c.drawString(inner_x, box_y + 4.8 * mm, f"{ORG_EMAIL}  ·  {ORG_WEB}")
+        c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.4))
+        c.line(right - 45 * mm, box_y + 7 * mm, right, box_y + 7 * mm)
+        c.setFillColor(colors.HexColor(BRAND_NAVY))
+        c.setFont("Helvetica-Bold", 6)
+        c.drawCentredString(right - 22.5 * mm, box_y + 4.2 * mm, "Authorised signatory")
+        c.setFillColor(colors.HexColor(BRAND_GREEN))
+        c.setFont("Helvetica", 5.5)
+        c.drawCentredString(right - 22.5 * mm, box_y + 2.2 * mm, "Treasurer / Office bearer")
+
+    serial = start_no
+    for page_i in range(page_count):
+        for i in range(3):
+            box_y = page_h - margin_y - (i + 1) * slip_h - i * gap
+            _draw_slip(margin_x, box_y, slip_w, slip_h, serial)
+            # Tear hint between slips
+            if i < 2:
+                tear_y = box_y - gap / 2
+                c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
+                c.setFont("Helvetica", 5)
+                c.drawCentredString(page_w / 2, tear_y - 0.8 * mm, "· · · tear here · · ·")
+            serial += 1
+            if serial > 999999:
+                serial = 1
+        c.showPage()
+
+    c.save()
+    end_no = start_no + page_count * 3 - 1
+    fname = f"mhws-cash-receipts-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
+    return buf.getvalue(), fname
 
 
 def build_pending_dues_pdf(

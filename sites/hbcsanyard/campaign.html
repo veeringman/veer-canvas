@@ -94,7 +94,16 @@
     .form-msg { margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }
     .form-msg.success { color: var(--primary); }
     .loading { text-align: center; padding: 3rem 1rem; color: var(--muted); }
-    .error { text-align: center; padding: 3rem 1rem; color: #dc2626; }
+    .suggestions-list { margin: 1rem 0; display: grid; gap: 0.6rem; }
+.suggestion-item {
+  padding: 0.65rem 0.75rem;
+  background: rgba(15,40,80,0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(15,40,80,0.08);
+  font-size: 0.88rem;
+}
+.suggestion-item strong { display: block; margin-bottom: 0.2rem; }
+.suggestion-item .meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.35rem; }
   </style>
 </head>
 <body>
@@ -109,6 +118,7 @@
   const content = document.getElementById('content');
   let pollTimer = null;
   let currentCampaign = null;
+  let currentSuggestions = [];
 
   if (!campaignId) {
     content.innerHTML = '<p class="error">No campaign specified.</p>';
@@ -147,7 +157,18 @@
     if (note && state.note) note.value = state.note;
   }
 
-  function renderCampaign(c) {
+  function renderSuggestionsList(items) {
+    if (!items?.length) return '<p class="muted" style="font-size:0.88rem">No suggestions yet.</p>';
+    return `<div class="suggestions-list">${items.map((s) => `
+      <div class="suggestion-item">
+        <strong>${esc(s.contributorName || 'Member')}</strong>
+        <div class="meta">Plot ${esc(s.houseId || '—')}</div>
+        <p>${esc(s.text || '')}</p>
+      </div>`).join('')}</div>`;
+  }
+
+  function renderCampaign(c, suggestions) {
+    currentSuggestions = suggestions || [];
     currentCampaign = c;
     const cover = c.imageUrl ? `${c.imageUrl}${c.updatedAt ? '?v=' + encodeURIComponent(c.updatedAt) : ''}` : '';
     const pledged = c.pledgedAmount || 0;
@@ -211,13 +232,30 @@
       </div>`;
     }
 
+    if (c.canSuggest) {
+      html += `<div class="pledge-form" id="publicSuggestForm">
+        <h3>💡 Suggestions</h3>
+        <p class="muted" style="font-size:0.88rem;margin:0 0 0.6rem">Share ideas for this drive — locations, species, volunteers, etc.</p>
+        ${renderSuggestionsList(currentSuggestions)}
+        <div class="form-row">
+          <input type="text" id="sName" placeholder="Your name" required>
+          <input type="text" id="sHouse" placeholder="House / Plot No." required>
+        </div>
+        <div class="form-row">
+          <input type="text" id="sText" placeholder="Your suggestion" required>
+        </div>
+        <button type="button" class="submit-btn" id="sBtn">Submit suggestion</button>
+        <p class="form-msg" id="sMsg" hidden></p>
+      </div>`;
+    }
+
     html += '</div></div>';
     content.innerHTML = html;
 
     const btn = document.getElementById('pBtn');
-    if (btn) {
-      btn.addEventListener('click', submitParticipation);
-    }
+    if (btn) btn.addEventListener('click', submitParticipation);
+    const sBtn = document.getElementById('sBtn');
+    if (sBtn) sBtn.addEventListener('click', submitSuggestion);
   }
 
   function updateStats(c) {
@@ -260,10 +298,11 @@
         || currentCampaign.details !== c.details;
 
       if (settingsChanged) {
-        renderCampaign(c);
+        renderCampaign(c, data.suggestions || currentSuggestions);
         if (formState) restoreFormState(formState);
       } else {
         currentCampaign = c;
+        currentSuggestions = data.suggestions || currentSuggestions;
         updateStats(c);
       }
     } catch (e) {
@@ -317,6 +356,43 @@
       msg.textContent = 'Network error. Please try again.';
       msg.className = 'form-msg'; msg.hidden = false;
       btn.disabled = false; btn.textContent = btnLabel;
+    }
+  }
+
+  async function submitSuggestion() {
+    const c = currentCampaign;
+    if (!c || !c.canSuggest) return;
+    const name = document.getElementById('sName')?.value.trim();
+    const house = document.getElementById('sHouse')?.value.trim();
+    const text = document.getElementById('sText')?.value.trim();
+    const msg = document.getElementById('sMsg');
+    const btn = document.getElementById('sBtn');
+    if (!name || !house || !text) {
+      if (msg) { msg.textContent = 'Please fill all fields.'; msg.hidden = false; msg.className = 'form-msg'; }
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    try {
+      const res = await fetch('/api/rwa/public/campaigns/' + encodeURIComponent(campaignId) + '/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, house, text })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        if (msg) { msg.textContent = '✅ Thank you! Your suggestion has been recorded.'; msg.className = 'form-msg success'; msg.hidden = false; }
+        btn.textContent = 'Done!';
+        document.getElementById('sName').value = '';
+        document.getElementById('sHouse').value = '';
+        document.getElementById('sText').value = '';
+        await loadCampaign({ fullRender: true });
+      } else {
+        if (msg) { msg.textContent = result.error || 'Something went wrong.'; msg.className = 'form-msg'; msg.hidden = false; }
+        btn.disabled = false; btn.textContent = 'Submit suggestion';
+      }
+    } catch (e) {
+      if (msg) { msg.textContent = 'Network error. Please try again.'; msg.className = 'form-msg'; msg.hidden = false; }
+      btn.disabled = false; btn.textContent = 'Submit suggestion';
     }
   }
 

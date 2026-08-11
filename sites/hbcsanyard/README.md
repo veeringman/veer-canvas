@@ -24,7 +24,9 @@ EC members with `role=admin` also see an **EC desk** tab inside the portal for n
 - **admin** (Executive Committee) — publish notices, import PDF ledger, view full dues, promote members
 - **resident** — view notices, own dues, directory, edit own profile
 
-Login: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. AuthBuddy planned later.
+Login: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. Sessions last until **Sign out**.
+
+**AuthBuddy (optional):** after email verification, residents may link AuthBuddy / BuddyAuthenticator for alternate sign-in. **One factor only** for now (`mfa_required=false` on blueprint `hbcsanyard-password-mfa`). Same email as an existing AuthBuddy account (e.g. VeerLabs) is signed in and linked — not registered twice. Future public domain: `housingcolonysanyard.in`.
 
 ## Database + PDF import
 

@@ -387,7 +387,7 @@ def upsert_meeting_proceeding(
               published_at = :published_at,
               published_by = :published_by,
               updated_at = :updated_at
-            WHERE id = ?
+            WHERE id = :id
             """,
             {**fields, "id": pid},
         )

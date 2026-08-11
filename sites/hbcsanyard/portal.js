@@ -6,6 +6,7 @@
     pendingContact: false,
     missingEmail: false,
     missingPhone: false,
+    authbuddyLinked: false,
     msgThreads: [],
     msgActiveThreadId: null,
     msgCanModerate: false,
@@ -6561,7 +6562,31 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }).join('');
   }
 
-  function renderCampaignDetail(campaign, pledges, contributions) {
+  function renderCampaignSuggestions(suggestions, campaign) {
+    const block = el('campaignSuggestionsBlock');
+    const list = el('campaignSuggestionsList');
+    if (!block || !list) return;
+    block.hidden = !campaign?.canSuggest;
+    if (block.hidden) return;
+    const isAdmin = hasEntitlement('manage_works');
+    if (!suggestions?.length) {
+      list.innerHTML = '<p class="muted">No suggestions yet — share an idea for this drive.</p>';
+      return;
+    }
+    list.innerHTML = suggestions.map((s) => `
+      <div class="campaign-participant-row">
+        <div>
+          <strong>${escapeHtml(s.contributorName || 'Member')}</strong>
+          <div class="meta">Plot ${escapeHtml(s.houseId || '—')}${s.createdAt ? ` · ${escapeHtml(formatIstDate(s.createdAt) || '')}` : ''}</div>
+          <p>${escapeHtml(s.text || '')}</p>
+        </div>
+        <div>
+          ${isAdmin ? `<button type="button" class="btn ghost compact" data-cmp-del-suggest="${escapeHtml(s.id)}" title="Remove suggestion">Remove</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  function renderCampaignDetail(campaign, pledges, contributions, suggestions) {
     campaignsState.selected = campaign;
     renderCampaignsList();
     const body = el('campaignDetailBody');
@@ -6594,10 +6619,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       </div>`;
     renderCampaignPledges(pledges || [], campaign);
     renderCampaignContributions(contributions || [], campaign);
+    renderCampaignSuggestions(suggestions || [], campaign);
     const pledgeBtn = el('campaignPledgeBtn');
     const contributeBtn = el('campaignContributeBtn');
+    const suggestBtn = el('campaignSuggestBtn');
     if (pledgeBtn) pledgeBtn.hidden = isViewOnly() || !campaign.canPledge;
     if (contributeBtn) contributeBtn.hidden = isViewOnly() || !campaign.canContribute;
+    if (suggestBtn) suggestBtn.hidden = isViewOnly() || !campaign.canSuggest;
     const shareBtn = el('campaignShareBtn');
     if (shareBtn) shareBtn.hidden = campaign.audience !== 'public';
     if (el('campaignEditBtn')) el('campaignEditBtn').hidden = !hasEntitlement('manage_works');
@@ -6612,7 +6640,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function openCampaignDetail(campaignId) {
     const data = await api(`/api/rwa/campaigns/${encodeURIComponent(campaignId)}`);
-    renderCampaignDetail(data.campaign, data.pledges || [], data.contributions || []);
+    renderCampaignDetail(data.campaign, data.pledges || [], data.contributions || [], data.suggestions || []);
     el('campaignDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -6826,6 +6854,58 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   }
 
+  function openCampaignSuggestDialog() {
+    const c = campaignsState.selected;
+    if (!c || !c.canSuggest || isViewOnly()) return;
+    if (el('campaignSuggestTitle')) el('campaignSuggestTitle').textContent = `Suggestion — ${c.title || 'Drive'}`;
+    prefillCampaignParticipantFields('campaignSuggest');
+    if (el('campaignSuggestText')) el('campaignSuggestText').value = '';
+    if (el('campaignSuggestStatus')) el('campaignSuggestStatus').textContent = '';
+    el('campaignSuggestDialog')?.showModal();
+  }
+
+  async function submitCampaignSuggestion(event) {
+    event.preventDefault();
+    const c = campaignsState.selected;
+    if (!c || isViewOnly()) return;
+    const statusLine = el('campaignSuggestStatus');
+    const btn = el('campaignSuggestSubmitBtn');
+    const name = el('campaignSuggestName')?.value.trim() || '';
+    const house = el('campaignSuggestHouse')?.value.trim() || '';
+    const text = el('campaignSuggestText')?.value.trim() || '';
+    if (!name || !house || !text) {
+      if (statusLine) statusLine.textContent = 'Name, house, and suggestion are required.';
+      return;
+    }
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Submitting…';
+    try {
+      await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/suggestions`, {
+        method: 'POST',
+        body: JSON.stringify({ contributorName: name, houseId: house, text }),
+      });
+      el('campaignSuggestDialog')?.close();
+      await openCampaignDetail(c.id);
+      await loadCampaigns();
+      if (statusLine) statusLine.textContent = 'Suggestion recorded — thank you!';
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Submit failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function removeCampaignSuggestion(suggestionId) {
+    const c = campaignsState.selected;
+    if (!c || !hasEntitlement('manage_works')) return;
+    if (!window.confirm('Remove this suggestion?')) return;
+    await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/suggestions/${encodeURIComponent(suggestionId)}`, {
+      method: 'DELETE',
+    });
+    await openCampaignDetail(c.id);
+    await loadCampaigns();
+  }
+
   function openCampaignContributeDialog() {
     const c = campaignsState.selected;
     if (!c || !c.canContribute || isViewOnly()) return;
@@ -7007,6 +7087,159 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return `<div class="proceedings-multiline">${String(text).split('\n').map((line) => escapeHtml(line)).join('<br>')}</div>`;
   }
 
+  const MOM_ASSETS = {
+    wm: '/assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9',
+    seal: '/assets/mhws-logo/mhws-logo-seal-cert.png',
+  };
+
+  function momText(text) {
+    if (!text) return '&nbsp;';
+    return escapeHtml(String(text)).replace(/\n/g, '<br>');
+  }
+
+  function momResolutionsTableRows(resolutions) {
+    const items = resolutions || [];
+    const rows = items.map((r) => `
+      <tr>
+        <td>${escapeHtml(r.no || '')}</td>
+        <td>${escapeHtml(r.text || '')}${r.votesFor != null ? `<br><span style="font-size:7pt;color:#5a6a80">For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0}</span>` : ''}${r.passed === false ? ' · <em>Not passed</em>' : ''}</td>
+        <td style="text-align:center">${r.passed === false ? 'No' : 'Yes'}</td>
+      </tr>`);
+    while (rows.length < 5) {
+      rows.push('<tr><td>&nbsp;</td><td style="height:11mm"></td><td></td></tr>');
+    }
+    return rows.join('');
+  }
+
+  function momActionsTableRows(actions) {
+    const items = actions || [];
+    const rows = items.map((a) => `
+      <tr>
+        <td>${escapeHtml(a.item || '')}${a.done ? ' ✓' : ''}</td>
+        <td>${escapeHtml(a.owner || '')}</td>
+        <td>${escapeHtml(formatIstDate(a.dueDate) || a.dueDate || '')}</td>
+        <td style="text-align:center">${a.done ? 'Yes' : ''}</td>
+      </tr>`);
+    while (rows.length < 4) {
+      rows.push('<tr><td style="height:8mm"></td><td></td><td></td><td></td></tr>');
+    }
+    return rows.join('');
+  }
+
+  function buildProceedingsMomHtml(p) {
+    if (!p) return '';
+    const isGh = p.meetingType === 'gh';
+    const reg = escapeHtml(p.registerLabel || '');
+    const date = escapeHtml(formatIstDate(p.meetingDate) || '');
+    const time = escapeHtml(p.meetingTime || '');
+    const venue = escapeHtml(p.venue || '');
+    const chair = escapeHtml(p.chairPerson || '');
+    const subtype = escapeHtml(p.meetingSubtypeLabel || '');
+    const quorum = p.quorumMet === true ? 'Yes' : (p.quorumMet === false ? 'No' : '');
+    const presentLabel = isGh ? 'Members present' : 'EC members present';
+    const banner1 = isGh ? 'General House Meeting' : 'Executive Committee Meeting';
+    const addr1 = isGh
+      ? 'Housing Colony Sanyard, Mandi HP 175001'
+      : 'Housing Colony Sanyard, Mandi HP 175001 · Executive Committee';
+    const addr2 = isGh ? 'General House MOM — continued' : 'Executive Committee MOM — continued';
+    const foot2 = isGh
+      ? 'General House Proceedings Register · Himuda Housing Colony Sanyard · housingcolonysanyard.in'
+      : 'Executive Committee Proceedings Register · Himuda Housing Colony Sanyard · housingcolonysanyard.in';
+    const nextLabel = isGh ? 'Next GH meeting date' : 'Next EC meeting date';
+    const body = p.proceedingsBody || '';
+    const bodySplit = body.length > 600;
+    const bodyP1 = bodySplit ? `${body.slice(0, 597)}…` : body;
+    const bodyP2 = bodySplit ? body.slice(597).trimStart() : '';
+
+    const page1MetaGh = isGh ? `
+        <div class="field"><label>Quorum met (Yes / No)</label><div class="ruled">${escapeHtml(quorum) || '&nbsp;'}</div></div>` : '';
+
+    const sheetHead = (pageTag, addr) => `
+      <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
+      <div class="accent-edge-thin" aria-hidden="true"></div>
+      <img class="wm" src="${MOM_ASSETS.wm}" alt="" aria-hidden="true">
+      <span class="page-tag">${pageTag}</span>
+      <div class="pad">
+        <header class="brand">
+          <img class="logo" src="${MOM_ASSETS.seal}" alt="Himuda Housing Colony Sanyard">
+          <div>
+            <h1>Mandi Housing Welfare Society</h1>
+            <p class="colony">Himuda Housing Colony Sanyard</p>
+            <p class="addr">${addr}</p>
+          </div>
+          <div class="reg-box">
+            <strong>Register No.</strong>
+            <div class="line">${reg || '&nbsp;'}</div>
+            <strong style="margin-top:1.5mm">Meeting date</strong>
+            <div class="line">${date || '&nbsp;'}</div>
+          </div>
+        </header>`;
+
+    return `<div class="mom-print-root">
+      <div class="sheet" aria-label="MOM page 1">
+        ${sheetHead('Page 1 of 2', addr1)}
+        <div class="banner">${banner1} <span class="sep">·</span> Minutes of Meeting</div>
+        <div class="meta-grid">
+          <div class="field"><label>Meeting type</label><div class="ruled">${subtype || '&nbsp;'}</div></div>
+          <div class="field"><label>Time</label><div class="ruled">${time || '&nbsp;'}</div></div>
+          <div class="field span-2"><label>Venue</label><div class="ruled">${venue || '&nbsp;'}</div></div>
+          <div class="field${isGh ? '' : ' span-2'}"><label>Chair / presiding</label><div class="ruled">${chair || '&nbsp;'}</div></div>
+          ${page1MetaGh}
+        </div>
+        <div class="section">
+          <h2>${presentLabel}</h2>
+          <div class="ruled-block md">${momText(p.membersPresent)}</div>
+        </div>
+        <div class="section">
+          <h2>Members absent / regrets</h2>
+          <div class="ruled-block sm">${momText(p.membersAbsent)}</div>
+        </div>
+        <div class="section">
+          <h2>Agenda</h2>
+          <div class="ruled-block lg">${momText(p.agenda)}</div>
+        </div>
+        <div class="section grow">
+          <h2>Proceedings / minutes${bodySplit ? ' (continued on page 2)' : ''}</h2>
+          <div class="ruled-block xl">${momText(bodyP1)}</div>
+          ${bodySplit ? '<p class="cont-note">→ Continue detailed proceedings on page 2</p>' : ''}
+        </div>
+        <div class="foot-bar">Unity<span class="sep">·</span>Harmony<span class="sep">·</span>Progress · housingcolonysanyard.in</div>
+      </div></div>
+
+      <div class="sheet" aria-label="MOM page 2">
+        ${sheetHead('Page 2 of 2', addr2)}
+        <div class="banner">Proceedings continued <span class="sep">·</span> ${isGh ? 'Resolutions &amp; Actions' : 'Decisions &amp; Actions'}</div>
+        <div class="section grow">
+          <h2>Proceedings / minutes (continued)</h2>
+          <div class="ruled-block xxl">${momText(bodyP2)}</div>
+        </div>
+        <div class="section">
+          <h2>Resolutions / decisions</h2>
+          <table class="res-table">
+            <thead><tr><th style="width:8mm">No.</th><th>Resolution / decision</th><th style="width:18mm">Passed</th></tr></thead>
+            <tbody>${momResolutionsTableRows(p.resolutions)}</tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h2>Action items</h2>
+          <table class="res-table">
+            <thead><tr><th>Item</th><th style="width:32mm">Owner</th><th style="width:24mm">Due date</th><th style="width:14mm">Done</th></tr></thead>
+            <tbody>${momActionsTableRows(p.actionItems)}</tbody>
+          </table>
+        </div>
+        <div class="meta-grid" style="margin-top:3mm">
+          <div class="field"><label>${nextLabel}</label><div class="ruled">${escapeHtml(formatIstDate(p.nextMeetingDate) || '') || '&nbsp;'}</div></div>
+          <div class="field"><label>Signed / approved by</label><div class="ruled">${escapeHtml(p.signedBy || '') || '&nbsp;'}</div></div>
+        </div>
+        <div class="sign-row">
+          <div class="sig">President / Chairman</div>
+          <div class="sig">General Secretary</div>
+        </div>
+        <div class="foot-bar" style="margin-top:4mm">${foot2}</div>
+      </div></div>
+    </div>`;
+  }
+
   function renderProceedingsList() {
     const mount = el('proceedingsList');
     const statusLine = el('proceedingsListStatus');
@@ -7039,56 +7272,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function renderProceedingsDetail(p) {
     const body = el('proceedingsDetailBody');
     if (!body || !p) return;
-    const isGh = p.meetingType === 'gh';
-    const registerTitle = isGh ? 'General House Meeting' : 'Executive Committee Meeting';
-    const resolutions = (p.resolutions || []).length
-      ? `<ol class="proceedings-resolutions">${p.resolutions.map((r) => `
-          <li><strong>${escapeHtml(r.no || '')}</strong> ${escapeHtml(r.text)}
-          ${r.votesFor != null ? `<span class="muted"> (For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0})</span>` : ''}
-          ${r.passed === false ? ' <em>Not passed</em>' : ''}</li>`).join('')}</ol>`
-      : '<p class="muted">No resolutions recorded.</p>';
-    const actions = (p.actionItems || []).length
-      ? `<ul class="proceedings-actions">${p.actionItems.map((a) => `
-          <li class="${a.done ? 'is-done' : ''}">${escapeHtml(a.item)}
-          ${a.owner ? ` — <span class="muted">${escapeHtml(a.owner)}</span>` : ''}
-          ${a.dueDate ? ` · due ${escapeHtml(formatIstDate(a.dueDate))}` : ''}</li>`).join('')}</ul>`
-      : '<p class="muted">No action items.</p>';
-
-    body.innerHTML = `
-      <div class="proceedings-page-inner">
-        <span class="proceedings-corner c-tl" aria-hidden="true"></span>
-        <span class="proceedings-corner c-tr" aria-hidden="true"></span>
-        <span class="proceedings-corner c-bl" aria-hidden="true"></span>
-        <span class="proceedings-corner c-br" aria-hidden="true"></span>
-        <header class="proceedings-page-head">
-          <img class="proceedings-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="">
-          <div>
-            <p class="proceedings-org">Mandi Housing Welfare Society</p>
-            <h3>${escapeHtml(registerTitle)}</h3>
-            <p class="muted">${escapeHtml(p.meetingSubtypeLabel || '')} · Himuda Housing Colony Sanyard</p>
-          </div>
-          <div class="proceedings-reg-meta">
-            <div><strong>Register No.</strong> ${escapeHtml(p.registerLabel || '—')}</div>
-            <div><strong>Date</strong> ${escapeHtml(formatIstDate(p.meetingDate))}${p.meetingTime ? ` · ${escapeHtml(p.meetingTime)}` : ''}</div>
-          </div>
-        </header>
-        <div class="proceedings-meta-grid">
-          <div><strong>Venue</strong> ${escapeHtml(p.venue || '—')}</div>
-          <div><strong>Chair / presiding</strong> ${escapeHtml(p.chairPerson || '—')}</div>
-          ${isGh ? `<div><strong>Quorum</strong> ${p.quorumMet === true ? 'Met' : (p.quorumMet === false ? 'Not met' : '—')}</div>` : ''}
-          ${p.nextMeetingDate ? `<div><strong>Next meeting</strong> ${escapeHtml(formatIstDate(p.nextMeetingDate))}</div>` : ''}
-        </div>
-        <section><h4>Members present</h4>${proceedingsMultiline(p.membersPresent)}</section>
-        <section><h4>Members absent / regrets</h4>${proceedingsMultiline(p.membersAbsent)}</section>
-        <section><h4>Agenda</h4>${proceedingsMultiline(p.agenda)}</section>
-        <section><h4>Proceedings / minutes</h4>${proceedingsMultiline(p.proceedingsBody)}</section>
-        <section><h4>Resolutions</h4>${resolutions}</section>
-        <section><h4>Action items</h4>${actions}</section>
-        <footer class="proceedings-page-foot">
-          ${p.signedBy ? `<p><strong>Signed / approved:</strong> ${escapeHtml(p.signedBy)}</p>` : ''}
-          ${p.publishedAt ? `<p class="muted">Published ${escapeHtml(formatIstDateTime(p.publishedAt))}</p>` : ''}
-        </footer>
-      </div>`;
+    body.innerHTML = buildProceedingsMomHtml(p);
   }
 
   function showProceedingsDetail(show) {
@@ -7305,16 +7489,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function printProceedingsDetail() {
     const p = proceedingsState.selected;
     if (!p) return;
-    const html = el('proceedingsDetailBody')?.innerHTML || '';
+    const html = buildProceedingsMomHtml(p);
     const w = window.open('', '_blank', 'noopener');
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(p.title)}</title>
-      <link rel="stylesheet" href="${location.origin}/portal.css?v=20260810proceedings1">
-      <style>@page{size:A4;margin:10mm}body{margin:0;background:#fff}.proceedings-page-inner{box-shadow:none}</style>
-      </head><body><article class="proceedings-page">${html}</article></body></html>`);
+    w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(p.title || 'Proceedings')}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260811mom1">
+      </head><body>${html}</body></html>`);
     w.document.close();
     w.focus();
-    w.print();
+    setTimeout(() => w.print(), 400);
   }
 
   function switchPanel(name) {
@@ -7489,6 +7675,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     el('otpMemberForm') && (el('otpMemberForm').hidden = true);
     el('otpContactForm') && (el('otpContactForm').hidden = true);
     el('otpVerifyForm') && (el('otpVerifyForm').hidden = true);
+    if (el('authbuddyGatePane')) el('authbuddyGatePane').hidden = true;
+    if (el('authbuddyContinueBtn')) el('authbuddyContinueBtn').hidden = true;
+    if (el('authbuddySignInBtn')) el('authbuddySignInBtn').hidden = true;
     if (el('otpInput')) el('otpInput').value = '';
     if (el('otpContactEmail')) el('otpContactEmail').value = '';
     if (el('otpContactPhone')) el('otpContactPhone').value = '';
@@ -7498,7 +7687,81 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     state.pendingContact = false;
     state.missingEmail = false;
     state.missingPhone = false;
+    state.authbuddyLinked = false;
     showError('');
+  }
+
+  async function refreshAuthbuddyGate() {
+    const pane = el('authbuddyGatePane');
+    const cont = el('authbuddyContinueBtn');
+    const sign = el('authbuddySignInBtn');
+    if (!pane || !cont || !sign) return;
+    const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
+    if (!houseId) {
+      pane.hidden = true;
+      return;
+    }
+    try {
+      const q = new URLSearchParams({ houseId });
+      if (state.pendingMemberId) q.set('memberId', state.pendingMemberId);
+      const st = await api('/api/rwa/authbuddy/status?' + q.toString());
+      if (!st.reachable) {
+        pane.hidden = true;
+        return;
+      }
+      pane.hidden = false;
+      state.authbuddyLinked = Boolean(st.linked);
+      cont.hidden = !st.linked;
+      sign.hidden = false;
+      const hint = el('authbuddyGateHint');
+      if (hint) {
+        hint.textContent = st.linked
+          ? 'This member is linked to AuthBuddy — one factor (password, TOTP, or passkey) is enough.'
+          : 'Optional: link AuthBuddy after email passcode for faster sign-in (single factor).';
+      }
+    } catch (_e) {
+      pane.hidden = true;
+    }
+  }
+
+  function authbuddyAuthUrl(purpose) {
+    const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
+    const memberId = state.pendingMemberId || '';
+    const returnTo = new URL('index.html', window.location.href);
+    returnTo.hash = 'home';
+    const auth = new URL('auth.html', window.location.href);
+    auth.searchParams.set('return_to', returnTo.href);
+    auth.searchParams.set('purpose', purpose || 'login');
+    if (houseId) auth.searchParams.set('houseId', houseId);
+    if (memberId) auth.searchParams.set('memberId', memberId);
+    return auth.href;
+  }
+
+  function offerAuthbuddyLinkBanner() {
+    if (!state.session?.resident || state.session.resident.authbuddyLinked) return;
+    if (document.getElementById('authbuddyLinkBanner')) return;
+    const host = el('noticeList') || el('panel-home') || el('appView');
+    if (!host) return;
+    const ban = document.createElement('div');
+    ban.id = 'authbuddyLinkBanner';
+    ban.className = 'card';
+    ban.style.cssText = 'margin:0.75rem 0;padding:0.85rem 1rem;border:1px solid #b7ddd9;background:#f3fbfa;border-radius:12px';
+    ban.innerHTML = `
+      <p style="margin:0 0 0.5rem"><strong>Add AuthBuddy?</strong>
+        Optional single-factor sign-in next time (password, TOTP, or passkey) via BuddyAuthenticator.
+        Skip anytime — email passcode still works.</p>
+      <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button type="button" class="btn primary compact" id="authbuddyLinkNowBtn">Link AuthBuddy</button>
+        <button type="button" class="btn ghost compact" id="authbuddyLinkDismissBtn">Not now</button>
+      </p>`;
+    host.prepend(ban);
+    el('authbuddyLinkDismissBtn')?.addEventListener('click', () => ban.remove());
+    el('authbuddyLinkNowBtn')?.addEventListener('click', () => {
+      const r = state.session.resident;
+      state.pendingHouse = r.houseId || '';
+      state.pendingMemberId = r.memberId || '';
+      window.location.href = authbuddyAuthUrl('link');
+    });
   }
 
   function showMemberPicker(data) {
@@ -7563,6 +7826,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       hint += '. Enter the code to confirm — email/phone are saved only after verification.';
     }
     el('otpHint').innerHTML = hint;
+    refreshAuthbuddyGate().catch(() => {});
   }
 
   async function requestOtp(payload) {
@@ -7672,6 +7936,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           list.prepend(note);
         }
       }
+      offerAuthbuddyLinkBanner();
     } catch (err) {
       showError(err.message || 'Invalid code');
     } finally {
@@ -7681,6 +7946,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   el('otpContactBackBtn')?.addEventListener('click', () => resetLoginForms());
   el('restartLoginBtn')?.addEventListener('click', () => resetLoginForms());
+  el('authbuddyContinueBtn')?.addEventListener('click', () => {
+    window.location.href = authbuddyAuthUrl('login');
+  });
+  el('authbuddySignInBtn')?.addEventListener('click', () => {
+    const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
+    if (!houseId) {
+      showError('Enter your house / plot number first');
+      return;
+    }
+    state.pendingHouse = houseId;
+    window.location.href = authbuddyAuthUrl(state.authbuddyLinked ? 'login' : 'login');
+  });
 
   el('msgThreadList')?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-thread-id]');
@@ -8894,6 +9171,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('campaignBackBtn')?.addEventListener('click', showCampaignList);
   el('campaignPledgeBtn')?.addEventListener('click', openCampaignPledgeDialog);
   el('campaignContributeBtn')?.addEventListener('click', openCampaignContributeDialog);
+  el('campaignSuggestBtn')?.addEventListener('click', openCampaignSuggestDialog);
   el('campaignShareBtn')?.addEventListener('click', () => {
     const c = campaignsState.selected;
     if (!c) return;
@@ -8912,6 +9190,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('campaignPledgeForm')?.addEventListener('submit', submitCampaignPledge);
   el('campaignPledgeCloseBtn')?.addEventListener('click', () => el('campaignPledgeDialog')?.close());
   el('campaignPledgeCancelBtn')?.addEventListener('click', () => el('campaignPledgeDialog')?.close());
+  el('campaignSuggestForm')?.addEventListener('submit', submitCampaignSuggestion);
+  el('campaignSuggestCloseBtn')?.addEventListener('click', () => el('campaignSuggestDialog')?.close());
+  el('campaignSuggestCancelBtn')?.addEventListener('click', () => el('campaignSuggestDialog')?.close());
+  el('campaignSuggestionsList')?.addEventListener('click', (event) => {
+    const delBtn = event.target.closest('[data-cmp-del-suggest]');
+    if (delBtn) {
+      removeCampaignSuggestion(delBtn.getAttribute('data-cmp-del-suggest')).catch((e) => {
+        window.alert(e.message || 'Remove failed');
+      });
+    }
+  });
   el('campaignEditBtn')?.addEventListener('click', () => {
     if (campaignsState.selected) fillCampaignsForm(campaignsState.selected);
   });

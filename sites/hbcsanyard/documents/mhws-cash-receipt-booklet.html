@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 6mm; }
+    @page { size: A4 portrait; margin: 4mm; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -37,68 +37,79 @@
     }
     .sheet {
       width: 210mm;
-      min-height: 297mm;
+      height: 297mm;
+      max-height: 297mm;
       margin: 0 auto 18px;
-      padding: 5mm 6mm;
+      padding: 3mm 5mm;
       background: var(--paper);
       border: 1.25pt solid var(--navy);
       display: flex;
       flex-direction: column;
       gap: 0;
-          overflow: hidden;
+      overflow: hidden;
     }
 
-    /* Three tear-off receipts per A4 page */
+    /* Three tear-off receipts per A4 page — no outer border */
     .receipt {
       position: relative;
-      flex: 1;
+      flex: 1 1 0;
       min-height: 0;
-      border: 1pt solid var(--navy);
-      padding: 3.2mm 4.5mm 3mm;
+      max-height: 33.33%;
+      border: 0;
+      padding: 2mm 3.5mm 1.5mm;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      background: #fff;
+      background: transparent;
     }
     .receipt + .receipt {
-      margin-top: 3.5mm;
-      border-style: dashed solid solid solid;
-      border-top-style: dashed;
+      margin-top: 0;
+      border: 0;
     }
-    .receipt::before {
-      content: "";
+    .r-wm {
       position: absolute;
       left: 50%;
       top: 50%;
-      width: min(40mm, 42%);
-      height: min(40mm, 42%);
-      max-width: 42%;
-      max-height: 42%;
       transform: translate(-50%, -50%);
-      background: url("../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8") center / contain no-repeat;
-      opacity: 0.7;
+      width: auto;
+      height: 70%;
+      max-width: 78%;
+      max-height: 70%;
+      object-fit: contain;
+      opacity: 0.72;
       pointer-events: none;
       z-index: 0;
     }
-    .receipt > * { position: relative; z-index: 1; }
+    .receipt > *:not(.r-wm):not(.r-bg):not(.r-bg-svg) { position: relative; z-index: 1; }
+
+    /* Tint + pattern as SVG so print/PDF always includes them */
+    .r-bg-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .r-bg { display: none; }
 
     .r-top {
       display: grid;
-      grid-template-columns: 16mm 1fr auto;
-      gap: 3mm;
+      grid-template-columns: 13mm 1fr auto;
+      gap: 2.5mm;
       align-items: center;
-      padding-bottom: 2mm;
-      border-bottom: 1pt solid var(--navy);
+      padding-bottom: 1.2mm;
+      border-bottom: 0.7pt solid rgba(11, 42, 86, 0.35);
     }
     .r-logo {
-      width: 15mm;
+      width: 12mm;
       height: auto;
       display: block;
     }
     .r-org h1 {
       margin: 0;
       font-family: "Cormorant Garamond", Georgia, serif;
-      font-size: 11pt;
+      font-size: 10pt;
       font-weight: 700;
       letter-spacing: 0.04em;
       color: var(--navy);
@@ -106,14 +117,14 @@
       line-height: 1.05;
     }
     .r-org .colony {
-      margin: 0.4mm 0 0;
-      font-size: 8pt;
+      margin: 0.2mm 0 0;
+      font-size: 7.2pt;
       font-weight: 700;
       color: var(--navy-2, #143a6e);
     }
     .r-org .addr {
-      margin: 0.6mm 0 0;
-      font-size: 7pt;
+      margin: 0.3mm 0 0;
+      font-size: 6.4pt;
       font-weight: 600;
       color: var(--green);
     }
@@ -122,7 +133,7 @@
       font-size: 7.2pt;
       line-height: 1.35;
       color: var(--muted);
-      min-width: 42mm;
+      min-width: 46mm;
     }
     .r-meta strong {
       display: block;
@@ -133,6 +144,25 @@
       color: var(--navy);
       margin-bottom: 1.2mm;
     }
+    .r-meta .rcpt-no-label {
+      display: block;
+      font-size: 6.4pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4mm;
+    }
+    .r-meta .rcpt-no {
+      display: block;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 12pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #c62828;
+      line-height: 1.1;
+      margin-bottom: 0.8mm;
+    }
     .r-meta .fill {
       display: inline-block;
       min-width: 28mm;
@@ -142,23 +172,75 @@
       margin-left: 1mm;
     }
 
+    .screen-controls {
+      max-width: 210mm;
+      margin: 0 auto 12px;
+      padding: 12px 14px;
+      background: #fff;
+      border: 1px solid rgba(11, 42, 86, 0.18);
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px 14px;
+      align-items: end;
+      font: 500 13px/1.35 system-ui, sans-serif;
+      color: #223;
+    }
+    .screen-controls label {
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5a6a80;
+    }
+    .screen-controls input,
+    .screen-controls select {
+      font: 600 13px/1.2 system-ui, sans-serif;
+      padding: 7px 9px;
+      border: 1px solid rgba(11, 42, 86, 0.25);
+      border-radius: 7px;
+      color: #12233f;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .screen-controls .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .screen-controls button {
+      border: 0;
+      border-radius: 7px;
+      padding: 8px 14px;
+      font: 700 13px/1.2 system-ui, sans-serif;
+      cursor: pointer;
+      background: #0b2a56;
+      color: #fff;
+    }
+    .screen-controls button.secondary {
+      background: #e8eef6;
+      color: #0b2a56;
+    }
+
     .r-banner {
-      margin: 2mm 0 2.2mm;
+      margin: 1.2mm 0 1.4mm;
       text-align: center;
       background: linear-gradient(90deg, var(--navy), var(--navy-2));
       color: #f7f3ea;
-      font-size: 8pt;
+      font-size: 7pt;
       font-weight: 700;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      padding: 1.4mm 3mm;
+      padding: 1mm 2.5mm;
     }
     .r-banner .gold { color: var(--gold); margin: 0 1.5mm; }
 
     .fields {
       display: grid;
-      gap: 1.8mm;
-      font-size: 8pt;
+      gap: 1.1mm;
+      font-size: 7.5pt;
       flex: 1;
     }
     .row {
@@ -180,24 +262,24 @@
     }
     .line {
       border-bottom: 1px solid rgba(11, 42, 86, 0.42);
-      min-height: 4.2mm;
+      min-height: 3.4mm;
     }
     .amount-box {
       display: grid;
       grid-template-columns: 28mm 1fr;
       gap: 2mm;
       align-items: stretch;
-      margin-top: 0.5mm;
+      margin-top: 0.2mm;
     }
     .amount-value {
       border: 1pt solid var(--navy);
       background: var(--soft);
-      min-height: 8mm;
+      min-height: 6.5mm;
       display: flex;
       align-items: center;
-      padding: 1mm 2.5mm;
+      padding: 0.6mm 2mm;
       font-weight: 700;
-      font-size: 11pt;
+      font-size: 10pt;
       color: var(--navy);
       letter-spacing: 0.02em;
     }
@@ -232,16 +314,16 @@
     .r-foot {
       display: grid;
       grid-template-columns: 1.2fr 1fr;
-      gap: 4mm;
-      margin-top: 2.5mm;
-      padding-top: 2mm;
-      border-top: 0.8pt solid var(--line);
+      gap: 3mm;
+      margin-top: 1.2mm;
+      padding-top: 1.2mm;
+      border-top: 0.6pt solid var(--line);
       align-items: end;
     }
     .note {
-      font-size: 6.6pt;
+      font-size: 6pt;
       color: var(--muted);
-      line-height: 1.35;
+      line-height: 1.3;
     }
     .note strong {
       color: var(--navy);
@@ -249,92 +331,157 @@
     }
     .sign {
       text-align: center;
-      font-size: 7pt;
+      font-size: 6.5pt;
       color: var(--muted);
     }
     .sign .space {
-      height: 9mm;
+      height: 6mm;
       border-bottom: 1px solid rgba(11, 42, 86, 0.4);
-      margin-bottom: 1mm;
+      margin-bottom: 0.6mm;
     }
     .sign .who {
       font-weight: 700;
       color: var(--navy);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      font-size: 7.2pt;
+      font-size: 6.6pt;
     }
     .sign .role {
-      font-size: 6.6pt;
+      font-size: 6pt;
       color: var(--green);
       font-weight: 600;
     }
     .copy-tag {
       position: absolute;
-      top: 3mm;
-      right: 4mm;
-      font-size: 6pt;
+      top: 2mm;
+      right: 3mm;
+      font-size: 5.5pt;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: rgba(11, 42, 86, 0.45);
-      border: 0.7pt solid rgba(11, 42, 86, 0.25);
-      padding: 0.4mm 1.6mm;
+      border: 0.6pt solid rgba(11, 42, 86, 0.25);
+      padding: 0.3mm 1.2mm;
       background: rgba(255, 255, 255, 0.75);
       z-index: 2;
     }
     .perf {
       text-align: center;
-      font-size: 6pt;
-      letter-spacing: 0.2em;
+      font-size: 5pt;
+      letter-spacing: 0.18em;
       color: rgba(11, 42, 86, 0.35);
-      margin: 1.2mm 0 0;
+      margin: 0.4mm 0;
+      padding: 0;
       text-transform: uppercase;
+      flex: 0 0 auto;
+      line-height: 1;
     }
 
     @media print {
+      @page { size: A4 portrait; margin: 3mm; }
       html, body {
         background: #fff !important;
-        -webkit-print-color-adjust: economy;
-        print-color-adjust: economy;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
       }
-      .screen-hint { display: none !important; }
+      .screen-hint,
+      .screen-controls,
+      .download-status { display: none !important; }
       .sheet {
-        margin: 0;
-        border: 0;
+        margin: 0 auto !important;
+        border: 0 !important;
         background: #fff !important;
         box-shadow: none !important;
-        height: auto !important;
+        width: 204mm !important;
+        height: 291mm !important;
+        max-height: 291mm !important;
         min-height: 0 !important;
-        padding: 0;
+        padding: 2mm 3mm !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        break-inside: avoid !important;
       }
       .receipt {
-        background: #fff !important;
+        border: 0 !important;
         box-shadow: none !important;
+        flex: 1 1 0 !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
-      .receipt::before { opacity: 0.65; }
-      .amount-value,
-      .fields,
-      .r-top {
-        background: #fff !important;
+      .r-wm,
+      .r-bg-svg,
+      .r-banner,
+      .copy-tag,
+      .rcpt-no {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
       }
-      .r-banner, .copy-tag, .accent-edge {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+      .receipt + .receipt { margin-top: 0 !important; border: 0 !important; }
+      .perf {
+        margin: 0.2mm 0 !important;
+        page-break-inside: avoid;
       }
-      .receipt + .receipt { margin-top: 4mm; }
+    }
+    .download-status {
+      max-width: 210mm;
+      margin: 0 auto 10px;
+      font: 500 13px/1.4 system-ui, sans-serif;
+      color: #445;
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <p class="screen-hint">
-    Cash receipt booklet — 3 slips per A4 page. Print multiple copies for a bound book
-    (office copy / member copy). Number receipts by hand or stamp before issue.
+    Cash receipt booklet — 3 slips per A4. Set starting number and how many pages to print/download as a continuous series.
   </p>
+
+  <div class="screen-controls" id="receiptControls">
+    <label>Start receipt no.
+      <input id="startReceiptNo" type="number" min="1" max="999999" value="1" step="1">
+    </label>
+    <label>Pages (3 slips each)
+      <input id="pageCount" type="number" min="1" max="100" value="1" step="1">
+    </label>
+    <label>Paper colour
+      <select id="paperTint">
+        <option value="white">White</option>
+        <option value="cream" selected>Cream</option>
+        <option value="ivory">Ivory</option>
+        <option value="mint">Mint</option>
+        <option value="sky">Sky blue</option>
+        <option value="rose">Rose</option>
+      </select>
+    </label>
+    <label>Background pattern
+      <select id="paperPattern">
+        <option value="none">None</option>
+        <option value="lines" selected>Ruled lines</option>
+        <option value="diagonal">Diagonal hatch</option>
+        <option value="dots">Security dots</option>
+        <option value="guilloche">Guilloche</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="button" id="applyReceiptOpts">Preview</button>
+      <button type="button" class="secondary" id="printReceipts">Print series</button>
+      <button type="button" class="secondary" id="downloadReceiptPdf">Download PDF</button>
+    </div>
+  </div>
+  <p class="download-status" id="downloadStatus">Series: <strong id="seriesRange">000001 – 000003</strong> (1 page · 3 receipts)</p>
 
   <div class="sheet" aria-label="Cash receipt booklet page">
     <!-- Receipt 1 -->
-    <article class="receipt">
+    <article class="receipt" data-tint="cream" data-pattern="lines">
+      <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
+      <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
       <span class="copy-tag">Original</span>
       <header class="r-top">
         <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
@@ -345,7 +492,8 @@
         </div>
         <div class="r-meta">
           <strong>Cash Receipt</strong>
-          No.<span class="fill"></span><br>
+          <span class="rcpt-no-label">Receipt No.</span>
+          <span class="rcpt-no" data-rcpt-slot="0">000001</span>
           Date<span class="fill"></span>
         </div>
       </header>
@@ -400,7 +548,9 @@
     <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
 
     <!-- Receipt 2 -->
-    <article class="receipt">
+    <article class="receipt" data-tint="cream" data-pattern="lines">
+      <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
+      <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
       <span class="copy-tag">Original</span>
       <header class="r-top">
         <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
@@ -411,7 +561,8 @@
         </div>
         <div class="r-meta">
           <strong>Cash Receipt</strong>
-          No.<span class="fill"></span><br>
+          <span class="rcpt-no-label">Receipt No.</span>
+          <span class="rcpt-no" data-rcpt-slot="1">000002</span>
           Date<span class="fill"></span>
         </div>
       </header>
@@ -466,7 +617,9 @@
     <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
 
     <!-- Receipt 3 -->
-    <article class="receipt">
+    <article class="receipt" data-tint="cream" data-pattern="lines">
+      <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
+      <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
       <span class="copy-tag">Original</span>
       <header class="r-top">
         <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
@@ -477,7 +630,8 @@
         </div>
         <div class="r-meta">
           <strong>Cash Receipt</strong>
-          No.<span class="fill"></span><br>
+          <span class="rcpt-no-label">Receipt No.</span>
+          <span class="rcpt-no" data-rcpt-slot="2">000003</span>
           Date<span class="fill"></span>
         </div>
       </header>
@@ -530,5 +684,152 @@
       </footer>
     </article>
   </div>
+<script>
+(function () {
+  const TINTS = {
+    white: '#ffffff',
+    cream: '#fbf6ea',
+    ivory: '#f7f3e8',
+    mint: '#eef8f1',
+    sky: '#eef4fb',
+    rose: '#fbf0f2',
+  };
+
+  function pad6(n) {
+    const v = Math.max(1, Math.min(999999, Number(n) || 1));
+    return String(v).padStart(6, '0');
+  }
+
+  function opts() {
+    const start = Math.max(1, Math.min(999999, parseInt(document.getElementById('startReceiptNo').value, 10) || 1));
+    const pages = Math.max(1, Math.min(100, parseInt(document.getElementById('pageCount').value, 10) || 1));
+    const tint = document.getElementById('paperTint').value || 'cream';
+    const pattern = document.getElementById('paperPattern').value || 'lines';
+    const end = Math.min(999999, start + pages * 3 - 1);
+    return { start, pages, tint, pattern, end, total: end - start + 1 };
+  }
+
+  function bookletUrl(o, disposition) {
+    const q = new URLSearchParams({
+      start: String(o.start),
+      pages: String(o.pages),
+      tint: o.tint,
+      pattern: o.pattern,
+      disposition: disposition || 'attachment',
+    });
+    return `/api/rwa/public/cash-receipt-booklet.pdf?${q.toString()}`;
+  }
+
+  function buildBgSvg(tint, pattern) {
+    const fill = TINTS[tint] || TINTS.cream;
+    const parts = [`<rect width="100%" height="100%" fill="${fill}"/>`];
+    if (pattern === 'lines') {
+      for (let y = 12; y < 400; y += 14) {
+        parts.push(`<line x1="0" y1="${y}" x2="1200" y2="${y}" stroke="rgba(11,42,86,0.08)" stroke-width="1"/>`);
+      }
+    } else if (pattern === 'diagonal') {
+      for (let x = -400; x < 1400; x += 22) {
+        parts.push(`<line x1="${x}" y1="0" x2="${x + 420}" y2="420" stroke="rgba(11,42,86,0.07)" stroke-width="1"/>`);
+      }
+    } else if (pattern === 'dots') {
+      for (let y = 10; y < 400; y += 14) {
+        for (let x = 10; x < 900; x += 14) {
+          parts.push(`<circle cx="${x}" cy="${y}" r="1.1" fill="rgba(11,42,86,0.1)"/>`);
+        }
+      }
+    } else if (pattern === 'guilloche') {
+      for (let r = 30; r < 520; r += 28) {
+        parts.push(`<circle cx="450" cy="200" r="${r}" fill="none" stroke="rgba(26,107,58,0.07)" stroke-width="1"/>`);
+      }
+    }
+    return parts.join('');
+  }
+
+  function applyOpts() {
+    const o = opts();
+    document.getElementById('startReceiptNo').value = String(o.start);
+    document.getElementById('pageCount').value = String(o.pages);
+    const status = document.getElementById('downloadStatus');
+    if (status) {
+      status.innerHTML = `Series: <strong id="seriesRange">${pad6(o.start)} – ${pad6(o.end)}</strong> (${o.pages} page${o.pages > 1 ? 's' : ''} · ${o.total} receipts)`;
+    }
+    // Preview first page only on screen
+    document.querySelectorAll('.receipt').forEach((el, i) => {
+      el.setAttribute('data-tint', o.tint);
+      el.setAttribute('data-pattern', o.pattern);
+      const slot = el.querySelector('.rcpt-no');
+      if (slot) slot.textContent = pad6(o.start + i);
+      const svg = el.querySelector('.r-bg-svg');
+      if (svg) {
+        svg.setAttribute('viewBox', '0 0 900 400');
+        svg.innerHTML = buildBgSvg(o.tint, o.pattern);
+      }
+    });
+  }
+
+  function setStatus(msg) {
+    const el = document.getElementById('downloadStatus');
+    if (!el) return;
+    el.textContent = msg;
+  }
+
+  async function downloadPdf() {
+    applyOpts();
+    const o = opts();
+    const btn = document.getElementById('downloadReceiptPdf');
+    if (btn) btn.disabled = true;
+    setStatus(`Preparing PDF — ${o.pages} page${o.pages > 1 ? 's' : ''} (${pad6(o.start)} – ${pad6(o.end)})…`);
+    try {
+      const res = await fetch(bookletUrl(o));
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const blob = await res.blob();
+      if (!blob || blob.type.indexOf('pdf') === -1 && blob.size < 100) {
+        throw new Error('Invalid PDF response');
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mhws-cash-receipts-${pad6(o.start)}-${pad6(o.end)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus(`Downloaded ${o.pages} page${o.pages > 1 ? 's' : ''}: ${pad6(o.start)} – ${pad6(o.end)}`);
+      setTimeout(applyOpts, 2500);
+    } catch (err) {
+      console.error(err);
+      setStatus('Download failed. Opening PDF in a new tab — use Save / Print from there.');
+      window.open(bookletUrl(o), '_blank', 'noopener');
+      setTimeout(applyOpts, 3000);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function printSeries() {
+    applyOpts();
+    const o = opts();
+    setStatus(`Opening ${o.pages}-page PDF for printing (${pad6(o.start)} – ${pad6(o.end)})…`);
+    const w = window.open(bookletUrl(o, 'inline'), '_blank', 'noopener');
+    if (!w) {
+      setStatus('Popup blocked — allow popups, or use Download PDF then print the file.');
+      return;
+    }
+    // PDF viewer: print all pages from there.
+    setTimeout(applyOpts, 2000);
+  }
+
+  document.getElementById('applyReceiptOpts')?.addEventListener('click', applyOpts);
+  document.getElementById('printReceipts')?.addEventListener('click', printSeries);
+  document.getElementById('downloadReceiptPdf')?.addEventListener('click', () => {
+    downloadPdf().catch(console.error);
+  });
+  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', applyOpts);
+    document.getElementById(id)?.addEventListener('input', applyOpts);
+  });
+  applyOpts();
+})();
+</script>
 </body>
 </html>

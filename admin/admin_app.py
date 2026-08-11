@@ -2788,8 +2788,119 @@ def _rwa_auth_payload(sess: dict) -> dict:
         **sess,
         "features": {
             "infoCentreProtect": rwa_portal.info_centre_protect_enabled(SITE_ROOT),
+            "authbuddy": True,
         },
     }
+
+
+def _authbuddy_idp_base() -> str:
+    """Public IdP URL for server-side session introspection."""
+    meta_path = SITE_ROOT / "site-meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        auth = meta.get("auth") or {}
+        url = (auth.get("idpPublicUrl") or auth.get("idpBaseUrl") or "").strip().rstrip("/")
+        if url:
+            return url
+    except Exception:
+        pass
+    return (os.environ.get("AUTHBUDDY_IDP_URL") or "https://authbuddy.veerlabs.solutions").rstrip("/")
+
+
+def _authbuddy_fetch_profile(session_id: str) -> dict | None:
+    """Validate AuthBuddy session via GET /auth/me (Bearer). Returns profile or None."""
+    sid = (session_id or "").strip()
+    if not sid:
+        return None
+    import urllib.error
+    import urllib.request
+
+    url = f"{_authbuddy_idp_base()}/auth/me"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {sid}",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8") or "{}")
+            if not isinstance(data, dict):
+                return None
+            email = str(data.get("email") or "").strip().lower()
+            username = str(data.get("username") or "").strip()
+            if not email and not username:
+                return None
+            # /auth/me does not return user_id; resolve via agent session when possible.
+            return {
+                "email": email,
+                "username": username,
+                "user_id": str(data.get("user_id") or data.get("sub") or "").strip() or None,
+                "has_totp": bool(data.get("has_totp")),
+                "has_hotp": bool(data.get("has_hotp")),
+                "has_passkey": bool(data.get("has_passkey")),
+                "has_hybrid_pqc": bool(data.get("has_hybrid_pqc")),
+            }
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _authbuddy_fetch_agent_session(session_id: str) -> dict | None:
+    """Prefer agent session (includes user_id + email) via same-origin or loopback."""
+    sid = (session_id or "").strip()
+    if not sid:
+        return None
+    import urllib.error
+    import urllib.request
+
+    bases = [
+        "http://127.0.0.1:18080",
+        _authbuddy_idp_base(),
+    ]
+    for base in bases:
+        url = f"{base.rstrip('/')}/agent/v1/session"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {sid}",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8") or "{}")
+                if not data.get("authenticated") or not data.get("session"):
+                    continue
+                sess = data["session"]
+                return {
+                    "user_id": str(sess.get("user_id") or "").strip(),
+                    "username": (sess.get("username") or "").strip() or None,
+                    "email": str(sess.get("email") or "").strip().lower() or None,
+                    "session_id": str(sess.get("session_id") or sid),
+                }
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+            continue
+    return None
+
+
+def _authbuddy_resolve(session_id: str) -> dict | None:
+    """Combine agent session (user_id) with /auth/me profile."""
+    agent = _authbuddy_fetch_agent_session(session_id)
+    profile = _authbuddy_fetch_profile(session_id)
+    if not agent and not profile:
+        return None
+    out = {
+        "user_id": (agent or {}).get("user_id") or (profile or {}).get("user_id"),
+        "username": (agent or {}).get("username") or (profile or {}).get("username"),
+        "email": (agent or {}).get("email") or (profile or {}).get("email"),
+        "session_id": session_id,
+    }
+    if not out.get("email") and not out.get("user_id"):
+        return None
+    return out
 
 
 def _public_base_url() -> str:
@@ -3094,6 +3205,203 @@ def api_rwa_logout():
         conn.close()
 
 
+@app.route("/api/rwa/authbuddy/status", methods=["GET"])
+def api_rwa_authbuddy_status():
+    """Health + optional plot/member link status for gate CTAs."""
+    import urllib.error
+    import urllib.request
+
+    house_id = str(request.args.get("houseId") or request.args.get("plotNo") or "").strip()
+    member_id = str(request.args.get("memberId") or "").strip() or None
+    reachable = False
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:18080/agent/v1/health",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8") or "{}")
+            reachable = str(data.get("status") or "") in ("ok", "degraded")
+    except Exception:
+        reachable = False
+
+    out = {
+        "ok": True,
+        "reachable": reachable,
+        "clientId": "hbcsanyard-web",
+        "linked": False,
+        "authbuddyUsername": None,
+        "memberId": member_id,
+        "houseId": house_id or None,
+        "emailMasked": None,
+        "hasEmail": False,
+    }
+    if not house_id:
+        return jsonify(out)
+    conn = _rwa_conn()
+    try:
+        resident = rwa_portal.find_resident(conn, house_id)
+        if not resident:
+            return jsonify({**out, "ok": False, "error": "Plot not found"}), 404
+        member = None
+        if member_id:
+            member = rwa_household.get_member(conn, member_id)
+            if member and member.get("house_id") != resident["house_id"]:
+                member = None
+        if not member:
+            member = rwa_household.primary_member(conn, resident["house_id"])
+        if member:
+            pub = rwa_household.public_member(member, include_contacts=False)
+            out["memberId"] = pub.get("id")
+            out["linked"] = bool(pub.get("authbuddyLinked"))
+            out["authbuddyUsername"] = pub.get("authbuddyUsername")
+            out["emailMasked"] = pub.get("emailMasked")
+            out["hasEmail"] = bool(pub.get("hasEmail"))
+        return jsonify(out)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/authbuddy/link", methods=["POST"])
+def api_rwa_authbuddy_link():
+    """Link AuthBuddy user to the signed-in household member (email must match)."""
+    payload = request.get_json(force=True, silent=True) or {}
+    ab_session = str(
+        payload.get("authbuddySessionId")
+        or payload.get("sessionId")
+        or payload.get("session_id")
+        or ""
+    ).strip()
+    if not ab_session:
+        return jsonify({"ok": False, "error": "AuthBuddy session required"}), 400
+    identity = _authbuddy_resolve(ab_session)
+    if not identity or not identity.get("email"):
+        return jsonify({"ok": False, "error": "AuthBuddy session invalid or expired"}), 401
+    if not identity.get("user_id"):
+        return jsonify({"ok": False, "error": "Could not resolve AuthBuddy user id"}), 400
+
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in to the portal first (email passcode)"}), 401
+        actor = sess["resident"]
+        member_id = str(actor.get("memberId") or payload.get("memberId") or "").strip()
+        if not member_id:
+            return jsonify({"ok": False, "error": "No household member on this session"}), 400
+        member = rwa_household.get_member(conn, member_id)
+        if not member:
+            return jsonify({"ok": False, "error": "Member not found"}), 404
+        member_email = str(member.get("email") or "").strip().lower()
+        if not member_email:
+            return jsonify({"ok": False, "error": "Member email missing — verify email OTP first"}), 400
+        if member_email != identity["email"]:
+            return jsonify({
+                "ok": False,
+                "error": "AuthBuddy account email does not match this household member email",
+                "memberEmailMasked": rwa_portal.mask_email(member_email),
+                "authbuddyEmailMasked": rwa_portal.mask_email(identity["email"]),
+            }), 409
+        linked = rwa_household.link_authbuddy(
+            conn,
+            member_id,
+            user_id=identity["user_id"],
+            username=identity.get("username"),
+        )
+        resident = rwa_portal.find_resident(conn, member["house_id"])
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        refreshed = rwa_portal.create_session_for_resident(conn, resident, member=linked)
+        resp = jsonify({
+            "ok": True,
+            "linked": True,
+            "member": rwa_household.public_member(linked, include_contacts=True),
+            **_rwa_auth_payload(refreshed),
+        })
+        _rwa_set_session_cookie(resp, refreshed["token"])
+        return resp
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/authbuddy/session", methods=["POST"])
+def api_rwa_authbuddy_session():
+    """Bridge AuthBuddy login → rwa_session for a linked member on a plot."""
+    payload = request.get_json(force=True, silent=True) or {}
+    house_id = str(payload.get("houseId") or payload.get("plotNo") or "").strip()
+    member_id = str(payload.get("memberId") or payload.get("member_id") or "").strip() or None
+    ab_session = str(
+        payload.get("authbuddySessionId")
+        or payload.get("sessionId")
+        or payload.get("session_id")
+        or ""
+    ).strip()
+    if not house_id or not ab_session:
+        return jsonify({"ok": False, "error": "House / plot number and AuthBuddy session required"}), 400
+    identity = _authbuddy_resolve(ab_session)
+    if not identity or not identity.get("user_id"):
+        return jsonify({"ok": False, "error": "AuthBuddy session invalid or expired"}), 401
+
+    conn = _rwa_conn()
+    try:
+        resident = rwa_portal.find_resident(conn, house_id)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        member = None
+        if member_id:
+            member = rwa_household.get_member(conn, member_id)
+            if member and member.get("house_id") != hid:
+                member = None
+        if not member:
+            row = conn.execute(
+                """
+                SELECT * FROM household_members
+                WHERE house_id = ? AND authbuddy_user_id = ? AND status = 'active'
+                LIMIT 1
+                """,
+                (hid, identity["user_id"]),
+            ).fetchone()
+            if row:
+                member = dict(row)
+        if not member and identity.get("email"):
+            member = rwa_household.find_member_by_email_on_plot(conn, hid, identity["email"])
+        if not member:
+            return jsonify({
+                "ok": False,
+                "error": "No household member on this plot is linked to this AuthBuddy account. Sign in with email passcode once to link.",
+                "needsLink": True,
+            }), 403
+        linked_uid = str(member.get("authbuddy_user_id") or "").strip()
+        if linked_uid and linked_uid != identity["user_id"]:
+            return jsonify({"ok": False, "error": "This plot member is linked to a different AuthBuddy account"}), 403
+        if not linked_uid:
+            mem_email = str(member.get("email") or "").strip().lower()
+            if not mem_email or mem_email != (identity.get("email") or ""):
+                return jsonify({
+                    "ok": False,
+                    "error": "AuthBuddy is not linked for this member yet. Use email passcode first, then link AuthBuddy.",
+                    "needsLink": True,
+                }), 403
+            member = rwa_household.link_authbuddy(
+                conn,
+                member["id"],
+                user_id=identity["user_id"],
+                username=identity.get("username"),
+            )
+        sess = rwa_portal.create_session_for_resident(conn, resident, member=member)
+        resp = jsonify({"ok": True, **_rwa_auth_payload(sess)})
+        _rwa_set_session_cookie(resp, sess["token"])
+        return resp
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/household/<path:house_id>/members", methods=["GET", "POST"])
 def api_rwa_household_members(house_id: str):
     """List or add household members (owner / EC)."""
@@ -3154,6 +3462,39 @@ def api_rwa_household_member_item(house_id: str, member_id: str):
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:
         conn.close()
+
+
+@app.route("/api/rwa/public/cash-receipt-booklet.pdf", methods=["GET"])
+def api_rwa_public_cash_receipt_booklet_pdf():
+    """Blank cash-receipt booklet PDF (3 slips/page). Query: start, pages, tint, pattern, disposition."""
+    try:
+        start_no = int(request.args.get("start") or 1)
+    except ValueError:
+        start_no = 1
+    try:
+        page_count = int(request.args.get("pages") or 1)
+    except ValueError:
+        page_count = 1
+    tint = (request.args.get("tint") or "cream").strip().lower()
+    pattern = (request.args.get("pattern") or "lines").strip().lower()
+    disposition = (request.args.get("disposition") or "attachment").strip().lower()
+    as_attachment = disposition != "inline"
+    try:
+        pdf_bytes, filename = rwa_reports.build_cash_receipt_booklet_pdf(
+            site_root=SITE_ROOT,
+            start_no=start_no,
+            page_count=page_count,
+            paper_tint=tint,
+            paper_pattern=pattern,
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=as_attachment,
+        download_name=filename,
+    )
 
 
 @app.route("/api/rwa/public/landing", methods=["GET"])
@@ -6642,7 +6983,8 @@ def api_rwa_public_campaign(campaign_id: str):
             viewer_house=None,
             status="verified",
         )
-        return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions})
+        suggestions = rwa_campaigns.list_suggestions(conn, campaign_id)
+        return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions, "suggestions": suggestions})
     finally:
         conn.close()
 
@@ -6701,6 +7043,30 @@ def api_rwa_public_campaign_contribution(campaign_id: str):
         note = (body.get("note") or "").strip()[:500]
         contribution = rwa_campaigns.public_create_contribution(conn, campaign_id=campaign_id, house_id=house, contributor_name=name, amount=amount, note=note)
         return jsonify({"ok": True, "contribution": contribution})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/campaigns/<campaign_id>/suggestions", methods=["POST"])
+def api_rwa_public_campaign_suggestion(campaign_id: str):
+    """Public suggestion submission (no auth required for public campaigns)."""
+    conn = _rwa_conn()
+    try:
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=False, signed_in=False)
+        if not campaign or campaign.get("audience") != "public":
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if campaign.get("status") != "active":
+            return jsonify({"ok": False, "error": "Campaign is not active"}), 400
+        body = request.get_json(force=True) or {}
+        name = (body.get("name") or "").strip()
+        house = (body.get("house") or "").strip()
+        text = (body.get("text") or body.get("suggestion") or "").strip()
+        if not name or not house or not text:
+            return jsonify({"ok": False, "error": "Name, house, and suggestion are required"}), 400
+        suggestion = rwa_campaigns.public_create_suggestion(
+            conn, campaign_id=campaign_id, house_id=house, contributor_name=name, text=text,
+        )
+        return jsonify({"ok": True, "suggestion": suggestion})
     finally:
         conn.close()
 
@@ -6812,7 +7178,8 @@ def api_rwa_campaign_item(campaign_id: str):
                 as_admin=is_admin,
                 viewer_house=viewer_house,
             )
-            return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions})
+            suggestions = rwa_campaigns.list_suggestions(conn, campaign_id)
+            return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions, "suggestions": suggestions})
 
         if not is_admin:
             return jsonify({"ok": False, "error": "Admin access required"}), 403
@@ -6930,6 +7297,54 @@ def api_rwa_campaign_pledge_delete(campaign_id: str, pledge_id: str):
         campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
         pledges = rwa_campaigns.list_pledges(conn, campaign_id)
         return jsonify({"ok": True, "campaign": campaign, "pledges": pledges})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/suggestions", methods=["GET", "POST"])
+def api_rwa_campaign_suggestions(campaign_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_works")
+
+        if request.method == "GET":
+            suggestions = rwa_campaigns.list_suggestions(conn, campaign_id)
+            return jsonify({"ok": True, "suggestions": suggestions})
+
+        payload = request.get_json(force=True, silent=True) or {}
+        suggestion = rwa_campaigns.create_suggestion(
+            conn,
+            campaign_id=campaign_id,
+            payload=payload,
+            actor=sess["resident"],
+        )
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=is_admin, signed_in=True)
+        suggestions = rwa_campaigns.list_suggestions(conn, campaign_id)
+        return jsonify({"ok": True, "suggestion": suggestion, "campaign": campaign, "suggestions": suggestions})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/suggestions/<suggestion_id>", methods=["DELETE"])
+def api_rwa_campaign_suggestion_delete(campaign_id: str, suggestion_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_works"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        rwa_campaigns.delete_suggestion(conn, campaign_id=campaign_id, suggestion_id=suggestion_id)
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
+        suggestions = rwa_campaigns.list_suggestions(conn, campaign_id)
+        return jsonify({"ok": True, "campaign": campaign, "suggestions": suggestions})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

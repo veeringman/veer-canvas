@@ -20,8 +20,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260811campaigns2">
-  <script src="portal.js?v=20260811campaigns3" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260811mom1">
+  <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260811mom1">
+  <script src="auth.js?v=20260812auth1" defer></script>
+  <script src="portal.js?v=20260812auth1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -155,6 +157,13 @@
           <button type="submit" class="btn primary" id="verifyOtpBtn">Verify &amp; enter</button>
           <button type="button" class="btn ghost" id="restartLoginBtn">Use a different plot</button>
         </form>
+
+        <div id="authbuddyGatePane" class="stack" hidden>
+          <hr class="gate-sep" style="border:0;border-top:1px solid #d5dee8;margin:0.5rem 0 0.25rem">
+          <p class="muted" id="authbuddyGateHint">Optional: AuthBuddy (BuddyAuthenticator) — one factor is enough (password, TOTP, or passkey).</p>
+          <button type="button" class="btn primary" id="authbuddyContinueBtn" hidden>Continue with AuthBuddy</button>
+          <button type="button" class="btn ghost" id="authbuddySignInBtn" hidden>Sign in with AuthBuddy</button>
+        </div>
       </div>
 
       <div id="adminLoginPane" hidden>
@@ -1040,6 +1049,7 @@
               <div class="campaign-detail-actions">
                 <button type="button" class="btn primary compact" id="campaignPledgeBtn" hidden>Make a pledge</button>
                 <button type="button" class="btn secondary compact" id="campaignContributeBtn" hidden>Contribute funds</button>
+                <button type="button" class="btn ghost compact" id="campaignSuggestBtn" hidden>Add suggestion</button>
                 <button type="button" class="btn ghost compact" id="campaignShareBtn" title="Copy shareable link">Share link</button>
                 <button type="button" class="btn ghost compact admin-only" id="campaignEditBtn" data-entitlement="manage_works" hidden>Edit drive</button>
                 <button type="button" class="btn ghost compact admin-only" id="campaignDeleteBtn" data-entitlement="manage_works" hidden>Delete</button>
@@ -1053,6 +1063,10 @@
             <div id="campaignContributionsBlock" class="campaign-participants-block" hidden>
               <h3>Contributions</h3>
               <div id="campaignContributionsList" class="campaign-participants-list"></div>
+            </div>
+            <div id="campaignSuggestionsBlock" class="campaign-participants-block" hidden>
+              <h3>Suggestions</h3>
+              <div id="campaignSuggestionsList" class="campaign-participants-list"></div>
             </div>
           </div>
 
@@ -1195,6 +1209,32 @@
                 <button type="button" class="btn ghost" id="campaignContributeCancelBtn">Cancel</button>
               </div>
               <p class="muted" id="campaignContributeStatus"></p>
+            </form>
+          </dialog>
+
+          <dialog id="campaignSuggestDialog" class="campaign-contribute-dialog">
+            <form id="campaignSuggestForm" method="dialog" class="stack">
+              <header class="dialog-head">
+                <h3 id="campaignSuggestTitle">Add a suggestion</h3>
+                <button type="button" class="btn ghost compact dialog-close" id="campaignSuggestCloseBtn" aria-label="Close">✕</button>
+              </header>
+              <p class="muted" id="campaignSuggestLead">Share an idea for this drive — location, species, timing, volunteers, etc.</p>
+              <div class="settings-grid">
+                <label class="span-2">Your name
+                  <input id="campaignSuggestName" maxlength="120" required placeholder="Full name">
+                </label>
+                <label>House / plot no.
+                  <input id="campaignSuggestHouse" maxlength="40" required placeholder="e.g. A-12">
+                </label>
+                <label class="span-2">Suggestion
+                  <textarea id="campaignSuggestText" rows="4" maxlength="1000" required placeholder="Your suggestion for the drive…"></textarea>
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="campaignSuggestSubmitBtn">Submit suggestion</button>
+                <button type="button" class="btn ghost" id="campaignSuggestCancelBtn">Cancel</button>
+              </div>
+              <p class="muted" id="campaignSuggestStatus"></p>
             </form>
           </dialog>
         </div><!-- /worksTabCampaigns -->

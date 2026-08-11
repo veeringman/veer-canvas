@@ -20,11 +20,66 @@
   }
 
   function continueToReturn() {
-    window.location.replace(returnTo());
+    const purpose = params().get('purpose') || '';
+    const houseId = params().get('houseId') || params().get('house_id') || '';
+    const memberId = params().get('memberId') || params().get('member_id') || '';
+    const sid = (window.VeerAuth && window.VeerAuth.savedSessionId()) || '';
+    const dest = returnTo();
+
+    // Bridge AuthBuddy → RWA session when returning to the portal with plot context.
+    if (sid && houseId && (purpose === 'login' || purpose === 'bridge')) {
+      fetch('/api/rwa/authbuddy/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          houseId: houseId,
+          memberId: memberId || undefined,
+          authbuddySessionId: sid,
+        }),
+      })
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          if (ok && d && d.token) {
+            window.location.replace(dest.indexOf('index.html') >= 0 ? 'index.html#home' : dest);
+            return;
+          }
+          setStatus((d && d.error) || 'AuthBuddy signed in — finish with email passcode if not linked yet.');
+          setTimeout(() => { window.location.replace(dest); }, 900);
+        })
+        .catch(() => { window.location.replace(dest); });
+      return;
+    }
+
+    if (sid && purpose === 'link') {
+      fetch('/api/rwa/authbuddy/link', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          authbuddySessionId: sid,
+          memberId: memberId || undefined,
+        }),
+      })
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          if (ok) {
+            setStatus('AuthBuddy linked. Returning…');
+            setTimeout(() => { window.location.replace(dest); }, 500);
+            return;
+          }
+          setError((d && d.error) || 'Could not link AuthBuddy');
+          setTimeout(() => { window.location.replace(dest); }, 1200);
+        })
+        .catch(() => { window.location.replace(dest); });
+      return;
+    }
+
+    window.location.replace(dest);
   }
 
   function clientId() {
-    return (window.VeerAuth && window.VeerAuth.config() || {}).clientId || 'veerlabs-web';
+    return (window.VeerAuth && window.VeerAuth.config() || {}).clientId || 'hbcsanyard-web';
   }
 
   function setError(msg) {

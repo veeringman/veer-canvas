@@ -1,0 +1,280 @@
+/* Shared MOM register print styles — matches proceedings-*-mom-pad.html */
+@page { size: A4 portrait; margin: 6mm; }
+* { box-sizing: border-box; }
+:root {
+  --navy: #0b2a56;
+  --navy-2: #143a6e;
+  --green: #1a6b3a;
+  --gold: #c9a227;
+  --ink: #12233f;
+  --muted: #5a6a80;
+  --paper: #ffffff;
+  --line: rgba(11, 42, 86, 0.22);
+}
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #cfd8e6;
+  font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+.mom-print-root { max-width: 210mm; margin: 0 auto; }
+.sheet {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  height: 297mm;
+  margin: 0 auto 16px;
+  padding: 0;
+  background: var(--paper);
+  border: 1pt solid rgba(11, 42, 86, 0.55);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.accent-edge {
+  display: grid;
+  grid-template-columns: 1fr 7mm 1fr;
+  height: 2.4mm;
+  flex: 0 0 auto;
+}
+.accent-edge .n { background: var(--navy); }
+.accent-edge .g { background: var(--gold); }
+.accent-edge .e { background: var(--green); }
+.accent-edge-thin {
+  height: 0.35mm;
+  background: rgba(11, 42, 86, 0.12);
+  flex: 0 0 auto;
+}
+.wm {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  width: min(112mm, 70%);
+  max-height: 46%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 0;
+}
+.pad {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4mm 11mm 0;
+  min-height: 0;
+}
+.brand {
+  display: grid;
+  grid-template-columns: 20mm 1fr auto;
+  gap: 4mm;
+  align-items: center;
+  padding: 0 0 2mm;
+}
+.brand .logo { width: 20mm; height: auto; display: block; }
+.brand h1 {
+  margin: 0;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--navy);
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.brand .colony {
+  margin: 0.6mm 0 0;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--navy-2);
+}
+.brand .addr {
+  margin: 0.6mm 0 0;
+  font-size: 7.8pt;
+  font-weight: 600;
+  color: var(--green);
+}
+.reg-box {
+  border: 1pt solid rgba(11, 42, 86, 0.4);
+  padding: 1.8mm 2.4mm;
+  min-width: 36mm;
+  font-size: 8pt;
+}
+.reg-box strong {
+  display: block;
+  font-size: 6.6pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.reg-box .line {
+  border-bottom: 1px solid rgba(11, 42, 86, 0.35);
+  min-height: 4.5mm;
+  margin-top: 0.8mm;
+  font-weight: 600;
+  color: var(--navy);
+  padding-top: 0.3mm;
+}
+.page-tag {
+  position: absolute;
+  top: 5mm;
+  right: 12mm;
+  z-index: 2;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.banner {
+  text-align: center;
+  background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+  color: #f7f3ea;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 2.2mm 3mm;
+  margin: 1.5mm 0 3mm;
+}
+.banner .sep { color: var(--gold); margin: 0 1.2mm; letter-spacing: 0; }
+.meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2mm 4mm;
+  font-size: 8.8pt;
+  margin-bottom: 2.5mm;
+}
+.field label {
+  display: block;
+  font-size: 6.8pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 0.4mm;
+}
+.field .ruled {
+  border-bottom: 1px solid rgba(11, 42, 86, 0.35);
+  min-height: 5.5mm;
+  padding: 0.5mm 0;
+  line-height: 1.35;
+}
+.field.span-2 { grid-column: 1 / -1; }
+.section { margin: 2.2mm 0; }
+.section h2 {
+  margin: 0 0 1.2mm;
+  font-size: 7.6pt;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--navy);
+  border-bottom: 1pt solid rgba(11, 42, 86, 0.35);
+  padding-bottom: 0.8mm;
+}
+.ruled-block {
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 6.6mm,
+    var(--line) 6.6mm,
+    var(--line) 6.8mm
+  );
+  border-left: 2px solid rgba(11, 42, 86, 0.28);
+  padding: 1mm 2mm;
+  font-size: 8.8pt;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.ruled-block.sm { min-height: 20mm; }
+.ruled-block.md { min-height: 32mm; }
+.ruled-block.lg { min-height: 48mm; }
+.ruled-block.xl { min-height: 78mm; }
+.ruled-block.xxl { min-height: 165mm; flex: 1; }
+.grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.grow .ruled-block.xxl { flex: 1; min-height: 140mm; }
+table.res-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.4pt;
+  margin-top: 1.5mm;
+}
+table.res-table th, table.res-table td {
+  border: 1px solid rgba(11, 42, 86, 0.28);
+  padding: 1.4mm 2mm;
+  vertical-align: top;
+}
+table.res-table th {
+  background: rgba(11, 42, 86, 0.92);
+  color: #f7f3ea;
+  font-size: 7.2pt;
+  text-align: center;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sign-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8mm;
+  margin-top: 6mm;
+  font-size: 8.4pt;
+}
+.sign-row .sig {
+  border-top: 1pt solid rgba(11, 42, 86, 0.45);
+  padding-top: 1.4mm;
+  text-align: center;
+  color: var(--navy);
+  font-weight: 600;
+}
+.foot-bar {
+  margin: auto -11mm 0;
+  background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+  color: #f7f3ea;
+  text-align: center;
+  padding: 1.8mm 8mm;
+  font-size: 7.4pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.foot-bar .sep { color: var(--gold); margin: 0 1.2mm; letter-spacing: 0; }
+.cont-note {
+  font-size: 7.4pt;
+  color: var(--muted);
+  font-style: italic;
+  margin: 1mm 0 0;
+  text-align: right;
+}
+@media print {
+  html, body {
+    background: #fff !important;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
+  }
+  .sheet {
+    margin: 0;
+    border: 0;
+    background: #fff !important;
+    box-shadow: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible;
+    page-break-after: always;
+    break-after: page;
+  }
+  .sheet:last-of-type {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .wm { opacity: 0.7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pad, .section, .grow { background: transparent !important; }
+  table.res-table th {
+    background: #e8eef6 !important;
+    color: var(--navy) !important;
+  }
+  .accent-edge, .foot-bar, .banner, table.res-table th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

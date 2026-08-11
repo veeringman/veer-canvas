@@ -152,6 +152,8 @@ def public_member(m: dict | sqlite3.Row | None, *, include_contacts: bool = True
         out["emailMasked"] = mask_email(data.get("email"))
         out["hasEmail"] = bool(str(data.get("email") or "").strip())
         out["hasPhone"] = bool(str(data.get("phone") or "").strip())
+    out["authbuddyLinked"] = bool(str(data.get("authbuddy_user_id") or "").strip())
+    out["authbuddyUsername"] = (data.get("authbuddy_username") or "").strip() or None
     photo = (data.get("photo_filename") or data.get("photoFilename") or "").strip()
     out["hasPhoto"] = bool(photo)
     out["photoFilename"] = photo or None
@@ -726,6 +728,89 @@ def apply_member_contacts(
         sync_primary_to_resident(conn, member["house_id"])
     conn.commit()
     return get_member(conn, member_id) or member
+
+
+def link_authbuddy(
+    conn: sqlite3.Connection,
+    member_id: str,
+    *,
+    user_id: str,
+    username: str | None = None,
+) -> dict:
+    """Attach an AuthBuddy user id to a household member (same email may already exist)."""
+    ensure_household_members_table(conn)
+    member = get_member(conn, member_id)
+    if not member:
+        raise ValueError("Member not found")
+    uid = (user_id or "").strip()
+    if not uid:
+        raise ValueError("AuthBuddy user id required")
+    uname = (username or "").strip() or None
+    now = utc_now()
+    conn.execute(
+        """
+        UPDATE household_members
+        SET authbuddy_user_id = ?, authbuddy_username = ?, authbuddy_linked_at = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (uid, uname, now, now, member_id),
+    )
+    conn.commit()
+    return get_member(conn, member_id) or member
+
+
+def unlink_authbuddy(conn: sqlite3.Connection, member_id: str) -> dict:
+    ensure_household_members_table(conn)
+    member = get_member(conn, member_id)
+    if not member:
+        raise ValueError("Member not found")
+    now = utc_now()
+    conn.execute(
+        """
+        UPDATE household_members
+        SET authbuddy_user_id = NULL, authbuddy_username = NULL, authbuddy_linked_at = NULL, updated_at = ?
+        WHERE id = ?
+        """,
+        (now, member_id),
+    )
+    conn.commit()
+    return get_member(conn, member_id) or member
+
+
+def find_member_by_authbuddy_user(conn: sqlite3.Connection, user_id: str) -> dict | None:
+    ensure_household_members_table(conn)
+    uid = (user_id or "").strip()
+    if not uid:
+        return None
+    row = conn.execute(
+        """
+        SELECT * FROM household_members
+        WHERE authbuddy_user_id = ? AND status = 'active'
+        ORDER BY is_primary DESC, updated_at DESC
+        LIMIT 1
+        """,
+        (uid,),
+    ).fetchone()
+    return _row_dict(row) if row else None
+
+
+def find_member_by_email_on_plot(
+    conn: sqlite3.Connection, house_id: str, email: str
+) -> dict | None:
+    ensure_household_members_table(conn)
+    hid = (house_id or "").strip()
+    em = (email or "").strip().lower()
+    if not hid or not em:
+        return None
+    row = conn.execute(
+        """
+        SELECT * FROM household_members
+        WHERE house_id = ? AND lower(trim(email)) = ? AND status = 'active'
+        LIMIT 1
+        """,
+        (hid, em),
+    ).fetchone()
+    return _row_dict(row) if row else None
 
 
 def prepare_member_pending_contacts(

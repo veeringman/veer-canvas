@@ -198,6 +198,14 @@ def _pledger_count(conn: sqlite3.Connection, campaign_id: str) -> int:
     return int(row["n"] or 0)
 
 
+def _suggestion_count(conn: sqlite3.Connection, campaign_id: str) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM campaign_suggestions WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    return int(row["n"] or 0)
+
+
 def _pending_count(conn: sqlite3.Connection, campaign_id: str) -> int:
     row = conn.execute(
         """
@@ -250,6 +258,7 @@ def _campaign_public(conn: sqlite3.Connection, row: sqlite3.Row | dict, *, inclu
     pledged = _pledged_for_campaign(conn, cid)
     contributors = _contributor_count(conn, cid)
     pledgers = _pledger_count(conn, cid)
+    suggestions = _suggestion_count(conn, cid)
     pending = _pending_count(conn, cid) if include_admin else 0
     progress_pct = None
     if target and int(target) > 0:
@@ -282,6 +291,7 @@ def _campaign_public(conn: sqlite3.Connection, row: sqlite3.Row | dict, *, inclu
         "pledgedAmount": pledged,
         "contributorCount": contributors,
         "pledgerCount": pledgers,
+        "suggestionCount": suggestions,
         "progressPercent": progress_pct,
         "deadline": data.get("deadline") or "",
         "eventDate": data.get("event_date") or "",
@@ -294,6 +304,7 @@ def _campaign_public(conn: sqlite3.Connection, row: sqlite3.Row | dict, *, inclu
         "updatedAt": data.get("updated_at"),
         "canPledge": active and mode in {"pledge", "both"},
         "canContribute": active and mode in {"funding", "both"},
+        "canSuggest": active,
     }
     if include_admin:
         out["pendingContributions"] = pending
@@ -1072,3 +1083,122 @@ def public_create_contribution(
     )
     conn.commit()
     return {"id": cid, "contributorName": contributor_name, "amount": amount, "houseId": house_id}
+
+
+def _suggestion_public(row: sqlite3.Row | dict) -> dict:
+    if hasattr(row, "keys"):
+        data = {k: row[k] for k in row.keys()}
+    else:
+        data = dict(row)
+    return {
+        "id": data.get("id") or "",
+        "contributorName": data.get("contributor_name") or "",
+        "houseId": data.get("house_id") or "",
+        "text": data.get("text") or "",
+        "createdAt": data.get("created_at"),
+    }
+
+
+def list_suggestions(conn: sqlite3.Connection, campaign_id: str) -> list[dict]:
+    ensure_colony_campaigns_tables(conn)
+    rows = conn.execute(
+        """
+        SELECT * FROM campaign_suggestions
+        WHERE campaign_id = ?
+        ORDER BY created_at DESC
+        """,
+        (campaign_id,),
+    ).fetchall()
+    return [_suggestion_public(r) for r in rows]
+
+
+def public_create_suggestion(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: str,
+    house_id: str,
+    contributor_name: str,
+    text: str,
+) -> dict:
+    ensure_colony_campaigns_tables(conn)
+    body = str(text or "").strip()[:1000]
+    if not body:
+        raise ValueError("Suggestion text is required")
+    sid = f"cs_{secrets.token_hex(8)}"
+    now = utc_now()
+    conn.execute(
+        """INSERT INTO campaign_suggestions(
+            id, campaign_id, house_id, member_id, contributor_name, text, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?)""",
+        (sid, campaign_id, house_id, None, contributor_name, body, now, now),
+    )
+    conn.commit()
+    return {"id": sid, "contributorName": contributor_name, "houseId": house_id, "text": body}
+
+
+def create_suggestion(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: str,
+    payload: dict,
+    actor: dict,
+) -> dict:
+    ensure_colony_campaigns_tables(conn)
+    campaign = get_campaign(conn, campaign_id, as_admin=False, signed_in=True)
+    if not campaign:
+        raise ValueError("Campaign not found")
+    if not campaign.get("canSuggest"):
+        raise ValueError("This campaign is not accepting suggestions")
+    house_id = str(
+        payload.get("houseId") or payload.get("house_id") or payload.get("house")
+        or actor.get("houseId") or actor.get("house_id") or ""
+    ).strip()
+    if not house_id:
+        raise ValueError("House / plot number is required")
+    contributor_name = str(
+        payload.get("contributorName") or payload.get("contributor_name") or payload.get("name") or ""
+    ).strip()[:120]
+    if not contributor_name:
+        contributor_name = str(actor.get("name") or "").strip()
+    if not contributor_name:
+        raise ValueError("Name is required")
+    text = str(payload.get("text") or payload.get("suggestion") or "").strip()[:1000]
+    if not text:
+        raise ValueError("Suggestion text is required")
+    sid = f"cs_{secrets.token_hex(8)}"
+    now = utc_now()
+    conn.execute(
+        """INSERT INTO campaign_suggestions(
+            id, campaign_id, house_id, member_id, contributor_name, text, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?)""",
+        (
+            sid,
+            campaign_id,
+            house_id,
+            str(actor.get("memberId") or actor.get("member_id") or "") or None,
+            contributor_name,
+            text,
+            now,
+            now,
+        ),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM campaign_suggestions WHERE id = ?", (sid,)).fetchone()
+    return _suggestion_public(row)
+
+
+def delete_suggestion(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: str,
+    suggestion_id: str,
+) -> None:
+    ensure_colony_campaigns_tables(conn)
+    row = conn.execute(
+        "SELECT id FROM campaign_suggestions WHERE id = ? AND campaign_id = ?",
+        (suggestion_id, campaign_id),
+    ).fetchone()
+    if not row:
+        raise ValueError("Suggestion not found")
+    conn.execute("DELETE FROM campaign_suggestions WHERE id = ?", (suggestion_id,))
+    conn.commit()

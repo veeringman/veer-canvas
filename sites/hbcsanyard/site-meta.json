@@ -21,8 +21,12 @@
   "auth": {
     "agentBaseUrl": "",
     "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
-    "clientId": "veerlabs-web",
-    "gateAllLearnMore": true
+    "clientId": "hbcsanyard-web",
+    "gateAllLearnMore": false,
+    "futureOrigins": [
+      "https://housingcolonysanyard.in",
+      "https://www.housingcolonysanyard.in"
+    ]
   },
   "logoPdf": "assets/mhws-logo/mhws-logo-pdf.png"
 }

@@ -1,13 +1,13 @@
 /**
- * VeerLabs ↔ AuthBuddy Agent auth helper.
+ * HBC Sanyard ↔ AuthBuddy Agent auth helper.
  * Session checked via cookie + Bearer session UUID against /agent/v1/session.
  */
 (function (global) {
   const DEFAULTS = {
     agentBaseUrl: '',
     idpPublicUrl: 'https://authbuddy.veerlabs.solutions',
-    clientId: 'veerlabs-web',
-    gateAllLearnMore: true,
+    clientId: 'hbcsanyard-web',
+    gateAllLearnMore: false,
   };
 
   let config = Object.assign({}, DEFAULTS);
@@ -20,7 +20,7 @@
       agentBaseUrl: auth.agentBaseUrl != null ? auth.agentBaseUrl : DEFAULTS.agentBaseUrl,
       idpPublicUrl: auth.idpPublicUrl || auth.idpBaseUrl || DEFAULTS.idpPublicUrl,
       clientId: auth.clientId || DEFAULTS.clientId,
-      gateAllLearnMore: auth.gateAllLearnMore !== false,
+      gateAllLearnMore: auth.gateAllLearnMore === true,
     });
   }
 
@@ -33,7 +33,7 @@
     return String(config.idpPublicUrl || '').replace(/\/$/, '') + path;
   }
 
-  const SESSION_KEY = 'veerlabs_authbuddy_session';
+  const SESSION_KEY = 'hbcsanyard_authbuddy_session';
 
   function savedSessionId() {
     try { return localStorage.getItem(SESSION_KEY) || ''; } catch (_e) { return ''; }
@@ -66,7 +66,8 @@
 
   async function getPolicy() {
     if (policyCache) return policyCache;
-    policyCache = await fetchJson('/agent/v1/policy');
+    const q = config.clientId ? ('?client_id=' + encodeURIComponent(config.clientId)) : '';
+    policyCache = await fetchJson('/agent/v1/policy' + q);
     return policyCache;
   }
 
@@ -296,37 +297,13 @@
   document.addEventListener('DOMContentLoaded', () => {
     const apply = (meta) => {
       loadConfigFromMeta(meta || {});
-      mountTopbarAuth();
+      if (document.querySelector('.site-topbar, .topbar-auth')) {
+        mountTopbarAuth();
+      }
     };
     fetch('site-meta.json')
       .then((r) => r.json())
       .then(apply)
       .catch(() => apply({}));
-
-    // Capture-phase gate so Learn more never bypasses AuthBuddy even if
-    // engagement.js bindLearnMoreGates did not attach.
-    document.addEventListener('click', async (event) => {
-      const link = event.target && event.target.closest
-        ? event.target.closest('a.learn-more-btn, a.is-gated[data-require-auth="1"]')
-        : null;
-      if (!link) return;
-      if (!projectRequiresAuth(null)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
-      const href = link.getAttribute('href') || '';
-      if (!href || href === '#') return;
-      const match = href.match(/[?&]project=([^&]+)/);
-      const slug = match ? decodeURIComponent(match[1]) : '';
-      let dest;
-      try {
-        dest = new URL(href, global.location.href).href;
-      } catch (_e) {
-        dest = href;
-      }
-      // Must pass the project URL — not the catalog page the click came from.
-      const ok = await ensureProjectAccess(slug, { requireAuth: true }, dest);
-      if (ok) global.location.href = dest;
-    }, true);
   });
 })(window);

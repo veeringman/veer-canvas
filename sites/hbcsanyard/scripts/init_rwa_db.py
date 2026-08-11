@@ -929,6 +929,20 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE household_members ADD COLUMN is_primary_delegate INTEGER NOT NULL DEFAULT 0"
         )
+    member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
+    # AuthBuddy link (optional alternate factor after email OTP)
+    if "authbuddy_user_id" not in member_cols:
+        conn.execute("ALTER TABLE household_members ADD COLUMN authbuddy_user_id TEXT")
+    if "authbuddy_username" not in member_cols:
+        conn.execute("ALTER TABLE household_members ADD COLUMN authbuddy_username TEXT")
+    if "authbuddy_linked_at" not in member_cols:
+        conn.execute("ALTER TABLE household_members ADD COLUMN authbuddy_linked_at TEXT")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_household_members_authbuddy
+          ON household_members(authbuddy_user_id)
+        """
+    )
     # At most one primary delegate per plot (active).
     conn.execute(
         """
@@ -1622,6 +1636,19 @@ def ensure_colony_campaigns_tables(conn: sqlite3.Connection) -> None:
           ON campaign_contributions(campaign_id, status, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_campaign_contributions_house
           ON campaign_contributions(house_id, campaign_id);
+        CREATE TABLE IF NOT EXISTS campaign_suggestions (
+          id TEXT PRIMARY KEY,
+          campaign_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          member_id TEXT,
+          contributor_name TEXT NOT NULL,
+          text TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (campaign_id) REFERENCES colony_campaigns(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_campaign_suggestions_campaign
+          ON campaign_suggestions(campaign_id, created_at DESC);
         """
     )
     cols = {row[1] for row in conn.execute("PRAGMA table_info(colony_campaigns)").fetchall()}

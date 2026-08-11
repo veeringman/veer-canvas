@@ -2443,7 +2443,27 @@ body.is-view-only #grievanceForm {
   color: var(--muted);
   font-style: italic;
 }
-.proceedings-detail { margin-top: 0.5rem; }
+.proceedings-detail .proceedings-page {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+#proceedingsDetailBody .mom-print-root {
+  max-width: 100%;
+}
+#proceedingsDetailBody .sheet {
+  max-width: 100%;
+  height: auto;
+  min-height: 280mm;
+}
+@media (max-width: 900px) {
+  #proceedingsDetailBody .sheet {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+  }
+}
 .proceedings-detail-head {
   display: flex;
   flex-wrap: wrap;

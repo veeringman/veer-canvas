@@ -1108,6 +1108,8 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         "entitlements": [],
         "hasPhoto": False,
         "photoUrl": "",
+        "authbuddyLinked": False,
+        "authbuddyUsername": None,
     }
     if member and not super_admin:
         pub = household.public_member(member, include_contacts=True)
@@ -1125,6 +1127,8 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         out["viewOnly"] = bool(pub.get("viewOnly"))
         out["hasPhoto"] = bool(pub.get("hasPhoto"))
         out["photoUrl"] = pub.get("photoUrl") or ""
+        out["authbuddyLinked"] = bool(pub.get("authbuddyLinked"))
+        out["authbuddyUsername"] = pub.get("authbuddyUsername")
         plot_is_ec = is_mem
         out["plotIsEc"] = plot_is_ec
         mid = str(out["memberId"] or "").strip()
@@ -5007,14 +5011,7 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
         or meta.get("title")
         or "Himuda Housing Colony Sanyard"
     ).strip()
-    hour = datetime.now(timezone.utc).astimezone().hour
-    if hour < 12:
-        hello = "Good morning"
-    elif hour < 17:
-        hello = "Good afternoon"
-    else:
-        hello = "Good evening"
-    greeting = f"{hello}. Welcome to {society}."
+    greeting = f"Welcome to {society}."
 
     notices = list_notices(conn, status="published", viewer=None)
     updates = []

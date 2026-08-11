@@ -1,0 +1,43 @@
+---
+description: Never overwrite live hbcsanyard data or runtime config on deploy/sync
+globs: deploy/**/*,sites/hbcsanyard/**/*,docs/DEPLOY.md
+alwaysApply: false
+---
+
+# HBC Sanyard — preserve live data & config
+
+Production web root: `/var/www/hbcsanyard.veerlabs.solutions`
+
+## Never overwrite on the live site
+
+- Entire `data/` tree (`rwa.db`, receipts, vault, info-centre, messages, smtp/vapid/ai env, …)
+- `share/` (Info Centre OG cards)
+- CMS brand uploads: `assets/site/`
+- Live catalog unless explicitly overriding: `projects.json`, `projects-public.json`, `catalog-exclusions.json`
+- Runtime secrets: `data/smtp.env`, `data/vapid.env`, `data/ai.env`, `/etc/veercanvas/hbcsanyard.env`
+- Do not push laptop `site.config.json` over the server (deploy already excludes it)
+
+## Required deploy posture
+
+```bash
+# Safe (default): pulls live site-meta/catalog first, protects data/
+SITE_ID=hbcsanyard EC2_KEY=… ./deploy/remote-deploy.sh
+
+# ❌ Do not use unless the user explicitly asks
+OVERRIDE_CATALOG=1 …
+```
+
+- Prefer `remote-deploy.sh` over ad-hoc `rsync --delete` to the web root.
+- For AuthBuddy: merge only `auth.*` from local `site.config.json` into pulled live `site-meta.json` — never replace branding/CMS keys from a stale laptop copy.
+- Seed/migrate DB columns in place (`init_rwa_db` / app boot); never replace `data/rwa.db` with a local file.
+
+## Repo sync (veer-canvas ↔ hbcsanyard git)
+
+When copying `sites/hbcsanyard/` into the standalone `hbcsanyard` repo (or the reverse):
+
+```bash
+# Always exclude runtime data / secrets
+rsync -a --exclude 'data/' --exclude 'venv/' --exclude '.git' …
+```
+
+Never commit production `data/`, `*.env` (non-example), or SQLite DBs.
