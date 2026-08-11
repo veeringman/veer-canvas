@@ -1990,6 +1990,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (grievanceForm) grievanceForm.hidden = isViewOnly(r);
     loadHouseholdMembers().catch(() => {});
     refreshMsgThreads().catch(() => {});
+    refreshProfileAuthbuddyCard().catch(() => {});
   }
 
   function activePanelName() {
@@ -7548,7 +7549,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (name === 'messages') loadMessagesPanel().catch((e) => {
       if (el('msgThreadList')) el('msgThreadList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
-    if (name === 'profile') refreshPushUi().catch(() => {});
+    if (name === 'profile') {
+      refreshPushUi().catch(() => {});
+      refreshProfileAuthbuddyCard().catch(() => {});
+    }
     if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr class="is-empty-row"><td colspan="5">${escapeHtml(e.message)}</td></tr>`; });
     if (name === 'info') loadInfoCentre().catch((e) => {
       if (el('infoDocList')) el('infoDocList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
@@ -7716,8 +7720,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const hint = el('authbuddyGateHint');
       if (hint) {
         hint.textContent = st.linked
-          ? 'This member is linked to AuthBuddy — one factor (password, TOTP, or passkey) is enough.'
-          : 'Optional: link AuthBuddy after email passcode for faster sign-in (single factor).';
+          ? 'Linked to AuthBuddy — password, passkey, TOTP, or QR approve (one factor). BuddyAuthenticator preferred; iOS may use Google/Microsoft Authenticator for TOTP only.'
+          : 'Link AuthBuddy after email passcode. BuddyAuthenticator preferred; on iOS Google/Microsoft Authenticator works for TOTP codes only. OTP still works.';
       }
     } catch (_e) {
       pane.hidden = true;
@@ -7737,31 +7741,171 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return auth.href;
   }
 
-  function offerAuthbuddyLinkBanner() {
-    if (!state.session?.resident || state.session.resident.authbuddyLinked) return;
-    if (document.getElementById('authbuddyLinkBanner')) return;
-    const host = el('noticeList') || el('panel-home') || el('appView');
-    if (!host) return;
-    const ban = document.createElement('div');
-    ban.id = 'authbuddyLinkBanner';
-    ban.className = 'card';
-    ban.style.cssText = 'margin:0.75rem 0;padding:0.85rem 1rem;border:1px solid #b7ddd9;background:#f3fbfa;border-radius:12px';
-    ban.innerHTML = `
-      <p style="margin:0 0 0.5rem"><strong>Add AuthBuddy?</strong>
-        Optional single-factor sign-in next time (password, TOTP, or passkey) via BuddyAuthenticator.
-        Skip anytime — email passcode still works.</p>
-      <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap">
-        <button type="button" class="btn primary compact" id="authbuddyLinkNowBtn">Link AuthBuddy</button>
-        <button type="button" class="btn ghost compact" id="authbuddyLinkDismissBtn">Not now</button>
-      </p>`;
-    host.prepend(ban);
-    el('authbuddyLinkDismissBtn')?.addEventListener('click', () => ban.remove());
+  const AUTHBUDDY_LINK_DISMISS_KEY = 'hbcsanyard_authbuddy_link_dismissed';
+
+  function authbuddyLinkDismissed() {
+    try { return sessionStorage.getItem(AUTHBUDDY_LINK_DISMISS_KEY) === '1'; } catch (_e) { return false; }
+  }
+
+  function setAuthbuddyLinkDismissed() {
+    try { sessionStorage.setItem(AUTHBUDDY_LINK_DISMISS_KEY, '1'); } catch (_e) { /* ignore */ }
+  }
+
+  function clearAuthbuddyLinkDismissed() {
+    try { sessionStorage.removeItem(AUTHBUDDY_LINK_DISMISS_KEY); } catch (_e) { /* ignore */ }
+  }
+
+  /** Modal (not noticeList) so loadHome() innerHTML cannot wipe the prompt. */
+  async function offerAuthbuddyLinkBanner(opts = {}) {
+    const force = Boolean(opts.force);
+    const r = state.session?.resident;
+    if (!r || r.authbuddyLinked || state.authbuddyLinked) return;
+    if (!force && authbuddyLinkDismissed()) return;
+    if (document.getElementById('authbuddyLinkModal')) return;
+
+    // Confirm IdP is reachable before blocking the UI.
+    try {
+      const q = new URLSearchParams();
+      if (r.houseId) q.set('houseId', r.houseId);
+      if (r.memberId) q.set('memberId', r.memberId);
+      const st = await api('/api/rwa/authbuddy/status?' + q.toString());
+      if (st.linked) {
+        state.authbuddyLinked = true;
+        return;
+      }
+      if (st.reachable === false) return;
+    } catch (_e) {
+      return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'authbuddyLinkModal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'authbuddyLinkTitle');
+    modal.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:10000',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:1.25rem', 'background:rgba(12,28,36,0.45)',
+      'backdrop-filter:blur(2px)',
+    ].join(';');
+    modal.innerHTML = `
+      <div class="card" style="max-width:32rem;width:100%;max-height:min(92vh,40rem);overflow:auto;margin:0;padding:1.25rem 1.35rem;border-radius:14px;border:1px solid #b7ddd9;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.18)">
+        <h2 id="authbuddyLinkTitle" style="margin:0 0 0.4rem;font-size:1.2rem">Link AuthBuddy for faster sign-in</h2>
+        <p style="margin:0 0 0.85rem;line-height:1.45">
+          AuthBuddy is VeerLabs’ secure sign-in service.
+          Linking it to this plot member lets you open the portal <strong>without waiting for an email passcode</strong>
+          when the service is online — while plot + email OTP remains available anytime.
+        </p>
+        <p style="margin:0 0 0.35rem;font-weight:600;color:#1a3a40">Prerequisite — authenticator app</p>
+        <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.95rem">
+          Install <strong>BuddyAuthenticator</strong> on iPhone or Android <em>before</em> (or while) linking
+          for authenticator codes, QR scan, on-phone approve, and Hybrid PQC.
+          Ask your society / VeerLabs admin if you do not have the install link yet.
+        </p>
+        <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.92rem">
+          <strong>iOS alternative (TOTP codes only):</strong> if BuddyAuthenticator is not available yet,
+          you can install <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong>
+          from the App Store and enroll a TOTP account when AuthBuddy shows the QR / secret.
+          That path supports <em>rotating codes only</em> — not QR login approve, passkey helper flows, or Hybrid PQC.
+          Password and passkey can still work in the browser without those apps.
+        </p>
+        <p style="margin:0 0 0.35rem;font-weight:600;color:#1a3a40">What you can use (one method is enough)</p>
+        <ul style="margin:0 0 0.85rem;padding-left:1.15rem;line-height:1.5;font-size:0.95rem">
+          <li><strong>Password</strong> — AuthBuddy account password in the browser.</li>
+          <li><strong>Passkey</strong> — Face ID / fingerprint / device unlock (phishing-resistant).</li>
+          <li><strong>Authenticator codes (TOTP / HOTP)</strong> — rotating codes in BuddyAuthenticator, or on iOS in Google/Microsoft Authenticator (TOTP only).</li>
+          <li><strong>QR / Approve on phone</strong> — scan or approve a login from BuddyAuthenticator.</li>
+          <li><strong>Hybrid PQC</strong> — stronger post-quantum-ready keys for advanced setups (via the app).</li>
+        </ul>
+        <p class="muted" style="margin:0 0 1rem;line-height:1.45;font-size:0.92rem">
+          Already use AuthBuddy on VeerLabs? Sign in with the <strong>same email</strong> — we link this household member; you won’t need a second account.
+          For HBC Sanyard only <strong>one factor</strong> is required right now. Skip anytime; nothing colony-side changes if you choose Not now.
+        </p>
+        <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button type="button" class="btn primary" id="authbuddyLinkNowBtn">I have the app — Link AuthBuddy</button>
+          <button type="button" class="btn ghost" id="authbuddyLinkDismissBtn">Not now</button>
+        </p>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => { modal.remove(); };
+    el('authbuddyLinkDismissBtn')?.addEventListener('click', () => {
+      setAuthbuddyLinkDismissed();
+      close();
+      refreshProfileAuthbuddyCard().catch(() => {});
+    });
     el('authbuddyLinkNowBtn')?.addEventListener('click', () => {
-      const r = state.session.resident;
       state.pendingHouse = r.houseId || '';
       state.pendingMemberId = r.memberId || '';
       window.location.href = authbuddyAuthUrl('link');
     });
+  }
+
+  async function refreshProfileAuthbuddyCard() {
+    const block = el('profileAuthbuddyBlock');
+    const status = el('profileAuthbuddyStatus');
+    const hint = el('profileAuthbuddyHint');
+    const linkBtn = el('profileAuthbuddyLinkBtn');
+    const signBtn = el('profileAuthbuddySignInBtn');
+    const help = el('profileAuthbuddyHelp');
+    if (!block || !status) return;
+
+    const r = state.session?.resident;
+    if (!r || r.superAdmin) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+
+    try {
+      const q = new URLSearchParams();
+      if (r.houseId) q.set('houseId', r.houseId);
+      if (r.memberId) q.set('memberId', r.memberId);
+      const st = await api('/api/rwa/authbuddy/status?' + q.toString());
+      const linked = Boolean(st.linked || r.authbuddyLinked);
+      state.authbuddyLinked = linked;
+      if (r) r.authbuddyLinked = linked;
+
+      if (st.reachable === false) {
+        status.textContent = 'AuthBuddy is temporarily unreachable — use email passcode.';
+        if (linkBtn) linkBtn.hidden = true;
+        if (signBtn) signBtn.hidden = true;
+        if (hint) hint.textContent = 'Instructions stay here for when the service is back online.';
+        if (help) help.open = false;
+        return;
+      }
+
+      if (linked) {
+        const who = st.authbuddyUsername ? ` as ${st.authbuddyUsername}` : '';
+        status.textContent = `Linked to AuthBuddy${who}.`;
+        if (linkBtn) {
+          linkBtn.hidden = false;
+          linkBtn.textContent = 'Re-link / manage AuthBuddy';
+        }
+        if (signBtn) signBtn.hidden = false;
+        if (hint) {
+          hint.textContent = 'On the gate, use Continue with AuthBuddy after entering your plot. Email passcode still works.';
+        }
+        if (help) help.open = false;
+      } else {
+        status.textContent = 'Not linked yet — optional faster sign-in.';
+        if (linkBtn) {
+          linkBtn.hidden = false;
+          linkBtn.textContent = 'Link AuthBuddy';
+        }
+        if (signBtn) signBtn.hidden = true;
+        if (hint) {
+          hint.textContent = 'Install BuddyAuthenticator first (or Google/Microsoft Authenticator on iOS for TOTP only), then tap Link.';
+        }
+        if (help) help.open = true;
+      }
+    } catch (_e) {
+      status.textContent = 'Could not check AuthBuddy status.';
+      if (linkBtn) linkBtn.hidden = false;
+      if (signBtn) signBtn.hidden = true;
+      if (hint) hint.textContent = 'You can still try linking; email passcode remains available.';
+    }
   }
 
   function showMemberPicker(data) {
@@ -7924,6 +8068,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           code: el('otpInput').value.trim(),
         }),
       });
+      clearAuthbuddyLinkDismissed();
       setAuthed(data);
       ensurePanelVisibility('home');
       applyRouteHash();
@@ -7936,7 +8081,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           list.prepend(note);
         }
       }
-      offerAuthbuddyLinkBanner();
+      // Wait a tick so loadHome can paint, then show a modal that survives notice re-renders.
+      setTimeout(() => { offerAuthbuddyLinkBanner({ force: true }); }, 250);
     } catch (err) {
       showError(err.message || 'Invalid code');
     } finally {
@@ -7957,6 +8103,20 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     state.pendingHouse = houseId;
     window.location.href = authbuddyAuthUrl(state.authbuddyLinked ? 'login' : 'login');
+  });
+  el('profileAuthbuddyLinkBtn')?.addEventListener('click', () => {
+    const r = state.session?.resident;
+    if (!r) return;
+    state.pendingHouse = r.houseId || '';
+    state.pendingMemberId = r.memberId || '';
+    window.location.href = authbuddyAuthUrl('link');
+  });
+  el('profileAuthbuddySignInBtn')?.addEventListener('click', () => {
+    const r = state.session?.resident;
+    if (!r) return;
+    state.pendingHouse = r.houseId || '';
+    state.pendingMemberId = r.memberId || '';
+    window.location.href = authbuddyAuthUrl('login');
   });
 
   el('msgThreadList')?.addEventListener('click', (event) => {
@@ -8296,6 +8456,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   el('logoutBtn')?.addEventListener('click', async () => {
     try { await api('/api/rwa/logout', { method: 'POST', body: '{}' }); } catch (_e) { /* ignore */ }
+    clearAuthbuddyLinkDismissed();
+    document.getElementById('authbuddyLinkModal')?.remove();
     setAuthed(null);
     resetLoginForms();
     showLanding();

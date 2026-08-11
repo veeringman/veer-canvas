@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260811mom1">
+  <link rel="stylesheet" href="portal.css?v=20260812auth3">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260811mom1">
   <script src="auth.js?v=20260812auth1" defer></script>
   <script src="portal.js?v=20260812auth1" defer></script>
@@ -160,7 +160,7 @@
 
         <div id="authbuddyGatePane" class="stack" hidden>
           <hr class="gate-sep" style="border:0;border-top:1px solid #d5dee8;margin:0.5rem 0 0.25rem">
-          <p class="muted" id="authbuddyGateHint">Optional: AuthBuddy (BuddyAuthenticator) — one factor is enough (password, TOTP, or passkey).</p>
+          <p class="muted" id="authbuddyGateHint">BuddyAuthenticator preferred (codes, QR, approve). On iOS you may use Google/Microsoft Authenticator for TOTP codes only. Password/passkey work in browser. Email passcode still works.</p>
           <button type="button" class="btn primary" id="authbuddyContinueBtn" hidden>Continue with AuthBuddy</button>
           <button type="button" class="btn ghost" id="authbuddySignInBtn" hidden>Sign in with AuthBuddy</button>
         </div>
@@ -1467,6 +1467,40 @@
           <button type="submit" class="btn primary">Save profile</button>
           <p class="muted" id="profileStatus"></p>
         </form>
+        </div>
+
+        <div class="roster-block profile-authbuddy" id="profileAuthbuddyBlock">
+          <header class="panel-head">
+            <h3>AuthBuddy (optional)</h3>
+            <p class="muted" id="profileAuthbuddyStatus">Checking AuthBuddy…</p>
+          </header>
+          <div class="stack narrow profile-authbuddy-body" id="profileAuthbuddyBody">
+            <p class="profile-authbuddy-lede" id="profileAuthbuddyLede">
+              Link AuthBuddy for faster return visits without waiting for an email passcode.
+              Plot + email OTP still works anytime.
+            </p>
+            <details class="profile-authbuddy-help" id="profileAuthbuddyHelp">
+              <summary>How it works &amp; app setup</summary>
+              <div class="profile-authbuddy-help-body">
+                <p><strong>Prerequisite:</strong> install <strong>BuddyAuthenticator</strong> on iPhone or Android for codes, QR approve, and Hybrid PQC. Ask your society / VeerLabs admin for the install link if needed.</p>
+                <p><strong>iOS alternative (TOTP only):</strong> Google Authenticator or Microsoft Authenticator from the App Store — rotating codes only (not QR approve or Hybrid PQC). Password and passkey still work in the browser.</p>
+                <p class="profile-authbuddy-methods-label">Methods (one is enough for HBC Sanyard)</p>
+                <ul class="profile-authbuddy-methods">
+                  <li>Password</li>
+                  <li>Passkey (Face ID / fingerprint)</li>
+                  <li>Authenticator codes (TOTP / HOTP)</li>
+                  <li>QR / Approve on phone (BuddyAuthenticator)</li>
+                  <li>Hybrid PQC (advanced, via BuddyAuthenticator)</li>
+                </ul>
+                <p>Same email as VeerLabs AuthBuddy links this household member — no second account.</p>
+              </div>
+            </details>
+            <div class="btn-row profile-authbuddy-actions" id="profileAuthbuddyActions">
+              <button type="button" class="btn primary" id="profileAuthbuddyLinkBtn">Link AuthBuddy</button>
+              <button type="button" class="btn ghost" id="profileAuthbuddySignInBtn" hidden>Sign in with AuthBuddy</button>
+            </div>
+            <p class="muted profile-authbuddy-hint" id="profileAuthbuddyHint"></p>
+          </div>
         </div>
 
         <div class="roster-block household-block" id="householdBlock" hidden>

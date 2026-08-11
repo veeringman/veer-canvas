@@ -2,16 +2,16 @@
   "siteName": "Himuda Housing Colony Sanyard",
   "brandName": "Himuda Housing Colony Sanyard",
   "brandTag": "RWA",
-  "eyebrow": "Mandi Housing Welfare Society · RWA · Mandi",
+  "eyebrow": "Mandi Housing Welfare Society \u00b7 RWA \u00b7 Mandi",
   "title": "Himuda Housing Colony Sanyard",
   "subtitle": "Notices, directory, payments, and community updates for Himuda Housing Colony Sanyard.",
   "chipPrimary": "Resident portal",
   "chipSecondary": "Managed By VeerLabs",
   "platform": "VeerLabs",
-  "platformMark": "assets/veerlabs-logo-mark.webp",
   "favicon": "assets/favicon-192.png",
   "brandMark": "assets/mhws-logo/mhws-logo-web-512.png",
-  "logoPrint": "assets/mhws-logo/mhws-logo-pdf.png",
+  "platformMark": "assets/veerlabs-logo-mark.webp",
+  "logoPrint": "assets/mhws-logo/mhws-logo-seal-cert.png",
   "logoWatermark": "assets/mhws-logo/mhws-logo-watermark.png",
   "logoWeb": "assets/mhws-logo/mhws-logo-web-512.png",
   "societyName": "Mandi Housing Welfare Society",
@@ -28,5 +28,5 @@
       "https://www.housingcolonysanyard.in"
     ]
   },
-  "logoPdf": "assets/mhws-logo/mhws-logo-pdf.png"
+  "logoPdf": "assets/mhws-logo/mhws-logo-seal-cert.png"
 }
