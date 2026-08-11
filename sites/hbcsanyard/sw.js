@@ -1,17 +1,19 @@
 /* Himuda Housing Colony Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v102-logofinal1';
+const CACHE = 'hbc-sanyard-v109-land3';
 const PRECACHE = [
   '/',
   '/index.html',
-  '/manifest.webmanifest',
-  '/apple-touch-icon.png',
-  '/portal.css?v=20260810final1',
-  '/portal.js?v=20260810final1',
-  '/assets/favicon-192.png',
-  '/assets/apple-touch-icon.png',
-  '/assets/hbcs-sanyard-seal-512.png',
-  '/assets/hbcs-sanyard-seal-512-maskable.png',
-  '/assets/mhws-logo/mhws-logo-official.png',
+  '/manifest.webmanifest?v=20260810pwa1',
+  '/apple-touch-icon.png?v=20260810pwa1',
+  '/portal.css?v=20260811land3',
+  '/portal.js?v=20260811land3',
+  '/assets/favicon-192.png?v=20260810pwa1',
+  '/assets/apple-touch-icon.png?v=20260810pwa1',
+  '/assets/hbcs-sanyard-seal-512.png?v=20260810pwa1',
+  '/assets/hbcs-sanyard-seal-512-maskable.png?v=20260810pwa1',
+  '/assets/mhws-logo/mhws-logo-web-512.webp',
+  '/assets/mhws-logo/mhws-logo-web-512.png',
+  '/assets/mhws-logo/mhws-logo-web-256.webp',
   '/assets/mhws-logo/mhws-logo-web-256.png',
   '/assets/rwa-assistant-avatar.svg',
   '/assets/hbcs-sanyard-seal-240.webp',
@@ -50,8 +52,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Himuda Housing Colony Sanyard';
   const options = {
     body: data.body || 'New update',
-    icon: '/assets/favicon-192.png',
-    badge: '/assets/favicon-192.png',
+    icon: '/assets/favicon-192.png?v=20260810pwa1',
+    badge: '/assets/favicon-192.png?v=20260810pwa1',
     data: { url: data.url || '/' },
     tag: data.eventType || 'rwa',
     renotify: true,

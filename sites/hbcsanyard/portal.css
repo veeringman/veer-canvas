@@ -27,10 +27,17 @@ html { color-scheme: light; }
 [hidden] {
   display: none !important;
 }
-body.is-authed #gateView {
+body.is-authed #gateView,
+body.is-authed #landingView {
   display: none !important;
 }
 body:not(.is-authed) #appView {
+  display: none !important;
+}
+body:not(.is-authed):not(.is-members-gate) #gateView {
+  display: none !important;
+}
+body:not(.is-authed).is-members-gate #landingView {
   display: none !important;
 }
 body {
@@ -166,6 +173,227 @@ input:focus, textarea:focus, select:focus {
   justify-items: center;
   text-align: center;
 }
+.gate-back-row {
+  width: 100%;
+  max-width: 440px;
+  margin: 0;
+  text-align: left;
+}
+.gate-back-row .btn {
+  font-size: 0.8rem;
+}
+
+/* Pre-login public landing */
+.landing-shell {
+  width: min(920px, calc(100% - 24px));
+  margin: 0 auto;
+  padding: 0 0 48px;
+  display: grid;
+  gap: 0;
+}
+.landing-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.15rem;
+  margin: 0 0 0.25rem;
+  background: linear-gradient(180deg, rgba(248, 244, 235, 0.96) 40%, rgba(248, 244, 235, 0));
+  backdrop-filter: blur(8px);
+}
+.landing-top-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.landing-top-seal {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.landing-top-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.landing-signin {
+  appearance: none;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.42rem 0.85rem;
+  border: 1px solid rgba(21, 35, 63, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 252, 246, 0.72);
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+.landing-signin-arrow {
+  font-size: 0.95em;
+  color: var(--gold-deep);
+  transition: transform 0.18s ease;
+}
+.landing-signin:hover {
+  transform: translateY(-1px);
+  border-color: rgba(158, 125, 58, 0.55);
+  background: #fffdf8;
+  color: var(--navy-deep);
+}
+.landing-signin:hover .landing-signin-arrow {
+  transform: translateX(2px);
+}
+.landing-signin:focus-visible {
+  outline: 3px solid rgba(196, 161, 90, 0.28);
+  outline-offset: 2px;
+}
+.landing-hero {
+  min-height: min(72vh, 620px);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 1.5rem 0.5rem 2.5rem;
+  animation: rise 0.75s ease both;
+}
+.landing-hero-seal {
+  width: clamp(160px, 38vw, 220px);
+  aspect-ratio: 1;
+  margin-bottom: 0.35rem;
+  animation: landSealIn 0.9s ease both;
+}
+.landing-seal {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 50%;
+  object-fit: contain;
+}
+.landing-hero h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.7rem, 4.4vw, 2.55rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  max-width: 16ch;
+}
+.landing-greeting {
+  margin: 0.35rem 0 0;
+  max-width: 28rem;
+  font-size: clamp(1.02rem, 2.4vw, 1.2rem);
+  line-height: 1.45;
+  color: var(--muted);
+  animation: rise 0.85s 0.12s ease both;
+}
+.landing-section {
+  padding: 1.75rem 0.35rem 0.5rem;
+  border-top: 1px solid var(--line);
+  animation: rise 0.7s 0.18s ease both;
+}
+.landing-section h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  color: var(--navy);
+}
+.landing-section-lede {
+  margin: 0.35rem 0 1rem;
+  font-size: 0.92rem;
+}
+.landing-list {
+  display: grid;
+  gap: 0.85rem;
+}
+.landing-update {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.15rem 0 0.75rem;
+  border-bottom: 1px solid rgba(21, 35, 63, 0.08);
+}
+.landing-update:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.landing-update strong {
+  font-size: 1.02rem;
+  color: var(--navy);
+  font-weight: 600;
+}
+.landing-update .landing-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.landing-update p {
+  margin: 0.15rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: rgba(21, 35, 63, 0.78);
+  white-space: pre-wrap;
+}
+.landing-bearer {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid rgba(21, 35, 63, 0.08);
+}
+.landing-bearer:last-child {
+  border-bottom: 0;
+}
+.landing-bearer .landing-title {
+  font-weight: 600;
+  color: var(--gold-deep);
+  font-size: 0.88rem;
+}
+.landing-bearer .landing-name {
+  color: var(--navy);
+  font-weight: 500;
+}
+.landing-foot {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: #8a8790;
+}
+@keyframes landSealIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (max-width: 640px) {
+  .landing-top-name {
+    max-width: 11rem;
+  }
+  .landing-bearer {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+  .landing-hero {
+    min-height: min(68vh, 520px);
+    padding-top: 0.75rem;
+  }
+}
+
 .gate-brand {
   display: grid;
   gap: 18px;
@@ -281,6 +509,34 @@ input:focus, textarea:focus, select:focus {
 }
 .gate-foot .pwa-hint {
   font-size: 0.78rem;
+}
+.gate-managed,
+.app-foot-managed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  flex-wrap: wrap;
+}
+.gate-managed-note {
+  margin: 0.2rem 0 0;
+  font-size: 0.68rem;
+  text-align: center;
+}
+.gate-managed-logo {
+  width: auto;
+  height: 19px;
+  border-radius: 0;
+  object-fit: contain;
+  flex: 0 0 auto;
+  box-shadow: none;
+  background: transparent;
+}
+.app-foot .gate-managed-logo {
+  height: 46px;
+  width: auto;
+  border-radius: 0;
 }
 .app-foot {
   margin: 1.25rem auto 0.5rem;

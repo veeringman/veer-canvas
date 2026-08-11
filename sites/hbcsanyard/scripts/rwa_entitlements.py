@@ -19,6 +19,7 @@ from typing import Any
 
 from init_rwa_db import SUPERADMIN_HOUSE_ID, ensure_entitlements_schema, utc_now
 from rwa_household import primary_member_photo_map
+import rwa_household as household
 
 ENTITLEMENT_DEFS: list[dict[str, str]] = [
     {"id": "manage_roster", "label": "Resident roster", "description": "View and edit plot contacts"},
@@ -251,12 +252,36 @@ def load_grants(conn: sqlite3.Connection, house_id: str) -> list[str]:
     return out
 
 
+def actor_holds_ec_seat(actor: dict | None) -> bool:
+    """True when this login is the designated EC seat holder for the plot.
+
+    Seat holders are the plot owner or the primary delegate (bound via
+    residents.ec_member_id). Other household delegates never inherit EC
+    entitlements even if the plot is on the committee.
+    """
+    if not actor:
+        return False
+    if _is_super(actor):
+        return True
+    if actor.get("viewOnly"):
+        return False
+    # Explicit flag from enrich / public_resident
+    if "holdsEcSeat" in actor:
+        return bool(actor.get("holdsEcSeat"))
+    mid = str(actor.get("memberId") or actor.get("member_id") or "").strip()
+    seat = str(actor.get("ecMemberId") or actor.get("ec_member_id") or "").strip()
+    if seat:
+        return bool(mid) and mid == seat
+    # Legacy plots without ec_member_id: primary owner holds the seat.
+    return bool(actor.get("isPrimary"))
+
+
 def entitlements_for_actor(conn: sqlite3.Connection, actor: dict | None) -> list[str]:
     if not actor:
         return []
     if _is_super(actor):
         return sorted(EC_ADMIN_ENTITLEMENTS)
-    if actor.get("viewOnly") or actor.get("isPrimary") is False:
+    if actor.get("viewOnly") or not actor_holds_ec_seat(actor):
         return []
     grants = load_grants(conn, actor.get("houseId") or "")
     if (actor.get("role") or "") == "admin":
@@ -270,21 +295,28 @@ def enrich_actor(conn: sqlite3.Connection, actor: dict) -> dict:
     ensure_ready(conn)
     hid = actor.get("houseId") or ""
     super_admin = _is_super(actor)
+    ec_member_id = str(actor.get("ecMemberId") or "").strip() or None
     if hid and hid != SUPERADMIN_HOUSE_ID:
         row = conn.execute(
             """
-            SELECT is_ec_member, is_office_bearer, official_title, role
+            SELECT is_ec_member, is_office_bearer, official_title, role, ec_member_id
             FROM residents WHERE house_id = ?
             """,
             (hid,),
         ).fetchone()
         if row:
+            try:
+                ec_member_id = (row["ec_member_id"] or "").strip() or ec_member_id
+            except (KeyError, IndexError, TypeError):
+                pass
             is_ob = bool(int(row["is_office_bearer"] or 0)) or bool(str(row["official_title"] or "").strip()) or (
                 (row["role"] or "") == "admin"
             )
             is_mem = bool(int(row["is_ec_member"] or 0)) or is_ob or (row["role"] or "") == "admin"
             actor["isOfficeBearer"] = is_ob or super_admin
             actor["isEcMember"] = is_mem or super_admin
+            actor["ecMemberId"] = ec_member_id
+            actor["plotIsEc"] = is_mem
         else:
             actor["isOfficeBearer"] = super_admin or bool(str(actor.get("officialTitle") or "").strip()) or (
                 actor.get("role") == "admin"
@@ -294,8 +326,33 @@ def enrich_actor(conn: sqlite3.Connection, actor: dict) -> dict:
         actor["isOfficeBearer"] = True
         actor["isEcMember"] = True
 
-    actor["isEcAdmin"] = is_ec_admin(actor) and not actor.get("viewOnly") and actor.get("isPrimary") is not False
-    if actor.get("viewOnly") or actor.get("isPrimary") is False:
+    mid = str(actor.get("memberId") or "").strip()
+    if super_admin:
+        holds = True
+    elif actor.get("viewOnly"):
+        holds = False
+    elif not actor.get("isEcMember") and not actor.get("isOfficeBearer") and (actor.get("role") or "") != "admin":
+        holds = False
+    elif ec_member_id:
+        holds = bool(mid) and mid == ec_member_id
+    else:
+        holds = bool(actor.get("isPrimary"))
+    actor["holdsEcSeat"] = holds
+    actor["ecMemberId"] = ec_member_id
+
+    # Plot-level EC flags apply to the seat holder only.
+    if not holds and not super_admin:
+        actor["isEcAdmin"] = False
+        actor["isOfficeBearer"] = False
+        actor["isEcMember"] = False
+        actor["officialTitle"] = ""
+        if (actor.get("role") or "") == "admin":
+            actor["role"] = "resident"
+        actor["entitlements"] = []
+        return actor
+
+    actor["isEcAdmin"] = is_ec_admin(actor) and not actor.get("viewOnly") and holds
+    if actor.get("viewOnly"):
         actor["isEcAdmin"] = False
         actor["entitlements"] = []
         return actor
@@ -308,7 +365,7 @@ def actor_has(actor: dict | None, key: str) -> bool:
         return False
     if _is_super(actor):
         return True
-    if actor.get("viewOnly") or actor.get("isPrimary") is False:
+    if actor.get("viewOnly") or not actor_holds_ec_seat(actor):
         return False
     ents = actor.get("entitlements")
     if isinstance(ents, list):
@@ -324,9 +381,9 @@ def actor_can_open_ec_desk(actor: dict | None) -> bool:
         return False
     if _is_super(actor):
         return True
-    if actor.get("viewOnly") or actor.get("isPrimary") is False:
+    if actor.get("viewOnly") or not actor_holds_ec_seat(actor):
         return False
-    if (actor.get("role") or "") == "admin":
+    if (actor.get("role") or "") == "admin" or actor.get("isEcAdmin"):
         return True
     ents = actor.get("entitlements") or []
     return bool(ents)
@@ -417,12 +474,12 @@ def set_grants(
 
 
 def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    """EC members, office bearers, and EC admins."""
+    """EC members, office bearers, and EC admins (with seat-holder identity)."""
     ensure_ready(conn)
     rows = conn.execute(
         """
         SELECT house_id, plot_no, section, name, official_title, role, status,
-               is_ec_member, is_office_bearer
+               is_ec_member, is_office_bearer, ec_member_id
         FROM residents
         WHERE house_id != ?
           AND status = 'active'
@@ -448,17 +505,38 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
         grants = load_grants(conn, hid)
         effective = sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants)) if is_ec else grants
+        owner = household.primary_member(conn, hid)
+        delegate = household.primary_delegate_member(conn, hid)
+        seat_id = (r["ec_member_id"] or "").strip() or ((owner or {}).get("id") or "")
+        seat = household.get_member(conn, seat_id) if seat_id else None
+        seat_pub = household.public_member(seat) if seat else {}
         photo = photos.get(hid) or {}
+        if seat_pub.get("hasPhoto"):
+            photo = {
+                "hasPhoto": True,
+                "photoUrl": seat_pub.get("photoUrl") or "",
+                "memberId": seat_pub.get("id"),
+            }
         out.append({
             "houseId": hid,
             "plotNo": r["plot_no"] or hid,
             "section": r["section"] or "",
-            "name": r["name"] or hid,
+            "name": (seat_pub.get("name") or r["name"] or hid),
+            "ownerName": (owner or {}).get("name") or r["name"] or hid,
+            "primaryDelegateName": (delegate or {}).get("name") or "",
+            "displayName": (
+                f"{(owner or {}).get('name') or r['name'] or hid}"
+                + (f" / {(delegate or {}).get('name')}" if (delegate or {}).get("name") else "")
+            ),
             "officialTitle": r["official_title"] or "",
             "role": r["role"] or "resident",
             "isEcMember": is_mem,
             "isOfficeBearer": is_ob,
             "isEcAdmin": is_ec,
+            "ecMemberId": seat_id or None,
+            "ecSeatHolderName": seat_pub.get("name") or "",
+            "ecSeatHolderLabel": seat_pub.get("identityLabel") or "",
+            "eligibleMembers": household.eligible_ec_members(conn, hid),
             "entitlements": effective,
             "hasPhoto": bool(photo.get("hasPhoto")),
             "photoUrl": photo.get("photoUrl") or "",

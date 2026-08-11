@@ -17,11 +17,15 @@ When you add a new place that shows the logo, **append a consumer** in
 
 | Role | Path | Use |
 |------|------|-----|
-| `official` | `assets/mhws-logo/mhws-logo-official.png` | Canonical transparent seal — portal hero, mini seal, proceedings UI |
-| `print` | `assets/mhws-logo/mhws-logo-print.png` | Print / PDF headers — letterheads, receipts, certificates, pads |
-| `watermark` | `assets/mhws-logo/mhws-logo-watermark.png` | Pre-faded watermark for pads, receipts, PDF letterhead chrome |
-| `web512` | `assets/mhws-logo/mhws-logo-web-512.png` | Large web / site-meta brand web mark |
-| `web256` | `assets/mhws-logo/mhws-logo-web-256.png` | Info Centre HTML mastheads, attest page |
+| `official` | `assets/mhws-logo/mhws-logo-official.png` | Full-res archive master only — do not use in portal UI or PDF embeds |
+| `pdf` | `assets/mhws-logo/mhws-logo-pdf.png` | 256px full-contrast seal for PDF + HTML pad/receipt headers (hardened alpha) |
+| `sealCert` | `assets/mhws-logo/mhws-logo-seal-cert.png` | 320px vivid certificate/PDF letterhead header seal (hard alpha, boosted contrast) |
+| `print` | `assets/mhws-logo/mhws-logo-print.png` | 256px full-contrast print/HTML seal |
+| `watermark` | `assets/mhws-logo/mhws-logo-watermark.png` | Very light 192px pre-faded watermark for pads/PDFs |
+| `web512` | `assets/mhws-logo/mhws-logo-web-512.png` | Portal gate / brand mark PNG fallback |
+| `web512Webp` | `assets/mhws-logo/mhws-logo-web-512.webp` | Portal gate WebP (mobile-first) |
+| `web256` | `assets/mhws-logo/mhws-logo-web-256.png` | Info Centre HTML mastheads, attest page, mini UI PNG |
+| `web256Webp` | `assets/mhws-logo/mhws-logo-web-256.webp` | Compact WebP for mini seals / mastheads |
 | `icon128` | `assets/mhws-logo/mhws-logo-icon-128.png` | Compact UI icons |
 | `icon64` | `assets/mhws-logo/mhws-logo-icon-64.png` | Tiny chrome / lists |
 | `ogSquare` | `assets/mhws-logo/mhws-logo-og-square.png` | Square share / OG-style mark on cream |
@@ -39,13 +43,17 @@ When you add a new place that shows the logo, **append a consumer** in
 
 | Id | File | Role | Kind | Note |
 |----|------|------|------|------|
-| `portal-gate` | `index.html` | `official` | `img` | Gate hero seal |
-| `portal-mini` | `index.html` | `official` | `img` | Signed-in brand mini seal |
+| `portal-gate` | `index.html` | `web512` | `img` | Gate hero seal (PNG fallback; prefer web512Webp) |
+| `portal-gate-webp` | `index.html` | `web512Webp` | `img` | Gate hero seal WebP source |
+| `portal-mini` | `index.html` | `web256` | `img` | Signed-in brand mini seal |
+| `portal-mini-webp` | `index.html` | `web256Webp` | `img` | Signed-in brand mini seal WebP |
 | `portal-favicon` | `index.html` | `favicon` | `link` | Portal favicon |
 | `portal-apple-touch` | `index.html` | `appleTouch` | `link` | Apple touch icons (180/167/152 + root) |
-| `portal-proceedings-seal` | `portal.js` | `official` | `img` | Proceedings modal seal markup |
-| `sw-precache-official` | `sw.js` | `official` | `precache` | Service worker precache |
+| `portal-proceedings-seal` | `portal.js` | `web256` | `img` | Proceedings modal seal markup |
+| `sw-precache-web512` | `sw.js` | `web512` | `precache` | Service worker precache gate PNG |
+| `sw-precache-web512-webp` | `sw.js` | `web512Webp` | `precache` | Service worker precache gate WebP |
 | `sw-precache-web256` | `sw.js` | `web256` | `precache` | Service worker precache |
+| `sw-precache-web256-webp` | `sw.js` | `web256Webp` | `precache` | Service worker precache mini WebP |
 | `sw-precache-favicon` | `sw.js` | `favicon` | `precache` | Push / precache favicon |
 | `sw-precache-pwa512` | `sw.js` | `pwa512` | `precache` | PWA 512 precache |
 | `sw-precache-maskable` | `sw.js` | `pwaMaskable` | `precache` | PWA maskable precache |
@@ -53,24 +61,28 @@ When you add a new place that shows the logo, **append a consumer** in
 | `manifest-pwa512` | `manifest.webmanifest` | `pwa512` | `manifest` | PWA any 512 |
 | `manifest-maskable` | `manifest.webmanifest` | `pwaMaskable` | `manifest` | PWA maskable 512 |
 | `manifest-apple-root` | `manifest.webmanifest` | `appleTouchRoot` | `manifest` | Root apple-touch in manifest |
-| `site-meta-brand` | `site-meta.json` | `official` | `meta` | brandMark |
+| `site-meta-brand` | `site-meta.json` | `web512` | `meta` | brandMark |
 | `site-meta-favicon` | `site-meta.json` | `favicon` | `meta` | favicon |
-| `site-meta-print` | `site-meta.json` | `print` | `meta` | logoPrint |
+| `site-meta-print` | `site-meta.json` | `pdf` | `meta` | logoPrint |
 | `site-meta-watermark` | `site-meta.json` | `watermark` | `meta` | logoWatermark |
 | `site-meta-web` | `site-meta.json` | `web512` | `meta` | logoWeb |
 | `attest-mark` | `attest.html` | `web256` | `img` | Attestation verify page seal |
 | `attest-favicon` | `attest.html` | `favicon` | `link` | Attest favicon |
-| `pdf-reports-header` | `scripts/rwa_reports.py` | `print` | `python` | PDF report / certificate / receipt headers (LOGO_CANDIDATES) |
+| `pdf-reports-header` | `scripts/rwa_reports.py` | `pdf` | `python` | PDF report / certificate / receipt headers (LOGO_CANDIDATES) |
 | `pdf-reports-watermark` | `scripts/rwa_reports.py` | `watermark` | `python` | PDF letterhead watermark (WATERMARK_CANDIDATES) |
-| `export-ec-pad` | `scripts/export_ec_pad.py` | `print` | `img` | EC chart HTML generator seal src |
-| `doc-letterhead-logo` | `documents/mhws-letterhead-pad.html` | `print` | `img` | Letterhead header logo |
+| `export-ec-pad` | `scripts/export_ec_pad.py` | `pdf` | `img` | EC chart HTML generator seal src |
+| `doc-letterhead-logo` | `documents/mhws-letterhead-pad.html` | `pdf` | `img` | Letterhead header logo |
 | `doc-letterhead-wm` | `documents/mhws-letterhead-pad.html` | `watermark` | `img` | Letterhead watermark |
-| `doc-receipt-logo` | `documents/mhws-cash-receipt-booklet.html` | `print` | `img` | Cash receipt slip logos (×3) |
+| `doc-receipt-logo` | `documents/mhws-cash-receipt-booklet.html` | `pdf` | `img` | Cash receipt slip logos (×3) |
 | `doc-receipt-wm` | `documents/mhws-cash-receipt-booklet.html` | `watermark` | `css-url` | Cash receipt watermark background |
-| `doc-letterhead-blank` | `documents/rwa-letterhead-blank.html` | `print` | `img` | Blank letterhead seal |
-| `doc-ec-pad` | `documents/ec-committee-pad.html` | `print` | `img` | EC committee pad seal |
-| `doc-proceedings-ec` | `documents/proceedings-ec-mom-pad.html` | `print` | `img` | EC MoM pad seal |
-| `doc-proceedings-gh` | `documents/proceedings-gh-mom-pad.html` | `print` | `img` | GH MoM pad seal |
+| `doc-letterhead-blank` | `documents/rwa-letterhead-blank.html` | `pdf` | `img` | Blank letterhead seal |
+| `doc-letterhead-blank-wm` | `documents/rwa-letterhead-blank.html` | `watermark` | `img` | Blank letterhead watermark |
+| `doc-ec-pad` | `documents/ec-committee-pad.html` | `pdf` | `img` | EC committee pad seal |
+| `doc-ec-pad-wm` | `documents/ec-committee-pad.html` | `watermark` | `img` | EC committee pad watermark |
+| `doc-proceedings-ec` | `documents/proceedings-ec-mom-pad.html` | `pdf` | `img` | EC MoM pad seal |
+| `doc-proceedings-ec-wm` | `documents/proceedings-ec-mom-pad.html` | `watermark` | `img` | EC MoM pad watermark |
+| `doc-proceedings-gh` | `documents/proceedings-gh-mom-pad.html` | `pdf` | `img` | GH MoM pad seal |
+| `doc-proceedings-gh-wm` | `documents/proceedings-gh-mom-pad.html` | `watermark` | `img` | GH MoM pad watermark |
 | `info-bylaws-mast` | `documents/mhws-sanyard-rules-bylaws.html` | `web256` | `img` | Info Centre — Rules & Bye-laws masthead |
 | `info-bylaws-favicon` | `documents/mhws-sanyard-rules-bylaws.html` | `favicon` | `link` | Info Centre — Rules favicon |
 | `info-act-mast` | `documents/hp-societies-registration-act-2006.html` | `web256` | `img` | Info Centre — HP Societies Act masthead |
@@ -78,7 +90,7 @@ When you add a new place that shows the logo, **append a consumer** in
 | `info-civil-mast` | `documents/civil-suit-2023-sanyardh-path-right.html` | `web256` | `img` | Info Centre — Civil Suit case file masthead |
 | `info-civil-favicon` | `documents/civil-suit-2023-sanyardh-path-right.html` | `favicon` | `link` | Info Centre — Civil Suit favicon |
 
-Version: `20260810final1` · Updated: `2026-08-10`
+Version: `20260811lite2` · Updated: `2026-08-10`
 
 Master: `assets/mhws-logo/mhws-logo-official.png`  
 Locked: `assets/mhws-logo/mhws-logo-official-locked-20260810.png`  

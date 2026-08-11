@@ -26,41 +26,108 @@ ORG_SLOGAN = "Unity · Harmony · Progress"
 ORG_SHORT = ORG_COLONY
 ORG_AUTHOR = ORG_SOCIETY
 def _logo_candidates_from_manifest() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Prefer paths from assets/mhws-logo/logo.manifest.json (managed registry)."""
+    """Prefer compact PDF/web marks — never the full ~1MB official master."""
     fallback_logo = (
+        "assets/mhws-logo/mhws-logo-seal-cert.png",
         "assets/mhws-logo/mhws-logo-print.png",
-        "assets/mhws-logo/mhws-logo-official.png",
+        "assets/mhws-logo/mhws-logo-web-256.png",
         "assets/mhws-logo/mhws-logo-web-512.png",
+        "assets/mhws-logo/mhws-logo-pdf.png",
         "assets/hbcs-sanyard-seal-mark.png",
         "assets/hbcs-sanyard-seal-512.png",
     )
     fallback_wm = (
         "assets/mhws-logo/mhws-logo-watermark.png",
-        "assets/mhws-logo/mhws-logo-print.png",
-        "assets/mhws-logo/mhws-logo-official.png",
     )
     try:
         from logo_registry import load_manifest, role_path
 
         m = load_manifest()
-        logos = (
-            role_path(m, "print"),
-            role_path(m, "official"),
-            role_path(m, "web512"),
-            role_path(m, "sealMark"),
-            role_path(m, "pwa512"),
-        )
-        wms = (
-            role_path(m, "watermark"),
-            role_path(m, "print"),
-            role_path(m, "official"),
-        )
+
+        def _role(name: str) -> str | None:
+            try:
+                return role_path(m, name)
+            except Exception:
+                return None
+
+        # Prefer vivid certificate seal for PDF headers (hard alpha / full contrast).
+        logos = tuple(
+            p
+            for p in (
+                _role("sealCert"),
+                _role("print"),
+                _role("web256"),
+                _role("web512"),
+                _role("pdf"),
+                _role("sealMark"),
+                _role("pwa512"),
+            )
+            if p
+        ) or fallback_logo
+        wms = tuple(
+            p for p in (_role("watermark"),) if p
+        ) or fallback_wm
         return logos, wms
     except Exception:
         return fallback_logo, fallback_wm
 
 
 LOGO_CANDIDATES, WATERMARK_CANDIDATES = _logo_candidates_from_manifest()
+_IMAGE_READER_CACHE: dict[str, Any] = {}
+
+
+def _image_reader(path: Path):
+    """Reuse decoded ReportLab ImageReaders across pages / certificates in-process."""
+    key = str(path.resolve())
+    hit = _IMAGE_READER_CACHE.get(key)
+    if hit is not None:
+        return hit
+    try:
+        from reportlab.lib.utils import ImageReader
+    except Exception:
+        return str(path)
+    reader = ImageReader(str(path))
+    _IMAGE_READER_CACHE[key] = reader
+    return reader
+
+
+def _seal_image_reader(path: Path):
+    """Full-contrast header seal for ReportLab (file-backed hard alpha).
+
+    Soft-alpha PNGs embed as washed soft-masks in PDF viewers. Prefer the
+    prebuilt sealCert asset; otherwise harden on the fly and cache to disk.
+    """
+    key = f"seal-file:{path.resolve()}"
+    hit = _IMAGE_READER_CACHE.get(key)
+    if hit is not None:
+        return hit
+    try:
+        from reportlab.lib.utils import ImageReader
+        from PIL import Image, ImageEnhance
+    except Exception:
+        return _image_reader(path)
+
+    try:
+        # Already a cert seal — load directly.
+        if "seal-cert" in path.name or "seal_cert" in path.name:
+            reader = ImageReader(str(path))
+            _IMAGE_READER_CACHE[key] = reader
+            return reader
+
+        cache_path = path.with_name(f"{path.stem}-pdfhard.png")
+        src_mtime = path.stat().st_mtime
+        if not cache_path.is_file() or cache_path.stat().st_mtime < src_mtime:
+            im = Image.open(path).convert("RGBA")
+            rgb = ImageEnhance.Contrast(im.convert("RGB")).enhance(1.28)
+            rgb = ImageEnhance.Color(rgb).enhance(1.18)
+            alpha = im.split()[3].point(lambda v: 255 if v >= 20 else 0)
+            out = Image.merge("RGBA", (*rgb.split(), alpha))
+            out.save(cache_path, format="PNG", optimize=True)
+        reader = ImageReader(str(cache_path))
+        _IMAGE_READER_CACHE[key] = reader
+        return reader
+    except Exception:
+        return _image_reader(path)
 
 
 def _now_ist() -> datetime:
@@ -544,7 +611,8 @@ BRAND_GOLD = "#c9a227"
 BRAND_INK = "#12233f"
 BRAND_MUTED = "#5a6a80"
 ORG_EMAIL = "housingcolonysanyard@gmail.com"
-ORG_WEB = ""  # leave blank until a public site URL is ready
+ORG_WEB = "housingcolonysanyard.in"
+ORG_PHONE_DESK = ""  # society desk line (optional)
 
 # Letterhead pad officer order (matches Templates folder pad).
 _LETTERHEAD_ROLE_ORDER = (
@@ -555,9 +623,46 @@ _LETTERHEAD_ROLE_ORDER = (
     "treasurer",
 )
 
+# Canonical office-bearer roster for PDF letterhead when DB title/phone/name is incomplete.
+LETTERHEAD_OFFICER_FALLBACKS: dict[str, dict[str, str]] = {
+    "president": {
+        "title": "President",
+        "name": "Anup Vaidya",
+        "phone": "9418495449",
+    },
+    "general secretary": {
+        "title": "General Secretary",
+        "name": "Vijay Kumar Sharma",
+        "phone": "8219788139",
+    },
+    "vice president": {
+        "title": "Vice President",
+        "name": "Murari Lal Modgil",
+        "phone": "9418168784",
+    },
+    "treasurer": {
+        "title": "Treasurer",
+        "name": "Parveen Kumar Thakur",
+        "phone": "9418071187",
+    },
+}
+
+
+def _fmt_phone_display(phone: str | None) -> str:
+    """Display phones as 5+5 groups for India mobiles; blank → empty string."""
+    raw = str(phone or "").strip()
+    if not raw:
+        return ""
+    digits = "".join(c for c in raw if c.isdigit())
+    if len(digits) == 10:
+        return f"{digits[:5]} {digits[5:]}"
+    if len(digits) == 12 and digits.startswith("91"):
+        return f"{digits[2:7]} {digits[7:]}"
+    return raw
+
 
 def _letterhead_officers(conn) -> list[dict]:
-    """Four office-bearer slots for letterhead chrome."""
+    """Four office-bearer slots for letterhead chrome (DB + canonical fallbacks)."""
     bearers = office_bearers_for_header(conn) if conn is not None else []
     by_key: dict[str, dict] = {}
     for b in bearers:
@@ -566,7 +671,6 @@ def _letterhead_officers(conn) -> list[dict]:
             if key in title and key not in by_key:
                 by_key[key] = b
                 break
-    # Prefer canonical titles for labels.
     slots = [
         ("President", "president"),
         ("General Secretary", "general secretary"),
@@ -578,15 +682,27 @@ def _letterhead_officers(conn) -> list[dict]:
         hit = by_key.get(key)
         if not hit and key == "vice president":
             hit = by_key.get("vice-president")
-        if hit:
-            out.append({
-                "title": label,
-                "name": hit.get("name") or "",
-                "phone": hit.get("phone") or "",
-            })
-        else:
-            out.append({"title": label, "name": "", "phone": ""})
+        fb = LETTERHEAD_OFFICER_FALLBACKS.get(key) or {}
+        name = ((hit or {}).get("name") or "").strip()
+        phone = ((hit or {}).get("phone") or "").strip()
+        fb_name = (fb.get("name") or "").strip()
+        # Prefer fallback when DB name is missing or abbreviated (e.g. "M L MODGIL").
+        if not name:
+            name = fb_name
+        elif fb_name:
+            words = [w for w in re.split(r"\s+", name) if w]
+            full_words = [w for w in words if len(re.sub(r"[^A-Za-z]", "", w)) >= 3]
+            if len(full_words) < 2:
+                name = fb_name
+        if not phone:
+            phone = (fb.get("phone") or "").strip()
+        out.append({
+            "title": label,
+            "name": name,
+            "phone": _fmt_phone_display(phone),
+        })
     return out
+
 
 
 def _amount_in_words_inr(amount: int) -> str:
@@ -656,7 +772,7 @@ def _draw_mhws_watermark(
         x = (page_w - w) / 2
         y = page_h * cy_frac - h / 2
         canvas.drawImage(
-            str(seal),
+            _image_reader(seal),
             x,
             y,
             width=w,
@@ -685,7 +801,7 @@ def _draw_report_page_chrome(
     """Standard letterhead watermark + report footer on every page."""
     from reportlab.lib import colors
 
-    seal_mm = min(112.0, (page_h / mm) * 0.62)
+    seal_mm = min(90.0, (page_h / mm) * 0.55)
     _draw_mhws_watermark(
         canvas,
         site_root,
@@ -693,7 +809,7 @@ def _draw_report_page_chrome(
         page_h=page_h,
         size_mm=seal_mm,
         cy_frac=0.5,
-        alpha=0.065,
+        alpha=0.04,
     )
     canvas.saveState()
     canvas.setFont("Helvetica", 7)
@@ -744,18 +860,22 @@ def _draw_mhws_letterhead_chrome(
 
     y = _draw_accent_edge(canvas, page_w, y_top=page_h - 3 * mm, mm=mm)
     _draw_mhws_watermark(
-        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=112, cy_frac=0.48, alpha=0.065
+        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=96, cy_frac=0.48, alpha=0.04
     )
 
     pad_x = 12 * mm
-    # Brand row
+    # Brand row — full-opacity header seal (never inherit watermark fill alpha).
     seal = _seal_path(site_root)
     brand_top = y - 5 * mm
     logo_w = 24 * mm
     if seal:
         try:
+            if hasattr(canvas, "setFillAlpha"):
+                canvas.setFillAlpha(1.0)
+            if hasattr(canvas, "setStrokeAlpha"):
+                canvas.setStrokeAlpha(1.0)
             canvas.drawImage(
-                str(seal),
+                _seal_image_reader(seal),
                 pad_x,
                 brand_top - logo_w,
                 width=logo_w,
@@ -789,36 +909,39 @@ def _draw_mhws_letterhead_chrome(
     canvas.rect(-1.1 * mm, -1.1 * mm, 2.2 * mm, 2.2 * mm, fill=1, stroke=0)
     canvas.restoreState()
 
-    # Officers 2×2
+    # Officers: one centered top row (4 across), top-aligned columns
     slots = officers[:4] if officers else _letterhead_officers(None)
     while len(slots) < 4:
         slots.append({"title": "", "name": "", "phone": ""})
-    grid_top = rule_y - 5 * mm
-    col_w = (page_w - 2 * pad_x) / 2
+    grid_top = rule_y - 4.5 * mm
+    col_w = (page_w - 2 * pad_x) / 4
     for i, slot in enumerate(slots):
-        col = i % 2
-        row = i // 2
-        cx = pad_x + col_w * col + col_w / 2
-        cy = grid_top - row * 12 * mm
+        cx = pad_x + col_w * i + col_w / 2
+        cy = grid_top
         canvas.setFillColor(colors.HexColor(BRAND_GREEN))
-        canvas.setFont("Helvetica-Bold", 6.2)
+        canvas.setFont("Helvetica-Bold", 5.6)
         title = (slot.get("title") or "").upper()
         canvas.drawCentredString(cx, cy, title)
         canvas.setFillColor(colors.HexColor(BRAND_NAVY))
-        canvas.setFont("Helvetica-Bold", 8.5)
-        canvas.drawCentredString(cx, cy - 4 * mm, (slot.get("name") or "—").upper())
+        canvas.setFont("Helvetica-Bold", 7.2)
+        name = (slot.get("name") or "-").upper()
+        # Keep long names on one visual line (slightly smaller if needed).
+        if len(name) > 18:
+            canvas.setFont("Helvetica-Bold", 6.2)
+        canvas.drawCentredString(cx, cy - 3.6 * mm, _pdf_safe(name))
         phone = (slot.get("phone") or "").strip()
         canvas.setFillColor(colors.HexColor(BRAND_MUTED))
-        canvas.setFont("Helvetica", 7.2)
-        ph = f"Ph {phone}" if phone else "Ph —"
-        canvas.drawCentredString(cx, cy - 7.5 * mm, ph)
-        if col == 0:
+        canvas.setFont("Helvetica", 6.4)
+        ph = f"Ph {phone}" if phone else "Ph -"
+        canvas.drawCentredString(cx, cy - 6.8 * mm, _pdf_safe(ph))
+        if i < 3:
             canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.14))
-            canvas.setLineWidth(0.6)
-            canvas.line(pad_x + col_w, cy - 8 * mm, pad_x + col_w, cy + 1 * mm)
+            canvas.setLineWidth(0.55)
+            xdiv = pad_x + col_w * (i + 1)
+            canvas.line(xdiv, cy - 7.2 * mm, xdiv, cy + 1 * mm)
 
     # Officers foot gold rule
-    foot_rule_y = grid_top - 26 * mm
+    foot_rule_y = grid_top - 12 * mm
     canvas.setStrokeColor(colors.Color(201 / 255, 162 / 255, 39 / 255, alpha=0.55))
     canvas.setLineWidth(0.7)
     canvas.line(mid - 18 * mm, foot_rule_y, mid + 18 * mm, foot_rule_y)
@@ -900,7 +1023,7 @@ def _draw_cash_receipt_leaf_chrome(
     canvas.rect(box_x, box_y + box_h - 18 * mm, box_w, 18 * mm, fill=1, stroke=0)
 
     _draw_mhws_watermark(
-        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=72, cy_frac=0.48, alpha=0.055
+        canvas, site_root, page_w=page_w, page_h=page_h, size_mm=64, cy_frac=0.48, alpha=0.04
     )
 
     pad = 5 * mm
@@ -912,13 +1035,17 @@ def _draw_cash_receipt_leaf_chrome(
     canvas.setFont("Helvetica", 6)
     canvas.drawRightString(box_x + box_w - pad, top - 2 * mm, copy_tag.upper())
 
-    # Header: logo + org + meta
+    # Header: full-contrast logo + org + meta
     seal = _seal_path(site_root)
-    logo_w = 16 * mm
+    logo_w = 18 * mm
     if seal:
         try:
+            if hasattr(canvas, "setFillAlpha"):
+                canvas.setFillAlpha(1.0)
+            if hasattr(canvas, "setStrokeAlpha"):
+                canvas.setStrokeAlpha(1.0)
             canvas.drawImage(
-                str(seal),
+                _seal_image_reader(seal),
                 inner_x,
                 top - logo_w - 1 * mm,
                 width=logo_w,
@@ -966,8 +1093,25 @@ def _draw_cash_receipt_leaf_chrome(
         "RECEIVED WITH THANKS   ·   UNITY · HARMONY · PROGRESS",
     )
 
+    # Footer contacts inside the leaf (email + website).
+    foot_y = box_y + 6 * mm
+    canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.28))
+    canvas.setLineWidth(0.6)
+    canvas.line(inner_x, foot_y + 8 * mm, box_x + box_w - pad, foot_y + 8 * mm)
+    canvas.setFillColor(colors.HexColor(BRAND_GREEN))
+    canvas.setFont("Helvetica-Bold", 5.8)
+    canvas.drawString(inner_x, foot_y + 4.8 * mm, "EMAIL")
+    canvas.drawString(inner_x + 62 * mm, foot_y + 4.8 * mm, "WEBSITE")
+    canvas.setFillColor(colors.HexColor(BRAND_NAVY))
+    canvas.setFont("Helvetica-Bold", 7)
+    canvas.drawString(inner_x, foot_y + 1.8 * mm, ORG_EMAIL)
+    canvas.drawString(inner_x + 62 * mm, foot_y + 1.8 * mm, ORG_WEB)
+    canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+    canvas.setFont("Helvetica", 6)
+    canvas.drawRightString(box_x + box_w - pad, foot_y + 1.8 * mm, ORG_SUBTITLE)
+
     content_top = ban_y - 4 * mm
-    content_bottom = box_y + 28 * mm
+    content_bottom = box_y + 18 * mm
     return inner_x, content_bottom, box_w - 2 * pad, content_top - content_bottom
 
 
@@ -1812,8 +1956,8 @@ def build_no_dues_certificate_pdf(
 
     letterhead=True (digital): official letterhead pad layout + watermark
     (same template as Templates folder letterhead).
-    letterhead=False (paper print): omit letterhead; enlarge top/bottom margins
-    so the body fits pre-printed letterhead stationery.
+    letterhead=False (paper print): omit letterhead chrome; enlarge margins for
+    pre-printed stationery — society watermark is still drawn on every page.
     """
     info = no_dues_eligibility(conn, house_id, enrich_payment_row=enrich_payment_row)
     if require_eligible and not info["eligible"]:
@@ -1834,7 +1978,7 @@ def build_no_dues_certificate_pdf(
     house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
 
     if letterhead:
-        top_m, bottom_m, left_m, right_m = 78 * mm, 32 * mm, 14 * mm, 14 * mm
+        top_m, bottom_m, left_m, right_m = 62 * mm, 32 * mm, 14 * mm, 14 * mm
     else:
         top_m, bottom_m, left_m, right_m = 48 * mm, 32 * mm, 18 * mm, 18 * mm
 
@@ -1870,7 +2014,9 @@ def build_no_dues_certificate_pdf(
     body = (
         f"This is to certify that <b>{_escape(info['name'])}</b>, "
         f"resident of House/Plot <b>{_escape(house_no)}</b>, "
-        f"{ORG_SUBTITLE}, has <b>no outstanding subscription / maintenance dues</b> "
+        f"{_escape(ORG_COLONY)} ({_escape(ORG_SUBTITLE)}), "
+        f"has <b>no outstanding subscription / maintenance dues</b> "
+        f"with <b>{_escape(ORG_SOCIETY)}</b> "
         f"as per the society ledger on record for fee year <b>{fee_year}</b>."
     )
     story.append(Paragraph(body, body_style))
@@ -1900,19 +2046,29 @@ def build_no_dues_certificate_pdf(
             pass
 
     def _page(canvas, _doc):
-        if not letterhead:
-            return
         canvas.saveState()
         try:
-            _draw_mhws_letterhead_chrome(
-                canvas,
-                site_root,
-                officers,
-                page_w=page[0],
-                page_h=page[1],
-                mm=mm,
-                doc_label=f"No Dues · Plot {house_no}",
-            )
+            if letterhead:
+                _draw_mhws_letterhead_chrome(
+                    canvas,
+                    site_root,
+                    officers,
+                    page_w=page[0],
+                    page_h=page[1],
+                    mm=mm,
+                    doc_label=f"No Dues · Plot {house_no}",
+                )
+            else:
+                # Paper-print omits full letterhead chrome but still carries society watermark.
+                _draw_mhws_watermark(
+                    canvas,
+                    site_root,
+                    page_w=page[0],
+                    page_h=page[1],
+                    size_mm=96,
+                    cy_frac=0.48,
+                    alpha=0.04,
+                )
         finally:
             canvas.restoreState()
 
@@ -1963,7 +2119,8 @@ def build_no_objection_certificate_pdf(
     """Portrait No Objection Certificate PDF for one plot.
 
     letterhead=True (digital): official letterhead pad layout + watermark.
-    letterhead=False (paper print): omit letterhead for pre-printed stationery.
+    letterhead=False (paper print): omit letterhead chrome for stationery fit;
+    society watermark is still drawn on every page.
     """
     info = no_objection_eligibility(conn, house_id)
     if require_eligible and not info["eligible"]:
@@ -1986,7 +2143,7 @@ def build_no_objection_certificate_pdf(
     house_no = str(info.get("plotNo") or info.get("houseId") or house_id)
 
     if letterhead:
-        top_m, bottom_m, left_m, right_m = 78 * mm, 32 * mm, 14 * mm, 14 * mm
+        top_m, bottom_m, left_m, right_m = 62 * mm, 32 * mm, 14 * mm, 14 * mm
     else:
         top_m, bottom_m, left_m, right_m = 48 * mm, 32 * mm, 18 * mm, 18 * mm
 
@@ -2020,8 +2177,9 @@ def build_no_objection_certificate_pdf(
     story = []
     story.append(Paragraph("<b>NO OBJECTION CERTIFICATE</b>", title_style))
     body = (
-        f"This is to certify that <b>{ORG_NAME}</b> of "
-        f"{ORG_SUBTITLE} has <b>no objection</b> for "
+        f"This is to certify that <b>{_escape(ORG_SOCIETY)}</b> "
+        f"({_escape(ORG_COLONY)}, {_escape(ORG_SUBTITLE)}) "
+        f"has <b>no objection</b> for "
         f"<b>{_escape(info['name'])}</b>, resident of House/Plot <b>{_escape(house_no)}</b>, "
         f"in respect of the purpose stated below."
     )
@@ -2047,19 +2205,28 @@ def build_no_objection_certificate_pdf(
             pass
 
     def _page(canvas, _doc):
-        if not letterhead:
-            return
         canvas.saveState()
         try:
-            _draw_mhws_letterhead_chrome(
-                canvas,
-                site_root,
-                officers,
-                page_w=page[0],
-                page_h=page[1],
-                mm=mm,
-                doc_label=f"NOC · Plot {house_no}",
-            )
+            if letterhead:
+                _draw_mhws_letterhead_chrome(
+                    canvas,
+                    site_root,
+                    officers,
+                    page_w=page[0],
+                    page_h=page[1],
+                    mm=mm,
+                    doc_label=f"NOC · Plot {house_no}",
+                )
+            else:
+                _draw_mhws_watermark(
+                    canvas,
+                    site_root,
+                    page_w=page[0],
+                    page_h=page[1],
+                    size_mm=96,
+                    cy_frac=0.48,
+                    alpha=0.04,
+                )
         finally:
             canvas.restoreState()
 
@@ -2084,6 +2251,8 @@ def build_cash_received_note_pdf(
     attestation_id: str | None = None,
     verify_url: str | None = None,
     receipt_no: str | None = None,
+    conn=None,
+    officers: list[dict] | None = None,
 ) -> tuple[bytes, str]:
     """Cash receipt / voucher PDF matching the Templates folder receipt leaf + watermark."""
     rl = _reportlab()
@@ -2143,14 +2312,14 @@ def build_cash_received_note_pdf(
     page = rl["A4"]
 
     if is_claim:
-        # Reimbursement keeps letterhead-style voucher with watermark.
-        officers: list[dict] = []
+        # Reimbursement keeps letterhead-style voucher with watermark + office bearers.
+        officer_slots = officers if officers is not None else _letterhead_officers(conn)
         doc = rl["SimpleDocTemplate"](
             buf,
             pagesize=page,
             leftMargin=14 * mm,
             rightMargin=14 * mm,
-            topMargin=78 * mm,
+            topMargin=62 * mm,
             bottomMargin=32 * mm,
             title=f"{title} - Plot {plot_no}",
             author=ORG_AUTHOR,
@@ -2206,7 +2375,7 @@ def build_cash_received_note_pdf(
             canvas.saveState()
             try:
                 _draw_mhws_letterhead_chrome(
-                    canvas, site_root, officers,
+                    canvas, site_root, officer_slots,
                     page_w=page[0], page_h=page[1], mm=mm,
                     doc_label=f"Voucher · Plot {plot_no}",
                 )
@@ -2285,8 +2454,8 @@ def build_cash_received_note_pdf(
     story.append(Paragraph(_escape(note_text), value))
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(
-        "<b>Mode:</b> Cash only on this slip. Subject to verification by the Society. "
-        "Keep this as your acknowledgement.",
+        f"<b>Mode:</b> Cash only on this slip. Subject to verification by the Society. "
+        f"Keep this as your acknowledgement. Web: {_escape(ORG_WEB)} · {_escape(ORG_EMAIL)}",
         note,
     ))
     story.append(Spacer(1, 14 * mm))

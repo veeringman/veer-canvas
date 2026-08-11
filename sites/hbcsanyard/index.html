@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Himuda Housing Colony Sanyard</title>
   <meta name="description" content="Residents Welfare Association — Himuda Housing Colony Sanyard. Notices, dues, directory, and household profile.">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-167.png" sizes="167x167">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-152.png" sizes="152x152">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" sizes="180x180">
+  <link rel="manifest" href="manifest.webmanifest?v=20260810pwa1">
+  <link rel="icon" href="assets/favicon-192.png?v=20260810pwa1" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260810pwa1" sizes="180x180">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-167.png?v=20260810pwa1" sizes="167x167">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon-152.png?v=20260810pwa1" sizes="152x152">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=20260810pwa1" sizes="180x180">
   <meta name="theme-color" content="#15233f">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,20 +20,86 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260810final1">
-  <script src="portal.js?v=20260810final1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260811land3">
+  <script src="portal.js?v=20260811land3" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
 
-  <div id="gateView" class="shell gate-shell">
+  <div id="landingView" class="shell landing-shell">
+    <header class="landing-top">
+      <div class="landing-top-brand">
+        <picture>
+          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp?v=20260810lite1">
+          <img class="landing-top-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="" width="36" height="36" decoding="async">
+        </picture>
+        <span class="landing-top-name">Mandi Housing Welfare Society</span>
+      </div>
+      <button type="button" class="landing-signin" id="landingMembersBtn">
+        <span>Resident sign-in</span>
+        <span class="landing-signin-arrow" aria-hidden="true">→</span>
+      </button>
+    </header>
+
+    <section class="landing-hero" aria-labelledby="landingHeroTitle">
+      <div class="landing-hero-seal">
+        <picture>
+          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
+          <img
+            class="landing-seal"
+            src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
+            width="220"
+            height="220"
+            alt="Himuda Housing Colony Sanyard"
+            decoding="async"
+            fetchpriority="high"
+          >
+        </picture>
+      </div>
+      <p class="eyebrow" id="landingEyebrow">Mandi Housing Welfare Society · RWA · Mandi</p>
+      <h1 id="landingHeroTitle">Himuda Housing Colony Sanyard</h1>
+      <p class="landing-greeting" id="landingGreeting">Welcome to Mandi Housing Welfare Society.</p>
+    </section>
+
+    <section class="landing-section landing-updates" aria-labelledby="landingUpdatesTitle">
+      <h2 id="landingUpdatesTitle">Latest updates</h2>
+      <p class="muted landing-section-lede">Public news from the society.</p>
+      <div id="landingUpdatesList" class="landing-list">
+        <p class="muted">Loading updates…</p>
+      </div>
+    </section>
+
+    <section class="landing-section landing-committee" aria-labelledby="landingCommitteeTitle">
+      <h2 id="landingCommitteeTitle">Executive Committee</h2>
+      <p class="muted landing-section-lede">Office bearers serving Himuda Housing Colony Sanyard.</p>
+      <div id="landingCommitteeList" class="landing-list">
+        <p class="muted">Loading committee…</p>
+      </div>
+    </section>
+
+    <footer class="landing-foot muted">
+      <p class="gate-managed">
+        <span>Managed By</span>
+        <picture>
+          <source type="image/webp" srcset="assets/veerlabs-logo-mark-64.webp?v=20260811vl3 1x, assets/veerlabs-logo-mark.webp?v=20260811vl3 2x">
+          <img class="gate-managed-logo" src="assets/veerlabs-logo-mark-64.png?v=20260811vl3" alt="VeerLabs Solutions" width="21" height="19" decoding="async">
+        </picture>
+      </p>
+    </footer>
+  </div>
+
+  <div id="gateView" class="shell gate-shell" hidden>
+    <p class="gate-back-row">
+      <button type="button" class="btn ghost compact" id="gateBackToLandingBtn">← Back to colony home</button>
+    </p>
     <header class="gate-brand" id="gateBrand">
       <div class="seal-ring">
         <picture>
+          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
           <img
             class="seal"
             id="gateSeal"
-            src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1"
+            src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
             width="248"
             height="248"
             alt="Himuda Housing Colony Sanyard"
@@ -117,7 +183,15 @@
         <button type="button" class="btn ghost compact" id="appRefreshBtn">Refresh app</button>
         <span id="appRefreshStatus">Checks for updates automatically.</span>
       </p>
-      Managed on VeerCanvas · Add to Home Screen for quick access<span class="superadmin-only" id="gateCmsHint" hidden> · CMS at /admin</span>
+      <p class="gate-managed">
+        <span>Managed By</span>
+        <picture>
+          <source type="image/webp" srcset="assets/veerlabs-logo-mark-64.webp?v=20260811vl3 1x, assets/veerlabs-logo-mark.webp?v=20260811vl3 2x">
+          <img class="gate-managed-logo" src="assets/veerlabs-logo-mark-64.png?v=20260811vl3" alt="VeerLabs Solutions" width="21" height="19" decoding="async">
+        </picture>
+        <span class="superadmin-only" id="gateCmsHint" hidden>· CMS at /admin</span>
+      </p>
+      <p class="gate-managed-note muted">Add to Home Screen for quick access</p>
     </footer>
   </div>
 
@@ -125,7 +199,10 @@
     <header class="app-top">
       <div class="app-top-bar">
         <div class="brand-mini">
-          <img class="seal-mini" src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1" alt="" width="42" height="42" decoding="async">
+          <picture>
+            <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp?v=20260810lite1">
+            <img class="seal-mini" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="" width="42" height="42" decoding="async">
+          </picture>
           <div class="brand-mini-text">
             <strong>Himuda Housing Colony Sanyard</strong>
             <span class="user-chip-row">
@@ -205,6 +282,13 @@
           <h2>Your dues</h2>
           <p class="muted">From the RWA subscription ledger (keyed by plot number).</p>
         </header>
+        <div class="roster-block" id="societyBankBlock">
+          <header class="panel-head">
+            <h3>Society Dues Bank Details</h3>
+            <p class="muted">Pay society subscription / maintenance dues to this account (UPI QR or bank transfer).</p>
+          </header>
+          <div id="bankCard" class="pay-card"></div>
+        </div>
         <div id="duesCard" class="stat-grid"></div>
         <div class="roster-block vault-resident-block" id="vaultResidentBlock">
           <header class="panel-head">
@@ -251,7 +335,6 @@
           <p class="muted" id="noObjectionResidentStatus"></p>
           <div id="noObjectionResidentList" class="payment-records-list"></div>
         </div>
-        <div id="bankCard" class="pay-card"></div>
 
         <div class="roster-block payment-records-block" id="paymentRecordsBlock">
           <header class="panel-head">
@@ -1160,6 +1243,7 @@
             </label>
             <label>Email <input id="hhEmail" name="email" type="email" placeholder="optional"></label>
             <label>Phone <input id="hhPhone" name="phone" type="tel" placeholder="optional"></label>
+            <label class="check"><input type="checkbox" id="hhPrimaryDelegate" name="isPrimaryDelegate"> Primary delegate (EC-eligible)</label>
             <label class="check"><input type="checkbox" id="hhViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
             <button type="submit" class="btn secondary">Add household member</button>
             <p class="muted" id="householdStatus"></p>
@@ -1378,7 +1462,7 @@
         <div class="roster-block" data-entitlement="manage_bank">
           <div class="roster-toolbar">
             <div>
-              <h3>Payment collection</h3>
+              <h3>Society Dues Bank Details</h3>
               <p class="muted">Bank account and UPI QR shown on the dues page for residents.</p>
             </div>
             <button type="button" class="btn secondary compact" id="ecEditBankBtn">Edit bank &amp; UPI</button>
@@ -1390,7 +1474,7 @@
           <div class="roster-toolbar">
             <div>
               <h3>Add delegate</h3>
-              <p class="muted">Add a household login for any plot. Name and relation only — no email or phone here; the delegate can add contacts later on their profile.</p>
+              <p class="muted">Add a household login for any plot. Mark one delegate as <strong>primary</strong> to make them EC-eligible. Each person needs a unique email/phone identity.</p>
             </div>
           </div>
           <form id="ecDelegateForm" class="stack narrow ec-delegate-form">
@@ -1407,6 +1491,7 @@
                 <option value="other" selected>Other</option>
               </select>
             </label>
+            <label class="check"><input type="checkbox" id="ecDelegatePrimary" name="isPrimaryDelegate"> Mark as primary delegate (EC-eligible)</label>
             <label class="check"><input type="checkbox" id="ecDelegateViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
             <div class="btn-row">
               <button type="submit" class="btn secondary">Add delegate</button>
@@ -1415,6 +1500,43 @@
             <p class="muted" id="ecDelegateStatus"></p>
           </form>
           <div id="ecDelegateMemberList" class="household-member-list"></div>
+        </div>
+
+        <div class="roster-block" id="ecCharterBlock" data-entitlement="manage_roles" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Manage Charter</h3>
+              <p class="muted">Add EC members and office bearers. Only the plot owner or the primary delegate may hold the EC seat — if a primary delegate is seated, the owner does not get EC entitlements.</p>
+            </div>
+            <button type="button" class="btn ghost compact" id="ecCharterRefreshBtn">Refresh</button>
+          </div>
+          <form id="ecCharterForm" class="settings-grid" style="margin-bottom:1rem">
+            <label>Plot
+              <input id="ecCharterPlot" list="ecCharterPlotList" type="text" placeholder="e.g. 23" autocomplete="off" required>
+              <datalist id="ecCharterPlotList"></datalist>
+            </label>
+            <label>Seat holder (owner or primary delegate)
+              <select id="ecCharterSeat" required>
+                <option value="">Select plot first…</option>
+              </select>
+            </label>
+            <label>Official title (office bearer)
+              <input id="ecCharterTitle" type="text" placeholder="e.g. Treasurer" maxlength="80" autocomplete="off">
+            </label>
+            <label>Role
+              <select id="ecCharterRole">
+                <option value="member">EC Member</option>
+                <option value="bearer">Office Bearer</option>
+                <option value="admin">EC Admin</option>
+              </select>
+            </label>
+            <div class="btn-row span-2">
+              <button type="submit" class="btn primary">Save to charter</button>
+              <button type="button" class="btn ghost" id="ecCharterLoadEligibleBtn">Load eligible people</button>
+            </div>
+          </form>
+          <div id="ecCharterList" class="roles-members-list"></div>
+          <p class="muted" id="ecCharterStatus"></p>
         </div>
 
         <div class="roster-block" data-entitlement="manage_roster">
@@ -1509,6 +1631,10 @@
           <label class="check" for="noticePinnedInput">
             <input type="checkbox" name="pinned" id="noticePinnedInput">
             <span>Pin to top of colony board</span>
+          </label>
+          <label class="check" for="noticePublicLandingInput">
+            <input type="checkbox" name="publicLanding" id="noticePublicLandingInput">
+            <span>Also show on public landing page</span>
           </label>
           <div class="btn-row">
             <button type="submit" class="btn primary" id="noticeSubmitBtn">Publish notice</button>
@@ -2099,7 +2225,15 @@
         </div>
       </form>
     </dialog>
-    <footer class="app-foot">Managed on VeerCanvas · Himuda Housing Colony Sanyard RWA</footer>
+    <footer class="app-foot">
+      <span class="app-foot-managed">
+        <span>Managed By</span>
+        <picture>
+          <source type="image/webp" srcset="assets/veerlabs-logo-mark.webp?v=20260811vl3 1x, assets/veerlabs-logo-mark-96.webp?v=20260811vl3 2x">
+          <img class="gate-managed-logo" src="assets/veerlabs-logo-mark.png?v=20260811vl3" alt="VeerLabs Solutions" width="52" height="46" decoding="async">
+        </picture>
+      </span>
+    </footer>
   </div>
 </body>
 </html>

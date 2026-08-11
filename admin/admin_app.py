@@ -3155,6 +3155,16 @@ def api_rwa_household_member_item(house_id: str, member_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/public/landing", methods=["GET"])
+def api_rwa_public_landing():
+    """Pre-login colony home: greeting, published updates, office bearers."""
+    conn = _rwa_conn()
+    try:
+        return jsonify(rwa_portal.public_landing(conn, site_meta=load_site_meta()))
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/notices", methods=["GET"])
 def api_rwa_notices():
     conn = _rwa_conn()
@@ -4148,6 +4158,7 @@ def api_rwa_cash_received_note():
             category_label=category_label,
             attestation_id=att_id,
             verify_url=verify_url,
+            conn=conn,
         )
         dest = rwa_attest.attestations_dir(SITE_ROOT) / f"{att_id}.pdf"
         dest.write_bytes(pdf_bytes)
@@ -5571,6 +5582,80 @@ def api_rwa_roles_list():
         if err:
             return err
         return jsonify({"ok": True, "members": rwa_entitlements.list_office_and_ec(conn)})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/ec/charter", methods=["GET", "PATCH"])
+def api_rwa_ec_charter():
+    """Manage EC charter: list seat holders / update office bearers & members."""
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_roles")
+        if err:
+            # Fall back to sensitive_ops (EC Admin)
+            sess, err = _rwa_ec_session(conn, "sensitive_ops")
+            if err:
+                return err
+        actor = sess["resident"]
+        if request.method == "GET":
+            house_id = (request.args.get("houseId") or request.args.get("plot") or "").strip()
+            members = rwa_entitlements.list_office_and_ec(conn)
+            eligible = []
+            if house_id:
+                eligible = rwa_household.eligible_ec_members(conn, house_id)
+            return jsonify({
+                "ok": True,
+                "members": members,
+                "eligibleMembers": eligible,
+                "houseId": house_id or None,
+            })
+
+        payload = request.get_json(force=True, silent=True) or {}
+        house_id = str(payload.get("houseId") or payload.get("plot") or "").strip()
+        if not house_id:
+            return jsonify({"ok": False, "error": "houseId required"}), 400
+        patch = {
+            "isEcMember": payload.get("isEcMember", True),
+        }
+        if "isOfficeBearer" in payload or "officeBearer" in payload:
+            patch["isOfficeBearer"] = bool(payload.get("isOfficeBearer", payload.get("officeBearer")))
+        if "officialTitle" in payload or "official_title" in payload:
+            patch["officialTitle"] = payload.get("officialTitle", payload.get("official_title"))
+        if "role" in payload:
+            patch["role"] = payload.get("role")
+        if "ecMemberId" in payload or "ec_member_id" in payload:
+            patch["ecMemberId"] = payload.get("ecMemberId", payload.get("ec_member_id"))
+        if "entitlements" in payload and isinstance(payload.get("entitlements"), list):
+            patch["entitlements"] = payload["entitlements"]
+        if payload.get("remove"):
+            patch = {"isEcMember": False, "isOfficeBearer": False, "role": "resident", "officialTitle": ""}
+        try:
+            updated = rwa_portal.update_profile(conn, house_id, patch, actor=actor)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        members = rwa_entitlements.list_office_and_ec(conn)
+        return jsonify({"ok": True, "resident": updated, "members": members})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/ec/eligible/<path:house_id>", methods=["GET"])
+def api_rwa_ec_eligible(house_id: str):
+    """Owner + primary delegate options for an EC seat on this plot."""
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_roles")
+        if err:
+            sess, err = _rwa_ec_session(conn, "sensitive_ops")
+            if err:
+                return err
+        hid = (house_id or "").strip()
+        return jsonify({
+            "ok": True,
+            "houseId": hid,
+            "members": rwa_household.eligible_ec_members(conn, hid),
+        })
     finally:
         conn.close()
 

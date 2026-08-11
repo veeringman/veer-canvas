@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate printable EC committee pad HTML from rwa.db (not for the live portal).
+"""Generate printable EC committee charter HTML from rwa.db (not for the live portal).
 
 Usage:
   python3 scripts/export_ec_pad.py
@@ -21,6 +21,14 @@ SITE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = SITE_ROOT / "data" / "rwa.db"
 DEFAULT_OUT = SITE_ROOT / "documents" / "ec-committee-pad.html"
 SUPERADMIN = "__SUPERADMIN__"
+
+# Fallback executive members when the roster has no non-office-bearer EC rows yet.
+FALLBACK_GENERAL = [
+    {"name": "Hari Singh Dogra", "phone": ""},
+    {"name": "Roop Lal Sharma", "phone": ""},
+    {"name": "Jitesh Sharma", "phone": ""},
+    {"name": "Rajesh Kumar Saini", "phone": ""},
+]
 
 TITLE_RANK = {
     "president": 0,
@@ -48,7 +56,7 @@ def fmt_phone(phone: str | None) -> str:
     digits = "".join(c for c in str(phone) if c.isdigit())
     if len(digits) == 10:
         return f"{digits[:5]} {digits[5:]}"
-    return str(phone).strip()
+    return str(phone).strip() or "—"
 
 
 def load_ec(conn: sqlite3.Connection) -> tuple[list[dict], list[dict]]:
@@ -113,7 +121,7 @@ def member_tables(general: list[dict], start_no: int) -> str:
         for j, m in enumerate(items, offset):
             rows.append(
                 f"<tr><td>{j}</td><td>{html.escape(m['name'])}</td>"
-                f"<td>{html.escape(fmt_phone(m['phone']))}</td></tr>"
+                f"<td>{html.escape(fmt_phone(m.get('phone')))}</td></tr>"
             )
         return (
             '<table class="member-table"><thead><tr>'
@@ -133,7 +141,7 @@ def render(office: list[dict], general: list[dict]) -> str:
     office_count = len(office) if office else len(general)
     member_start = office_count + 1
     if office:
-        general_for_members = general
+        general_for_members = general or list(FALLBACK_GENERAL)
     else:
         general_for_members = []
 
@@ -143,115 +151,212 @@ def render(office: list[dict], general: list[dict]) -> str:
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Himuda Housing Colony Sanyard — Executive Committee Pad</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Himuda Housing Colony Sanyard — Executive Committee Charter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page {{ size: A4 portrait; margin: 10mm; }}
+    @page {{ size: A4 portrait; margin: 6mm; }}
     * {{ box-sizing: border-box; }}
+    :root {{
+      --navy: #0b2a56;
+      --navy-2: #143a6e;
+      --green: #1a6b3a;
+      --gold: #c9a227;
+      --ink: #12233f;
+      --muted: #5a6a80;
+      --paper: #ffffff;
+    }}
     body {{
       margin: 0;
-      font-family: "Times New Roman", Times, Georgia, serif;
-      color: #1a1208;
-      background: #e8e0d0;
+      color: var(--ink);
+      background: #cfd8e6;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }}
+    .screen-hint {{
+      text-align: center;
+      padding: 10px 14px;
+      font: 500 13px/1.45 system-ui, sans-serif;
+      color: #445;
+      max-width: 210mm;
+      margin: 0 auto;
     }}
     .sheet {{
+      position: relative;
       width: 210mm;
       min-height: 297mm;
-      margin: 0 auto;
-      padding: 8mm 10mm 10mm;
-      background: #fdfaf3;
-      border: 2px solid #6b4a2e;
-      position: relative;
+      margin: 0 auto 18px;
+      padding: 0;
+      background: var(--paper);
+      border: 1pt solid rgba(11, 42, 86, 0.55);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }}
-    .corner {{ position: absolute; width: 16mm; height: 16mm; border: 2px solid #6b4a2e; }}
-    .c-tl {{ top: 5mm; left: 5mm; border-right: 0; border-bottom: 0; }}
-    .c-tr {{ top: 5mm; right: 5mm; border-left: 0; border-bottom: 0; }}
-    .c-bl {{ bottom: 5mm; left: 5mm; border-right: 0; border-top: 0; }}
-    .c-br {{ bottom: 5mm; right: 5mm; border-left: 0; border-top: 0; }}
-    .head {{
+    .accent-edge {{
       display: grid;
-      grid-template-columns: 26mm 1fr;
-      gap: 7mm;
+      grid-template-columns: 1fr 7mm 1fr;
+      height: 2.6mm;
+      flex: 0 0 auto;
+    }}
+    .accent-edge .n {{ background: var(--navy); }}
+    .accent-edge .g {{ background: var(--gold); }}
+    .accent-edge .e {{ background: var(--green); }}
+    .accent-edge-thin {{
+      height: 0.4mm;
+      background: rgba(11, 42, 86, 0.12);
+      flex: 0 0 auto;
+    }}
+    .wm {{
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      transform: translate(-50%, -50%);
+      width: 96mm;
+      height: auto;
+      opacity: 0.42;
+      pointer-events: none;
+      z-index: 0;
+    }}
+    .pad {{
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 5mm 12mm 0;
+      min-height: 0;
+    }}
+    .brand {{
+      display: grid;
+      grid-template-columns: 24mm 1fr;
+      gap: 5mm;
       align-items: center;
-      margin-bottom: 4mm;
+      padding: 0 0 3mm;
     }}
-    .seal {{
+    .brand .logo {{
       width: 24mm;
-      height: 24mm;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid #9e7d3a;
+      height: auto;
+      display: block;
     }}
-    .org h1 {{
+    .brand h1 {{
       margin: 0;
+      font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
       font-size: 16pt;
-      color: #3d2914;
-      line-height: 1.12;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      color: var(--navy);
+      line-height: 1.05;
+      text-transform: uppercase;
     }}
-    .org p {{
-      margin: 1.5mm 0 0;
-      font-size: 10pt;
-      color: #4a3728;
-      line-height: 1.3;
-    }}
-    .main-banner {{
-      text-align: center;
-      background: #4a3728;
-      color: #fdf6e8;
+    .brand .colony {{
+      margin: 0.8mm 0 0;
       font-size: 10pt;
       font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 2.5mm;
-      margin: 3mm 0 4mm;
+      color: var(--navy-2);
+      letter-spacing: 0.03em;
     }}
+    .brand .addr {{
+      margin: 1.2mm 0 0;
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--green);
+    }}
+    .rule {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 3mm;
+      margin: 0 0 3.5mm;
+    }}
+    .rule::before,
+    .rule::after {{
+      content: "";
+      height: 0;
+      border-top: 1pt solid var(--navy);
+    }}
+    .rule .pip {{
+      width: 2.2mm;
+      height: 2.2mm;
+      background: var(--gold);
+      transform: rotate(45deg);
+      box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
+    }}
+    .banner {{
+      text-align: center;
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+      color: #f7f3ea;
+      font-size: 9.5pt;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      padding: 2.6mm 4mm;
+      margin: 0 0 4mm;
+    }}
+    .banner .sep {{ color: var(--gold); margin: 0 1.4mm; letter-spacing: 0; }}
     .section-title {{
-      text-align: center;
-      font-size: 11pt;
+      margin: 0 0 2mm;
+      font-size: 8pt;
       font-weight: 700;
-      color: #3d2914;
-      margin: 4mm 0 2mm;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
+      color: var(--green);
+      text-align: center;
     }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      font-size: 9.5pt;
+      font-size: 9.2pt;
     }}
     th, td {{
-      border: 1px solid #6b4a2e;
-      padding: 1.8mm 2mm;
+      border: 1px solid rgba(11, 42, 86, 0.28);
+      padding: 2mm 2.4mm;
       text-align: left;
       vertical-align: middle;
     }}
     th {{
-      background: #4a3728;
-      color: #fdf6e8;
+      background: rgba(11, 42, 86, 0.92);
+      color: #f7f3ea;
       font-weight: 700;
       text-align: center;
-      font-size: 9pt;
+      font-size: 8pt;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+    td:first-child {{ text-align: center; width: 12mm; color: var(--muted); font-weight: 600; }}
+    .office-table td:nth-child(2) {{
+      width: 34%;
+      color: var(--green);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 8.2pt;
       letter-spacing: 0.04em;
     }}
-    td:first-child {{ text-align: center; width: 10mm; }}
-    .office-table td:nth-child(2) {{ width: 38%; }}
+    .office-table td:nth-child(3) {{
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }}
     .members-heading {{
       display: flex;
       align-items: center;
       gap: 4mm;
-      margin: 5mm 0 2mm;
+      margin: 5.5mm 0 2.5mm;
     }}
     .members-heading::before,
     .members-heading::after {{
       content: "";
       flex: 1;
-      border-top: 1px solid #6b4a2e;
+      border-top: 1pt solid rgba(11, 42, 86, 0.28);
     }}
     .members-heading span {{
-      font-size: 10pt;
+      font-size: 8pt;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
-      color: #3d2914;
+      color: var(--green);
       white-space: nowrap;
     }}
     .member-columns {{
@@ -259,72 +364,159 @@ def render(office: list[dict], general: list[dict]) -> str:
       grid-template-columns: 1fr 1fr;
       gap: 4mm;
     }}
-    .member-table td:first-child {{ width: 8mm; }}
-    .empty-members {{ text-align: center; color: #666; font-size: 9pt; }}
-    .footer {{
-      margin-top: 6mm;
-      text-align: center;
-      font-size: 8.5pt;
-      color: #6b4a2e;
-      letter-spacing: 0.06em;
-      border-top: 1px solid rgba(107, 74, 46, 0.4);
-      padding-top: 3mm;
+    .member-table td:nth-child(2) {{
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }}
+    .member-table td:first-child {{ width: 10mm; }}
+    .empty-members {{ text-align: center; color: var(--muted); font-size: 9pt; }}
+    .body-spacer {{ flex: 1; min-height: 12mm; }}
+    .foot {{ margin-top: auto; padding: 0; }}
+    .contacts {{
+      display: grid;
+      grid-template-columns: 1.35fr 1.25fr 1fr;
+      gap: 3mm;
+      padding: 2.8mm 0 2.6mm;
+      border-top: 1pt solid rgba(11, 42, 86, 0.45);
+      font-size: 7.4pt;
+      align-items: start;
+    }}
+    .contact {{
+      display: grid;
+      grid-template-columns: 4.2mm 1fr;
+      gap: 1.6mm;
+      align-items: start;
+    }}
+    .contact svg {{
+      width: 3.6mm;
+      height: 3.6mm;
+      margin-top: 0.4mm;
+      stroke: var(--green);
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }}
+    .contact .k {{
+      display: block;
+      font-size: 6.2pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.5mm;
+    }}
+    .contact .v {{
+      color: var(--navy);
+      font-weight: 600;
+      line-height: 1.25;
+    }}
+    .slogan-bar {{
+      margin: 0 -12mm;
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+      color: #f7f3ea;
+      text-align: center;
+      padding: 2.3mm 10mm;
+      font-size: 8.2pt;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }}
+    .slogan-bar .sep {{ color: var(--gold); margin: 0 1.6mm; letter-spacing: 0; }}
+    .slogan-bar .u {{ color: #dbe7ff; }}
+    .slogan-bar .h {{ color: #b8e6c6; }}
+    .slogan-bar .p {{ color: #f0d48a; }}
     .meta {{
       text-align: right;
-      font-size: 7.5pt;
-      color: #888;
-      margin-top: 2mm;
-    }}
-    .screen-hint {{
-      text-align: center;
-      padding: 8px;
-      font-family: system-ui, sans-serif;
-      font-size: 13px;
-      color: #555;
+      font-size: 7pt;
+      color: var(--muted);
+      margin: 2mm 0 3mm;
     }}
     @media print {{
       body {{ background: #fff; }}
-      .screen-hint {{ display: none; }}
-      .sheet {{ margin: 0; box-shadow: none; }}
+      .screen-hint {{ display: none !important; }}
+      .sheet {{
+        margin: 0;
+        border-width: 0.8pt;
+        min-height: 100vh;
+      }}
     }}
   </style>
 </head>
 <body>
-  <p class="screen-hint">Print on A4 — send to press for EC pad / chart. Generated {html.escape(generated)}.</p>
+  <p class="screen-hint">
+    Executive Committee Charter — Himuda Housing Colony Sanyard.<br>
+    Open → Print → A4. Generated {html.escape(generated)}.
+  </p>
+
   <div class="sheet">
-    <span class="corner c-tl" aria-hidden="true"></span>
-    <span class="corner c-tr" aria-hidden="true"></span>
-    <span class="corner c-bl" aria-hidden="true"></span>
-    <span class="corner c-br" aria-hidden="true"></span>
+    <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
+    <div class="accent-edge-thin" aria-hidden="true"></div>
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
 
-    <header class="head">
-      <img class="seal" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
-      <div class="org">
-        <h1>Himuda Housing Colony Sanyard</h1>
-        <p>Housing Colony Sanyard, Mandi HP 175001</p>
-        <p>Unity · Harmony · Progress</p>
-        <p><strong>Executive Committee</strong></p>
-      </div>
-    </header>
+    <div class="pad">
+      <header class="brand">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
+        <div>
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+        </div>
+      </header>
 
-    <div class="main-banner">Office Bearers &amp; Executive Committee Members</div>
+      <div class="rule" aria-hidden="true"><span class="pip"></span></div>
 
-    <div class="section-title">Office Bearers</div>
-    <table class="office-table">
-      <thead>
-        <tr><th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th></tr>
-      </thead>
-      <tbody>
+      <div class="banner">Executive Committee Charter <span class="sep">·</span> Office Bearers &amp; Members</div>
+
+      <div class="section-title">Office Bearers</div>
+      <table class="office-table">
+        <thead>
+          <tr><th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th></tr>
+        </thead>
+        <tbody>
         {office_rows(office, general)}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
 
-    <div class="members-heading"><span>Executive Committee Members</span></div>
-    {member_tables(general_for_members, member_start)}
+      <div class="members-heading"><span>Executive Committee Members</span></div>
+      {member_tables(general_for_members, member_start)}
 
-    <footer class="footer">Unity · Harmony · Progress</footer>
-    <p class="meta">Chart generated {html.escape(generated)} · Himuda Housing Colony Sanyard</p>
+      <div class="body-spacer" aria-hidden="true"></div>
+
+      <footer class="foot">
+        <div class="contacts">
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            <div>
+              <span class="k">Address</span>
+              <span class="v">Housing Colony Sanyard, Mandi HP 175001</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1.5"/><path d="M4 7l8 6 8-6"/></svg>
+            <div>
+              <span class="k">Email</span>
+              <span class="v">housingcolonysanyard@gmail.com</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16"/></svg>
+            <div>
+              <span class="k">Website</span>
+              <span class="v">housingcolonysanyard.in</span>
+            </div>
+          </div>
+        </div>
+        <div class="slogan-bar" aria-label="Society slogan">
+          <span class="u">Unity</span><span class="sep">·</span>
+          <span class="h">Harmony</span><span class="sep">·</span>
+          <span class="p">Progress</span>
+        </div>
+        <p class="meta">Executive Committee Charter · Generated {html.escape(generated)} · Himuda Housing Colony Sanyard</p>
+      </footer>
+    </div>
   </div>
 </body>
 </html>
@@ -332,7 +524,7 @@ def render(office: list[dict], general: list[dict]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export printable EC committee pad HTML")
+    parser = argparse.ArgumentParser(description="Export printable EC committee charter HTML")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB, help="Path to rwa.db")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT, help="Output HTML path")
     args = parser.parse_args()
@@ -340,7 +532,7 @@ def main() -> None:
     if not args.db.is_file():
         raise SystemExit(f"Database not found: {args.db}")
 
-    conn = sqlite3.connect(args.db)
+    conn = sqlite3.connect(str(args.db))
     try:
         office, general = load_ec(conn)
     finally:
@@ -348,7 +540,7 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render(office, general), encoding="utf-8")
-    print(f"Wrote {args.output} ({len(office)} office bearers, {len(general)} members)")
+    print(f"Wrote {args.output} ({len(office)} office bearers, {len(general) or len(FALLBACK_GENERAL)} members)")
 
 
 if __name__ == "__main__":

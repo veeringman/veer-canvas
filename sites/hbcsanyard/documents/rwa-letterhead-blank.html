@@ -75,6 +75,18 @@
       font-weight: 600;
       color: var(--green);
     }
+    .wm {
+      position: absolute;
+      left: 50%;
+      top: 55%;
+      transform: translate(-50%, -50%);
+      width: 96mm;
+      height: auto;
+      opacity: 0.42;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .head, .body-area, .slogan-bar { position: relative; z-index: 1; }
     .body-area {
       flex: 1;
       min-height: 210mm;
@@ -101,12 +113,14 @@
 <body>
   <p class="screen-hint">Blank A4 letterhead pad — Housing Colony Sanyard, Mandi HP 175001</p>
   <div class="sheet">
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
     <header class="head">
-      <img class="seal" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
+      <img class="seal" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
       <div class="org">
         <h1>Mandi Housing Welfare Society</h1>
         <p class="colony">Himuda Housing Colony Sanyard</p>
         <p class="sub">Housing Colony Sanyard, Mandi HP 175001</p>
+        <p class="sub">housingcolonysanyard.in</p>
       </div>
     </header>
     <div class="body-area" aria-label="Writing area"></div>

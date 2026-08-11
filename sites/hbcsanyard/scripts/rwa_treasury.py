@@ -345,6 +345,26 @@ def _apply(
         f"UPDATE {table} SET {sets} WHERE {where}",
         (*params, *where_params),
     )
+    # Keep vault Verify in sync — Treasury validate/confirm seals the linked docs.
+    try:
+        import rwa_vault
+
+        st_after = "pending"
+        if action == "validate":
+            st_after = "validated"
+        elif action == "confirm":
+            st_after = "confirmed"
+        rwa_vault.sync_linked_docs_from_treasury(
+            conn,
+            kind=kind,
+            target_id=tid,
+            treasury_status=st_after,
+            actor_house=house,
+            note=note_clean,
+            commit=False,
+        )
+    except Exception:
+        pass
     conn.commit()
     return _reload_public(conn, kind, tid)
 

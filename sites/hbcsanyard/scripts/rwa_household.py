@@ -131,10 +131,20 @@ def public_member(m: dict | sqlite3.Row | None, *, include_contacts: bool = True
         "relation": relation,
         "relationLabel": RELATION_LABELS.get(relation, relation.title()),
         "isPrimary": bool(int(data.get("is_primary") or data.get("isPrimary") or 0)),
+        "isPrimaryDelegate": bool(
+            int(data.get("is_primary_delegate") or data.get("isPrimaryDelegate") or 0)
+        ),
         "canManage": bool(int(data.get("can_manage") or data.get("canManage") or 0)),
         "viewOnly": bool(int(data.get("view_only") or data.get("viewOnly") or 0)),
         "status": data.get("status") or "active",
+        "identityId": data.get("id"),
     }
+    if out["isPrimary"]:
+        out["identityLabel"] = "Owner"
+    elif out["isPrimaryDelegate"]:
+        out["identityLabel"] = "Primary delegate"
+    else:
+        out["identityLabel"] = out["relationLabel"] or "Delegate"
     if include_contacts:
         out["email"] = data.get("email") or ""
         out["phone"] = data.get("phone") or ""
@@ -176,7 +186,7 @@ def list_members(
             """
             SELECT * FROM household_members
             WHERE house_id = ?
-            ORDER BY is_primary DESC, can_manage DESC,
+            ORDER BY is_primary DESC, is_primary_delegate DESC, can_manage DESC,
               CASE relation
                 WHEN 'owner' THEN 0 WHEN 'spouse' THEN 1 WHEN 'parent' THEN 2
                 WHEN 'child' THEN 3 ELSE 4 END,
@@ -189,7 +199,7 @@ def list_members(
             """
             SELECT * FROM household_members
             WHERE house_id = ? AND status = 'active'
-            ORDER BY is_primary DESC, can_manage DESC,
+            ORDER BY is_primary DESC, is_primary_delegate DESC, can_manage DESC,
               CASE relation
                 WHEN 'owner' THEN 0 WHEN 'spouse' THEN 1 WHEN 'parent' THEN 2
                 WHEN 'child' THEN 3 ELSE 4 END,
@@ -198,6 +208,169 @@ def list_members(
             (hid,),
         ).fetchall()
     return [_row_dict(r) for r in rows]
+
+
+def primary_delegate_member(conn: sqlite3.Connection, house_id: str) -> dict | None:
+    """Active primary delegate for a plot (if any)."""
+    ensure_household_members_table(conn)
+    hid = (house_id or "").strip()
+    if not hid:
+        return None
+    row = conn.execute(
+        """
+        SELECT * FROM household_members
+        WHERE house_id = ? AND status = 'active' AND is_primary_delegate = 1
+        LIMIT 1
+        """,
+        (hid,),
+    ).fetchone()
+    return _row_dict(row) if row else None
+
+
+def assert_unique_member_identity(
+    conn: sqlite3.Connection,
+    *,
+    email: str | None,
+    phone: str | None,
+    exclude_member_id: str | None = None,
+) -> None:
+    """Owners and delegates must not share email / phone with another active login."""
+    ensure_household_members_table(conn)
+    email_n = str(email or "").strip().lower() or None
+    phone_n = normalize_phone(phone) if phone else None
+    exclude = (exclude_member_id or "").strip() or None
+    if email_n:
+        row = conn.execute(
+            """
+            SELECT id, house_id, name FROM household_members
+            WHERE status = 'active' AND lower(trim(email)) = ?
+              AND (? IS NULL OR id != ?)
+            LIMIT 1
+            """,
+            (email_n, exclude, exclude),
+        ).fetchone()
+        if row:
+            raise ValueError(
+                f"Email already used by {row['name']} (plot {row['house_id']}) — each person needs a unique login identity"
+            )
+    if phone_n:
+        digits = re.sub(r"\D", "", phone_n)
+        rows = conn.execute(
+            """
+            SELECT id, house_id, name, phone FROM household_members
+            WHERE status = 'active' AND phone IS NOT NULL AND trim(phone) != ''
+              AND (? IS NULL OR id != ?)
+            """,
+            (exclude, exclude),
+        ).fetchall()
+        for row in rows:
+            other = re.sub(r"\D", "", str(row["phone"] or ""))
+            if len(other) >= 10 and other[-10:] == digits[-10:]:
+                raise ValueError(
+                    f"Phone already used by {row['name']} (plot {row['house_id']}) — each person needs a unique login identity"
+                )
+
+
+def is_ec_eligible_member(member: dict | None) -> bool:
+    """Owner or primary delegate (not view-only) may hold an EC seat."""
+    if not member:
+        return False
+    if (member.get("status") or "active") != "active":
+        return False
+    if int(member.get("view_only") or member.get("viewOnly") or 0):
+        return False
+    if int(member.get("is_primary") or member.get("isPrimary") or 0):
+        return True
+    if int(member.get("is_primary_delegate") or member.get("isPrimaryDelegate") or 0):
+        return True
+    return False
+
+
+def eligible_ec_members(conn: sqlite3.Connection, house_id: str) -> list[dict]:
+    """People who may be designated as the EC seat holder for this plot."""
+    return [
+        public_member(m)
+        for m in list_members(conn, house_id, include_inactive=False)
+        if is_ec_eligible_member(m)
+    ]
+
+
+def set_primary_delegate(
+    conn: sqlite3.Connection,
+    house_id: str,
+    member_id: str,
+    *,
+    enabled: bool = True,
+    commit: bool = True,
+) -> dict:
+    """Mark / clear primary delegate (at most one per plot; never the owner)."""
+    ensure_household_members_table(conn)
+    hid = (house_id or "").strip()
+    mid = (member_id or "").strip()
+    member = get_member(conn, mid)
+    if not member or member.get("house_id") != hid:
+        raise ValueError("Member not found")
+    if int(member.get("is_primary") or 0):
+        raise ValueError("The plot owner cannot also be marked as primary delegate")
+    if (member.get("status") or "active") != "active":
+        raise ValueError("Only an active delegate can be primary")
+    now = utc_now()
+    if enabled:
+        if int(member.get("view_only") or 0):
+            raise ValueError("Clear view-only before marking as primary delegate (EC-eligible)")
+        conn.execute(
+            "UPDATE household_members SET is_primary_delegate = 0, updated_at = ? WHERE house_id = ?",
+            (now, hid),
+        )
+        conn.execute(
+            """
+            UPDATE household_members
+            SET is_primary_delegate = 1, view_only = 0, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, mid),
+        )
+    else:
+        conn.execute(
+            "UPDATE household_members SET is_primary_delegate = 0, updated_at = ? WHERE id = ?",
+            (now, mid),
+        )
+        # If this person held the EC seat, fall seat back to owner.
+        owner = primary_member(conn, hid)
+        conn.execute(
+            """
+            UPDATE residents
+            SET ec_member_id = ?, updated_at = ?
+            WHERE house_id = ? AND ec_member_id = ?
+            """,
+            ((owner or {}).get("id"), now, hid, mid),
+        )
+    if commit:
+        conn.commit()
+    return public_member(get_member(conn, mid))
+
+
+def resolve_ec_member_id(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    ec_member_id: str | None = None,
+    require_eligible: bool = True,
+) -> str | None:
+    """Validate / default the EC seat holder for a plot."""
+    hid = (house_id or "").strip()
+    mid = (ec_member_id or "").strip() or None
+    if mid:
+        member = get_member(conn, mid)
+        if not member or member.get("house_id") != hid:
+            raise ValueError("EC seat holder must belong to this plot")
+        if require_eligible and not is_ec_eligible_member(member):
+            raise ValueError(
+                "Only the plot owner or the primary delegate can hold an EC seat"
+            )
+        return mid
+    owner = primary_member(conn, hid)
+    return (owner or {}).get("id")
 
 
 def primary_member(conn: sqlite3.Connection, house_id: str) -> dict | None:
@@ -278,13 +451,17 @@ def can_actor_manage_household(actor: dict | None, house_id: str) -> bool:
     actor_house = actor.get("houseId") or actor.get("house_id")
     if actor_house == house_id:
         return bool(actor.get("canManageHousehold") or actor.get("canManage") or actor.get("isPrimary"))
-    # Cross-plot: EC Admins only (add/manage delegates for any resident).
+    # Cross-plot: EC seat holders with admin (or manage_roles via entitlements).
     try:
         import rwa_entitlements as ents
 
-        return ents.is_ec_admin(actor) and actor.get("isPrimary") is not False
+        return ents.actor_holds_ec_seat(actor) and (
+            ents.is_ec_admin(actor) or ents.actor_has(actor, "manage_roles")
+        )
     except Exception:
-        return (actor.get("role") or "") == "admin" and actor.get("isPrimary") is not False
+        return bool(actor.get("holdsEcSeat")) and (
+            (actor.get("role") or "") == "admin" or actor.get("isEcAdmin")
+        )
 
 
 def actor_is_view_only(actor: dict | None) -> bool:
@@ -335,18 +512,26 @@ def add_member(
             raise ValueError("Enter a valid 10-digit mobile number")
 
     view_only = bool(payload.get("viewOnly") or payload.get("view_only"))
+    want_primary_delegate = bool(
+        payload.get("isPrimaryDelegate") or payload.get("is_primary_delegate")
+    )
+    if want_primary_delegate and view_only:
+        raise ValueError("Primary delegate cannot be view-only")
+    assert_unique_member_identity(conn, email=email, phone=phone)
     # Delegates never get manage by default; owners stay primary
     mid = f"hm_{secrets.token_hex(8)}"
     now = utc_now()
     conn.execute(
         """
         INSERT INTO household_members(
-          id, house_id, relation, is_primary, can_manage, view_only,
+          id, house_id, relation, is_primary, is_primary_delegate, can_manage, view_only,
           name, title, email, phone, status, created_at, updated_at
-        ) VALUES (?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 'active', ?, ?)
+        ) VALUES (?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?, 'active', ?, ?)
         """,
         (mid, hid, relation, 1 if view_only else 0, name, title, email, phone, now, now),
     )
+    if want_primary_delegate:
+        set_primary_delegate(conn, hid, mid, enabled=True, commit=False)
     conn.commit()
     return public_member(get_member(conn, mid))
 
@@ -401,6 +586,7 @@ def update_member(
 
     relation = member.get("relation") or "other"
     is_primary = int(member.get("is_primary") or 0)
+    is_primary_delegate = int(member.get("is_primary_delegate") or 0)
     can_manage = int(member.get("can_manage") or 0)
     view_only = int(member.get("view_only") or 0)
     status = member.get("status") or "active"
@@ -415,6 +601,8 @@ def update_member(
                 view_only = 0
             else:
                 view_only = 1 if (payload.get("viewOnly", payload.get("view_only"))) else 0
+                if view_only and is_primary_delegate:
+                    raise ValueError("Clear primary-delegate status before setting view-only")
         if "status" in payload and payload.get("status") in {"active", "inactive"}:
             if is_primary and payload.get("status") == "inactive":
                 raise ValueError("Cannot deactivate the primary owner")
@@ -422,25 +610,44 @@ def update_member(
         if payload.get("makePrimary") and not is_primary:
             # Transfer primary + manage to this member
             conn.execute(
-                "UPDATE household_members SET is_primary = 0, can_manage = 0, view_only = 0 WHERE house_id = ?",
+                """
+                UPDATE household_members
+                SET is_primary = 0, is_primary_delegate = 0, can_manage = 0, view_only = 0
+                WHERE house_id = ?
+                """,
                 (hid,),
             )
             is_primary = 1
+            is_primary_delegate = 0
             can_manage = 1
             view_only = 0
             relation = "owner"
+        if "isPrimaryDelegate" in payload or "is_primary_delegate" in payload:
+            want_pd = bool(payload.get("isPrimaryDelegate", payload.get("is_primary_delegate")))
+            if want_pd:
+                set_primary_delegate(conn, hid, member_id, enabled=True, commit=False)
+                is_primary_delegate = 1
+                view_only = 0
+            else:
+                set_primary_delegate(conn, hid, member_id, enabled=False, commit=False)
+                is_primary_delegate = 0
+
+    assert_unique_member_identity(
+        conn, email=email, phone=phone, exclude_member_id=member_id
+    )
 
     now = utc_now()
     conn.execute(
         """
         UPDATE household_members
         SET name = ?, title = ?, email = ?, phone = ?, relation = ?,
-            is_primary = ?, can_manage = ?, view_only = ?, status = ?, updated_at = ?
+            is_primary = ?, is_primary_delegate = ?, can_manage = ?, view_only = ?,
+            status = ?, updated_at = ?
         WHERE id = ?
         """,
         (
             name, title, email, phone, relation,
-            is_primary, can_manage, view_only, status, now, member_id,
+            is_primary, is_primary_delegate, can_manage, view_only, status, now, member_id,
         ),
     )
     if is_primary:
@@ -473,6 +680,8 @@ def delete_member(
             raise ValueError("Cannot remove the only owner / manager for this plot")
         if int(member.get("is_primary") or 0):
             raise ValueError("Make another member primary before removing the owner")
+    if int(member.get("is_primary_delegate") or 0):
+        set_primary_delegate(conn, hid, member_id, enabled=False, commit=False)
     conn.execute("DELETE FROM household_members WHERE id = ?", (member_id,))
     conn.commit()
 
@@ -500,6 +709,10 @@ def apply_member_contacts(
         if not new_phone or len(re.sub(r"\D", "", new_phone)) < 10:
             raise ValueError("Enter a valid 10-digit mobile number")
         changed = True
+    if changed:
+        assert_unique_member_identity(
+            conn, email=new_email, phone=new_phone, exclude_member_id=member_id
+        )
     if not changed:
         return member
     conn.execute(

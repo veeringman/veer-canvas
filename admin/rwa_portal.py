@@ -47,6 +47,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_db,
     ensure_grievances_table,
     ensure_notice_pin_order,
+    ensure_notice_audience,
     ensure_notice_shares_table,
     ensure_notice_engagement_tables,
     ensure_household_members_table,
@@ -1073,6 +1074,7 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         (r.get("role") or "") == "admin"
     ) or super_admin
     is_mem = bool(int(r.get("is_ec_member") or 0)) or is_ob or super_admin
+    ec_member_id = str(r.get("ec_member_id") or "").strip() or None
     out = {
         "houseId": r.get("house_id"),
         "plotNo": r.get("plot_no"),
@@ -1093,11 +1095,14 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         "relation": "owner" if not super_admin else "",
         "relationLabel": "Owner" if not super_admin else "",
         "isPrimary": True,
+        "isPrimaryDelegate": False,
         "canManageHousehold": True,
         "viewOnly": False,
         "isEcMember": is_mem,
         "isOfficeBearer": is_ob,
         "isEcAdmin": (r.get("role") or "") == "admin" or super_admin,
+        "ecMemberId": ec_member_id,
+        "holdsEcSeat": True if super_admin else False,
         "entitlements": [],
         "hasPhoto": False,
         "photoUrl": "",
@@ -1111,21 +1116,39 @@ def public_resident(r: dict, member: dict | None = None) -> dict:
         out["phone"] = pub.get("phone") or ""
         out["relation"] = pub.get("relation") or "other"
         out["relationLabel"] = pub.get("relationLabel") or ""
+        out["identityLabel"] = pub.get("identityLabel") or ""
         out["isPrimary"] = bool(pub.get("isPrimary"))
+        out["isPrimaryDelegate"] = bool(pub.get("isPrimaryDelegate"))
         out["canManageHousehold"] = bool(pub.get("canManage") or pub.get("isPrimary")) and not bool(pub.get("viewOnly"))
         out["viewOnly"] = bool(pub.get("viewOnly"))
         out["hasPhoto"] = bool(pub.get("hasPhoto"))
         out["photoUrl"] = pub.get("photoUrl") or ""
-        plot_is_ec = (r.get("role") or "") == "admin"
+        plot_is_ec = is_mem
         out["plotIsEc"] = plot_is_ec
-        if not out["isPrimary"] and out["role"] == "admin":
+        mid = str(out["memberId"] or "").strip()
+        seat = ec_member_id or ""
+        if plot_is_ec:
+            if seat:
+                out["holdsEcSeat"] = bool(mid) and mid == seat and not out["viewOnly"]
+            else:
+                out["holdsEcSeat"] = bool(out["isPrimary"]) and not out["viewOnly"]
+        else:
+            out["holdsEcSeat"] = False
+        # Strip plot-level EC from logins that do not hold the seat.
+        if not out["holdsEcSeat"]:
             out["role"] = "resident"
             out["isEcAdmin"] = False
+            out["isOfficeBearer"] = False
+            out["isEcMember"] = False
+            out["officialTitle"] = ""
         if out["viewOnly"]:
             out["role"] = "resident"
             out["isEcAdmin"] = False
             out["canManageHousehold"] = False
             out["officialTitle"] = ""
+            out["holdsEcSeat"] = False
+    elif super_admin:
+        out["holdsEcSeat"] = True
     return out
 
 
@@ -1299,7 +1322,8 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
         rows = conn.execute(
             """
             SELECT house_id, plot_no, section, name, title, profession, employment_status,
-                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
+                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status,
+                   ec_member_id
             FROM residents
             WHERE house_id != ?
             """,
@@ -1309,7 +1333,8 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
         rows = conn.execute(
             """
             SELECT house_id, plot_no, section, name, title, profession, employment_status,
-                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status
+                   official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status,
+                   ec_member_id
             FROM residents
             WHERE status = 'active' AND house_id != ?
             """,
@@ -1322,16 +1347,29 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
         is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(r["official_title"] or "") or is_ec
         is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
         photo = photos.get(r["house_id"]) or photo_fields_for_member(None, None)
+        owner = household.primary_member(conn, r["house_id"])
+        delegate = household.primary_delegate_member(conn, r["house_id"])
+        owner_name = (owner or {}).get("name") or r["name"] or ""
+        delegate_name = ((delegate or {}).get("name") or "").strip()
+        display_name = f"{owner_name} / {delegate_name}" if delegate_name else owner_name
+        seat_id = (r["ec_member_id"] or "").strip() or ((owner or {}).get("id") or "")
+        seat = household.get_member(conn, seat_id) if seat_id else None
+        seat_name = (seat or {}).get("name") or ""
         item = {
             "houseId": r["house_id"],
             "plotNo": r["plot_no"],
             "section": r["section"],
-            "name": r["name"],
+            "name": display_name,
+            "ownerName": owner_name,
+            "primaryDelegateName": delegate_name,
+            "displayName": display_name,
             "role": r["role"],
             "officialTitle": r["official_title"] or "",
             "isEcMember": is_mem,
             "isOfficeBearer": is_ob,
             "isEcAdmin": is_ec,
+            "ecMemberId": seat_id or None,
+            "ecSeatHolderName": seat_name if is_mem else "",
             "email": r["email"] or "",
             "phone": r["phone"] or "",
             "hasPhone": bool(r["phone"]),
@@ -4908,6 +4946,7 @@ def list_notices(
 ) -> list[dict]:
     """List notices. status: published (default), draft, archived, or all."""
     ensure_notice_pin_order(conn)
+    ensure_notice_audience(conn)
     ensure_notice_shares_table(conn)
     ensure_notice_engagement_tables(conn)
     # Welcome notice is always first among published; drafts sort by updated/published date.
@@ -4932,6 +4971,92 @@ def list_notices(
             continue
         out.append(_notice_public(conn, r, viewer=viewer))
     return out
+
+
+def _notice_audience(raw: str | None) -> str:
+    aud = (raw or "members").strip().lower()
+    return aud if aud in ("members", "public") else "members"
+
+
+def _office_bearer_sort_key(item: dict) -> tuple:
+    """President → Vice President(s) → General Secretary → Treasurer → others."""
+    title = re.sub(r"\s+", " ", (item.get("officialTitle") or "").strip().lower())
+    if re.match(r"^vice[\s\-]*president", title) or title in ("vp", "vice president"):
+        rank = 1
+    elif re.match(r"^president\b", title):
+        rank = 0
+    elif "general secretary" in title or title in ("secretary", "gs"):
+        rank = 2
+    elif "treasurer" in title:
+        rank = 3
+    else:
+        rank = 9
+    return (rank, title, (item.get("name") or "").lower())
+
+
+def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -> dict:
+    """Unauthenticated colony home: greeting, public updates, office bearers."""
+    ensure_notice_audience(conn)
+    meta = site_meta or {}
+    society = (meta.get("societyName") or "Mandi Housing Welfare Society").strip()
+    colony = (
+        meta.get("brandName")
+        or meta.get("siteName")
+        or meta.get("title")
+        or "Himuda Housing Colony Sanyard"
+    ).strip()
+    hour = datetime.now(timezone.utc).astimezone().hour
+    if hour < 12:
+        hello = "Good morning"
+    elif hour < 17:
+        hello = "Good afternoon"
+    else:
+        hello = "Good evening"
+    greeting = f"{hello}. Welcome to {society}."
+
+    notices = list_notices(conn, status="published", viewer=None)
+    updates = []
+    for n in notices:
+        if _notice_audience(n.get("audience")) != "public":
+            continue
+        body = (n.get("body") or "").strip()
+        if len(body) > 280:
+            body = body[:277].rstrip() + "…"
+        updates.append(
+            {
+                "id": n.get("id"),
+                "title": n.get("title") or "",
+                "body": body,
+                "publishedAt": n.get("publishedAt"),
+                "pinned": bool(n.get("pinned")),
+            }
+        )
+        if len(updates) >= 8:
+            break
+
+    office_bearers = []
+    for m in entitlements.list_office_and_ec(conn):
+        title = (m.get("officialTitle") or "").strip()
+        # Public roster: titled seats only (skip untitled EC admin / members).
+        if not title:
+            continue
+        office_bearers.append(
+            {
+                "officialTitle": title,
+                "name": (m.get("ecSeatHolderName") or m.get("name") or "").strip(),
+            }
+        )
+    office_bearers.sort(key=_office_bearer_sort_key)
+
+    return {
+        "ok": True,
+        "societyName": society,
+        "colonyName": colony,
+        "greeting": greeting,
+        "eyebrow": (meta.get("eyebrow") or f"{society} · RWA · Mandi").strip(),
+        "updates": updates,
+        "officeBearers": office_bearers,
+    }
 
 
 def _notice_engagement(conn: sqlite3.Connection, notice_id: str, viewer: dict | None) -> dict:
@@ -5010,6 +5135,7 @@ def _notice_public(
         "body": data.get("body") or "",
         "bodyHi": data.get("body_hi") or data.get("bodyHi") or "",
         "category": data.get("category") or "general",
+        "audience": _notice_audience(data.get("audience")),
         "pinned": bool(data.get("pinned")),
         "pinOrder": int(data.get("pin_order") or data.get("pinOrder") or 0),
         "fixedTop": notice_id == WELCOME_NOTICE_ID,
@@ -5374,6 +5500,7 @@ def upsert_notice(
     actor: dict | None = None,
 ) -> dict:
     ensure_notice_pin_order(conn)
+    ensure_notice_audience(conn)
     ensure_notice_shares_table(conn)
     ensure_bilingual_content_columns(conn)
     notice_id = (payload.get("id") or f"n_{secrets.token_hex(6)}").strip()
@@ -5447,6 +5574,12 @@ def upsert_notice(
             pin_order = 0
 
     category = (payload.get("category") or (existing["category"] if existing else None) or "general").strip()[:40]
+    if "audience" in payload:
+        audience = _notice_audience(payload.get("audience"))
+    elif existing and "audience" in existing.keys():
+        audience = _notice_audience(existing["audience"])
+    else:
+        audience = "members"
 
     # Fresh publish timestamp when leaving draft (or creating published).
     if status == "published" and (was_draft or not existing):
@@ -5461,8 +5594,8 @@ def upsert_notice(
 
     conn.execute(
         """
-        INSERT INTO notices(id, title, body, category, pinned, pin_order, published_at, published_by, status, title_hi, body_hi)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO notices(id, title, body, category, pinned, pin_order, published_at, published_by, status, title_hi, body_hi, audience)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title,
           body=excluded.body,
@@ -5473,9 +5606,23 @@ def upsert_notice(
           published_by=excluded.published_by,
           status=excluded.status,
           title_hi=excluded.title_hi,
-          body_hi=excluded.body_hi
+          body_hi=excluded.body_hi,
+          audience=excluded.audience
         """,
-        (notice_id, title, body or "", category, pinned, pin_order, published_at, published_by, status, title_hi or None, body_hi or None),
+        (
+            notice_id,
+            title,
+            body or "",
+            category,
+            pinned,
+            pin_order,
+            published_at,
+            published_by,
+            status,
+            title_hi or None,
+            body_hi or None,
+            audience,
+        ),
     )
     if status == "published" and was_draft:
         conn.execute("DELETE FROM notice_shares WHERE notice_id = ?", (notice_id,))
@@ -5904,6 +6051,28 @@ def update_profile(
             if "isOfficeBearer" not in payload and "officeBearer" not in payload:
                 payload = {**payload, "isOfficeBearer": False}
 
+    # EC seat holder: owner or primary delegate only.
+    ec_member_id = str(resident.get("ec_member_id") or "").strip() or None
+    if "ecMemberId" in payload or "ec_member_id" in payload:
+        if not can_manage_roles:
+            raise ValueError("manage_roles entitlement required")
+        raw_seat = payload.get("ecMemberId", payload.get("ec_member_id"))
+        if raw_seat is None or str(raw_seat).strip() == "":
+            ec_member_id = household.resolve_ec_member_id(conn, resident["house_id"])
+        else:
+            ec_member_id = household.resolve_ec_member_id(
+                conn, resident["house_id"], ec_member_id=str(raw_seat).strip()
+            )
+    elif is_ec_member and not ec_member_id:
+        ec_member_id = household.resolve_ec_member_id(conn, resident["house_id"])
+    if is_ec_member and ec_member_id:
+        # Re-validate whenever plot stays / becomes EC.
+        ec_member_id = household.resolve_ec_member_id(
+            conn, resident["house_id"], ec_member_id=ec_member_id
+        )
+    if not is_ec_member:
+        ec_member_id = None
+
     if "isOfficeBearer" in payload or "officeBearer" in payload:
         if not can_manage_roles:
             raise ValueError("manage_roles entitlement required")
@@ -5969,7 +6138,8 @@ def update_profile(
         """
         UPDATE residents SET
           email=?, phone=?, name=?, title=?, profession=?, employment_status=?,
-          official_title=?, is_ec_member=?, is_office_bearer=?, role=?, notes=?, status=?, updated_at=?
+          official_title=?, is_ec_member=?, is_office_bearer=?, role=?, notes=?, status=?,
+          ec_member_id=?, updated_at=?
         WHERE house_id=?
         """,
         (
@@ -5985,6 +6155,7 @@ def update_profile(
             role,
             notes,
             status,
+            ec_member_id,
             utc_now(),
             resident["house_id"],
         ),

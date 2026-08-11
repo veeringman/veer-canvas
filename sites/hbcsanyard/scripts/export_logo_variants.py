@@ -61,8 +61,16 @@ def _watermark(img: Image.Image, size: int = 1024, alpha: float = 0.10) -> Image
 
 def _save(img: Image.Image, path: Path, *, optimize: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(path, format="PNG", optimize=optimize)
-    print(f"  wrote {path.relative_to(SITE_ROOT)} ({img.size[0]}×{img.size[1]})")
+    img.save(path, format="PNG", optimize=optimize, compress_level=9)
+    kb = path.stat().st_size / 1024
+    print(f"  wrote {path.relative_to(SITE_ROOT)} ({img.size[0]}×{img.size[1]}, {kb:.1f}KB)")
+
+
+def _save_webp(img: Image.Image, path: Path, *, quality: int = 80) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path, format="WEBP", quality=quality, method=6)
+    kb = path.stat().st_size / 1024
+    print(f"  wrote {path.relative_to(SITE_ROOT)} ({img.size[0]}×{img.size[1]}, {kb:.1f}KB webp)")
 
 
 def _save_jpeg(img: Image.Image, path: Path, *, quality: int = 88, bg=(246, 241, 230)) -> None:
@@ -70,7 +78,8 @@ def _save_jpeg(img: Image.Image, path: Path, *, quality: int = 88, bg=(246, 241,
     rgb.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
     path.parent.mkdir(parents=True, exist_ok=True)
     rgb.save(path, format="JPEG", quality=quality, optimize=True)
-    print(f"  wrote {path.relative_to(SITE_ROOT)} ({img.size[0]}×{img.size[1]} jpeg)")
+    kb = path.stat().st_size / 1024
+    print(f"  wrote {path.relative_to(SITE_ROOT)} ({img.size[0]}×{img.size[1]}, {kb:.1f}KB jpeg)")
 
 
 def export_all() -> None:
@@ -79,14 +88,50 @@ def export_all() -> None:
     shutil.copy2(MASTER, LOCKED)
     print(f"  locked → {LOCKED.relative_to(SITE_ROOT)}")
 
-    # Transparent masters / lighter web sizes
+    # Keep full-res master for archive / regeneration only — do not ship it in UI or PDFs.
     _save(master, MASTER)  # re-save optimized
-    _save(_fit(master, 1024, pad_ratio=0.02), LOGO_DIR / "mhws-logo-print.png")
-    _save(_fit(master, 512, pad_ratio=0.02), LOGO_DIR / "mhws-logo-web-512.png")
-    _save(_fit(master, 256, pad_ratio=0.02), LOGO_DIR / "mhws-logo-web-256.png")
+
+    def _harden_alpha(img: Image.Image) -> Image.Image:
+        """Push soft downscale alpha toward opaque so PDF seals stay full-contrast."""
+        r, g, b, a = img.split()
+
+        def boost(v: int) -> int:
+            if v <= 8:
+                return 0
+            if v >= 200:
+                return 255
+            return min(255, int(48 + (v - 8) * (207 / 192)))
+
+        return Image.merge("RGBA", (r, g, b, a.point(boost)))
+
+    def _cert_seal(img: Image.Image, size: int = 320) -> Image.Image:
+        """Vivid certificate/PDF header seal — hard alpha + contrast/color punch."""
+        from PIL import ImageEnhance
+
+        base = _fit(img, size, pad_ratio=0.02)
+        rgb = ImageEnhance.Contrast(base.convert("RGB")).enhance(1.28)
+        rgb = ImageEnhance.Color(rgb).enhance(1.18)
+        alpha = base.split()[3].point(lambda v: 255 if v >= 20 else 0)
+        return Image.merge("RGBA", (*rgb.split(), alpha))
+
+    # PDF / letterhead seals: prefer dedicated cert seal; keep print/pdf in sync.
+    cert320 = _cert_seal(master, 320)
+    print256 = _harden_alpha(_fit(master, 256, pad_ratio=0.02))
+    pdf256 = print256
+    web512 = _fit(master, 512, pad_ratio=0.02)
+    web256 = print256
+    _save(cert320, LOGO_DIR / "mhws-logo-seal-cert.png")
+    _save(pdf256, LOGO_DIR / "mhws-logo-pdf.png")
+    # HTML pads/receipts use "print" — 256px is sharp at ~24mm and much lighter than 512.
+    _save(print256, LOGO_DIR / "mhws-logo-print.png")
+    _save(web512, LOGO_DIR / "mhws-logo-web-512.png")
+    _save(web256, LOGO_DIR / "mhws-logo-web-256.png")
+    _save_webp(web512, LOGO_DIR / "mhws-logo-web-512.webp", quality=80)
+    _save_webp(web256, LOGO_DIR / "mhws-logo-web-256.webp", quality=80)
     _save(_fit(master, 128, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-128.png")
     _save(_fit(master, 64, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-64.png")
-    _save(_watermark(master, 1024, alpha=0.10), LOGO_DIR / "mhws-logo-watermark.png")
+    # Very light watermark for PDF + HTML chrome (small file, low alpha).
+    _save(_watermark(master, 192, alpha=0.055), LOGO_DIR / "mhws-logo-watermark.png")
 
     # Transparent mark used by legacy seal paths
     mark512 = _fit(master, 512, pad_ratio=0.04)

@@ -1,5 +1,5 @@
 {
-  "version": "20260810final1",
+  "version": "20260811lite2",
   "updated": "2026-08-10",
   "master": "assets/mhws-logo/mhws-logo-official.png",
   "locked": "assets/mhws-logo/mhws-logo-official-locked-20260810.png",
@@ -14,23 +14,39 @@
   "roles": {
     "official": {
       "path": "assets/mhws-logo/mhws-logo-official.png",
-      "use": "Canonical transparent seal — portal hero, mini seal, proceedings UI"
+      "use": "Full-res archive master only — do not use in portal UI or PDF embeds"
+    },
+    "pdf": {
+      "path": "assets/mhws-logo/mhws-logo-pdf.png",
+      "use": "256px full-contrast seal for PDF + HTML pad/receipt headers (hardened alpha)"
+    },
+    "sealCert": {
+      "path": "assets/mhws-logo/mhws-logo-seal-cert.png",
+      "use": "320px vivid certificate/PDF letterhead header seal (hard alpha, boosted contrast)"
     },
     "print": {
       "path": "assets/mhws-logo/mhws-logo-print.png",
-      "use": "Print / PDF headers — letterheads, receipts, certificates, pads"
+      "use": "256px full-contrast print/HTML seal"
     },
     "watermark": {
       "path": "assets/mhws-logo/mhws-logo-watermark.png",
-      "use": "Pre-faded watermark for pads, receipts, PDF letterhead chrome"
+      "use": "Very light 192px pre-faded watermark for pads/PDFs"
     },
     "web512": {
       "path": "assets/mhws-logo/mhws-logo-web-512.png",
-      "use": "Large web / site-meta brand web mark"
+      "use": "Portal gate / brand mark PNG fallback"
+    },
+    "web512Webp": {
+      "path": "assets/mhws-logo/mhws-logo-web-512.webp",
+      "use": "Portal gate WebP (mobile-first)"
     },
     "web256": {
       "path": "assets/mhws-logo/mhws-logo-web-256.png",
-      "use": "Info Centre HTML mastheads, attest page"
+      "use": "Info Centre HTML mastheads, attest page, mini UI PNG"
+    },
+    "web256Webp": {
+      "path": "assets/mhws-logo/mhws-logo-web-256.webp",
+      "use": "Compact WebP for mini seals / mastheads"
     },
     "icon128": {
       "path": "assets/mhws-logo/mhws-logo-icon-128.png",
@@ -85,16 +101,30 @@
     {
       "id": "portal-gate",
       "file": "index.html",
-      "role": "official",
+      "role": "web512",
       "kind": "img",
-      "note": "Gate hero seal"
+      "note": "Gate hero seal (PNG fallback; prefer web512Webp)"
+    },
+    {
+      "id": "portal-gate-webp",
+      "file": "index.html",
+      "role": "web512Webp",
+      "kind": "img",
+      "note": "Gate hero seal WebP source"
     },
     {
       "id": "portal-mini",
       "file": "index.html",
-      "role": "official",
+      "role": "web256",
       "kind": "img",
       "note": "Signed-in brand mini seal"
+    },
+    {
+      "id": "portal-mini-webp",
+      "file": "index.html",
+      "role": "web256Webp",
+      "kind": "img",
+      "note": "Signed-in brand mini seal WebP"
     },
     {
       "id": "portal-favicon",
@@ -113,16 +143,23 @@
     {
       "id": "portal-proceedings-seal",
       "file": "portal.js",
-      "role": "official",
+      "role": "web256",
       "kind": "img",
       "note": "Proceedings modal seal markup"
     },
     {
-      "id": "sw-precache-official",
+      "id": "sw-precache-web512",
       "file": "sw.js",
-      "role": "official",
+      "role": "web512",
       "kind": "precache",
-      "note": "Service worker precache"
+      "note": "Service worker precache gate PNG"
+    },
+    {
+      "id": "sw-precache-web512-webp",
+      "file": "sw.js",
+      "role": "web512Webp",
+      "kind": "precache",
+      "note": "Service worker precache gate WebP"
     },
     {
       "id": "sw-precache-web256",
@@ -130,6 +167,13 @@
       "role": "web256",
       "kind": "precache",
       "note": "Service worker precache"
+    },
+    {
+      "id": "sw-precache-web256-webp",
+      "file": "sw.js",
+      "role": "web256Webp",
+      "kind": "precache",
+      "note": "Service worker precache mini WebP"
     },
     {
       "id": "sw-precache-favicon",
@@ -183,7 +227,7 @@
     {
       "id": "site-meta-brand",
       "file": "site-meta.json",
-      "role": "official",
+      "role": "web512",
       "kind": "meta",
       "note": "brandMark"
     },
@@ -197,7 +241,7 @@
     {
       "id": "site-meta-print",
       "file": "site-meta.json",
-      "role": "print",
+      "role": "pdf",
       "kind": "meta",
       "note": "logoPrint"
     },
@@ -232,7 +276,7 @@
     {
       "id": "pdf-reports-header",
       "file": "scripts/rwa_reports.py",
-      "role": "print",
+      "role": "pdf",
       "kind": "python",
       "note": "PDF report / certificate / receipt headers (LOGO_CANDIDATES)"
     },
@@ -246,14 +290,14 @@
     {
       "id": "export-ec-pad",
       "file": "scripts/export_ec_pad.py",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "EC chart HTML generator seal src"
     },
     {
       "id": "doc-letterhead-logo",
       "file": "documents/mhws-letterhead-pad.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "Letterhead header logo"
     },
@@ -267,7 +311,7 @@
     {
       "id": "doc-receipt-logo",
       "file": "documents/mhws-cash-receipt-booklet.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "Cash receipt slip logos (×3)"
     },
@@ -281,30 +325,58 @@
     {
       "id": "doc-letterhead-blank",
       "file": "documents/rwa-letterhead-blank.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "Blank letterhead seal"
     },
     {
+      "id": "doc-letterhead-blank-wm",
+      "file": "documents/rwa-letterhead-blank.html",
+      "role": "watermark",
+      "kind": "img",
+      "note": "Blank letterhead watermark"
+    },
+    {
       "id": "doc-ec-pad",
       "file": "documents/ec-committee-pad.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "EC committee pad seal"
     },
     {
+      "id": "doc-ec-pad-wm",
+      "file": "documents/ec-committee-pad.html",
+      "role": "watermark",
+      "kind": "img",
+      "note": "EC committee pad watermark"
+    },
+    {
       "id": "doc-proceedings-ec",
       "file": "documents/proceedings-ec-mom-pad.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "EC MoM pad seal"
     },
     {
+      "id": "doc-proceedings-ec-wm",
+      "file": "documents/proceedings-ec-mom-pad.html",
+      "role": "watermark",
+      "kind": "img",
+      "note": "EC MoM pad watermark"
+    },
+    {
       "id": "doc-proceedings-gh",
       "file": "documents/proceedings-gh-mom-pad.html",
-      "role": "print",
+      "role": "pdf",
       "kind": "img",
       "note": "GH MoM pad seal"
+    },
+    {
+      "id": "doc-proceedings-gh-wm",
+      "file": "documents/proceedings-gh-mom-pad.html",
+      "role": "watermark",
+      "kind": "img",
+      "note": "GH MoM pad watermark"
     },
     {
       "id": "info-bylaws-mast",

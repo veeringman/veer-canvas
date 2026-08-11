@@ -288,6 +288,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
           official_title TEXT,
           is_ec_member INTEGER NOT NULL DEFAULT 0,
           is_office_bearer INTEGER NOT NULL DEFAULT 0,
+          ec_member_id TEXT,
           email TEXT,
           phone TEXT,
           role TEXT NOT NULL DEFAULT 'resident' CHECK(role IN ('admin','resident')),
@@ -389,6 +390,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
           relation TEXT NOT NULL DEFAULT 'owner'
             CHECK(relation IN ('owner','spouse','parent','child','other')),
           is_primary INTEGER NOT NULL DEFAULT 0,
+          is_primary_delegate INTEGER NOT NULL DEFAULT 0,
           can_manage INTEGER NOT NULL DEFAULT 0,
           view_only INTEGER NOT NULL DEFAULT 0,
           name TEXT NOT NULL,
@@ -636,6 +638,10 @@ def ensure_resident_profile_columns(conn: sqlite3.Connection) -> None:
             "is_office_bearer",
             "ALTER TABLE residents ADD COLUMN is_office_bearer INTEGER NOT NULL DEFAULT 0",
         ),
+        (
+            "ec_member_id",
+            "ALTER TABLE residents ADD COLUMN ec_member_id TEXT",
+        ),
     ]
     for name, sql in alters:
         if name not in cols:
@@ -681,6 +687,35 @@ def ensure_entitlements_schema(conn: sqlite3.Connection) -> None:
         """,
         (SUPERADMIN_HOUSE_ID,),
     )
+    # Bind EC seat to primary owner when plot is on EC and seat is unset.
+    ensure_household_members_table(conn)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(residents)").fetchall()}
+    if "ec_member_id" in cols:
+        rows = conn.execute(
+            """
+            SELECT house_id FROM residents
+            WHERE house_id != ?
+              AND (is_ec_member = 1 OR is_office_bearer = 1 OR role = 'admin'
+                   OR (official_title IS NOT NULL AND TRIM(official_title) != ''))
+              AND (ec_member_id IS NULL OR TRIM(ec_member_id) = '')
+            """,
+            (SUPERADMIN_HOUSE_ID,),
+        ).fetchall()
+        for r in rows:
+            hid = r["house_id"]
+            primary = conn.execute(
+                """
+                SELECT id FROM household_members
+                WHERE house_id = ? AND status = 'active' AND is_primary = 1
+                ORDER BY created_at ASC LIMIT 1
+                """,
+                (hid,),
+            ).fetchone()
+            if primary:
+                conn.execute(
+                    "UPDATE residents SET ec_member_id = ? WHERE house_id = ?",
+                    (primary["id"], hid),
+                )
     conn.commit()
 
 
@@ -778,6 +813,25 @@ def ensure_notice_pin_order(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
+def ensure_notice_audience(conn: sqlite3.Connection) -> None:
+    """members (default colony board) vs public (pre-login landing)."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(notices)").fetchall()}
+    if "audience" not in cols:
+        conn.execute(
+            "ALTER TABLE notices ADD COLUMN audience TEXT NOT NULL DEFAULT 'members'"
+        )
+        conn.commit()
+    # Normalize legacy/blank values.
+    conn.execute(
+        """
+        UPDATE notices
+        SET audience = 'members'
+        WHERE audience IS NULL OR TRIM(audience) = '' OR audience NOT IN ('members', 'public')
+        """
+    )
+    conn.commit()
+
+
 def ensure_notice_shares_table(conn: sqlite3.Connection) -> None:
     """Draft collaboration shares (selected EC members)."""
     conn.executescript(
@@ -844,6 +898,7 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
           relation TEXT NOT NULL DEFAULT 'owner'
             CHECK(relation IN ('owner','spouse','parent','child','other')),
           is_primary INTEGER NOT NULL DEFAULT 0,
+          is_primary_delegate INTEGER NOT NULL DEFAULT 0,
           can_manage INTEGER NOT NULL DEFAULT 0,
           view_only INTEGER NOT NULL DEFAULT 0,
           name TEXT NOT NULL,
@@ -869,17 +924,30 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
     member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
     if "photo_filename" not in member_cols:
         conn.execute("ALTER TABLE household_members ADD COLUMN photo_filename TEXT")
+    member_cols = {row[1] for row in conn.execute("PRAGMA table_info(household_members)").fetchall()}
+    if "is_primary_delegate" not in member_cols:
+        conn.execute(
+            "ALTER TABLE household_members ADD COLUMN is_primary_delegate INTEGER NOT NULL DEFAULT 0"
+        )
+    # At most one primary delegate per plot (active).
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_household_one_primary_delegate
+          ON household_members(house_id)
+          WHERE is_primary_delegate = 1 AND status = 'active'
+        """
+    )
 
     sess_cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
-    if "member_id" not in sess_cols:
+    if "member_id" not in sess_cols and sess_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN member_id TEXT")
 
     otp_cols = {row[1] for row in conn.execute("PRAGMA table_info(otp_challenges)").fetchall()}
-    if "member_id" not in otp_cols:
+    if "member_id" not in otp_cols and otp_cols:
         conn.execute("ALTER TABLE otp_challenges ADD COLUMN member_id TEXT")
 
     comment_cols = {row[1] for row in conn.execute("PRAGMA table_info(notice_comments)").fetchall()}
-    if "member_id" not in comment_cols:
+    if "member_id" not in comment_cols and comment_cols:
         conn.execute("ALTER TABLE notice_comments ADD COLUMN member_id TEXT")
 
     # Seed one primary owner member per plot from the residents row (before likes migration).
@@ -903,9 +971,9 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
         conn.execute(
             """
             INSERT INTO household_members(
-              id, house_id, relation, is_primary, can_manage, view_only,
+              id, house_id, relation, is_primary, is_primary_delegate, can_manage, view_only,
               name, title, email, phone, status, created_at, updated_at
-            ) VALUES (?, ?, 'owner', 1, 1, 0, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, 'owner', 1, 0, 1, 0, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 mid,

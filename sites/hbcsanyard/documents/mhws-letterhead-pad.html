@@ -68,9 +68,9 @@
       left: 50%;
       top: 55%;
       transform: translate(-50%, -50%);
-      width: 112mm;
+      width: 96mm;
       height: auto;
-      opacity: 0.72;
+      opacity: 0.45;
       pointer-events: none;
       z-index: 0;
     }
@@ -144,56 +144,62 @@
       box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
     }
 
-    /* —— Officers: open centered 2×2 (no table frame) —— */
+    /* —— Officers: one centered top row, outward 4-across, top-aligned —— */
     .officers {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      column-gap: 10mm;
-      row-gap: 2.8mm;
-      margin: 0 auto 3mm;
-      max-width: 168mm;
-      padding: 0 2mm;
+      grid-template-columns: repeat(4, 1fr);
+      column-gap: 0;
+      align-items: start;
+      justify-items: center;
+      margin: 0 0 2.5mm;
+      width: 100%;
+      padding: 0;
     }
     .role {
       text-align: center;
       min-width: 0;
-      padding: 0 2mm;
+      width: 100%;
+      padding: 0 2.2mm;
       position: relative;
+      align-self: start;
     }
-    .role:nth-child(odd)::after {
+    .role:not(:last-child)::after {
       content: "";
       position: absolute;
-      top: 15%;
-      bottom: 15%;
-      right: -5mm;
+      top: 12%;
+      bottom: 12%;
+      right: 0;
       width: 0;
       border-right: 0.7pt solid rgba(11, 42, 86, 0.14);
     }
     .role .title {
       display: block;
-      font-size: 6.4pt;
+      font-size: 5.8pt;
       font-weight: 700;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--green);
-      margin-bottom: 0.7mm;
+      margin-bottom: 0.6mm;
+      line-height: 1.15;
+      min-height: 2.4mm;
     }
     .role .name {
       display: block;
-      font-size: 8.8pt;
+      font-size: 7.4pt;
       font-weight: 700;
       color: var(--navy);
       text-transform: uppercase;
-      letter-spacing: 0.035em;
+      letter-spacing: 0.02em;
       line-height: 1.15;
+      min-height: 8.2mm;
     }
     .role .ph {
       display: block;
-      margin-top: 0.6mm;
-      font-size: 7.4pt;
+      margin-top: 0.4mm;
+      font-size: 6.6pt;
       font-weight: 600;
       color: var(--muted);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       font-variant-numeric: tabular-nums;
     }
     .role .ph .lbl {
@@ -220,8 +226,8 @@
     }
     .contacts {
       display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 4mm;
+      grid-template-columns: 1.35fr 1.25fr 1fr;
+      gap: 3mm;
       padding: 2.8mm 0 2.6mm;
       border-top: 1pt solid rgba(11, 42, 86, 0.45);
       font-size: 7.4pt;
@@ -297,7 +303,7 @@
 <body>
   <p class="screen-hint">
     Official A4 letterhead pad — Himuda Housing Colony Sanyard.<br>
-    Open → Print → A4. Office-bearer names from EC chart; blank phone lines where not on file.
+    Open → Print → A4. Office-bearer names and phones from the EC chart.
   </p>
 
   <div class="sheet">
@@ -307,7 +313,7 @@
 
     <div class="pad">
       <header class="brand">
-        <img class="logo" src="../assets/mhws-logo/mhws-logo-print.png" alt="Himuda Housing Colony Sanyard">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
         <div class="brand-text">
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
@@ -357,6 +363,13 @@
             <div>
               <span class="k">Email</span>
               <span class="v">housingcolonysanyard@gmail.com</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16"/></svg>
+            <div>
+              <span class="k">Website</span>
+              <span class="v">housingcolonysanyard.in</span>
             </div>
           </div>
         </div>

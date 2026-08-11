@@ -99,10 +99,11 @@ def sync_site_meta_logo_fields(manifest: dict) -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     mapping = {
         "favicon": "favicon",
-        "brandMark": "official",
-        "logoPrint": "print",
+        "brandMark": "web512",
+        "logoPrint": "pdf",
         "logoWatermark": "watermark",
         "logoWeb": "web512",
+        "logoPdf": "pdf",
     }
     changed = False
     for key, role in mapping.items():

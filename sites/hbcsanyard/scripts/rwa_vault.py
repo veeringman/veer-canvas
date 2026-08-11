@@ -716,7 +716,7 @@ def index_receipt_file(
 
     # Cash note PDF is already catalogued as an attestation — link payment, don't add a twin.
     pay = conn.execute(
-        "SELECT method FROM payment_records WHERE id = ?",
+        "SELECT method, treasury_status FROM payment_records WHERE id = ?",
         (record_id,),
     ).fetchone()
     if pay and str(pay["method"] or "").lower() == "cash":
@@ -756,11 +756,23 @@ def index_receipt_file(
                     note["id"],
                 ),
             )
+            pay_treas = (pay["treasury_status"] or "") or "pending"
+            if vault_status_for_treasury(pay_treas) == "verified":
+                sync_linked_docs_from_treasury(
+                    conn,
+                    kind="payment",
+                    target_id=record_id,
+                    treasury_status=pay_treas,
+                    commit=False,
+                )
             if commit:
                 conn.commit()
             out = get_doc(conn, note["id"])
             if out:
                 return out
+
+    pay_treas = (pay["treasury_status"] if pay else None) or None
+    vault_status = vault_status_for_treasury(pay_treas)
 
     return _upsert_catalog(
         conn,
@@ -773,7 +785,7 @@ def index_receipt_file(
         size_bytes=size_bytes,
         stored_rel=stored_rel,
         visibility="shared_ec",
-        status="under_review",
+        status=vault_status,
         source_kind="receipt_file",
         source_id=file_id,
         linked_payment_record_id=record_id,
@@ -803,7 +815,12 @@ def index_no_dues_certificate(
     path = rwa_no_dues.certificate_path(site_root, house_id, request_id, filename)
     if not path.is_file():
         return None
-    return _upsert_catalog(
+    treas = conn.execute(
+        "SELECT treasury_status FROM no_dues_requests WHERE id = ?",
+        (request_id,),
+    ).fetchone()
+    vault_status = vault_status_for_treasury(treas["treasury_status"] if treas else None)
+    out = _upsert_catalog(
         conn,
         house_id=house_id,
         doc_type="no_dues",
@@ -813,15 +830,37 @@ def index_no_dues_certificate(
         size_bytes=path.stat().st_size,
         stored_rel=_rel_path(site_root, path),
         visibility="shared_ec",
-        status="under_review",
+        status=vault_status,
         source_kind="no_dues",
         source_id=request_id,
         linked_no_dues_id=request_id,
         linked_attestation_id=attestation_id,
         uploaded_by_house_id=uploaded_by_house_id,
         uploaded_by_role="ec",
-        commit=commit,
+        commit=False,
     )
+    if out and vault_status == "verified":
+        now = utc_now()
+        conn.execute(
+            """
+            UPDATE vault_documents
+            SET verified_by_house_id = COALESCE(verified_by_house_id, ?),
+                verified_at = COALESCE(verified_at, ?),
+                verify_note = COALESCE(verify_note, ?),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                uploaded_by_house_id,
+                now,
+                "Auto-verified: certificate already Treasury-confirmed on issue",
+                now,
+                out["id"],
+            ),
+        )
+    if commit:
+        conn.commit()
+    return get_doc(conn, out["id"]) if out else None
 
 
 def index_no_objection_certificate(
@@ -843,7 +882,12 @@ def index_no_objection_certificate(
     path = rwa_no_objection.certificate_path(site_root, house_id, request_id, filename)
     if not path.is_file():
         return None
-    return _upsert_catalog(
+    treas = conn.execute(
+        "SELECT treasury_status FROM no_objection_requests WHERE id = ?",
+        (request_id,),
+    ).fetchone()
+    vault_status = vault_status_for_treasury(treas["treasury_status"] if treas else None)
+    out = _upsert_catalog(
         conn,
         house_id=house_id,
         doc_type="no_objection",
@@ -853,15 +897,37 @@ def index_no_objection_certificate(
         size_bytes=path.stat().st_size,
         stored_rel=_rel_path(site_root, path),
         visibility="shared_ec",
-        status="under_review",
+        status=vault_status,
         source_kind="no_objection",
         source_id=request_id,
         linked_no_objection_id=request_id,
         linked_attestation_id=attestation_id,
         uploaded_by_house_id=uploaded_by_house_id,
         uploaded_by_role="ec",
-        commit=commit,
+        commit=False,
     )
+    if out and vault_status == "verified":
+        now = utc_now()
+        conn.execute(
+            """
+            UPDATE vault_documents
+            SET verified_by_house_id = COALESCE(verified_by_house_id, ?),
+                verified_at = COALESCE(verified_at, ?),
+                verify_note = COALESCE(verify_note, ?),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                uploaded_by_house_id,
+                now,
+                "Auto-verified: certificate already Treasury-confirmed on issue",
+                now,
+                out["id"],
+            ),
+        )
+    if commit:
+        conn.commit()
+    return get_doc(conn, out["id"]) if out else None
 
 
 def index_attestation(
@@ -1080,6 +1146,163 @@ def set_visibility(
     return out
 
 
+def vault_status_for_treasury(treasury_status: str | None) -> str:
+    """Treasury validate/confirm is enough — do not ask a second vault Verify."""
+    st = (treasury_status or "").strip()
+    if st in ("validated", "confirmed"):
+        return "verified"
+    return "under_review"
+
+
+def sync_linked_docs_from_treasury(
+    conn: sqlite3.Connection,
+    *,
+    kind: str,
+    target_id: str,
+    treasury_status: str,
+    actor_house: str | None = None,
+    note: str | None = None,
+    commit: bool = False,
+) -> int:
+    """Mirror treasury stamps onto linked vault docs (certs, cash notes, receipts)."""
+    ensure_vault_tables(conn)
+    kid = (kind or "").strip()
+    tid = (target_id or "").strip()
+    if not tid or kid not in ("payment", "no_dues", "no_objection"):
+        return 0
+
+    desired = vault_status_for_treasury(treasury_status)
+    now = utc_now()
+    note_text = (note or "").strip()[:500] or None
+    if desired == "verified" and not note_text:
+        note_text = "Synced from Treasury validation/confirmation"
+    actor = (actor_house or "").strip() or None
+
+    if kid == "payment":
+        where = "linked_payment_record_id = ?"
+    elif kid == "no_dues":
+        where = "(linked_no_dues_id = ? OR (source_kind = 'no_dues' AND source_id = ?))"
+    else:
+        where = "(linked_no_objection_id = ? OR (source_kind = 'no_objection' AND source_id = ?))"
+
+    if kid == "payment":
+        params: tuple[Any, ...] = (tid,)
+    else:
+        params = (tid, tid)
+
+    rows = conn.execute(
+        f"SELECT id, status FROM vault_documents WHERE {where}",
+        params,
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        cur = (row["status"] or "").strip()
+        if desired == "verified":
+            if cur == "verified":
+                continue
+            if cur == "rejected":
+                continue
+            conn.execute(
+                """
+                UPDATE vault_documents
+                SET status = 'verified',
+                    verified_by_house_id = COALESCE(?, verified_by_house_id),
+                    verified_at = COALESCE(verified_at, ?),
+                    verify_note = COALESCE(?, verify_note),
+                    visibility = 'shared_ec',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (actor, now, note_text, now, row["id"]),
+            )
+            updated += 1
+        else:
+            # Treasury revert — reopen EC vault review unless manually rejected.
+            if cur not in ("verified", "uploaded", "under_review"):
+                continue
+            conn.execute(
+                """
+                UPDATE vault_documents
+                SET status = 'under_review',
+                    verified_by_house_id = NULL,
+                    verified_at = NULL,
+                    verify_note = COALESCE(?, verify_note),
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (note_text or "Reopened after Treasury revert", now, row["id"]),
+            )
+            updated += 1
+
+    if updated and commit:
+        conn.commit()
+    return updated
+
+
+def reconcile_vault_verify_with_treasury(conn: sqlite3.Connection, *, commit: bool = True) -> int:
+    """One-shot / startup backfill: verified vault when linked treasury is done."""
+    ensure_vault_tables(conn)
+    now = utc_now()
+    note = "Synced from Treasury validation/confirmation"
+    total = 0
+    for sql, args in (
+        (
+            """
+            UPDATE vault_documents
+            SET status = 'verified',
+                verified_at = COALESCE(verified_at, ?),
+                verify_note = COALESCE(verify_note, ?),
+                visibility = 'shared_ec',
+                updated_at = ?
+            WHERE status IN ('uploaded', 'under_review')
+              AND linked_no_dues_id IN (
+                SELECT id FROM no_dues_requests
+                WHERE treasury_status IN ('validated', 'confirmed')
+              )
+            """,
+            (now, note, now),
+        ),
+        (
+            """
+            UPDATE vault_documents
+            SET status = 'verified',
+                verified_at = COALESCE(verified_at, ?),
+                verify_note = COALESCE(verify_note, ?),
+                visibility = 'shared_ec',
+                updated_at = ?
+            WHERE status IN ('uploaded', 'under_review')
+              AND linked_no_objection_id IN (
+                SELECT id FROM no_objection_requests
+                WHERE treasury_status IN ('validated', 'confirmed')
+              )
+            """,
+            (now, note, now),
+        ),
+        (
+            """
+            UPDATE vault_documents
+            SET status = 'verified',
+                verified_at = COALESCE(verified_at, ?),
+                verify_note = COALESCE(verify_note, ?),
+                visibility = 'shared_ec',
+                updated_at = ?
+            WHERE status IN ('uploaded', 'under_review')
+              AND linked_payment_record_id IN (
+                SELECT id FROM payment_records
+                WHERE treasury_status IN ('validated', 'confirmed')
+                  AND status IN ('verified', 'reimbursed')
+              )
+            """,
+            (now, note, now),
+        ),
+    ):
+        cur = conn.execute(sql, args)
+        total += int(cur.rowcount or 0)
+    if commit and total:
+        conn.commit()
+    return total
+
+
 def set_verify_status(
     conn: sqlite3.Connection,
     doc_id: str,
@@ -1103,6 +1326,36 @@ def set_verify_status(
     doc = public_doc(row)
     if not can_view_doc(actor, doc):
         raise PermissionError("Document is not shared with EC")
+
+    # Already sealed by Treasury — do not ask another validator to re-verify/reject.
+    linked_treasury = ""
+    if doc.get("linkedNoDuesId"):
+        req = conn.execute(
+            "SELECT treasury_status FROM no_dues_requests WHERE id = ?",
+            (doc["linkedNoDuesId"],),
+        ).fetchone()
+        linked_treasury = (req["treasury_status"] if req else "") or ""
+    elif doc.get("linkedNoObjectionId"):
+        req = conn.execute(
+            "SELECT treasury_status FROM no_objection_requests WHERE id = ?",
+            (doc["linkedNoObjectionId"],),
+        ).fetchone()
+        linked_treasury = (req["treasury_status"] if req else "") or ""
+    elif doc.get("linkedPaymentRecordId"):
+        pay = conn.execute(
+            "SELECT treasury_status, status FROM payment_records WHERE id = ?",
+            (doc["linkedPaymentRecordId"],),
+        ).fetchone()
+        if pay and (pay["status"] or "") in ("verified", "reimbursed"):
+            linked_treasury = (pay["treasury_status"] or "") or ""
+    treasury_sealed = vault_status_for_treasury(linked_treasury) == "verified"
+    if treasury_sealed and status != "verified":
+        raise ValueError(
+            "This document is already sealed by Treasury validation/confirmation — no further vault review"
+        )
+    if treasury_sealed and (doc.get("status") or "") == "verified":
+        return doc
+
     now = utc_now()
     conn.execute(
         """
@@ -1141,6 +1394,12 @@ def vault_context(
     import rwa_payments
     import rwa_no_dues
     import rwa_treasury
+
+    # Heal lagging vault Verify buttons for cases already Treasury-sealed.
+    try:
+        reconcile_vault_verify_with_treasury(conn, commit=True)
+    except Exception:
+        pass
 
     hid = (house_id or "").strip()
     docs = list_docs(conn, house_id=hid, actor=actor)

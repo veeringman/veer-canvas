@@ -11,7 +11,9 @@ These files are **for print production only**. They are not linked from the resi
 | `mhws-letterhead-pad.html` | Official **letterhead pad** — compact header, office bearers, watermark |
 | `mhws-cash-receipt-booklet.html` | **Cash receipt booklet** — 3 tear-off slips per A4 |
 | `rwa-letterhead-blank.html` | Blank **letterhead pad** — org header + empty writing area |
-| `ec-committee-pad.html` | **Executive Committee chart** — office bearers + member list (regenerate from DB) |
+| `ec-committee-pad.html` | **Executive Committee Charter** — office bearers + members (letterhead theme; regenerate from DB) |
+| `proceedings-gh-mom-pad.html` | **General House MOM Register** — 2-page blank form for detailed minutes |
+| `proceedings-ec-mom-pad.html` | **Executive Committee MOM Register** — 2-page blank form for detailed minutes |
 
 These are also catalogued under **EC Desk → Templates** (upload more with title / category / tags).
 

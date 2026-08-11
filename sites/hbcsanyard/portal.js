@@ -874,17 +874,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function hasEntitlement(key, r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
-    if (r.viewOnly || r.isPrimary === false) return false;
+    if (r.viewOnly || r.holdsEcSeat === false) return false;
     const ents = r.entitlements;
     if (Array.isArray(ents) && ents.length) return ents.includes(key);
     // Fallback for older sessions: EC admin role implies all
-    return r.role === 'admin' && Boolean(r.isPrimary !== false);
+    return r.role === 'admin' && r.holdsEcSeat !== false;
   }
 
   function isEcAdmin(r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
-    if (r.viewOnly || r.isPrimary === false) return false;
+    if (r.viewOnly || r.holdsEcSeat === false) return false;
     if (typeof r.isEcAdmin === 'boolean') return r.isEcAdmin;
     return r.role === 'admin';
   }
@@ -892,7 +892,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function isEcMember(r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
-    if (r.viewOnly || r.isPrimary === false) return false;
+    if (r.viewOnly || r.holdsEcSeat === false) return false;
     if (isEcAdmin(r)) return true;
     if (r.isEcMember || r.isOfficeBearer) return true;
     return Boolean(String(r.officialTitle || '').trim());
@@ -901,7 +901,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function canOpenEcDesk(r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
-    if (r.viewOnly || r.isPrimary === false) return false;
+    if (r.viewOnly || r.holdsEcSeat === false) return false;
     if (isEcAdmin(r)) return true;
     const ents = r.entitlements;
     return Array.isArray(ents) && ents.length > 0;
@@ -915,6 +915,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     });
     const delegateBlock = el('ecDelegateBlock');
     if (delegateBlock) delegateBlock.hidden = !isEcAdmin();
+    const charterBlock = el('ecCharterBlock');
+    if (charterBlock) {
+      charterBlock.hidden = !(hasEntitlement('manage_roles') || hasEntitlement('sensitive_ops'));
+    }
     prepareMobileSections();
   }
 
@@ -1617,14 +1621,103 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
+  let landingLoaded = false;
+
+  function showLanding() {
+    document.body.classList.remove('is-members-gate');
+    const landing = el('landingView');
+    const gate = el('gateView');
+    if (landing) landing.hidden = false;
+    if (gate) gate.hidden = true;
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (hash === 'members' || hash === 'login') {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    }
+    loadLanding().catch(() => {});
+  }
+
+  function showMembersGate({ pushHash = true } = {}) {
+    document.body.classList.add('is-members-gate');
+    const landing = el('landingView');
+    const gate = el('gateView');
+    if (landing) landing.hidden = true;
+    if (gate) gate.hidden = false;
+    if (pushHash) {
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (hash !== 'members') {
+        history.replaceState(null, '', `${location.pathname}${location.search}#members`);
+      }
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function applyPreLoginRoute() {
+    if (state.session?.resident) return;
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (hash === 'members' || hash === 'login') {
+      showMembersGate({ pushHash: false });
+      return;
+    }
+    showLanding();
+  }
+
+  async function loadLanding() {
+    const updatesEl = el('landingUpdatesList');
+    const committeeEl = el('landingCommitteeList');
+    if (!updatesEl && !committeeEl) return;
+    try {
+      const data = await api('/api/rwa/public/landing');
+      landingLoaded = true;
+      if (el('landingEyebrow') && data.eyebrow) {
+        el('landingEyebrow').textContent = data.eyebrow;
+      }
+      if (el('landingHeroTitle') && data.colonyName) {
+        el('landingHeroTitle').textContent = data.colonyName;
+      }
+      if (el('landingGreeting') && data.greeting) {
+        el('landingGreeting').textContent = data.greeting;
+      }
+      if (updatesEl) {
+        const updates = data.updates || [];
+        updatesEl.innerHTML = updates.length
+          ? updates.map((u) => `
+            <article class="landing-update">
+              <strong>${escapeHtml(u.title || 'Update')}</strong>
+              <span class="landing-meta">${escapeHtml(formatIstDate(u.publishedAt) || '')}${u.pinned ? ' · Pinned' : ''}</span>
+              ${u.body ? `<p>${escapeHtml(u.body)}</p>` : ''}
+            </article>`).join('')
+          : '<p class="muted">No public updates yet.</p>';
+      }
+      if (committeeEl) {
+        const bearers = data.officeBearers || [];
+        if (!bearers.length) {
+          committeeEl.innerHTML = '<p class="muted">Office bearers will appear here when published by the society.</p>';
+        } else {
+          committeeEl.innerHTML = bearers.map((b) => `
+            <div class="landing-bearer">
+              <span class="landing-title">${escapeHtml(b.officialTitle || '')}</span>
+              <span class="landing-name">${escapeHtml(b.name || '')}</span>
+            </div>`).join('');
+        }
+      }
+    } catch (err) {
+      if (updatesEl && !landingLoaded) {
+        updatesEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load updates.')}</p>`;
+      }
+      if (committeeEl && !landingLoaded) {
+        committeeEl.innerHTML = '<p class="muted">Committee details unavailable right now.</p>';
+      }
+    }
+  }
+
   function setAuthed(session) {
     state.session = session;
     const isAuthed = Boolean(session?.resident);
     document.body.classList.toggle('is-authed', isAuthed);
     applyInfoCentreProtectMode();
+    const landing = el('landingView');
     const gate = el('gateView');
     const app = el('appView');
-    if (gate) gate.hidden = isAuthed;
     if (app) app.hidden = !isAuthed;
 
     if (!isAuthed) {
@@ -1635,8 +1728,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       });
       const duesTab = el('duesTab') || document.querySelector('.tab[data-panel="dues"]');
       if (duesTab) duesTab.hidden = false;
+      applyPreLoginRoute();
       return;
     }
+
+    document.body.classList.remove('is-members-gate');
+    if (landing) landing.hidden = true;
+    if (gate) gate.hidden = true;
 
     const r = session.resident;
     const chip = el('userChip');
@@ -2121,7 +2219,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (el('noticeCancelEditBtn')) el('noticeCancelEditBtn').hidden = !editing;
     if (el('noticeBodyInput')) el('noticeBodyInput').required = !isDraft;
-    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput'].forEach((id) => {
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput'].forEach((id) => {
       const field = el(id);
       if (field) field.disabled = editing && !canEdit;
     });
@@ -2134,10 +2232,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('noticeEditId')) el('noticeEditId').value = '';
     if (el('noticeEditStatus')) el('noticeEditStatus').value = 'published';
     if (el('noticePinnedInput')) el('noticePinnedInput').disabled = false;
+    if (el('noticePublicLandingInput')) el('noticePublicLandingInput').checked = false;
     const pinLabel = el('noticePinnedInput')?.closest('label');
     if (pinLabel) pinLabel.title = '';
     if (el('noticeBodyInput')) el('noticeBodyInput').required = true;
-    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput'].forEach((id) => {
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput'].forEach((id) => {
       const field = el(id);
       if (field) field.disabled = false;
     });
@@ -2162,6 +2261,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('noticePinnedInput')) {
       el('noticePinnedInput').checked = Boolean(notice.pinned);
       el('noticePinnedInput').disabled = isWelcomeNotice(notice) || notice.status === 'draft' || notice.canEdit === false;
+    }
+    if (el('noticePublicLandingInput')) {
+      el('noticePublicLandingInput').checked = (notice.audience || 'members') === 'public';
+      el('noticePublicLandingInput').disabled = notice.canEdit === false;
     }
     const pinLabel = el('noticePinnedInput')?.closest('label');
     if (pinLabel) {
@@ -2220,6 +2323,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         bodyHi,
         category: el('noticeCategoryInput')?.value || 'general',
         pinned: !asDraft && el('noticePinnedInput')?.checked === true,
+        audience: el('noticePublicLandingInput')?.checked ? 'public' : 'members',
         status: asDraft ? 'draft' : 'published',
       };
       if (noticeId) {
@@ -2272,7 +2376,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     const bank = el('bankCard');
     if (bank) {
-      renderPayCard(bank, data.summary?.bank, { showEdit: isEcAdmin() });
+      renderPayCard(bank, data.summary?.bank, { showEdit: isEcAdmin(), hideTitle: true });
     }
 
     const houseWrap = el('paymentRecordHouseWrap');
@@ -3663,7 +3767,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return `${base}?t=${encodeURIComponent(bank.qrFilename || bank.updatedAt || Date.now())}`;
   }
 
-  function renderPayCard(target, bank, { showEdit = false } = {}) {
+  function renderPayCard(target, bank, { showEdit = false, hideTitle = false } = {}) {
     if (!target) return;
     const b = bank || {};
     const name = b.bankName || b.bank_name || 'Bank of Baroda — Mandi';
@@ -3672,11 +3776,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const upiId = b.upiId || '';
     const upiName = b.upiName || '';
     const qr = qrImgUrl(b);
-    const label = b.label || 'RWA collection';
+    const label = b.label || 'Society Dues Bank Details';
+    const titleHtml = hideTitle ? '' : `<h3>${escapeHtml(label)}</h3>`;
     target.innerHTML = `
       <div class="pay-card-body">
         <div>
-          <h3>${escapeHtml(label)}</h3>
+          ${titleHtml}
           <p class="pay-meta">
             <span><strong>${escapeHtml(name)}</strong></span>
             <span>A/C ${escapeHtml(account)}</span>
@@ -3704,7 +3809,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function fillBankEditForm(bank) {
     const b = bank || {};
-    if (el('bankEditLabel')) el('bankEditLabel').value = b.label || 'RWA collection';
+    if (el('bankEditLabel')) el('bankEditLabel').value = b.label || 'Society Dues Bank Details';
     if (el('bankEditBankName')) el('bankEditBankName').value = b.bankName || b.bank_name || '';
     if (el('bankEditAccountNo')) el('bankEditAccountNo').value = b.accountNo || b.account_no || '';
     if (el('bankEditIfsc')) el('bankEditIfsc').value = b.ifsc || '';
@@ -3795,7 +3900,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       let bank = data.bank;
       if (file) bank = await uploadBankQr(file);
       renderEcBankPreview(bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank') });
+      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank'), hideTitle: true });
       fillBankEditForm(bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'Saved.';
     } catch (err) {
@@ -3834,7 +3939,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     try {
       const bank = await uploadBankQr(file);
       renderEcBankPreview(bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank') });
+      if (el('bankCard')) renderPayCard(el('bankCard'), bank, { showEdit: hasEntitlement('manage_bank'), hideTitle: true });
       fillBankEditForm(bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'QR uploaded.';
     } catch (err) {
@@ -3849,7 +3954,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     try {
       const data = await api('/api/rwa/bank/qr', { method: 'DELETE', body: '{}' });
       renderEcBankPreview(data.bank);
-      if (el('bankCard')) renderPayCard(el('bankCard'), data.bank, { showEdit: hasEntitlement('manage_bank') });
+      if (el('bankCard')) renderPayCard(el('bankCard'), data.bank, { showEdit: hasEntitlement('manage_bank'), hideTitle: true });
       fillBankEditForm(data.bank);
       if (el('bankEditStatus')) el('bankEditStatus').textContent = 'QR removed.';
     } catch (err) {
@@ -3880,13 +3985,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (caps?.canShare && doc.visibility === 'shared_ec' && doc.sourceKind === 'vault_upload') {
       actions.push(`<button type="button" class="btn ghost compact vault-share" data-id="${escapeHtml(doc.id)}" data-visibility="private">Make private</button>`);
     }
-    if (caps?.canVerify && doc.visibility === 'shared_ec') {
-      if (doc.status !== 'verified') {
-        actions.push(`<button type="button" class="btn secondary compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="verified">Verify</button>`);
-      }
-      if (doc.status !== 'rejected') {
-        actions.push(`<button type="button" class="btn ghost compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="rejected">Reject</button>`);
-      }
+    if (caps?.canVerify && doc.visibility === 'shared_ec' && doc.status !== 'verified') {
+      actions.push(`<button type="button" class="btn secondary compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="verified">Verify</button>`);
+    }
+    if (caps?.canVerify && doc.visibility === 'shared_ec' && doc.status !== 'rejected' && doc.status !== 'verified') {
+      actions.push(`<button type="button" class="btn ghost compact vault-verify" data-id="${escapeHtml(doc.id)}" data-status="rejected">Reject</button>`);
     }
     if (doc.canDelete) {
       actions.push(`<button type="button" class="btn ghost compact vault-delete" data-id="${escapeHtml(doc.id)}">Delete</button>`);
@@ -4293,6 +4396,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     box.innerHTML = rows.map((r) => {
       const roleLabel = committeeRoleLabel(r);
       const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
+      const ownerName = (r.ownerName || '').trim();
+      const delegateName = (r.primaryDelegateName || '').trim();
+      const nameHtml = delegateName
+        ? `<span class="dir-owner">${escapeHtml(ownerName || r.name || '')}</span>`
+          + `<span class="dir-sep muted"> / </span>`
+          + `<span class="dir-delegate">${escapeHtml(delegateName)}</span>`
+          + `<span class="dir-identity muted"> · Owner / Primary delegate</span>`
+        : `<span>${escapeHtml(r.name || ownerName || '')}</span>`;
+      const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
+        ? `<div class="muted dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</div>`
+        : '';
       const phone = (r.phone || '').trim();
       const email = (r.email || '').trim();
       const phoneHtml = phone
@@ -4304,7 +4418,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       return `
       <tr>
         <td class="plot-cell" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
-        <td data-label="Name"><span class="person-inline">${personAvatarHtml(r)}<span>${escapeHtml(r.name || '')}</span></span></td>
+        <td data-label="Name"><span class="person-inline">${personAvatarHtml(r)}<span>${nameHtml}${seatBit}</span></span></td>
         <td data-label="Role">${escapeHtml(roleLabel)}${titleBit}</td>
         <td data-label="Phone">${phoneHtml}</td>
         <td data-label="Email" class="dir-email">${emailHtml}</td>
@@ -5969,7 +6083,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <span class="proceedings-corner c-bl" aria-hidden="true"></span>
         <span class="proceedings-corner c-br" aria-hidden="true"></span>
         <header class="proceedings-page-head">
-          <img class="proceedings-seal" src="assets/mhws-logo/mhws-logo-official.png?v=20260810final1" alt="">
+          <img class="proceedings-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="">
           <div>
             <p class="proceedings-org">Mandi Housing Welfare Society</p>
             <h3>${escapeHtml(registerTitle)}</h3>
@@ -6328,6 +6442,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         loadRoster().catch((e) => { if (el('rosterStatus')) el('rosterStatus').textContent = e.message || 'Roster failed'; });
       } else if (isEcAdmin()) {
         populateEcDelegateHouseList().catch(() => {});
+      }
+      if (hasEntitlement('manage_roles') || hasEntitlement('sensitive_ops')) {
+        loadEcCharterPanel().catch(() => {});
       }
       if (hasEntitlement('sensitive_ops')) {
         loadRolesPanel().catch(() => {});
@@ -6880,7 +6997,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   function applyRouteHash() {
-    if (!state.session) return;
+    if (!state.session) {
+      applyPreLoginRoute();
+      return;
+    }
     if (!infoDeepLink) {
       infoDeepLink = parseInfoDeepLink(location.hash) || readPendingInfo({ consume: false });
     }
@@ -6890,6 +7010,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     const hash = (location.hash || '').replace(/^#/, '');
     if (!hash) return;
+    if (hash === 'members' || hash === 'login') {
+      history.replaceState(null, '', `${location.pathname}${location.search}#home`);
+      switchPanel('home');
+      return;
+    }
     if (hash === 'messages' || hash.startsWith('messages/')) {
       switchPanel('messages');
       return;
@@ -6907,10 +7032,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
   window.addEventListener('hashchange', () => applyRouteHash());
 
+  el('landingMembersBtn')?.addEventListener('click', () => {
+    showMembersGate({ pushHash: true });
+  });
+  el('gateBackToLandingBtn')?.addEventListener('click', () => {
+    showLanding();
+  });
+
   el('logoutBtn')?.addEventListener('click', async () => {
     try { await api('/api/rwa/logout', { method: 'POST', body: '{}' }); } catch (_e) { /* ignore */ }
     setAuthed(null);
     resetLoginForms();
+    showLanding();
   });
 
   document.querySelectorAll('.tab').forEach((tab) => {
@@ -6934,14 +7067,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (addForm) addForm.hidden = !canManage;
       list.innerHTML = (data.members || []).map((m) => {
         const badges = [
-          m.isPrimary ? 'Owner' : (m.relationLabel || m.relation),
+          m.isPrimary ? 'Owner' : (m.isPrimaryDelegate ? 'Primary delegate' : (m.relationLabel || m.relation)),
           m.viewOnly ? 'View only' : null,
         ].filter(Boolean).join(' · ');
         const actions = canManage && !m.isPrimary ? `
           <div class="btn-row">
-            <label class="check compact"><input type="checkbox" class="hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''}> View only</label>
+            <label class="check compact"><input type="checkbox" class="hh-primary-delegate" data-id="${escapeHtml(m.id)}" ${m.isPrimaryDelegate ? 'checked' : ''}> Primary delegate (EC-eligible)</label>
+            <label class="check compact"><input type="checkbox" class="hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''} ${m.isPrimaryDelegate ? 'disabled' : ''}> View only</label>
             <button type="button" class="btn ghost compact hh-remove" data-id="${escapeHtml(m.id)}">Remove</button>
-          </div>` : (m.isPrimary ? '<p class="muted">Primary owner — EC access stays with this login only</p>' : '');
+          </div>` : (m.isPrimary
+          ? '<p class="muted">Plot owner — unique login identity. EC access applies only if this person holds the plot’s EC seat.</p>'
+          : '');
         return `
           <article class="household-member-card" data-id="${escapeHtml(m.id)}">
             ${hhAvatarHtml(m)}
@@ -6972,6 +7108,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           email: el('hhEmail').value.trim(),
           phone: el('hhPhone').value.trim(),
           viewOnly: Boolean(el('hhViewOnly')?.checked),
+          isPrimaryDelegate: Boolean(el('hhPrimaryDelegate')?.checked),
         }),
       });
       el('householdAddForm').reset();
@@ -6983,9 +7120,25 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('householdMemberList')?.addEventListener('change', async (event) => {
+    const primaryDel = event.target.closest('.hh-primary-delegate');
     const box = event.target.closest('.hh-view-only');
-    if (!box) return;
     const r = state.session?.resident;
+    if (primaryDel) {
+      const id = primaryDel.getAttribute('data-id');
+      if (!r?.houseId || !id) return;
+      try {
+        await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/members/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isPrimaryDelegate: primaryDel.checked }),
+        });
+        await loadHouseholdMembers();
+      } catch (err) {
+        alert(err.message || 'Could not update primary delegate');
+        primaryDel.checked = !primaryDel.checked;
+      }
+      return;
+    }
+    if (!box) return;
     const id = box.getAttribute('data-id');
     if (!r?.houseId || !id) return;
     try {
@@ -8431,6 +8584,184 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   let entitlementCatalog = [];
 
+  async function loadEcCharterPanel() {
+    const box = el('ecCharterList');
+    if (!box) return;
+    if (!(hasEntitlement('manage_roles') || hasEntitlement('sensitive_ops'))) return;
+    try {
+      const data = await api('/api/rwa/ec/charter');
+      const members = data.members || [];
+      const plotList = el('ecCharterPlotList');
+      if (plotList) {
+        const dir = await api('/api/rwa/directory').catch(() => ({ residents: [] }));
+        plotList.innerHTML = (dir.residents || []).map((r) =>
+          `<option value="${escapeHtml(r.houseId)}">${escapeHtml(r.houseId)} — ${escapeHtml(r.ownerName || r.name || '')}</option>`
+        ).join('');
+      }
+      if (!members.length) {
+        box.innerHTML = '<p class="muted">No EC charter members yet. Add a plot with an eligible seat holder above.</p>';
+      } else {
+        box.innerHTML = members.map((m) => {
+          const roleBits = [
+            m.isEcAdmin ? 'EC Admin' : null,
+            m.isOfficeBearer ? 'Office Bearer' : null,
+            m.isEcMember ? 'EC Member' : null,
+          ].filter(Boolean).join(' · ');
+          const seatOpts = (m.eligibleMembers || []).map((p) =>
+            `<option value="${escapeHtml(p.id)}" ${p.id === m.ecMemberId ? 'selected' : ''}>${escapeHtml(p.name)} (${escapeHtml(p.identityLabel || p.relationLabel || '')})</option>`
+          ).join('');
+          return `<div class="roles-member-card" data-house="${escapeHtml(m.houseId)}">
+            <div class="roles-member-head">
+              ${personAvatarHtml(m, { size: 'md' })}
+              <div class="roles-member-text">
+                <strong>${escapeHtml(m.plotNo)}</strong> · ${escapeHtml(m.displayName || m.name)}
+                <span class="muted">${escapeHtml(m.officialTitle || '')}${m.officialTitle ? ' · ' : ''}${escapeHtml(roleBits)}</span>
+                <span class="muted">Seat: ${escapeHtml(m.ecSeatHolderName || '—')} (${escapeHtml(m.ecSeatHolderLabel || '—')})</span>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <label>Seat holder
+                <select class="ec-charter-seat" data-house="${escapeHtml(m.houseId)}">${seatOpts || '<option value="">No eligible people</option>'}</select>
+              </label>
+              <label>Official title
+                <input class="ec-charter-title" data-house="${escapeHtml(m.houseId)}" value="${escapeHtml(m.officialTitle || '')}" maxlength="80">
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn secondary compact ec-charter-save" data-house="${escapeHtml(m.houseId)}">Update seat / title</button>
+              ${m.isEcAdmin
+                ? `<button type="button" class="btn ghost compact ec-charter-demote" data-house="${escapeHtml(m.houseId)}">Demote Admin</button>`
+                : `<button type="button" class="btn ghost compact ec-charter-elevate" data-house="${escapeHtml(m.houseId)}">Elevate Admin</button>`}
+              <button type="button" class="btn ghost compact ec-charter-remove" data-house="${escapeHtml(m.houseId)}">Remove from EC</button>
+            </div>
+          </div>`;
+        }).join('');
+        await hydrateAvatars(box);
+      }
+      if (el('ecCharterStatus')) el('ecCharterStatus').textContent = `${members.length} charter seat(s)`;
+    } catch (err) {
+      box.innerHTML = `<p class="error">${escapeHtml(err.message || 'Failed to load charter')}</p>`;
+    }
+  }
+
+  async function loadEcCharterEligible(houseId) {
+    const seat = el('ecCharterSeat');
+    if (!seat || !houseId) return;
+    seat.innerHTML = '<option value="">Loading…</option>';
+    try {
+      const data = await api(`/api/rwa/ec/eligible/${encodeURIComponent(houseId)}`);
+      const members = data.members || [];
+      if (!members.length) {
+        seat.innerHTML = '<option value="">No owner / primary delegate on this plot</option>';
+        return;
+      }
+      seat.innerHTML = members.map((m) =>
+        `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} (${escapeHtml(m.identityLabel || '')})</option>`
+      ).join('');
+    } catch (err) {
+      seat.innerHTML = `<option value="">${escapeHtml(err.message || 'Failed')}</option>`;
+    }
+  }
+
+  el('ecCharterRefreshBtn')?.addEventListener('click', () => loadEcCharterPanel().catch(console.error));
+  el('ecCharterLoadEligibleBtn')?.addEventListener('click', () => {
+    const plot = (el('ecCharterPlot')?.value || '').trim();
+    loadEcCharterEligible(plot).catch(console.error);
+  });
+  el('ecCharterPlot')?.addEventListener('change', () => {
+    const plot = (el('ecCharterPlot')?.value || '').trim();
+    loadEcCharterEligible(plot).catch(console.error);
+  });
+  el('ecCharterForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('ecCharterStatus');
+    const plot = (el('ecCharterPlot')?.value || '').trim();
+    const seatId = (el('ecCharterSeat')?.value || '').trim();
+    const title = (el('ecCharterTitle')?.value || '').trim();
+    const role = (el('ecCharterRole')?.value || 'member').trim();
+    if (!plot || !seatId) {
+      if (status) status.textContent = 'Plot and seat holder are required.';
+      return;
+    }
+    const body = {
+      houseId: plot,
+      ecMemberId: seatId,
+      isEcMember: true,
+    };
+    if (role === 'bearer' || role === 'admin') {
+      if (!title) {
+        if (status) status.textContent = 'Official title is required for office bearers / EC Admin.';
+        return;
+      }
+      body.isOfficeBearer = true;
+      body.officialTitle = title;
+    } else if (title) {
+      body.officialTitle = title;
+      body.isOfficeBearer = true;
+    }
+    if (role === 'admin') body.role = 'admin';
+    try {
+      await api('/api/rwa/ec/charter', { method: 'PATCH', body: JSON.stringify(body) });
+      if (status) status.textContent = `Saved ${plot} on the charter.`;
+      el('ecCharterForm')?.reset();
+      if (el('ecCharterSeat')) el('ecCharterSeat').innerHTML = '<option value="">Select plot first…</option>';
+      await loadEcCharterPanel();
+      if (hasEntitlement('sensitive_ops')) await loadRolesPanel().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Save failed';
+    }
+  });
+
+  el('ecCharterList')?.addEventListener('click', async (event) => {
+    const save = event.target.closest('.ec-charter-save');
+    const elevate = event.target.closest('.ec-charter-elevate');
+    const demote = event.target.closest('.ec-charter-demote');
+    const remove = event.target.closest('.ec-charter-remove');
+    const btn = save || elevate || demote || remove;
+    if (!btn) return;
+    const house = btn.getAttribute('data-house');
+    if (!house) return;
+    const card = btn.closest('.roles-member-card');
+    const status = el('ecCharterStatus');
+    try {
+      if (remove) {
+        if (!window.confirm(`Remove plot ${house} from the EC charter?`)) return;
+        await api('/api/rwa/ec/charter', {
+          method: 'PATCH',
+          body: JSON.stringify({ houseId: house, remove: true }),
+        });
+      } else if (elevate) {
+        await api('/api/rwa/ec/charter', {
+          method: 'PATCH',
+          body: JSON.stringify({ houseId: house, role: 'admin', isEcMember: true, isOfficeBearer: true }),
+        });
+      } else if (demote) {
+        await api('/api/rwa/ec/charter', {
+          method: 'PATCH',
+          body: JSON.stringify({ houseId: house, role: 'resident', isEcMember: true, isOfficeBearer: true }),
+        });
+      } else if (save) {
+        const seat = card?.querySelector('.ec-charter-seat')?.value || '';
+        const title = card?.querySelector('.ec-charter-title')?.value || '';
+        await api('/api/rwa/ec/charter', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            houseId: house,
+            ecMemberId: seat,
+            officialTitle: title,
+            isEcMember: true,
+            isOfficeBearer: Boolean(title),
+          }),
+        });
+      }
+      if (status) status.textContent = 'Charter updated.';
+      await loadEcCharterPanel();
+      if (hasEntitlement('sensitive_ops')) await loadRolesPanel().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Update failed';
+    }
+  });
+
   async function loadRolesPanel() {
     const box = el('rolesMembersList');
     if (!box || !hasEntitlement('sensitive_ops')) return;
@@ -8744,14 +9075,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <p class="muted">Household for <code>${escapeHtml(houseLabel)}</code>${escapeHtml(ownerName)}</p>
       ${(data.members || []).map((m) => {
         const badges = [
-          m.isPrimary ? 'Owner' : (m.relationLabel || m.relation),
+          m.isPrimary ? 'Owner' : (m.isPrimaryDelegate ? 'Primary delegate' : (m.relationLabel || m.relation)),
           m.viewOnly ? 'View only' : null,
         ].filter(Boolean).join(' · ');
         const actions = canManage && !m.isPrimary ? `
           <div class="btn-row">
-            <label class="check compact"><input type="checkbox" class="ec-hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''}> View only</label>
+            <label class="check compact"><input type="checkbox" class="ec-hh-primary-delegate" data-id="${escapeHtml(m.id)}" ${m.isPrimaryDelegate ? 'checked' : ''}> Primary delegate</label>
+            <label class="check compact"><input type="checkbox" class="ec-hh-view-only" data-id="${escapeHtml(m.id)}" ${m.viewOnly ? 'checked' : ''} ${m.isPrimaryDelegate ? 'disabled' : ''}> View only</label>
             <button type="button" class="btn ghost compact ec-hh-remove" data-id="${escapeHtml(m.id)}">Remove</button>
-          </div>` : (m.isPrimary ? '<p class="muted">Primary owner</p>' : '');
+          </div>` : (m.isPrimary ? '<p class="muted">Plot owner</p>' : '');
         return `
           <article class="household-member-card" data-id="${escapeHtml(m.id)}">
             ${hhAvatarHtml(m)}
@@ -8806,10 +9138,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           name,
           relation: el('ecDelegateRelation')?.value || 'other',
           viewOnly: Boolean(el('ecDelegateViewOnly')?.checked),
+          isPrimaryDelegate: Boolean(el('ecDelegatePrimary')?.checked),
         }),
       });
       if (el('ecDelegateName')) el('ecDelegateName').value = '';
       if (el('ecDelegateViewOnly')) el('ecDelegateViewOnly').checked = false;
+      if (el('ecDelegatePrimary')) el('ecDelegatePrimary').checked = false;
       if (status) status.textContent = `Delegate added for ${hid}.`;
       await loadEcDelegateHousehold();
     } catch (err) {
@@ -8818,9 +9152,25 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('ecDelegateMemberList')?.addEventListener('change', async (event) => {
+    const primaryDel = event.target.closest('.ec-hh-primary-delegate');
     const box = event.target.closest('.ec-hh-view-only');
-    if (!box) return;
     const hid = ecDelegateHouseId();
+    if (primaryDel) {
+      const id = primaryDel.getAttribute('data-id');
+      if (!hid || !id) return;
+      try {
+        await api(`/api/rwa/household/${encodeURIComponent(hid)}/members/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ isPrimaryDelegate: primaryDel.checked }),
+        });
+        await loadEcDelegateHousehold();
+      } catch (err) {
+        alert(err.message || 'Could not update primary delegate');
+        primaryDel.checked = !primaryDel.checked;
+      }
+      return;
+    }
+    if (!box) return;
     const id = box.getAttribute('data-id');
     if (!hid || !id) return;
     try {
