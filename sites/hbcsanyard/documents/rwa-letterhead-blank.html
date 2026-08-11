@@ -78,11 +78,13 @@
     .wm {
       position: absolute;
       left: 50%;
-      top: 55%;
+      top: 52%;
       transform: translate(-50%, -50%);
-      width: 96mm;
+      width: min(112mm, 70%);
+      max-height: 46%;
       height: auto;
-      opacity: 0.55;
+      object-fit: contain;
+      opacity: 0.75;
       pointer-events: none;
       z-index: 0;
     }
@@ -117,7 +119,7 @@
         height: auto !important;
         min-height: 0 !important;
       }
-      .wm { opacity: 0.78; }
+      .wm { opacity: 0.7; }
       .slogan-bar {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -128,7 +130,7 @@
 <body>
   <p class="screen-hint">Blank A4 letterhead pad — Housing Colony Sanyard, Mandi HP 175001</p>
   <div class="sheet">
-    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
     <header class="head">
       <img class="seal" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
       <div class="org">

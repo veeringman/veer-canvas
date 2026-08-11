@@ -40,6 +40,7 @@ import rwa_messages  # noqa: E402
 import rwa_push  # noqa: E402
 import rwa_templates  # noqa: E402
 import rwa_proceedings  # noqa: E402
+import rwa_campaigns  # noqa: E402
 
 VEERCANVAS_ROOT = pathlib.Path(
     os.environ.get("VEERCANVAS_ROOT", str(APP_DIR.parent))
@@ -5800,6 +5801,7 @@ def api_rwa_print_templates():
                 "ok": True,
                 "templates": docs,
                 "categories": rwa_templates.categories(),
+                "optionPresets": rwa_templates.option_presets(),
             })
 
         upload = request.files.get("file") or request.files.get("document")
@@ -5813,6 +5815,11 @@ def api_rwa_print_templates():
                 "staticPath": request.form.get("staticPath"),
                 "id": request.form.get("id") or None,
             }
+            if request.form.get("options"):
+                try:
+                    payload["options"] = json.loads(request.form.get("options") or "{}")
+                except json.JSONDecodeError:
+                    payload["options"] = request.form.get("options")
         else:
             payload = request.get_json(force=True, silent=True) or {}
             upload = None
@@ -5841,7 +5848,7 @@ def api_rwa_print_template_item(template_id: str):
             doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
             if not doc:
                 return jsonify({"ok": False, "error": "Template not found"}), 404
-            return jsonify({"ok": True, "template": doc})
+            return jsonify({"ok": True, "template": doc, "optionPresets": rwa_templates.option_presets()})
 
         if request.method == "DELETE":
             rwa_templates.delete_template(conn, SITE_ROOT, template_id)
@@ -5858,6 +5865,11 @@ def api_rwa_print_template_item(template_id: str):
                 "staticPath": request.form.get("staticPath"),
                 "id": template_id,
             }
+            if request.form.get("options"):
+                try:
+                    payload["options"] = json.loads(request.form.get("options") or "{}")
+                except json.JSONDecodeError:
+                    payload["options"] = request.form.get("options")
         else:
             payload = request.get_json(force=True, silent=True) or {}
             payload["id"] = template_id
@@ -5870,6 +5882,39 @@ def api_rwa_print_template_item(template_id: str):
             file_storage=upload,
         )
         return jsonify({"ok": True, "template": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/<template_id>/render", methods=["GET"])
+def api_rwa_print_template_render(template_id: str):
+    """HTML preview/print with live office bearers + saved print options."""
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        override = None
+        raw_opts = (request.args.get("options") or "").strip()
+        if raw_opts:
+            try:
+                override = json.loads(raw_opts)
+            except json.JSONDecodeError:
+                override = None
+        html, doc = rwa_templates.render_template_html(
+            conn, SITE_ROOT, template_id, options_override=override
+        )
+        download = (request.args.get("download") or "").strip() in ("1", "true", "yes")
+        headers = {
+            "Cache-Control": "no-store",
+            "Content-Type": "text/html; charset=utf-8",
+        }
+        if download:
+            name = (doc.get("originalName") or doc.get("filename") or "template.html").rsplit(".", 1)[0]
+            headers["Content-Disposition"] = f'attachment; filename="{name}.html"'
+        return Response(html, headers=headers)
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:
@@ -6573,6 +6618,359 @@ def api_rwa_works_item(work_id: str):
         payload["id"] = work_id
         work = rwa_portal.upsert_colony_work(conn, payload, actor=sess["resident"])
         return jsonify({"ok": True, "work": work})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/campaigns/<campaign_id>", methods=["GET"])
+def api_rwa_public_campaign(campaign_id: str):
+    """Public campaign detail for landing-page drives (no auth)."""
+    conn = _rwa_conn()
+    try:
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=False, signed_in=False)
+        if not campaign or (campaign.get("audience") or "") != "public":
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if (campaign.get("status") or "") not in {"active", "paused", "completed"}:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        pledges = rwa_campaigns.list_pledges(conn, campaign_id)
+        contributions = rwa_campaigns.list_contributions(
+            conn,
+            campaign_id,
+            as_admin=False,
+            viewer_house=None,
+            status="verified",
+        )
+        return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/campaigns/<campaign_id>/pledges", methods=["POST"])
+def api_rwa_public_campaign_pledge(campaign_id: str):
+    """Public pledge submission (no auth required for public campaigns)."""
+    conn = _rwa_conn()
+    try:
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=False, signed_in=False)
+        if not campaign or campaign.get("audience") != "public":
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if campaign.get("status") != "active":
+            return jsonify({"ok": False, "error": "Campaign is not active"}), 400
+        mode = campaign.get("mode", "both")
+        if mode == "funding":
+            return jsonify({"ok": False, "error": "This campaign does not accept pledges"}), 400
+        body = request.get_json(force=True) or {}
+        name = (body.get("name") or "").strip()
+        house = (body.get("house") or "").strip()
+        amount = body.get("amount")
+        if not name or not house or not amount:
+            return jsonify({"ok": False, "error": "Name, house, and amount are required"}), 400
+        amount = int(amount)
+        if amount <= 0:
+            return jsonify({"ok": False, "error": "Amount must be positive"}), 400
+        note = (body.get("note") or "").strip()[:500]
+        pledge = rwa_campaigns.public_create_pledge(conn, campaign_id=campaign_id, house_id=house, contributor_name=name, amount=amount, note=note)
+        return jsonify({"ok": True, "pledge": pledge})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/campaigns/<campaign_id>/contributions", methods=["POST"])
+def api_rwa_public_campaign_contribution(campaign_id: str):
+    """Public contribution submission (no auth required for public campaigns)."""
+    conn = _rwa_conn()
+    try:
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=False, signed_in=False)
+        if not campaign or campaign.get("audience") != "public":
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if campaign.get("status") != "active":
+            return jsonify({"ok": False, "error": "Campaign is not active"}), 400
+        mode = campaign.get("mode", "both")
+        if mode == "pledge":
+            return jsonify({"ok": False, "error": "This campaign only accepts pledges"}), 400
+        body = request.get_json(force=True) or {}
+        name = (body.get("name") or "").strip()
+        house = (body.get("house") or "").strip()
+        amount = body.get("amount")
+        if not name or not house or not amount:
+            return jsonify({"ok": False, "error": "Name, house, and amount are required"}), 400
+        amount = int(amount)
+        if amount <= 0:
+            return jsonify({"ok": False, "error": "Amount must be positive"}), 400
+        note = (body.get("note") or "").strip()[:500]
+        contribution = rwa_campaigns.public_create_contribution(conn, campaign_id=campaign_id, house_id=house, contributor_name=name, amount=amount, note=note)
+        return jsonify({"ok": True, "contribution": contribution})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/cover", methods=["GET"])
+def api_rwa_campaign_cover(campaign_id: str):
+    """Campaign illustration / cover image."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        as_admin = bool(sess and rwa_entitlements.actor_has(sess["resident"], "manage_works"))
+        signed_in = bool(sess)
+        cover = rwa_campaigns.get_campaign_cover(
+            conn,
+            SITE_ROOT,
+            campaign_id,
+            as_admin=as_admin,
+            signed_in=signed_in,
+        )
+        if not cover:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        path, mime = cover
+        return send_file(path, mimetype=mime, max_age=300)
+    finally:
+        conn.close()
+
+
+def _campaign_payload_from_request() -> tuple[dict, object | None]:
+    """Parse JSON or multipart campaign form; returns (payload, image_file_or_none)."""
+    image_file = None
+    if request.content_type and "multipart/form-data" in request.content_type:
+        payload = dict(request.form)
+        image_file = request.files.get("image")
+    else:
+        payload = request.get_json(force=True, silent=True) or {}
+    return payload, image_file
+
+
+@app.route("/api/rwa/campaigns/meta", methods=["GET"])
+def api_rwa_campaigns_meta():
+    return jsonify({"ok": True, **rwa_campaigns.campaigns_meta()})
+
+
+@app.route("/api/rwa/campaigns", methods=["GET", "POST"])
+def api_rwa_campaigns():
+    """List / create funding drives."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_works")
+
+        if request.method == "GET":
+            kind = (request.args.get("kind") or "").strip() or None
+            status = (request.args.get("status") or "").strip() or None
+            audience = (request.args.get("audience") or "").strip() or None
+            campaigns = rwa_campaigns.list_campaigns(
+                conn,
+                kind=kind,
+                status=status,
+                audience=audience,
+                as_admin=is_admin,
+            )
+            return jsonify({"ok": True, "campaigns": campaigns, **rwa_campaigns.campaigns_meta()})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload, image_file = _campaign_payload_from_request()
+        campaign = rwa_campaigns.upsert_campaign(conn, payload, actor=sess["resident"])
+        if image_file and image_file.filename:
+            data = image_file.read()
+            rwa_campaigns.save_campaign_image(
+                conn,
+                SITE_ROOT,
+                campaign_id=campaign["id"],
+                data=data,
+                filename=image_file.filename,
+                mime=image_file.content_type or "",
+            )
+            campaign = rwa_campaigns.get_campaign(conn, campaign["id"], as_admin=True, signed_in=True)
+        return jsonify({"ok": True, "campaign": campaign})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>", methods=["GET", "PATCH", "DELETE"])
+def api_rwa_campaign_item(campaign_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_works")
+
+        if request.method == "GET":
+            campaign = rwa_campaigns.get_campaign(
+                conn, campaign_id, as_admin=is_admin, signed_in=True
+            )
+            if not campaign:
+                return jsonify({"ok": False, "error": "Not found"}), 404
+            viewer_house = str(sess["resident"].get("houseId") or "")
+            pledges = rwa_campaigns.list_pledges(conn, campaign_id)
+            contributions = rwa_campaigns.list_contributions(
+                conn,
+                campaign_id,
+                as_admin=is_admin,
+                viewer_house=viewer_house,
+            )
+            return jsonify({"ok": True, "campaign": campaign, "pledges": pledges, "contributions": contributions})
+
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+
+        if request.method == "DELETE":
+            rwa_campaigns.delete_campaign(conn, campaign_id, site_root=SITE_ROOT)
+            return jsonify({"ok": True, "deleted": campaign_id})
+
+        payload, image_file = _campaign_payload_from_request()
+        payload["id"] = campaign_id
+        campaign = rwa_campaigns.upsert_campaign(conn, payload, actor=sess["resident"])
+        if image_file and image_file.filename:
+            data = image_file.read()
+            rwa_campaigns.save_campaign_image(
+                conn,
+                SITE_ROOT,
+                campaign_id=campaign_id,
+                data=data,
+                filename=image_file.filename,
+                mime=image_file.content_type or "",
+            )
+            campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
+        return jsonify({"ok": True, "campaign": campaign})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/pledges", methods=["GET", "POST"])
+def api_rwa_campaign_pledges(campaign_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_works")
+
+        if request.method == "GET":
+            pledges = rwa_campaigns.list_pledges(conn, campaign_id)
+            return jsonify({"ok": True, "pledges": pledges})
+
+        payload = request.get_json(force=True, silent=True) or {}
+        pledge = rwa_campaigns.create_pledge(
+            conn,
+            campaign_id=campaign_id,
+            payload=payload,
+            actor=sess["resident"],
+        )
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=is_admin, signed_in=True)
+        pledges = rwa_campaigns.list_pledges(conn, campaign_id)
+        return jsonify({"ok": True, "pledge": pledge, "campaign": campaign, "pledges": pledges})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/contributions", methods=["GET", "POST"])
+def api_rwa_campaign_contributions(campaign_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_works")
+        viewer_house = str(sess["resident"].get("houseId") or "")
+
+        if request.method == "GET":
+            status = (request.args.get("status") or "").strip() or None
+            contributions = rwa_campaigns.list_contributions(
+                conn,
+                campaign_id,
+                as_admin=is_admin,
+                viewer_house=viewer_house,
+                status=status if status in {"pending", "verified", "rejected"} else None,
+            )
+            return jsonify({"ok": True, "contributions": contributions})
+
+        files: list[tuple[bytes, str, str]] = []
+        if request.content_type and "multipart/form-data" in request.content_type:
+            payload = dict(request.form)
+            for f in request.files.getlist("files"):
+                if f and f.filename:
+                    files.append((f.read(), f.filename, f.content_type or ""))
+        else:
+            payload = request.get_json(force=True, silent=True) or {}
+
+        contribution = rwa_campaigns.create_contribution(
+            conn,
+            SITE_ROOT,
+            campaign_id=campaign_id,
+            payload=payload,
+            files=files,
+            actor=sess["resident"],
+        )
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=is_admin, signed_in=True)
+        return jsonify({"ok": True, "contribution": contribution, "campaign": campaign})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/pledges/<pledge_id>", methods=["DELETE"])
+def api_rwa_campaign_pledge_delete(campaign_id: str, pledge_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_works"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        rwa_campaigns.delete_pledge(conn, campaign_id=campaign_id, pledge_id=pledge_id)
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
+        pledges = rwa_campaigns.list_pledges(conn, campaign_id)
+        return jsonify({"ok": True, "campaign": campaign, "pledges": pledges})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/campaigns/<campaign_id>/contributions/<contribution_id>", methods=["PATCH", "DELETE"])
+def api_rwa_campaign_contribution_review(campaign_id: str, contribution_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_works"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        if request.method == "DELETE":
+            rwa_campaigns.delete_contribution(conn, campaign_id=campaign_id, contribution_id=contribution_id)
+            campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
+            contributions = rwa_campaigns.list_contributions(conn, campaign_id, as_admin=True, viewer_house="", status=None)
+            return jsonify({"ok": True, "campaign": campaign, "contributions": contributions})
+        payload = request.get_json(force=True, silent=True) or {}
+        action = str(payload.get("action") or "").strip().lower()
+        if action == "verify":
+            contribution = rwa_campaigns.verify_contribution(
+                conn,
+                campaign_id=campaign_id,
+                contribution_id=contribution_id,
+                actor=sess["resident"],
+            )
+        elif action == "reject":
+            contribution = rwa_campaigns.reject_contribution(
+                conn,
+                campaign_id=campaign_id,
+                contribution_id=contribution_id,
+                reason=str(payload.get("reason") or ""),
+                actor=sess["resident"],
+            )
+        else:
+            return jsonify({"ok": False, "error": "action must be verify or reject"}), 400
+        campaign = rwa_campaigns.get_campaign(conn, campaign_id, as_admin=True, signed_in=True)
+        return jsonify({"ok": True, "contribution": contribution, "campaign": campaign})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

@@ -45,6 +45,7 @@
       display: flex;
       flex-direction: column;
       gap: 0;
+          overflow: hidden;
     }
 
     /* Three tear-off receipts per A4 page */
@@ -68,12 +69,14 @@
       content: "";
       position: absolute;
       left: 50%;
-      top: 52%;
-      width: 52mm;
-      height: 52mm;
+      top: 50%;
+      width: min(40mm, 42%);
+      height: min(40mm, 42%);
+      max-width: 42%;
+      max-height: 42%;
       transform: translate(-50%, -50%);
-      background: url("../assets/mhws-logo/mhws-logo-watermark.png") center / contain no-repeat;
-      opacity: 0.55;
+      background: url("../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8") center / contain no-repeat;
+      opacity: 0.7;
       pointer-events: none;
       z-index: 0;
     }
@@ -309,7 +312,7 @@
         background: #fff !important;
         box-shadow: none !important;
       }
-      .receipt::before { opacity: 0.72; }
+      .receipt::before { opacity: 0.65; }
       .amount-value,
       .fields,
       .r-top {

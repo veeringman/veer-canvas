@@ -42,6 +42,21 @@ TEMPLATE_EXT_MIME = {
 
 _STATIC_ALLOWED_PREFIXES = ("documents/", "assets/")
 
+PAPER_SIZES = ("A4", "A5", "Letter")
+BACKGROUND_STYLES = ("watermark", "none", "plain")
+
+DEFAULT_TEMPLATE_OPTIONS: dict[str, Any] = {
+    "paperSize": "A4",
+    "background": "watermark",
+    "colors": {
+        "heading": "#0b2a56",
+        "body": "#12233f",
+        "muted": "#5a6a80",
+        "accent": "#1a6b3a",
+        "gold": "#c9a227",
+    },
+}
+
 _SEED_TEMPLATES: list[dict[str, Any]] = [
     {
         "id": "tpl-mhws-letterhead",
@@ -110,6 +125,7 @@ def ensure_print_templates_table(conn: sqlite3.Connection) -> None:
           mime_type TEXT,
           size_bytes INTEGER,
           static_path TEXT,
+          options_json TEXT NOT NULL DEFAULT '{}',
           status TEXT NOT NULL DEFAULT 'published'
             CHECK(status IN ('draft','published','archived')),
           created_by TEXT,
@@ -120,6 +136,63 @@ def ensure_print_templates_table(conn: sqlite3.Connection) -> None:
           ON print_templates(status, category, updated_at DESC);
         """
     )
+    cols = {str(r[1]) for r in conn.execute("PRAGMA table_info(print_templates)").fetchall()}
+    if "options_json" not in cols:
+        conn.execute(
+            "ALTER TABLE print_templates ADD COLUMN options_json TEXT NOT NULL DEFAULT '{}'"
+        )
+
+
+def _hex_color(raw: Any, fallback: str) -> str:
+    text = str(raw or "").strip()
+    if re.fullmatch(r"#?[0-9a-fA-F]{6}", text):
+        return text if text.startswith("#") else f"#{text}"
+    if re.fullmatch(r"#?[0-9a-fA-F]{3}", text):
+        t = text[1:] if text.startswith("#") else text
+        return f"#{t[0]}{t[0]}{t[1]}{t[1]}{t[2]}{t[2]}"
+    return fallback
+
+
+def normalize_options(raw: Any = None) -> dict[str, Any]:
+    base = json.loads(json.dumps(DEFAULT_TEMPLATE_OPTIONS))
+    data: dict[str, Any] = {}
+    if isinstance(raw, dict):
+        data = raw
+    elif isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                data = parsed
+        except json.JSONDecodeError:
+            data = {}
+    paper = str(data.get("paperSize") or base["paperSize"]).strip()
+    if paper.lower() == "letter":
+        paper = "Letter"
+    else:
+        paper = paper.upper()
+    if paper not in PAPER_SIZES:
+        paper = base["paperSize"]
+    bg = str(data.get("background") or base["background"]).strip().lower()
+    if bg not in BACKGROUND_STYLES:
+        bg = base["background"]
+    colors_in = data.get("colors") if isinstance(data.get("colors"), dict) else {}
+    colors = {
+        key: _hex_color(colors_in.get(key), fallback)
+        for key, fallback in base["colors"].items()
+    }
+    return {"paperSize": paper, "background": bg, "colors": colors}
+
+
+def option_presets() -> dict[str, Any]:
+    return {
+        "paperSizes": [{"id": s, "label": s} for s in PAPER_SIZES],
+        "backgrounds": [
+            {"id": "watermark", "label": "Watermark"},
+            {"id": "none", "label": "No watermark"},
+            {"id": "plain", "label": "Plain white"},
+        ],
+        "defaults": DEFAULT_TEMPLATE_OPTIONS,
+    }
 
 
 def seed_default_templates(conn: sqlite3.Connection, site_root: pathlib.Path) -> None:
@@ -252,6 +325,7 @@ def _row_to_dto(row: sqlite3.Row | dict, site_root: pathlib.Path | None = None) 
         tags = []
     cat = data.get("category") or "other"
     cat_label = next((lab for k, lab in TEMPLATE_CATEGORIES if k == cat), cat)
+    options = normalize_options(data.get("options_json"))
     dto = {
         "id": data.get("id"),
         "title": data.get("title") or "",
@@ -265,12 +339,14 @@ def _row_to_dto(row: sqlite3.Row | dict, site_root: pathlib.Path | None = None) 
         "mimeType": data.get("mime_type"),
         "sizeBytes": data.get("size_bytes"),
         "staticPath": data.get("static_path"),
+        "options": options,
         "status": data.get("status") or "published",
         "createdBy": data.get("created_by"),
         "createdAt": data.get("created_at"),
         "updatedAt": data.get("updated_at"),
         "hasFile": False,
         "publicUrl": None,
+        "renderUrl": f"/api/rwa/templates/{data.get('id')}/render" if data.get("id") else None,
     }
     if site_root is not None:
         path = resolve_template_file(site_root, dto)
@@ -389,6 +465,15 @@ def upsert_template(
         if "status" in payload
         else (existing["status"] if existing else "published")
     )
+    if "options" in payload or "optionsJson" in payload or "options_json" in payload:
+        options = normalize_options(
+            payload.get("options")
+            if "options" in payload
+            else payload.get("optionsJson", payload.get("options_json"))
+        )
+    else:
+        options = normalize_options(existing["options_json"] if existing else None)
+    options_json = json.dumps(options, ensure_ascii=False)
 
     doc_type = (existing["doc_type"] if existing else "file")
     filename = existing["filename"] if existing else None
@@ -460,7 +545,7 @@ def upsert_template(
             UPDATE print_templates SET
               title = ?, description = ?, category = ?, tags_json = ?,
               doc_type = ?, filename = ?, original_name = ?, mime_type = ?,
-              size_bytes = ?, static_path = ?, status = ?, updated_at = ?
+              size_bytes = ?, static_path = ?, options_json = ?, status = ?, updated_at = ?
             WHERE id = ?
             """,
             (
@@ -474,6 +559,7 @@ def upsert_template(
                 mime_type,
                 size_bytes,
                 static_path,
+                options_json,
                 status,
                 now,
                 tid,
@@ -485,8 +571,8 @@ def upsert_template(
             INSERT INTO print_templates(
               id, title, description, category, tags_json, doc_type,
               filename, original_name, mime_type, size_bytes, static_path,
-              status, created_by, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              options_json, status, created_by, created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 tid,
@@ -500,6 +586,7 @@ def upsert_template(
                 mime_type,
                 size_bytes,
                 static_path,
+                options_json,
                 status,
                 created_by,
                 created_at,
@@ -527,3 +614,273 @@ def delete_template(conn: sqlite3.Connection, site_root: pathlib.Path, template_
         dest = templates_dir(site_root) / re.sub(r"[^a-zA-Z0-9_-]", "", template_id)
         if dest.is_dir():
             shutil.rmtree(dest, ignore_errors=True)
+
+
+def _html_escape(text: Any) -> str:
+    s = "" if text is None else str(text)
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _runtime_options_css(options: dict[str, Any]) -> str:
+    colors = options.get("colors") or {}
+    paper = options.get("paperSize") or "A4"
+    bg = options.get("background") or "watermark"
+    heading = colors.get("heading") or "#0b2a56"
+    body = colors.get("body") or "#12233f"
+    muted = colors.get("muted") or "#5a6a80"
+    accent = colors.get("accent") or "#1a6b3a"
+    gold = colors.get("gold") or "#c9a227"
+    page_size = {
+        "A4": "A4 portrait",
+        "A5": "A5 portrait",
+        "Letter": "letter portrait",
+    }.get(paper, "A4 portrait")
+    sheet_w = {"A4": "210mm", "A5": "148mm", "Letter": "8.5in"}.get(paper, "210mm")
+    sheet_min_h = {"A4": "297mm", "A5": "210mm", "Letter": "11in"}.get(paper, "297mm")
+    hide_wm = bg in {"none", "plain"}
+    if hide_wm:
+        wm_css = "img.wm, .receipt::before { opacity: 0 !important; visibility: hidden !important; }"
+    else:
+        wm_css = (
+            "img.wm {"
+            " width: min(112mm, 70%) !important; max-height: 46% !important;"
+            " height: auto !important; object-fit: contain !important; opacity: 0.75 !important;"
+            "}"
+            ".receipt::before {"
+            " width: min(40mm, 42%) !important; height: min(40mm, 42%) !important;"
+            " max-width: 42% !important; max-height: 42% !important; opacity: 0.7 !important;"
+            "}"
+            "@media print {"
+            " img.wm { opacity: 0.7 !important; }"
+            " .receipt::before { opacity: 0.65 !important; }"
+            "}"
+        )
+    plain_css = "body { background: #fff !important; }" if bg == "plain" else ""
+    return f"""
+<style id="tpl-runtime-opts">
+  :root {{
+    --navy: {heading};
+    --navy-2: {heading};
+    --green: {accent};
+    --gold: {gold};
+    --ink: {body};
+    --muted: {muted};
+    --paper: #ffffff;
+  }}
+  @page {{ size: {page_size}; }}
+  .sheet {{
+    width: {sheet_w};
+    min-height: {sheet_min_h};
+  }}
+  {wm_css}
+  {plain_css}
+</style>
+""".strip()
+
+
+def _letterhead_officers_html(officers: list[dict[str, Any]]) -> str:
+    parts = []
+    for o in officers:
+        title = _html_escape(o.get("title") or "")
+        name = _html_escape(o.get("name") or "—")
+        phone = _html_escape(o.get("phone") or "—")
+        slot = re.sub(r"[^a-z]+", "-", (o.get("title") or "").strip().lower()).strip("-")
+        parts.append(
+            f'<div class="role" data-officer-slot="{_html_escape(slot)}">'
+            f'<span class="title">{title}</span>'
+            f'<span class="name">{name}</span>'
+            f'<span class="ph"><span class="lbl">Ph</span>{phone}</span>'
+            "</div>"
+        )
+    return "\n".join(parts)
+
+
+def _fill_letterhead_officer_slots(html: str, officers: list[dict[str, Any]]) -> str:
+    """Update name/phone inside existing data-officer-slot cells (keeps 4-across layout)."""
+    if "data-officer-slot=" not in html:
+        return _replace_marked_block(html, "letterhead-officers", _letterhead_officers_html(officers))
+
+    by_slot: dict[str, dict[str, Any]] = {}
+    for o in officers:
+        title = (o.get("title") or "").strip().lower()
+        slot = re.sub(r"[^a-z]+", "-", title).strip("-")
+        if slot:
+            by_slot[slot] = o
+        # aliases
+        if "general" in title and "secretary" in title:
+            by_slot["general-secretary"] = o
+        if "vice" in title and "president" in title:
+            by_slot["vice-president"] = o
+
+    def _sub_slot(match: re.Match[str]) -> str:
+        slot = (match.group("slot") or "").strip().lower()
+        block = match.group(0)
+        hit = by_slot.get(slot)
+        if not hit:
+            return block
+        name = _html_escape(hit.get("name") or "—")
+        phone = _html_escape(hit.get("phone") or "—")
+        block = re.sub(
+            r'(<span class="name">)(.*?)(</span>)',
+            rf"\g<1>{name}\g<3>",
+            block,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        block = re.sub(
+            r'(<span class="ph">\s*<span class="lbl">Ph</span>)(.*?)(</span>)',
+            rf"\g<1>{phone}\g<3>",
+            block,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        return block
+
+    return re.sub(
+        r'<div class="role"[^>]*data-officer-slot="(?P<slot>[^"]+)"[^>]*>.*?</div>',
+        _sub_slot,
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+
+def _ec_office_rows_html(officers: list[dict[str, Any]]) -> str:
+    rows = []
+    for i, o in enumerate(officers, 1):
+        rows.append(
+            "<tr>"
+            f"<td>{i}</td>"
+            f"<td>{_html_escape(o.get('title') or '')}</td>"
+            f"<td>{_html_escape(o.get('name') or '—')}</td>"
+            f"<td>{_html_escape(o.get('phone') or '—')}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return (
+            '<tr><td colspan="4" style="text-align:center;padding:8px;">'
+            "No office bearers in the charter database yet."
+            "</td></tr>"
+        )
+    return "\n".join(rows)
+
+
+def _ec_member_columns_html(members: list[dict[str, Any]], start_no: int = 1) -> str:
+    if not members:
+        return (
+            '<table class="member-table"><thead>'
+            "<tr><th>S.No.</th><th>Name</th><th>Mobile</th></tr></thead>"
+            "<tbody><tr><td colspan=\"3\" style=\"text-align:center\">—</td></tr></tbody></table>"
+        )
+    mid = (len(members) + 1) // 2
+    chunks = [members[:mid], members[mid:]]
+    tables = []
+    n = start_no
+    for chunk in chunks:
+        if not chunk:
+            continue
+        body = []
+        for m in chunk:
+            body.append(
+                "<tr>"
+                f"<td>{n}</td>"
+                f"<td>{_html_escape(m.get('name') or '—')}</td>"
+                f"<td>{_html_escape(m.get('phone') or '—')}</td>"
+                "</tr>"
+            )
+            n += 1
+        tables.append(
+            '<table class="member-table"><thead>'
+            "<tr><th>S.No.</th><th>Name</th><th>Mobile</th></tr></thead>"
+            f"<tbody>{''.join(body)}</tbody></table>"
+        )
+    return "\n".join(tables)
+
+
+def _replace_marked_block(html: str, marker: str, inner: str) -> str:
+    """Replace inner HTML of the element carrying data-tpl-fill=\"marker\" (matched close tag)."""
+    open_m = re.search(
+        rf"<(?P<tag>\w+)(?P<attrs>[^>]*\bdata-tpl-fill=[\"']{re.escape(marker)}[\"'][^>]*)>",
+        html,
+        flags=re.IGNORECASE,
+    )
+    if not open_m:
+        return html
+    tag = open_m.group("tag")
+    attrs = open_m.group("attrs")
+    start_inner = open_m.end()
+    open_re = re.compile(rf"<{re.escape(tag)}\b[^>]*>", re.IGNORECASE)
+    close_re = re.compile(rf"</{re.escape(tag)}\s*>", re.IGNORECASE)
+    depth = 1
+    pos = start_inner
+    end_inner = None
+    close_end = None
+    while depth > 0 and pos < len(html):
+        next_open = open_re.search(html, pos)
+        next_close = close_re.search(html, pos)
+        if not next_close:
+            return html
+        if next_open and next_open.start() < next_close.start():
+            depth += 1
+            pos = next_open.end()
+            continue
+        depth -= 1
+        if depth == 0:
+            end_inner = next_close.start()
+            close_end = next_close.end()
+            break
+        pos = next_close.end()
+    if end_inner is None or close_end is None:
+        return html
+    return f"{html[: open_m.start()]}<{tag}{attrs}>{inner}</{tag}>{html[close_end:]}"
+
+def inject_template_runtime(html: str, *, options: dict[str, Any], conn: sqlite3.Connection, base_href: str | None = None) -> str:
+    """Inject print options CSS only (pads keep their authored office-bearer markup)."""
+    opts = normalize_options(options)
+    css = _runtime_options_css(opts)
+    base_tag = ""
+    if base_href:
+        href = base_href if base_href.endswith("/") else f"{base_href}/"
+        if re.search(r"<base\b", html, re.IGNORECASE) is None:
+            base_tag = f'<base href="{_html_escape(href)}">'
+    head_inject = "\n".join(x for x in (base_tag, css) if x)
+    if "</head>" in html:
+        html = html.replace("</head>", f"{head_inject}\n</head>", 1)
+    else:
+        html = head_inject + html
+    return html
+
+
+def render_template_html(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    template_id: str,
+    *,
+    options_override: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Return rendered HTML and template DTO for an HTML pad."""
+    doc = get_template(conn, template_id, site_root=site_root)
+    if not doc:
+        raise ValueError("Template not found")
+    path = resolve_template_file(site_root, doc)
+    if not path or not path.is_file():
+        raise ValueError("Template file is missing")
+    mime = (doc.get("mimeType") or "").lower()
+    if "html" not in mime and path.suffix.lower() not in {".html", ".htm"}:
+        raise ValueError("Render is only available for HTML templates")
+    raw = path.read_text(encoding="utf-8")
+    options = normalize_options(options_override if options_override is not None else doc.get("options"))
+    static_path = (doc.get("staticPath") or "").replace("\\", "/").lstrip("/")
+    if static_path.startswith("documents/"):
+        base_href = "/documents/"
+    elif static_path.startswith("assets/"):
+        base_href = "/assets/"
+    else:
+        base_href = "/"
+    rendered = inject_template_runtime(raw, options=options, conn=conn, base_href=base_href)
+    doc = {**doc, "options": options}
+    return rendered, doc

@@ -422,38 +422,24 @@ def _title_rank(title: str) -> tuple[int, str]:
 
 
 def office_bearers_for_header(conn) -> list[dict]:
-    """Office bearers for PDF letterhead (prefer is_office_bearer + title)."""
+    """Office bearers for PDF/HTML letterhead — seat-holder name/phone from charter DB."""
     try:
-        rows = conn.execute(
-            """
-            SELECT house_id, plot_no, name, official_title, phone, is_office_bearer, role
-            FROM residents
-            WHERE status = 'active' AND house_id != ?
-              AND (
-                is_office_bearer = 1
-                OR role = 'admin'
-                OR (official_title IS NOT NULL AND TRIM(official_title) != '')
-              )
-            """,
-            (SUPERADMIN_HOUSE_ID,),
-        ).fetchall()
+        from rwa_entitlements import list_office_and_ec
+
+        people = list_office_and_ec(conn)
     except Exception:
-        rows = conn.execute(
-            """
-            SELECT house_id, plot_no, name, official_title, phone
-            FROM residents
-            WHERE role = 'admin' AND status = 'active' AND house_id != ?
-            """,
-            (SUPERADMIN_HOUSE_ID,),
-        ).fetchall()
+        people = []
     members = [
         {
-            "houseId": r["house_id"],
-            "name": r["name"] or r["house_id"],
-            "officialTitle": (r["official_title"] or "").strip(),
-            "phone": r["phone"] or "",
+            "houseId": p.get("houseId"),
+            "name": (p.get("name") or p.get("houseId") or "").strip(),
+            "officialTitle": (p.get("officialTitle") or "").strip(),
+            "phone": (p.get("phone") or "").strip(),
         }
-        for r in rows
+        for p in people
+        if (p.get("officialTitle") or "").strip()
+        or p.get("isOfficeBearer")
+        or p.get("isEcAdmin")
     ]
     office = [m for m in members if m["officialTitle"]]
     office.sort(key=lambda m: (_title_rank(m["officialTitle"]), m["name"].lower()))
@@ -623,31 +609,6 @@ _LETTERHEAD_ROLE_ORDER = (
     "treasurer",
 )
 
-# Canonical office-bearer roster for PDF letterhead when DB title/phone/name is incomplete.
-LETTERHEAD_OFFICER_FALLBACKS: dict[str, dict[str, str]] = {
-    "president": {
-        "title": "President",
-        "name": "Anup Vaidya",
-        "phone": "9418495449",
-    },
-    "general secretary": {
-        "title": "General Secretary",
-        "name": "Vijay Kumar Sharma",
-        "phone": "8219788139",
-    },
-    "vice president": {
-        "title": "Vice President",
-        "name": "Murari Lal Modgil",
-        "phone": "9418168784",
-    },
-    "treasurer": {
-        "title": "Treasurer",
-        "name": "Parveen Kumar Thakur",
-        "phone": "9418071187",
-    },
-}
-
-
 def _fmt_phone_display(phone: str | None) -> str:
     """Display phones as 5+5 groups for India mobiles; blank → empty string."""
     raw = str(phone or "").strip()
@@ -662,7 +623,7 @@ def _fmt_phone_display(phone: str | None) -> str:
 
 
 def _letterhead_officers(conn) -> list[dict]:
-    """Four office-bearer slots for letterhead chrome (DB + canonical fallbacks)."""
+    """Four office-bearer slots for letterhead chrome — always from charter DB."""
     bearers = office_bearers_for_header(conn) if conn is not None else []
     by_key: dict[str, dict] = {}
     for b in bearers:
@@ -682,26 +643,48 @@ def _letterhead_officers(conn) -> list[dict]:
         hit = by_key.get(key)
         if not hit and key == "vice president":
             hit = by_key.get("vice-president")
-        fb = LETTERHEAD_OFFICER_FALLBACKS.get(key) or {}
         name = ((hit or {}).get("name") or "").strip()
         phone = ((hit or {}).get("phone") or "").strip()
-        fb_name = (fb.get("name") or "").strip()
-        # Prefer fallback when DB name is missing or abbreviated (e.g. "M L MODGIL").
-        if not name:
-            name = fb_name
-        elif fb_name:
-            words = [w for w in re.split(r"\s+", name) if w]
-            full_words = [w for w in words if len(re.sub(r"[^A-Za-z]", "", w)) >= 3]
-            if len(full_words) < 2:
-                name = fb_name
-        if not phone:
-            phone = (fb.get("phone") or "").strip()
         out.append({
             "title": label,
             "name": name,
             "phone": _fmt_phone_display(phone),
         })
     return out
+
+
+def charter_roster(conn) -> dict[str, list[dict]]:
+    """Office-bearer slots + other EC members for charter pads (DB seat holders)."""
+    officers = _letterhead_officers(conn)
+    officer_names = {((o.get("name") or "").strip().lower()) for o in officers if (o.get("name") or "").strip()}
+    members: list[dict] = []
+    try:
+        from rwa_entitlements import list_office_and_ec
+
+        for p in list_office_and_ec(conn):
+            if not (p.get("isEcMember") or p.get("isEcAdmin") or p.get("isOfficeBearer")):
+                continue
+            name = (p.get("name") or "").strip()
+            if not name:
+                continue
+            title = (p.get("officialTitle") or "").strip()
+            # Keep titled primary seats in the office-bearers table only.
+            title_l = title.lower()
+            is_primary = any(k in title_l for k in _LETTERHEAD_ROLE_ORDER)
+            if is_primary:
+                continue
+            if name.lower() in officer_names:
+                continue
+            members.append({
+                "name": name,
+                "phone": _fmt_phone_display(p.get("phone") or ""),
+                "officialTitle": title,
+                "houseId": p.get("houseId"),
+            })
+    except Exception:
+        members = []
+    members.sort(key=lambda m: m["name"].lower())
+    return {"officers": officers, "members": members}
 
 
 

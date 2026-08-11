@@ -64,11 +64,13 @@
     .wm {
       position: absolute;
       left: 50%;
-      top: 54%;
+      top: 52%;
       transform: translate(-50%, -50%);
-      width: 96mm;
+      width: min(112mm, 70%);
+      max-height: 46%;
       height: auto;
-      opacity: 0.55;
+      object-fit: contain;
+      opacity: 0.75;
       pointer-events: none;
       z-index: 0;
     }
@@ -274,7 +276,7 @@
         page-break-after: auto;
         break-after: auto;
       }
-      .wm { opacity: 0.78; }
+      .wm { opacity: 0.7; }
       .pad, .section, .grow {
         background: transparent !important;
       }
@@ -299,7 +301,7 @@
   <div class="sheet" aria-label="General House MOM — page 1">
     <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
     <div class="accent-edge-thin" aria-hidden="true"></div>
-    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
     <span class="page-tag">Page 1 of 2</span>
 
     <div class="pad">
@@ -354,7 +356,7 @@
   <div class="sheet" aria-label="General House MOM — page 2">
     <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
     <div class="accent-edge-thin" aria-hidden="true"></div>
-    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png" alt="" aria-hidden="true">
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
     <span class="page-tag">Page 2 of 2</span>
 
     <div class="pad">

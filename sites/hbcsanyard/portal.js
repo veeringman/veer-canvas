@@ -1710,6 +1710,104 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     showLanding();
   }
 
+  async function showLandingCampaignDetail(campaignId) {
+    document.body.classList.remove('is-members-gate');
+    const landing = el('landingView');
+    const gate = el('gateView');
+    if (landing) landing.hidden = false;
+    if (gate) gate.hidden = true;
+    state._landingCampaignFocus = campaignId;
+    try {
+      const data = await fetch(`/api/rwa/public/campaigns/${encodeURIComponent(campaignId)}`).then((r) => r.json());
+      if (!data.ok || !data.campaign) { delete state._landingCampaignFocus; loadLanding(); return; }
+      const c = data.campaign;
+      const cover = c.imageUrl ? `${c.imageUrl}?v=1` : '';
+      const pledged = c.pledgedAmount || 0;
+      const raised = c.raisedAmount || 0;
+      const target = c.targetAmount;
+      const pctPledge = target ? Math.min(100, Math.round(100 * pledged / target)) : 0;
+      const pctRaised = target ? Math.min(100, Math.round(100 * raised / target)) : 0;
+      const section = el('landingCampaignsSection');
+      const campaignsEl = el('landingCampaignsList');
+      if (section) section.hidden = false;
+      if (campaignsEl) {
+        campaignsEl.innerHTML = `
+          <div class="landing-campaign-detail">
+            ${cover ? `<img class="landing-campaign-hero" src="${escapeHtml(cover)}" alt="">` : ''}
+            <h3>${escapeHtml(c.title || '')}</h3>
+            ${c.summary ? `<p>${escapeHtml(c.summary)}</p>` : ''}
+            ${c.details ? `<div class="campaign-desc">${formatNoticeBody(c.details)}</div>` : ''}
+            <div class="campaign-stat-grid">
+              ${pledged ? `<div class="campaign-stat-card is-pledged"><strong>${formatRupee(pledged)}</strong><span>Pledged · ${c.pledgerCount || 0} members</span></div>` : ''}
+              ${raised ? `<div class="campaign-stat-card is-raised"><strong>${formatRupee(raised)}</strong><span>Raised · ${c.contributorCount || 0} payments</span></div>` : ''}
+              ${target ? `<div class="campaign-stat-card"><strong>${formatRupee(target)}</strong><span>Target</span></div>` : ''}
+            </div>
+            ${target ? `<div class="campaign-dual-progress">
+              ${pledged ? `<div><label>Pledged</label><div class="campaign-progress-bar"><div class="campaign-progress-fill" style="width:${pctPledge}%"></div></div></div>` : ''}
+              ${raised ? `<div><label>Raised</label><div class="campaign-progress-bar"><div class="campaign-progress-fill" style="width:${pctRaised}%"></div></div></div>` : ''}
+            </div>` : ''}
+            ${c.location ? `<p class="landing-meta">📍 ${escapeHtml(c.location)}</p>` : ''}
+            ${c.eventDate ? `<p class="landing-meta">📅 ${escapeHtml(c.eventDate)}</p>` : ''}
+            ${c.deadline ? `<p class="landing-meta">⏳ Deadline ${escapeHtml(c.deadline)}</p>` : ''}
+            ${c.paymentInstructions ? `<div class="campaign-payment-info"><strong>Payment info:</strong> ${escapeHtml(c.paymentInstructions)}</div>` : ''}
+            <div class="public-pledge-form" id="publicPledgeForm">
+              <h4>${c.canPledge ? '✋ Pledge your support' : '💰 Contribute'}</h4>
+              <div class="form-row">
+                <input type="text" id="pubPledgeName" placeholder="Your name" required>
+                <input type="text" id="pubPledgeHouse" placeholder="House / Plot No." required>
+              </div>
+              <div class="form-row">
+                <input type="number" id="pubPledgeAmount" placeholder="${c.fixedPledgeAmount ? 'Amount: ₹' + c.fixedPledgeAmount : 'Amount (₹)'}" min="1" ${c.fixedPledgeAmount ? `value="${c.fixedPledgeAmount}" readonly` : ''}>
+              </div>
+              <button type="button" id="pubPledgeSubmit">${c.canPledge ? 'Submit Pledge' : 'Submit Contribution'}</button>
+              <p id="pubPledgeMsg" class="muted" style="margin-top:0.5rem" hidden></p>
+            </div>
+          </div>`;
+        setTimeout(() => {
+          const btn = document.getElementById('pubPledgeSubmit');
+          if (btn) btn.addEventListener('click', async () => {
+            const name = document.getElementById('pubPledgeName')?.value?.trim();
+            const house = document.getElementById('pubPledgeHouse')?.value?.trim();
+            const amount = parseInt(document.getElementById('pubPledgeAmount')?.value, 10);
+            const msg = document.getElementById('pubPledgeMsg');
+            if (!name || !house || !amount || amount <= 0) {
+              if (msg) { msg.textContent = 'Please fill all fields.'; msg.hidden = false; }
+              return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Submitting…';
+            try {
+              const endpoint = c.canPledge
+                ? `/api/rwa/public/campaigns/${encodeURIComponent(campaignId)}/pledges`
+                : `/api/rwa/public/campaigns/${encodeURIComponent(campaignId)}/contributions`;
+              const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, house, amount })
+              });
+              const result = await res.json();
+              if (result.ok) {
+                if (msg) { msg.textContent = '✅ Thank you! Your submission has been recorded.'; msg.hidden = false; msg.style.color = '#1a6b45'; }
+                btn.textContent = 'Done!';
+              } else {
+                if (msg) { msg.textContent = result.error || 'Something went wrong.'; msg.hidden = false; }
+                btn.disabled = false;
+                btn.textContent = c.canPledge ? 'Submit Pledge' : 'Submit Contribution';
+              }
+            } catch (e) {
+              if (msg) { msg.textContent = 'Network error. Please try again.'; msg.hidden = false; }
+              btn.disabled = false;
+              btn.textContent = c.canPledge ? 'Submit Pledge' : 'Submit Contribution';
+            }
+          });
+        }, 0);
+      }
+    } catch (e) {
+      delete state._landingCampaignFocus;
+      loadLanding();
+    }
+  }
+
   async function loadLanding() {
     const updatesEl = el('landingUpdatesList');
     const committeeEl = el('landingCommitteeList');
@@ -6004,6 +6102,837 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   }
 
+  function formatRupee(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return '—';
+    return `₹${n.toLocaleString('en-IN')}`;
+  }
+
+  const worksState = {
+    meta: null,
+    items: [],
+    expandedId: null,
+    editingId: null,
+  };
+
+  const campaignsState = {
+    meta: null,
+    items: [],
+    selected: null,
+    tab: 'works',
+    editingId: null,
+  };
+
+  function syncWorksPanelTabs() {
+    const tab = campaignsState.tab || 'works';
+    document.querySelectorAll('.works-panel-tab').forEach((btn) => {
+      const on = btn.dataset.worksTab === tab;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const worksPane = el('worksTabWorks');
+    const campaignsPane = el('worksTabCampaigns');
+    if (worksPane) worksPane.hidden = tab !== 'works';
+    if (campaignsPane) campaignsPane.hidden = tab !== 'campaigns';
+  }
+
+  function fillWorksMetaSelects(meta) {
+    const kindFilter = el('worksKindFilter');
+    const kindInput = el('worksKindInput');
+    const catInput = el('worksCategoryInput');
+    const statusInput = el('worksStatusInput');
+    if (kindFilter && meta?.kinds) {
+      kindFilter.innerHTML = '<option value="">All types</option>'
+        + meta.kinds.map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.label)}</option>`).join('');
+    }
+    if (kindInput && meta?.kinds) {
+      kindInput.innerHTML = meta.kinds.map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.label)}</option>`).join('');
+    }
+    if (statusInput && meta?.statuses) {
+      statusInput.innerHTML = meta.statuses.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('');
+    }
+    const kind = el('worksKindInput')?.value || meta?.kinds?.[0]?.id || 'maintenance';
+    if (catInput && meta?.categories) {
+      const cats = meta.categories[kind] || [];
+      catInput.innerHTML = cats.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
+    }
+  }
+
+  function fillWorksFundingRow(data = {}) {
+    const sources = worksState.meta?.fundingSources || [];
+    const row = document.createElement('div');
+    row.className = 'works-row works-funding-row';
+    row.innerHTML = `
+      <label>Source
+        <select class="wf-source">${sources.map((s) => `<option value="${escapeHtml(s.id)}"${s.id === (data.source || 'rwa_fund') ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}</select>
+      </label>
+      <label>Amount (₹)
+        <input class="wf-amount" type="number" min="0" step="1" value="${escapeHtml(String(data.amount ?? ''))}">
+      </label>
+      <label>Notes
+        <input class="wf-notes" maxlength="240" value="${escapeHtml(data.notes || '')}">
+      </label>
+      <button type="button" class="btn ghost compact wf-remove">Remove</button>`;
+    return row;
+  }
+
+  function fillWorksMilestoneRow(data = {}) {
+    const row = document.createElement('div');
+    row.className = 'works-row works-milestone-row';
+    row.innerHTML = `
+      <label>Date <input class="wm-date" type="date" value="${escapeHtml(data.date || '')}"></label>
+      <label class="span-2">Milestone <input class="wm-title" maxlength="160" value="${escapeHtml(data.title || '')}"></label>
+      <label><input class="wm-done" type="checkbox"${data.done ? ' checked' : ''}> Done</label>
+      <button type="button" class="btn ghost compact wm-remove">Remove</button>`;
+    return row;
+  }
+
+  function collectWorksFunding() {
+    return Array.from(document.querySelectorAll('.works-funding-row')).map((row) => ({
+      source: row.querySelector('.wf-source')?.value || 'other',
+      amount: row.querySelector('.wf-amount')?.value || '',
+      notes: row.querySelector('.wf-notes')?.value.trim() || '',
+    })).filter((f) => f.amount || f.notes);
+  }
+
+  function collectWorksMilestones() {
+    return Array.from(document.querySelectorAll('.works-milestone-row')).map((row) => ({
+      date: row.querySelector('.wm-date')?.value || '',
+      title: row.querySelector('.wm-title')?.value.trim() || '',
+      done: Boolean(row.querySelector('.wm-done')?.checked),
+    })).filter((m) => m.title);
+  }
+
+  function resetWorksForm() {
+    worksState.editingId = null;
+    el('worksForm')?.reset();
+    if (el('worksEditId')) el('worksEditId').value = '';
+    if (el('worksFormTitle')) el('worksFormTitle').textContent = 'Initiate work / event';
+    if (el('worksCancelEditBtn')) el('worksCancelEditBtn').hidden = true;
+    if (el('worksCloseBtn')) el('worksCloseBtn').hidden = true;
+    if (el('worksFundingList')) el('worksFundingList').innerHTML = '';
+    if (el('worksMilestonesList')) el('worksMilestonesList').innerHTML = '';
+    if (el('worksFormStatus')) el('worksFormStatus').textContent = '';
+    fillWorksMetaSelects(worksState.meta || {});
+  }
+
+  function fillWorksForm(work) {
+    if (!work) return;
+    worksState.editingId = work.id;
+    if (el('worksEditId')) el('worksEditId').value = work.id;
+    if (el('worksFormTitle')) el('worksFormTitle').textContent = 'Edit work / event';
+    if (el('worksCancelEditBtn')) el('worksCancelEditBtn').hidden = false;
+    if (el('worksCloseBtn')) el('worksCloseBtn').hidden = !['in_progress', 'approved', 'planned', 'on_hold'].includes(work.status);
+    if (el('worksTitleInput')) el('worksTitleInput').value = work.title || '';
+    if (el('worksKindInput')) el('worksKindInput').value = work.kind || 'maintenance';
+    fillWorksMetaSelects(worksState.meta || {});
+    if (el('worksCategoryInput')) el('worksCategoryInput').value = work.category || 'other';
+    if (el('worksStatusInput')) el('worksStatusInput').value = work.status || 'planned';
+    if (el('worksVisibilityInput')) el('worksVisibilityInput').value = work.visibility || 'published';
+    if (el('worksSummaryInput')) el('worksSummaryInput').value = work.summary || '';
+    if (el('worksDetailsInput')) el('worksDetailsInput').value = work.details || '';
+    if (el('worksBenefitsInput')) el('worksBenefitsInput').value = work.benefits || '';
+    if (el('worksLocationInput')) el('worksLocationInput').value = work.location || '';
+    if (el('worksAssignedInput')) el('worksAssignedInput').value = work.assignedTo || '';
+    if (el('worksStartInput')) el('worksStartInput').value = work.startDate || '';
+    if (el('worksEndInput')) el('worksEndInput').value = work.endDate || '';
+    if (el('worksEventInput')) el('worksEventInput').value = work.eventDate || '';
+    if (el('worksTimelineInput')) el('worksTimelineInput').value = work.timelineNotes || '';
+    if (el('worksEstCostInput')) el('worksEstCostInput').value = work.estimatedCost ?? '';
+    if (el('worksActCostInput')) el('worksActCostInput').value = work.actualCost ?? '';
+    if (el('worksCostNotesInput')) el('worksCostNotesInput').value = work.costNotes || '';
+    if (el('worksContractorNameInput')) el('worksContractorNameInput').value = work.contractorName || '';
+    if (el('worksContractorContactInput')) el('worksContractorContactInput').value = work.contractorContact || '';
+    if (el('worksContractorDetailsInput')) el('worksContractorDetailsInput').value = work.contractorDetails || '';
+    const fundList = el('worksFundingList');
+    if (fundList) {
+      fundList.innerHTML = '';
+      (work.funding || []).forEach((f) => fundList.appendChild(fillWorksFundingRow(f)));
+    }
+    const msList = el('worksMilestonesList');
+    if (msList) {
+      msList.innerHTML = '';
+      (work.milestones || []).forEach((m) => msList.appendChild(fillWorksMilestoneRow(m)));
+    }
+    el('worksManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderWorksList() {
+    const list = el('worksList');
+    const statusLine = el('worksListStatus');
+    if (!list) return;
+    const items = worksState.items || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="muted">No works or events match these filters.</p>';
+      if (statusLine) statusLine.textContent = '';
+      return;
+    }
+    list.innerHTML = items.map((w) => {
+      const expanded = worksState.expandedId === w.id;
+      const milestones = (w.milestones || []).slice(0, 6);
+      return `
+        <article class="works-card mobile-fold${expanded ? ' is-expanded' : ''}" data-work-id="${escapeHtml(w.id)}">
+          <div class="meta">
+            <span class="works-badge">${escapeHtml(w.kindLabel || w.kind || '')}</span>
+            <span class="works-badge is-status-${escapeHtml(w.status || '')}">${escapeHtml(w.statusLabel || w.status || '')}</span>
+            ${w.visibility === 'draft' ? '<span class="works-badge is-draft">Draft</span>' : ''}
+            ${w.location ? ` · ${escapeHtml(w.location)}` : ''}
+          </div>
+          <h3>${escapeHtml(w.title || '')}</h3>
+          ${w.summary ? `<p class="summary">${escapeHtml(w.summary)}</p>` : ''}
+          ${expanded ? `
+            ${w.details ? `<div class="detail-block"><strong>Details</strong>${escapeHtml(w.details)}</div>` : ''}
+            ${w.benefits ? `<div class="detail-block"><strong>Benefits</strong>${escapeHtml(w.benefits)}</div>` : ''}
+            ${w.estimatedCost != null ? `<div class="detail-block"><strong>Estimated cost</strong>${formatRupee(w.estimatedCost)}</div>` : ''}
+            ${milestones.length ? `<div class="detail-block"><strong>Milestones</strong><ul class="works-milestone-list">${milestones.map((m) => `<li class="${m.done ? 'done' : ''}">${escapeHtml(m.date || '')} — ${escapeHtml(m.title || '')}</li>`).join('')}</ul></div>` : ''}
+          ` : ''}
+          <div class="btn-row">
+            <button type="button" class="btn ghost compact" data-work-toggle="${escapeHtml(w.id)}">${expanded ? 'Less' : 'Details'}</button>
+            ${hasEntitlement('manage_works') ? `<button type="button" class="btn secondary compact" data-work-edit="${escapeHtml(w.id)}">Edit</button>` : ''}
+          </div>
+        </article>`;
+    }).join('');
+    if (statusLine) statusLine.textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+    applyMobileListLimit(list, '.works-card.mobile-fold', 5);
+  }
+
+  async function loadWorks() {
+    syncWorksPanelTabs();
+    if (el('worksManageBlock')) {
+      el('worksManageBlock').hidden = !hasEntitlement('manage_works');
+    }
+    const qs = new URLSearchParams();
+    const kind = el('worksKindFilter')?.value || '';
+    const status = el('worksStatusFilter')?.value ?? 'active';
+    if (kind) qs.set('kind', kind);
+    if (status) qs.set('status', status);
+    if (hasEntitlement('manage_works')) {
+      const visibility = el('worksVisibilityFilter')?.value || '';
+      if (visibility) qs.set('visibility', visibility);
+    }
+    const statusLine = el('worksListStatus');
+    if (statusLine) statusLine.textContent = 'Loading works…';
+    const data = await api(`/api/rwa/works?${qs.toString()}`);
+    worksState.meta = {
+      kinds: data.kinds,
+      categories: data.categories,
+      statuses: data.statuses,
+      fundingSources: data.fundingSources,
+    };
+    worksState.items = data.works || [];
+    fillWorksMetaSelects(worksState.meta);
+    renderWorksList();
+    if (campaignsState.tab === 'campaigns') await loadCampaigns();
+  }
+
+  async function saveWorksForm(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_works')) return;
+    const statusLine = el('worksFormStatus');
+    const saveBtn = el('worksSaveBtn');
+    const title = String(el('worksTitleInput')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title is required.';
+      return;
+    }
+    const payload = {
+      title,
+      kind: el('worksKindInput')?.value || 'maintenance',
+      category: el('worksCategoryInput')?.value || 'other',
+      status: el('worksStatusInput')?.value || 'planned',
+      visibility: el('worksVisibilityInput')?.value || 'published',
+      summary: el('worksSummaryInput')?.value.trim() || '',
+      details: el('worksDetailsInput')?.value.trim() || '',
+      benefits: el('worksBenefitsInput')?.value.trim() || '',
+      location: el('worksLocationInput')?.value.trim() || '',
+      assignedTo: el('worksAssignedInput')?.value.trim() || '',
+      startDate: el('worksStartInput')?.value || '',
+      endDate: el('worksEndInput')?.value || '',
+      eventDate: el('worksEventInput')?.value || '',
+      timelineNotes: el('worksTimelineInput')?.value.trim() || '',
+      estimatedCost: el('worksEstCostInput')?.value || '',
+      actualCost: el('worksActCostInput')?.value || '',
+      costNotes: el('worksCostNotesInput')?.value.trim() || '',
+      contractorName: el('worksContractorNameInput')?.value.trim() || '',
+      contractorContact: el('worksContractorContactInput')?.value.trim() || '',
+      contractorDetails: el('worksContractorDetailsInput')?.value.trim() || '',
+      funding: collectWorksFunding(),
+      milestones: collectWorksMilestones(),
+    };
+    const editId = String(el('worksEditId')?.value || '').trim();
+    if (editId) payload.id = editId;
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      const data = editId
+        ? await api(`/api/rwa/works/${encodeURIComponent(editId)}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api('/api/rwa/works', { method: 'POST', body: JSON.stringify(payload) });
+      resetWorksForm();
+      await loadWorks();
+      if (statusLine) statusLine.textContent = 'Saved.';
+      if (data.work?.id) worksState.expandedId = data.work.id;
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function fillCampaignMetaSelects(meta) {
+    const kindFilter = el('campaignsKindFilter');
+    const kindInput = el('campaignsKindInput');
+    const statusInput = el('campaignsStatusInput');
+    const methodInput = el('campaignContributeMethod');
+    const fill = (sel, items, allLabel) => {
+      if (!sel || !items) return;
+      const cur = sel.value;
+      sel.innerHTML = (allLabel ? `<option value="">${allLabel}</option>` : '')
+        + items.map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.label)}</option>`).join('');
+      if (cur) sel.value = cur;
+    };
+    fill(kindFilter, meta?.kinds, 'All types');
+    fill(kindInput, meta?.kinds, null);
+    fill(statusInput, meta?.statuses, null);
+    fill(methodInput, meta?.contributionMethods, null);
+    syncCampaignFormMode();
+  }
+
+  function syncCampaignFormMode() {
+    const mode = el('campaignsModeInput')?.value || 'both';
+    const pledgeType = el('campaignsPledgeAmountTypeInput')?.value || 'discretionary';
+    const showPledge = mode === 'pledge' || mode === 'both';
+    const showFunding = mode === 'funding' || mode === 'both';
+    if (el('campaignsPledgeAmountTypeWrap')) el('campaignsPledgeAmountTypeWrap').hidden = !showPledge;
+    if (el('campaignsFixedPledgeWrap')) {
+      el('campaignsFixedPledgeWrap').hidden = !showPledge || pledgeType !== 'fixed';
+    }
+    if (el('campaignsPaymentWrap')) el('campaignsPaymentWrap').hidden = !showFunding;
+  }
+
+  function campaignCoverSrc(campaign) {
+    if (!campaign?.imageUrl) return '';
+    const v = campaign.updatedAt ? encodeURIComponent(String(campaign.updatedAt)) : '1';
+    return `${campaign.imageUrl}?v=${v}`;
+  }
+
+  function campaignKindEmoji(kind) {
+    return ({ plantation: '🌱', maintenance: '🔧', development: '🏗️', welfare: '🤝', event: '🎉', general: '💚' })[kind] || '💚';
+  }
+
+  function campaignStatCardsHtml(c) {
+    const mode = c.mode || 'both';
+    const cards = [];
+    if (mode === 'pledge' || mode === 'both') {
+      cards.push(`<div class="campaign-stat-card is-pledged"><strong>${formatRupee(c.pledgedAmount || 0)}</strong><span>Total pledged · ${c.pledgerCount || 0} member${(c.pledgerCount || 0) === 1 ? '' : 's'}</span></div>`);
+    }
+    if (mode === 'funding' || mode === 'both') {
+      cards.push(`<div class="campaign-stat-card is-raised"><strong>${formatRupee(c.raisedAmount || 0)}</strong><span>Total raised · ${c.contributorCount || 0} payment${(c.contributorCount || 0) === 1 ? '' : 's'}</span></div>`);
+    }
+    if (c.targetAmount) {
+      cards.push(`<div class="campaign-stat-card"><strong>${formatRupee(c.targetAmount)}</strong><span>Fundraising target</span></div>`);
+    }
+    return cards.length ? `<div class="campaign-stat-grid">${cards.join('')}</div>` : '';
+  }
+
+  function campaignProgressBarsHtml(c) {
+    const target = c.targetAmount;
+    if (!target) return '';
+    const mode = c.mode || 'both';
+    const bars = [];
+    if (mode === 'pledge' || mode === 'both') {
+      const pct = Math.min(100, Math.round(100 * (c.pledgedAmount || 0) / target));
+      bars.push(`<div><label>Pledged progress</label><div class="campaign-progress-bar"><div class="campaign-progress-fill" style="width:${pct}%"></div></div></div>`);
+    }
+    if (mode === 'funding' || mode === 'both') {
+      const pct = Math.min(100, Math.round(100 * (c.raisedAmount || 0) / target));
+      bars.push(`<div><label>Raised progress</label><div class="campaign-progress-bar"><div class="campaign-progress-fill" style="width:${pct}%"></div></div></div>`);
+    }
+    return bars.length ? `<div class="campaign-dual-progress">${bars.join('')}</div>` : '';
+  }
+
+  function campaignProgressHtml(c) {
+    return `${campaignStatCardsHtml(c)}${campaignProgressBarsHtml(c)}`;
+  }
+
+  function renderCampaignsList() {
+    const list = el('campaignsList');
+    const statusLine = el('campaignsListStatus');
+    const detail = el('campaignDetail');
+    if (!list) return;
+    if (campaignsState.selected) {
+      list.hidden = true;
+      if (detail) detail.hidden = false;
+      if (statusLine) statusLine.textContent = '';
+      return;
+    }
+    if (detail) detail.hidden = true;
+    list.hidden = false;
+    const items = campaignsState.items || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="muted">No funding drives match these filters. EC can launch a plantation or community drive below.</p>';
+      if (statusLine) statusLine.textContent = '';
+      return;
+    }
+    list.innerHTML = items.map((c) => {
+      const cover = campaignCoverSrc(c);
+      const thumb = cover
+        ? `<img class="campaign-card-thumb" src="${escapeHtml(cover)}" alt="">`
+        : `<div class="campaign-card-thumb-placeholder" aria-hidden="true">${campaignKindEmoji(c.kind)}</div>`;
+      return `
+      <article class="campaign-card has-thumb" data-campaign-id="${escapeHtml(c.id)}" tabindex="0">
+        ${thumb}
+        <div>
+          <div class="campaign-card-head">
+            <div class="campaign-badges">
+              <span class="campaign-badge">${escapeHtml(c.kindLabel || '')}</span>
+              <span class="campaign-badge is-${escapeHtml(c.status || '')}">${escapeHtml(c.statusLabel || '')}</span>
+              <span class="campaign-badge">${escapeHtml(c.modeLabel || '')}</span>
+              ${c.pendingContributions ? `<span class="campaign-badge is-paused">${c.pendingContributions} pending</span>` : ''}
+            </div>
+          </div>
+          <h3>${escapeHtml(c.title || '')}</h3>
+          ${c.summary ? `<p class="summary">${escapeHtml(c.summary)}</p>` : ''}
+          ${campaignProgressHtml(c)}
+          <div class="campaign-stats">
+            ${c.deadline ? `<span>Deadline ${escapeHtml(formatIstDate(c.deadline) || c.deadline)}</span>` : ''}
+            ${c.location ? `<span>${escapeHtml(c.location)}</span>` : ''}
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+    if (statusLine) statusLine.textContent = `${items.length} drive${items.length === 1 ? '' : 's'}`;
+    applyMobileListLimit(list, '.campaign-card', 6);
+  }
+
+  function renderCampaignPledges(pledges, campaign) {
+    const block = el('campaignPledgesBlock');
+    const list = el('campaignPledgesList');
+    if (!block || !list) return;
+    const mode = campaign?.mode || 'both';
+    block.hidden = mode === 'funding';
+    if (block.hidden) return;
+    const isAdmin = hasEntitlement('manage_works');
+    if (!pledges?.length) {
+      list.innerHTML = '<p class="muted">No pledges yet — be the first to commit.</p>';
+      return;
+    }
+    list.innerHTML = pledges.map((p) => `
+      <div class="campaign-participant-row">
+        <div>
+          <strong>${escapeHtml(p.contributorName || 'Member')}</strong>
+          <div class="meta">Plot ${escapeHtml(p.houseId || '—')}${p.note ? ` · ${escapeHtml(p.note)}` : ''}</div>
+        </div>
+        <div>
+          <div class="amt">${formatRupee(p.amount)}</div>
+          ${isAdmin ? `<button type="button" class="btn ghost compact" data-cmp-del-pledge="${escapeHtml(p.id)}" title="Remove pledge">Remove</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  function renderCampaignContributions(contributions, campaign) {
+    const block = el('campaignContributionsBlock');
+    const list = el('campaignContributionsList');
+    if (!block || !list) return;
+    const mode = campaign?.mode || 'both';
+    block.hidden = mode === 'pledge';
+    if (block.hidden) return;
+    if (!contributions?.length) {
+      list.innerHTML = '<p class="muted">No contributions yet — be the first to support this drive.</p>';
+      return;
+    }
+    const isAdmin = hasEntitlement('manage_works');
+    const myHouse = state.session?.resident?.houseId || '';
+    list.innerHTML = contributions.map((c) => {
+      const pending = c.status === 'pending';
+      const canReview = isAdmin && pending;
+      const label = c.contributorName || 'Member';
+      return `
+        <div class="campaign-participant-row is-${escapeHtml(c.status || '')}">
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <div class="meta">Plot ${escapeHtml(c.houseId || '—')}${c.methodLabel ? ` · ${escapeHtml(c.methodLabel)}` : ''}${c.paidOn ? ` · ${escapeHtml(formatIstDate(c.paidOn) || c.paidOn)}` : ''}${c.note ? ` · ${escapeHtml(c.note)}` : ''}${c.status !== 'verified' ? ` · ${escapeHtml(c.status)}` : ''}</div>
+          </div>
+          <div>
+            <div class="amt">${formatRupee(c.amount)}</div>
+            ${canReview ? `<div class="btn-row"><button type="button" class="btn secondary compact" data-cmp-verify="${escapeHtml(c.id)}">Verify</button><button type="button" class="btn ghost compact" data-cmp-reject="${escapeHtml(c.id)}">Reject</button></div>` : ''}
+            ${isAdmin && !canReview ? `<button type="button" class="btn ghost compact" data-cmp-del-contrib="${escapeHtml(c.id)}" title="Remove record">Remove</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderCampaignDetail(campaign, pledges, contributions) {
+    campaignsState.selected = campaign;
+    renderCampaignsList();
+    const body = el('campaignDetailBody');
+    if (!body || !campaign) return;
+    const cover = campaignCoverSrc(campaign);
+    const heroClass = cover ? 'campaign-showcase-hero has-image' : 'campaign-showcase-hero';
+    body.innerHTML = `
+      <div class="${heroClass}">
+        ${cover ? `<img src="${escapeHtml(cover)}" alt="">` : ''}
+        <div class="campaign-showcase-hero-overlay">
+          <div class="campaign-badges">
+            <span class="campaign-badge">${escapeHtml(campaign.kindLabel || '')}</span>
+            <span class="campaign-badge">${escapeHtml(campaign.modeLabel || '')}</span>
+            <span class="campaign-badge">${escapeHtml(campaign.statusLabel || '')}</span>
+          </div>
+          <h2>${escapeHtml(campaign.title || '')}</h2>
+        </div>
+      </div>
+      <div class="campaign-showcase-body">
+        ${campaign.summary ? `<p class="campaign-showcase-summary">${escapeHtml(campaign.summary)}</p>` : ''}
+        ${campaignProgressHtml(campaign)}
+        ${campaign.details ? `<div class="detail-section"><strong>About this drive</strong>${escapeHtml(campaign.details)}</div>` : ''}
+        ${campaign.paymentInstructions && campaign.mode !== 'pledge' ? `<div class="detail-section"><strong>How to pay</strong>${escapeHtml(campaign.paymentInstructions)}</div>` : ''}
+        <div class="campaign-stats">
+          ${campaign.location ? `<span>📍 ${escapeHtml(campaign.location)}</span>` : ''}
+          ${campaign.eventDate ? `<span>📅 ${escapeHtml(formatIstDate(campaign.eventDate) || campaign.eventDate)}</span>` : ''}
+          ${campaign.deadline ? `<span>⏳ Deadline ${escapeHtml(formatIstDate(campaign.deadline) || campaign.deadline)}</span>` : ''}
+          ${campaign.pledgeAmountType === 'fixed' && campaign.fixedPledgeAmount ? `<span>Fixed pledge ${formatRupee(campaign.fixedPledgeAmount)}</span>` : ''}
+        </div>
+      </div>`;
+    renderCampaignPledges(pledges || [], campaign);
+    renderCampaignContributions(contributions || [], campaign);
+    const pledgeBtn = el('campaignPledgeBtn');
+    const contributeBtn = el('campaignContributeBtn');
+    if (pledgeBtn) pledgeBtn.hidden = isViewOnly() || !campaign.canPledge;
+    if (contributeBtn) contributeBtn.hidden = isViewOnly() || !campaign.canContribute;
+    const shareBtn = el('campaignShareBtn');
+    if (shareBtn) shareBtn.hidden = campaign.audience !== 'public';
+    if (el('campaignEditBtn')) el('campaignEditBtn').hidden = !hasEntitlement('manage_works');
+    if (el('campaignDeleteBtn')) el('campaignDeleteBtn').hidden = !hasEntitlement('manage_works');
+  }
+
+  function showCampaignList() {
+    campaignsState.selected = null;
+    if (el('campaignDetail')) el('campaignDetail').hidden = true;
+    renderCampaignsList();
+  }
+
+  async function openCampaignDetail(campaignId) {
+    const data = await api(`/api/rwa/campaigns/${encodeURIComponent(campaignId)}`);
+    renderCampaignDetail(data.campaign, data.pledges || [], data.contributions || []);
+    el('campaignDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function resetCampaignsForm() {
+    campaignsState.editingId = null;
+    el('campaignsForm')?.reset();
+    if (el('campaignsEditId')) el('campaignsEditId').value = '';
+    if (el('campaignsFormTitle')) el('campaignsFormTitle').textContent = 'New funding drive';
+    if (el('campaignsCancelEditBtn')) el('campaignsCancelEditBtn').hidden = true;
+    if (el('campaignsFormStatus')) el('campaignsFormStatus').textContent = '';
+    if (el('campaignsImageHint')) el('campaignsImageHint').textContent = 'JPEG, PNG or WebP — auto-optimized for fast loading on the public page';
+    fillCampaignMetaSelects(campaignsState.meta || {});
+  }
+
+  function fillCampaignsForm(campaign) {
+    if (!campaign) return;
+    campaignsState.editingId = campaign.id;
+    if (el('campaignsEditId')) el('campaignsEditId').value = campaign.id;
+    if (el('campaignsFormTitle')) el('campaignsFormTitle').textContent = 'Edit funding drive';
+    if (el('campaignsCancelEditBtn')) el('campaignsCancelEditBtn').hidden = false;
+    if (el('campaignsTitleInput')) el('campaignsTitleInput').value = campaign.title || '';
+    if (el('campaignsKindInput')) el('campaignsKindInput').value = campaign.kind || 'general';
+    if (el('campaignsStatusInput')) el('campaignsStatusInput').value = campaign.status || 'draft';
+    if (el('campaignsModeInput')) el('campaignsModeInput').value = campaign.mode || 'both';
+    if (el('campaignsAudienceInput')) el('campaignsAudienceInput').value = campaign.audience || 'members';
+    if (el('campaignsPledgeAmountTypeInput')) el('campaignsPledgeAmountTypeInput').value = campaign.pledgeAmountType || 'discretionary';
+    if (el('campaignsFixedPledgeInput')) el('campaignsFixedPledgeInput').value = campaign.fixedPledgeAmount ?? '';
+    if (el('campaignsTargetInput')) el('campaignsTargetInput').value = campaign.targetAmount ?? '';
+    if (el('campaignsDeadlineInput')) el('campaignsDeadlineInput').value = campaign.deadline || '';
+    if (el('campaignsEventInput')) el('campaignsEventInput').value = campaign.eventDate || '';
+    if (el('campaignsLocationInput')) el('campaignsLocationInput').value = campaign.location || '';
+    if (el('campaignsSummaryInput')) el('campaignsSummaryInput').value = campaign.summary || '';
+    if (el('campaignsDetailsInput')) el('campaignsDetailsInput').value = campaign.details || '';
+    if (el('campaignsPaymentInput')) el('campaignsPaymentInput').value = campaign.paymentInstructions || '';
+    if (el('campaignsImageHint')) {
+      el('campaignsImageHint').textContent = campaign.imageUrl
+        ? 'Current illustration is saved — upload a new file to replace it.'
+        : 'JPEG, PNG or WebP — shown on the drive page';
+    }
+    syncCampaignFormMode();
+    el('campaignsManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function loadCampaigns() {
+    syncWorksPanelTabs();
+    if (el('campaignsManageBlock')) {
+      el('campaignsManageBlock').hidden = !hasEntitlement('manage_works');
+    }
+    const qs = new URLSearchParams();
+    const kind = el('campaignsKindFilter')?.value || '';
+    const status = el('campaignsStatusFilter')?.value ?? 'active';
+    if (kind) qs.set('kind', kind);
+    if (status) qs.set('status', status);
+    if (hasEntitlement('manage_works')) {
+      const audience = el('campaignsAudienceFilter')?.value || '';
+      if (audience) qs.set('audience', audience);
+    }
+    const statusLine = el('campaignsListStatus');
+    if (statusLine && !campaignsState.selected) statusLine.textContent = 'Loading drives…';
+    const data = await api(`/api/rwa/campaigns?${qs.toString()}`);
+    campaignsState.meta = {
+      kinds: data.kinds,
+      statuses: data.statuses,
+      audiences: data.audiences,
+      modes: data.modes,
+      pledgeAmountTypes: data.pledgeAmountTypes,
+      contributionMethods: data.contributionMethods,
+    };
+    campaignsState.items = data.campaigns || [];
+    fillCampaignMetaSelects(campaignsState.meta);
+    if (campaignsState.selected) {
+      const fresh = campaignsState.items.find((c) => c.id === campaignsState.selected.id);
+      if (fresh) {
+        await openCampaignDetail(fresh.id);
+        return;
+      }
+      showCampaignList();
+    }
+    renderCampaignsList();
+  }
+
+  async function saveCampaignsForm(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_works')) return;
+    const statusLine = el('campaignsFormStatus');
+    const saveBtn = el('campaignsSaveBtn');
+    const title = String(el('campaignsTitleInput')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title is required.';
+      return;
+    }
+    const mode = el('campaignsModeInput')?.value || 'both';
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('kind', el('campaignsKindInput')?.value || 'general');
+    fd.append('status', el('campaignsStatusInput')?.value || 'draft');
+    fd.append('mode', mode);
+    fd.append('audience', el('campaignsAudienceInput')?.value || 'members');
+    if (mode !== 'funding') {
+      fd.append('pledgeAmountType', el('campaignsPledgeAmountTypeInput')?.value || 'discretionary');
+      const fixed = el('campaignsFixedPledgeInput')?.value || '';
+      if (fixed) fd.append('fixedPledgeAmount', fixed);
+    }
+    fd.append('targetAmount', el('campaignsTargetInput')?.value || '');
+    fd.append('deadline', el('campaignsDeadlineInput')?.value || '');
+    fd.append('eventDate', el('campaignsEventInput')?.value || '');
+    fd.append('location', el('campaignsLocationInput')?.value.trim() || '');
+    fd.append('summary', el('campaignsSummaryInput')?.value.trim() || '');
+    fd.append('details', el('campaignsDetailsInput')?.value.trim() || '');
+    fd.append('paymentInstructions', el('campaignsPaymentInput')?.value.trim() || '');
+    const image = el('campaignsImageInput')?.files?.[0];
+    if (image) fd.append('image', image);
+    const editId = String(el('campaignsEditId')?.value || '').trim();
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      const headers = {};
+      if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+      const url = editId ? `/api/rwa/campaigns/${encodeURIComponent(editId)}` : '/api/rwa/campaigns';
+      const res = await fetch(url, {
+        method: editId ? 'PATCH' : 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText || 'Save failed');
+      resetCampaignsForm();
+      campaignsState.tab = 'campaigns';
+      syncWorksPanelTabs();
+      await loadCampaigns();
+      if (data.campaign?.id) await openCampaignDetail(data.campaign.id);
+      if (statusLine) statusLine.textContent = 'Saved.';
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function prefillCampaignParticipantFields(prefix) {
+    const resident = state.session?.resident || {};
+    const nameEl = el(`${prefix}Name`);
+    const houseEl = el(`${prefix}House`);
+    if (nameEl && !nameEl.value) nameEl.value = resident.name || '';
+    if (houseEl && !houseEl.value) houseEl.value = resident.houseId || '';
+  }
+
+  function openCampaignPledgeDialog() {
+    const c = campaignsState.selected;
+    if (!c || !c.canPledge || isViewOnly()) return;
+    if (el('campaignPledgeTitle')) el('campaignPledgeTitle').textContent = `Pledge — ${c.title || 'Drive'}`;
+    if (el('campaignPledgeLead')) {
+      el('campaignPledgeLead').textContent = c.pledgeAmountType === 'fixed' && c.fixedPledgeAmount
+        ? `Fixed pledge of ${formatRupee(c.fixedPledgeAmount)} per member. Enter your name and plot number.`
+        : 'Record your commitment — name, plot number, and pledged amount.';
+    }
+    prefillCampaignParticipantFields('campaignPledge');
+    const amountWrap = el('campaignPledgeAmountWrap');
+    const amountInput = el('campaignPledgeAmount');
+    if (c.pledgeAmountType === 'fixed' && c.fixedPledgeAmount) {
+      if (amountInput) {
+        amountInput.value = String(c.fixedPledgeAmount);
+        amountInput.readOnly = true;
+      }
+      if (amountWrap) amountWrap.hidden = false;
+    } else if (amountInput) {
+      amountInput.value = '';
+      amountInput.readOnly = false;
+    }
+    if (el('campaignPledgeNote')) el('campaignPledgeNote').value = '';
+    if (el('campaignPledgeStatus')) el('campaignPledgeStatus').textContent = '';
+    el('campaignPledgeDialog')?.showModal();
+  }
+
+  async function submitCampaignPledge(event) {
+    event.preventDefault();
+    const c = campaignsState.selected;
+    if (!c || isViewOnly()) return;
+    const statusLine = el('campaignPledgeStatus');
+    const btn = el('campaignPledgeSubmitBtn');
+    const name = el('campaignPledgeName')?.value.trim() || '';
+    const house = el('campaignPledgeHouse')?.value.trim() || '';
+    if (!name || !house) {
+      if (statusLine) statusLine.textContent = 'Name and house / plot number are required.';
+      return;
+    }
+    const payload = {
+      contributorName: name,
+      houseId: house,
+      note: el('campaignPledgeNote')?.value.trim() || '',
+    };
+    if (!(c.pledgeAmountType === 'fixed' && c.fixedPledgeAmount)) {
+      payload.amount = el('campaignPledgeAmount')?.value || '';
+    }
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Submitting pledge…';
+    try {
+      await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/pledges`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      el('campaignPledgeDialog')?.close();
+      await openCampaignDetail(c.id);
+      await loadCampaigns();
+      if (statusLine) statusLine.textContent = 'Pledge recorded — thank you!';
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Submit failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function openCampaignContributeDialog() {
+    const c = campaignsState.selected;
+    if (!c || !c.canContribute || isViewOnly()) return;
+    if (el('campaignContributeTitle')) el('campaignContributeTitle').textContent = `Contribute — ${c.title || 'Drive'}`;
+    if (el('campaignContributeLead')) {
+      el('campaignContributeLead').textContent = c.paymentInstructions
+        ? `Pay as instructed on the drive page, then record your contribution here.`
+        : 'Record your payment after transfer — EC will verify and update totals.';
+    }
+    fillCampaignMetaSelects(campaignsState.meta || {});
+    prefillCampaignParticipantFields('campaignContribute');
+    if (el('campaignContributePaidOn')) el('campaignContributePaidOn').value = todayIstDate();
+    if (el('campaignContributeAmount')) el('campaignContributeAmount').value = '';
+    if (el('campaignContributeNote')) el('campaignContributeNote').value = '';
+    if (el('campaignContributeFiles')) el('campaignContributeFiles').value = '';
+    if (el('campaignContributeStatus')) el('campaignContributeStatus').textContent = '';
+    el('campaignContributeDialog')?.showModal();
+  }
+
+  async function submitCampaignContribution(event) {
+    event.preventDefault();
+    const c = campaignsState.selected;
+    if (!c || isViewOnly()) return;
+    const statusLine = el('campaignContributeStatus');
+    const btn = el('campaignContributeSubmitBtn');
+    const name = el('campaignContributeName')?.value.trim() || '';
+    const house = el('campaignContributeHouse')?.value.trim() || '';
+    const amount = el('campaignContributeAmount')?.value || '';
+    if (!name || !house) {
+      if (statusLine) statusLine.textContent = 'Name and house / plot number are required.';
+      return;
+    }
+    if (!amount || Number(amount) <= 0) {
+      if (statusLine) statusLine.textContent = 'Enter a valid amount.';
+      return;
+    }
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Submitting…';
+    try {
+      const fd = new FormData();
+      fd.append('amount', amount);
+      fd.append('contributorName', name);
+      fd.append('houseId', house);
+      fd.append('method', el('campaignContributeMethod')?.value || 'upi');
+      fd.append('paidOn', el('campaignContributePaidOn')?.value || todayIstDate());
+      fd.append('note', el('campaignContributeNote')?.value.trim() || '');
+      const files = el('campaignContributeFiles')?.files || [];
+      Array.from(files).slice(0, 3).forEach((f) => fd.append('files', f));
+      const headers = {};
+      if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+      const res = await fetch(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/contributions`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText || 'Submit failed');
+      el('campaignContributeDialog')?.close();
+      await openCampaignDetail(c.id);
+      await loadCampaigns();
+      if (statusLine) statusLine.textContent = 'Submitted — awaiting EC verification.';
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Submit failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function reviewCampaignContribution(contributionId, action) {
+    const c = campaignsState.selected;
+    if (!c || !hasEntitlement('manage_works')) return;
+    let reason = '';
+    if (action === 'reject') {
+      reason = window.prompt('Reason for rejection (optional):') || '';
+      if (reason === null) return;
+    }
+    await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/contributions/${encodeURIComponent(contributionId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action, reason }),
+    });
+    await openCampaignDetail(c.id);
+    await loadCampaigns();
+  }
+
+  async function removeCampaignPledge(pledgeId) {
+    const c = campaignsState.selected;
+    if (!c || !hasEntitlement('manage_works')) return;
+    if (!window.confirm('Remove this pledge record?')) return;
+    await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/pledges/${encodeURIComponent(pledgeId)}`, {
+      method: 'DELETE',
+    });
+    await openCampaignDetail(c.id);
+    await loadCampaigns();
+  }
+
+  async function removeCampaignContribution(contributionId) {
+    const c = campaignsState.selected;
+    if (!c || !hasEntitlement('manage_works')) return;
+    if (!window.confirm('Remove this contribution record?')) return;
+    await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}/contributions/${encodeURIComponent(contributionId)}`, {
+      method: 'DELETE',
+    });
+    await openCampaignDetail(c.id);
+    await loadCampaigns();
+  }
+
   const proceedingsState = {
     type: 'gh',
     meta: null,
@@ -7883,6 +8812,155 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('infoCategoryFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoStatusFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
 
+  document.querySelectorAll('.works-panel-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      campaignsState.tab = btn.dataset.worksTab || 'works';
+      syncWorksPanelTabs();
+      if (campaignsState.tab === 'campaigns') {
+        showCampaignList();
+        loadCampaigns().catch(console.error);
+      } else {
+        loadWorks().catch(console.error);
+      }
+    });
+  });
+  el('worksRefreshBtn')?.addEventListener('click', () => loadWorks().catch(console.error));
+  el('worksKindFilter')?.addEventListener('change', () => loadWorks().catch(console.error));
+  el('worksStatusFilter')?.addEventListener('change', () => loadWorks().catch(console.error));
+  el('worksVisibilityFilter')?.addEventListener('change', () => loadWorks().catch(console.error));
+  el('worksKindInput')?.addEventListener('change', () => fillWorksMetaSelects(worksState.meta || {}));
+  el('worksAddFundingBtn')?.addEventListener('click', () => {
+    el('worksFundingList')?.appendChild(fillWorksFundingRow());
+  });
+  el('worksAddMilestoneBtn')?.addEventListener('click', () => {
+    el('worksMilestonesList')?.appendChild(fillWorksMilestoneRow());
+  });
+  el('worksFundingList')?.addEventListener('click', (event) => {
+    if (event.target.closest('.wf-remove')) event.target.closest('.works-funding-row')?.remove();
+  });
+  el('worksMilestonesList')?.addEventListener('click', (event) => {
+    if (event.target.closest('.wm-remove')) event.target.closest('.works-milestone-row')?.remove();
+  });
+  el('worksForm')?.addEventListener('submit', saveWorksForm);
+  el('worksCancelEditBtn')?.addEventListener('click', resetWorksForm);
+  el('worksCloseBtn')?.addEventListener('click', async () => {
+    if (!worksState.editingId) return;
+    try {
+      await api(`/api/rwa/works/${encodeURIComponent(worksState.editingId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'closed' }),
+      });
+      resetWorksForm();
+      await loadWorks();
+    } catch (e) {
+      if (el('worksFormStatus')) el('worksFormStatus').textContent = e.message || 'Close failed';
+    }
+  });
+  el('worksList')?.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-work-toggle]');
+    const edit = event.target.closest('[data-work-edit]');
+    if (toggle) {
+      const id = toggle.getAttribute('data-work-toggle');
+      worksState.expandedId = worksState.expandedId === id ? null : id;
+      renderWorksList();
+      return;
+    }
+    if (edit) {
+      const work = worksState.items.find((w) => w.id === edit.getAttribute('data-work-edit'));
+      if (work) fillWorksForm(work);
+    }
+  });
+
+  el('campaignsRefreshBtn')?.addEventListener('click', () => loadCampaigns().catch(console.error));
+  el('campaignsKindFilter')?.addEventListener('change', () => loadCampaigns().catch(console.error));
+  el('campaignsStatusFilter')?.addEventListener('change', () => loadCampaigns().catch(console.error));
+  el('campaignsAudienceFilter')?.addEventListener('change', () => loadCampaigns().catch(console.error));
+  el('campaignsForm')?.addEventListener('submit', saveCampaignsForm);
+  el('campaignsCancelEditBtn')?.addEventListener('click', resetCampaignsForm);
+  el('campaignsList')?.addEventListener('click', (event) => {
+    const card = event.target.closest('[data-campaign-id]');
+    if (!card) return;
+    openCampaignDetail(card.getAttribute('data-campaign-id')).catch((e) => {
+      if (el('campaignsListStatus')) el('campaignsListStatus').textContent = e.message || 'Open failed';
+    });
+  });
+  el('campaignsList')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const card = event.target.closest('[data-campaign-id]');
+    if (!card) return;
+    event.preventDefault();
+    openCampaignDetail(card.getAttribute('data-campaign-id')).catch(console.error);
+  });
+  el('campaignBackBtn')?.addEventListener('click', showCampaignList);
+  el('campaignPledgeBtn')?.addEventListener('click', openCampaignPledgeDialog);
+  el('campaignContributeBtn')?.addEventListener('click', openCampaignContributeDialog);
+  el('campaignShareBtn')?.addEventListener('click', () => {
+    const c = campaignsState.selected;
+    if (!c) return;
+    const url = `${location.origin}/campaign.html?id=${encodeURIComponent(c.id)}`;
+    if (navigator.share) {
+      navigator.share({ title: c.title, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        el('campaignShareBtn').textContent = 'Copied!';
+        setTimeout(() => { el('campaignShareBtn').textContent = 'Share link'; }, 2000);
+      });
+    }
+  });
+  el('campaignsModeInput')?.addEventListener('change', syncCampaignFormMode);
+  el('campaignsPledgeAmountTypeInput')?.addEventListener('change', syncCampaignFormMode);
+  el('campaignPledgeForm')?.addEventListener('submit', submitCampaignPledge);
+  el('campaignPledgeCloseBtn')?.addEventListener('click', () => el('campaignPledgeDialog')?.close());
+  el('campaignPledgeCancelBtn')?.addEventListener('click', () => el('campaignPledgeDialog')?.close());
+  el('campaignEditBtn')?.addEventListener('click', () => {
+    if (campaignsState.selected) fillCampaignsForm(campaignsState.selected);
+  });
+  el('campaignDeleteBtn')?.addEventListener('click', async () => {
+    const c = campaignsState.selected;
+    if (!c || !hasEntitlement('manage_works')) return;
+    if (!window.confirm(`Delete funding drive “${c.title}”? This cannot be undone.`)) return;
+    try {
+      await api(`/api/rwa/campaigns/${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      showCampaignList();
+      await loadCampaigns();
+    } catch (e) {
+      window.alert(e.message || 'Delete failed');
+    }
+  });
+  el('campaignPledgesList')?.addEventListener('click', (event) => {
+    const delBtn = event.target.closest('[data-cmp-del-pledge]');
+    if (delBtn) {
+      removeCampaignPledge(delBtn.getAttribute('data-cmp-del-pledge')).catch((e) => {
+        window.alert(e.message || 'Remove failed');
+      });
+    }
+  });
+  el('campaignContributionsList')?.addEventListener('click', (event) => {
+    const verify = event.target.closest('[data-cmp-verify]');
+    const reject = event.target.closest('[data-cmp-reject]');
+    const delBtn = event.target.closest('[data-cmp-del-contrib]');
+    if (verify) {
+      reviewCampaignContribution(verify.getAttribute('data-cmp-verify'), 'verify').catch((e) => {
+        window.alert(e.message || 'Verify failed');
+      });
+      return;
+    }
+    if (reject) {
+      reviewCampaignContribution(reject.getAttribute('data-cmp-reject'), 'reject').catch((e) => {
+        window.alert(e.message || 'Reject failed');
+      });
+      return;
+    }
+    if (delBtn) {
+      removeCampaignContribution(delBtn.getAttribute('data-cmp-del-contrib')).catch((e) => {
+        window.alert(e.message || 'Remove failed');
+      });
+    }
+  });
+  el('campaignContributeForm')?.addEventListener('submit', submitCampaignContribution);
+  el('campaignContributeCloseBtn')?.addEventListener('click', () => el('campaignContributeDialog')?.close());
+  el('campaignContributeCancelBtn')?.addEventListener('click', () => el('campaignContributeDialog')?.close());
+
   document.querySelectorAll('.proceedings-register-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       proceedingsState.type = btn.dataset.proceedingsType || 'gh';
@@ -8285,6 +9363,50 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   let templatesCache = [];
   let templatesCategories = [];
+  let templatesOptionDefaults = {
+    paperSize: 'A4',
+    background: 'watermark',
+    colors: {
+      heading: '#0b2a56',
+      body: '#12233f',
+      muted: '#5a6a80',
+      accent: '#1a6b3a',
+      gold: '#c9a227',
+    },
+  };
+
+  function readTemplateOptionsFromForm() {
+    const colors = {
+      heading: el('templatesColorHeading')?.value || templatesOptionDefaults.colors.heading,
+      body: el('templatesColorBody')?.value || templatesOptionDefaults.colors.body,
+      muted: el('templatesColorMuted')?.value || templatesOptionDefaults.colors.muted,
+      accent: el('templatesColorAccent')?.value || templatesOptionDefaults.colors.accent,
+      gold: templatesOptionDefaults.colors.gold,
+    };
+    return {
+      paperSize: el('templatesPaperSizeInput')?.value || 'A4',
+      background: el('templatesBackgroundInput')?.value || 'watermark',
+      colors,
+    };
+  }
+
+  function applyTemplateOptionsToForm(options) {
+    const opts = options && typeof options === 'object' ? options : templatesOptionDefaults;
+    const colors = opts.colors || templatesOptionDefaults.colors;
+    if (el('templatesPaperSizeInput')) el('templatesPaperSizeInput').value = opts.paperSize || 'A4';
+    if (el('templatesBackgroundInput')) el('templatesBackgroundInput').value = opts.background || 'watermark';
+    if (el('templatesColorHeading')) el('templatesColorHeading').value = colors.heading || '#0b2a56';
+    if (el('templatesColorBody')) el('templatesColorBody').value = colors.body || '#12233f';
+    if (el('templatesColorMuted')) el('templatesColorMuted').value = colors.muted || '#5a6a80';
+    if (el('templatesColorAccent')) el('templatesColorAccent').value = colors.accent || '#1a6b3a';
+  }
+
+  function templateIsHtml(doc) {
+    if (!doc) return false;
+    const mime = String(doc.mimeType || '').toLowerCase();
+    const name = `${doc.originalName || ''} ${doc.filename || ''} ${doc.staticPath || ''} ${doc.publicUrl || ''}`;
+    return mime.includes('html') || /\.html?/i.test(name);
+  }
 
   function fillTemplatesCategorySelects(cats) {
     templatesCategories = Array.isArray(cats) && cats.length
@@ -8326,6 +9448,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('templatesCategoryInput') && templatesCategories[0]) {
       el('templatesCategoryInput').value = templatesCategories[0].id;
     }
+    applyTemplateOptionsToForm(templatesOptionDefaults);
     if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Save template';
     if (el('templatesStatus')) el('templatesStatus').textContent = '';
   }
@@ -8340,12 +9463,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('templatesStatusInput')) el('templatesStatusInput').value = doc.status || 'published';
     if (el('templatesTagsInput')) el('templatesTagsInput').value = (doc.tags || []).join(', ');
     if (el('templatesFileInput')) el('templatesFileInput').value = '';
+    applyTemplateOptionsToForm(doc.options || templatesOptionDefaults);
     if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Update template';
     if (el('templatesStatus')) {
       el('templatesStatus').textContent = doc.docType === 'static'
-        ? 'Editing metadata for a seeded site document. Upload a file to replace with a private copy.'
+        ? 'Editing metadata & print options for a seeded site document. Upload a file to replace with a private copy.'
         : 'Editing template. Leave file blank to keep the current file.';
     }
+    const editor = el('templatesEditor');
+    if (editor) editor.open = true;
     el('templatesForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
@@ -8361,6 +9487,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const updated = doc.updatedAt
         ? new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
         : '';
+      const opts = doc.options || {};
+      const optBits = [
+        opts.paperSize || 'A4',
+        opts.background === 'none' ? 'no watermark' : (opts.background === 'plain' ? 'plain' : 'watermark'),
+      ].join(' · ');
       return `
         <article class="info-doc-card" data-doc-type="${escapeHtml(doc.docType || 'file')}">
           <div class="info-doc-card-row">
@@ -8370,18 +9501,23 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
                 <span class="info-doc-badge ${doc.status === 'published' ? '' : 'is-draft'}">${escapeHtml(doc.status || '')}</span>
                 <span class="info-doc-badge ${doc.docType === 'static' ? 'is-link' : 'is-file'}">${escapeHtml(doc.docType === 'static' ? 'site file' : 'upload')}</span>
               </div>
-              <h4 class="info-doc-card-title">${escapeHtml(doc.title || 'Untitled')}</h4>
-              <p class="meta">${escapeHtml(doc.originalName || doc.staticPath || '')}${updated ? ` · Updated ${escapeHtml(updated)}` : ''}</p>
+              <h4 class="info-doc-card-title tpl-open-title" data-tpl-open="${escapeHtml(doc.id)}" title="Open template">${escapeHtml(doc.title || 'Untitled')}</h4>
+              <p class="meta">${escapeHtml(doc.originalName || doc.staticPath || '')}${updated ? ` · Updated ${escapeHtml(updated)}` : ''} · ${escapeHtml(optBits)}</p>
               ${doc.description ? `<p class="summary">${escapeHtml(doc.description)}</p>` : ''}
               ${tags ? `<div class="info-doc-badges" style="margin-top:0.35rem">${tags}</div>` : ''}
             </div>
           </div>
-          <div class="btn-row info-doc-card-actions-inline">
+          <div class="tpl-card-toolbar">
             <button type="button" class="btn secondary compact" data-tpl-open="${escapeHtml(doc.id)}">Open</button>
-            <button type="button" class="btn ghost compact" data-tpl-download="${escapeHtml(doc.id)}">Download</button>
-            <button type="button" class="btn ghost compact" data-tpl-print="${escapeHtml(doc.id)}">Print</button>
-            <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
-            <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
+            <details class="tpl-card-actions">
+              <summary class="btn ghost compact tpl-card-actions-summary">More</summary>
+              <div class="btn-row info-doc-card-actions-inline">
+                <button type="button" class="btn ghost compact" data-tpl-download="${escapeHtml(doc.id)}">Download</button>
+                <button type="button" class="btn ghost compact" data-tpl-print="${escapeHtml(doc.id)}">Print</button>
+                <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
+                <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
+              </div>
+            </details>
           </div>
         </article>`;
     }).join('');
@@ -8396,6 +9532,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (category) qs.set('category', category);
     const data = await api(`/api/rwa/templates?${qs.toString()}`);
     fillTemplatesCategorySelects(data.categories || []);
+    if (data.optionPresets?.defaults) {
+      templatesOptionDefaults = data.optionPresets.defaults;
+    }
     templatesCache = data.templates || [];
     renderTemplatesList();
     if (el('templatesStatus') && !el('templatesEditId')?.value) {
@@ -8404,17 +9543,29 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function templateFileUrls(doc) {
-    if (!doc?.id) return { viewUrl: '', downloadUrl: '', mime: 'application/octet-stream' };
+    if (!doc?.id) return { viewUrl: '', downloadUrl: '', mime: 'application/octet-stream', useRender: false };
     const mime = doc.mimeType
       || (doc.docType === 'static' && /\.html?$/i.test(doc.publicUrl || doc.staticPath || '')
         ? 'text/html'
         : 'application/octet-stream');
+    const useRender = templateIsHtml(doc);
+    if (useRender) {
+      const renderApi = `/api/rwa/templates/${encodeURIComponent(doc.id)}/render`;
+      return {
+        viewUrl: authDocUrl(renderApi),
+        downloadUrl: authDocUrl(renderApi, { download: '1' }),
+        mime: 'text/html',
+        filename: doc.originalName || pathlibBasename(doc.publicUrl || doc.staticPath || 'template.html'),
+        useRender: true,
+      };
+    }
     if (doc.docType === 'static' && doc.publicUrl) {
       return {
         viewUrl: doc.publicUrl,
         downloadUrl: doc.publicUrl,
         mime,
         filename: doc.originalName || pathlibBasename(doc.publicUrl || doc.staticPath || 'template.html'),
+        useRender: false,
       };
     }
     const fileApi = `/api/rwa/templates/${encodeURIComponent(doc.id)}/file`;
@@ -8423,6 +9574,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       downloadUrl: authDocUrl(fileApi, { download: '1' }),
       mime,
       filename: doc.originalName || doc.filename || 'template',
+      useRender: false,
     };
   }
 
@@ -8503,6 +9655,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (saveBtn) saveBtn.disabled = true;
     if (statusLine) statusLine.textContent = 'Saving…';
+    const options = readTemplateOptionsFromForm();
     try {
       let doc;
       if (file) {
@@ -8513,6 +9666,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         body.append('category', el('templatesCategoryInput')?.value || 'other');
         body.append('tags', el('templatesTagsInput')?.value.trim() || '');
         body.append('status', el('templatesStatusInput')?.value || 'published');
+        body.append('options', JSON.stringify(options));
         if (editId) body.append('id', editId);
         const headers = {};
         if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
@@ -8535,6 +9689,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           category: el('templatesCategoryInput')?.value || 'other',
           tags: el('templatesTagsInput')?.value.trim() || '',
           status: el('templatesStatusInput')?.value || 'published',
+          options,
         };
         doc = (await api(`/api/rwa/templates/${encodeURIComponent(editId)}`, {
           method: 'PATCH',

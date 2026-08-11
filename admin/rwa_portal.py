@@ -54,6 +54,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
+    ensure_colony_campaigns_tables,
     ensure_meeting_proceedings_table,
     migrate_roman_plot_ids,
     ensure_otp_pending_columns,
@@ -585,6 +586,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
         ensure_colony_works_table(conn)
+        ensure_colony_campaigns_tables(conn)
         ensure_meeting_proceedings_table(conn)
         ensure_entitlements_schema(conn)
         ensure_report_templates_table(conn)
@@ -5048,6 +5050,8 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
         )
     office_bearers.sort(key=_office_bearer_sort_key)
 
+    public_campaigns = []
+
     return {
         "ok": True,
         "societyName": society,
@@ -5055,6 +5059,7 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
         "greeting": greeting,
         "eyebrow": (meta.get("eyebrow") or f"{society} · RWA · Mandi").strip(),
         "updates": updates,
+        "campaigns": public_campaigns,
         "officeBearers": office_bearers,
     }
 
@@ -5721,6 +5726,14 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^POST /api/rwa/works$"), "Create Works & Events item"),
     (re.compile(r"^PATCH /api/rwa/works/[^/]+$"), "Update Works & Events item"),
     (re.compile(r"^DELETE /api/rwa/works/[^/]+$"), "Delete Works & Events item"),
+    (re.compile(r"^GET /api/rwa/campaigns$"), "Browse campaigns"),
+    (re.compile(r"^POST /api/rwa/campaigns$"), "Create campaign"),
+    (re.compile(r"^PATCH /api/rwa/campaigns/[^/]+$"), "Update campaign"),
+    (re.compile(r"^DELETE /api/rwa/campaigns/[^/]+$"), "Delete campaign"),
+    (re.compile(r"^POST /api/rwa/campaigns/[^/]+/contributions$"), "Submit campaign contribution"),
+    (re.compile(r"^PATCH /api/rwa/campaigns/[^/]+/contributions/[^/]+$"), "Review campaign contribution"),
+    (re.compile(r"^DELETE /api/rwa/campaigns/[^/]+/contributions/[^/]+$"), "Remove campaign contribution"),
+    (re.compile(r"^DELETE /api/rwa/campaigns/[^/]+/pledges/[^/]+$"), "Remove campaign pledge"),
     (re.compile(r"^GET /api/rwa/proceedings$"), "Browse Proceedings register"),
     (re.compile(r"^POST /api/rwa/proceedings$"), "Create Proceedings entry"),
     (re.compile(r"^PATCH /api/rwa/proceedings/[^/]+$"), "Update Proceedings entry"),

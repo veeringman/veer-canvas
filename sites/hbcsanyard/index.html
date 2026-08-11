@@ -20,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260811foot1">
-  <script src="portal.js?v=20260811tpl1" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260811campaigns2">
+  <script src="portal.js?v=20260811campaigns3" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -851,9 +851,15 @@
       <section class="panel" id="panel-works" hidden>
         <header class="panel-head">
           <h2>Works &amp; Events</h2>
-          <p class="muted">Maintenance, development projects, colony activities, and events — with timelines, benefits, costs, and funding.</p>
+          <p class="muted">Maintenance, development projects, colony activities, funding drives, and events.</p>
         </header>
 
+        <div class="works-panel-tabs" role="tablist" aria-label="Works section">
+          <button type="button" class="works-panel-tab is-active" data-works-tab="works" aria-selected="true">Works &amp; projects</button>
+          <button type="button" class="works-panel-tab" data-works-tab="campaigns" aria-selected="false">Campaigns &amp; drives</button>
+        </div>
+
+        <div id="worksTabWorks" class="works-tab-pane">
         <div class="mailbox-toolbar works-toolbar">
           <label>
             Type
@@ -993,6 +999,205 @@
             <p class="muted" id="worksFormStatus"></p>
           </form>
         </div>
+        </div><!-- /worksTabWorks -->
+
+        <div id="worksTabCampaigns" class="works-tab-pane" hidden>
+          <div class="mailbox-toolbar campaigns-toolbar">
+            <label>
+              Type
+              <select id="campaignsKindFilter">
+                <option value="">All types</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select id="campaignsStatusFilter">
+                <option value="active">Active</option>
+                <option value="">All statuses</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+                <option value="draft">Draft</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label class="admin-only" hidden>
+              Visibility
+              <select id="campaignsAudienceFilter">
+                <option value="">All audiences</option>
+                <option value="members">Members only</option>
+                <option value="public">Public</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="campaignsRefreshBtn">Refresh</button>
+          </div>
+
+          <div id="campaignsList" class="campaigns-list"></div>
+          <p class="muted" id="campaignsListStatus"></p>
+
+          <div id="campaignDetail" class="campaign-detail" hidden>
+            <div class="campaign-detail-head">
+              <button type="button" class="btn ghost compact" id="campaignBackBtn">← Back to drives</button>
+              <div class="campaign-detail-actions">
+                <button type="button" class="btn primary compact" id="campaignPledgeBtn" hidden>Make a pledge</button>
+                <button type="button" class="btn secondary compact" id="campaignContributeBtn" hidden>Contribute funds</button>
+                <button type="button" class="btn ghost compact" id="campaignShareBtn" title="Copy shareable link">Share link</button>
+                <button type="button" class="btn ghost compact admin-only" id="campaignEditBtn" data-entitlement="manage_works" hidden>Edit drive</button>
+                <button type="button" class="btn ghost compact admin-only" id="campaignDeleteBtn" data-entitlement="manage_works" hidden>Delete</button>
+              </div>
+            </div>
+            <article id="campaignDetailBody" class="campaign-showcase"></article>
+            <div id="campaignPledgesBlock" class="campaign-participants-block" hidden>
+              <h3>Pledges</h3>
+              <div id="campaignPledgesList" class="campaign-participants-list"></div>
+            </div>
+            <div id="campaignContributionsBlock" class="campaign-participants-block" hidden>
+              <h3>Contributions</h3>
+              <div id="campaignContributionsList" class="campaign-participants-list"></div>
+            </div>
+          </div>
+
+          <div class="roster-block admin-only campaigns-manage" id="campaignsManageBlock" data-entitlement="manage_works" hidden>
+            <div class="roster-toolbar">
+              <div>
+                <h3 id="campaignsFormTitle">New funding drive</h3>
+                <p class="muted">Launch a plantation drive, maintenance fund, or community campaign — set target, deadline, and who can see it.</p>
+              </div>
+            </div>
+            <form id="campaignsForm" class="stack" enctype="multipart/form-data">
+              <input type="hidden" id="campaignsEditId" value="">
+              <div class="settings-grid">
+                <label class="span-2">Title
+                  <input id="campaignsTitleInput" required maxlength="160" placeholder="e.g. Monsoon plantation drive 2026">
+                </label>
+                <label>Type
+                  <select id="campaignsKindInput" required></select>
+                </label>
+                <label>Status
+                  <select id="campaignsStatusInput"></select>
+                </label>
+                <label>Collection mode
+                  <select id="campaignsModeInput">
+                    <option value="both">Pledges + funding</option>
+                    <option value="pledge">Pledge only</option>
+                    <option value="funding">Accept funding only</option>
+                  </select>
+                </label>
+                <label>Who can see this
+                  <select id="campaignsAudienceInput">
+                    <option value="members">Colony members only (private)</option>
+                    <option value="public">Public — also on landing page</option>
+                  </select>
+                </label>
+                <label id="campaignsPledgeAmountTypeWrap">Pledge amount
+                  <select id="campaignsPledgeAmountTypeInput">
+                    <option value="discretionary">Member chooses amount</option>
+                    <option value="fixed">Fixed amount per member</option>
+                  </select>
+                </label>
+                <label id="campaignsFixedPledgeWrap" hidden>Fixed pledge (₹)
+                  <input id="campaignsFixedPledgeInput" type="number" min="1" step="1" placeholder="e.g. 500">
+                </label>
+                <label>Fundraising target (₹)
+                  <input id="campaignsTargetInput" type="number" min="0" step="1" placeholder="Optional">
+                </label>
+                <label>Deadline
+                  <input id="campaignsDeadlineInput" type="date">
+                </label>
+                <label>Event date
+                  <input id="campaignsEventInput" type="date">
+                </label>
+                <label>Location
+                  <input id="campaignsLocationInput" maxlength="160" placeholder="e.g. Central park / Gate 1 strip">
+                </label>
+                <label class="span-2">Campaign illustration
+                  <input id="campaignsImageInput" type="file" accept="image/jpeg,image/png,image/webp">
+                  <span class="muted" id="campaignsImageHint">JPEG, PNG or WebP — auto-optimized for fast loading on the public page</span>
+                </label>
+                <label class="span-2">Short summary
+                  <input id="campaignsSummaryInput" maxlength="800" placeholder="One-line pitch for the card">
+                </label>
+                <label class="span-2">Description
+                  <textarea id="campaignsDetailsInput" rows="4" placeholder="What the drive covers, saplings planned, volunteer roles…"></textarea>
+                </label>
+                <label class="span-2" id="campaignsPaymentWrap">How to pay / UPI &amp; bank details
+                  <textarea id="campaignsPaymentInput" rows="3" placeholder="UPI ID, account name, reference note for transfers…"></textarea>
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="campaignsSaveBtn">Save drive</button>
+                <button type="button" class="btn ghost" id="campaignsCancelEditBtn" hidden>Cancel edit</button>
+              </div>
+              <p class="muted" id="campaignsFormStatus"></p>
+            </form>
+          </div>
+
+          <dialog id="campaignPledgeDialog" class="campaign-contribute-dialog">
+            <form id="campaignPledgeForm" method="dialog" class="stack">
+              <header class="dialog-head">
+                <h3 id="campaignPledgeTitle">Make a pledge</h3>
+                <button type="button" class="btn ghost compact dialog-close" id="campaignPledgeCloseBtn" aria-label="Close">✕</button>
+              </header>
+              <p class="muted" id="campaignPledgeLead">Record your commitment — name, plot, and pledged amount.</p>
+              <div class="settings-grid">
+                <label class="span-2">Your name
+                  <input id="campaignPledgeName" maxlength="120" required placeholder="Full name">
+                </label>
+                <label>House / plot no.
+                  <input id="campaignPledgeHouse" maxlength="40" required placeholder="e.g. A-12">
+                </label>
+                <label id="campaignPledgeAmountWrap">Pledged amount (₹)
+                  <input id="campaignPledgeAmount" type="number" min="1" step="1" required>
+                </label>
+                <label class="span-2">Note (optional)
+                  <input id="campaignPledgeNote" maxlength="500" placeholder="Saplings count, volunteer offer…">
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="campaignPledgeSubmitBtn">Submit pledge</button>
+                <button type="button" class="btn ghost" id="campaignPledgeCancelBtn">Cancel</button>
+              </div>
+              <p class="muted" id="campaignPledgeStatus"></p>
+            </form>
+          </dialog>
+
+          <dialog id="campaignContributeDialog" class="campaign-contribute-dialog">
+            <form id="campaignContributeForm" method="dialog" class="stack">
+              <header class="dialog-head">
+                <h3 id="campaignContributeTitle">Contribute funds</h3>
+                <button type="button" class="btn ghost compact dialog-close" id="campaignContributeCloseBtn" aria-label="Close">✕</button>
+              </header>
+              <p class="muted" id="campaignContributeLead"></p>
+              <div class="settings-grid">
+                <label class="span-2">Your name
+                  <input id="campaignContributeName" maxlength="120" required placeholder="Full name">
+                </label>
+                <label>House / plot no.
+                  <input id="campaignContributeHouse" maxlength="40" required placeholder="e.g. A-12">
+                </label>
+                <label>Amount (₹)
+                  <input id="campaignContributeAmount" type="number" min="1" step="1" required>
+                </label>
+                <label>Payment method
+                  <select id="campaignContributeMethod"></select>
+                </label>
+                <label>Date paid
+                  <input id="campaignContributePaidOn" type="date">
+                </label>
+                <label class="span-2">Note
+                  <input id="campaignContributeNote" maxlength="500" placeholder="UPI ref, transfer details…">
+                </label>
+                <label class="span-2">Receipt / screenshot (optional)
+                  <input id="campaignContributeFiles" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple>
+                </label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="campaignContributeSubmitBtn">Submit contribution</button>
+                <button type="button" class="btn ghost" id="campaignContributeCancelBtn">Cancel</button>
+              </div>
+              <p class="muted" id="campaignContributeStatus"></p>
+            </form>
+          </dialog>
+        </div><!-- /worksTabCampaigns -->
       </section>
 
       <section class="panel" id="panel-proceedings" hidden>
@@ -1734,7 +1939,12 @@
             </label>
           </div>
           <div id="templatesList" class="info-doc-list is-cards"></div>
-          <form id="templatesForm" class="stack" style="margin-top:1rem">
+          <details class="templates-editor" id="templatesEditor" open>
+            <summary class="templates-editor-summary">
+              <strong>Add / edit template</strong>
+              <span class="muted"> — metadata, print options, upload</span>
+            </summary>
+            <form id="templatesForm" class="stack" style="margin-top:0.75rem">
             <input type="hidden" id="templatesEditId" value="">
             <div class="settings-grid">
               <label class="span-2">Title
@@ -1756,17 +1966,44 @@
               <label class="span-2">Tags
                 <input type="text" id="templatesTagsInput" maxlength="200" placeholder="comma-separated, e.g. a4, print, cash" autocomplete="off">
               </label>
+              <label>Paper size
+                <select id="templatesPaperSizeInput">
+                  <option value="A4" selected>A4</option>
+                  <option value="A5">A5</option>
+                  <option value="Letter">Letter</option>
+                </select>
+              </label>
+              <label>Background
+                <select id="templatesBackgroundInput">
+                  <option value="watermark" selected>Watermark</option>
+                  <option value="none">No watermark</option>
+                  <option value="plain">Plain white</option>
+                </select>
+              </label>
+              <label>Heading colour
+                <input type="color" id="templatesColorHeading" value="#0b2a56">
+              </label>
+              <label>Body colour
+                <input type="color" id="templatesColorBody" value="#12233f">
+              </label>
+              <label>Muted colour
+                <input type="color" id="templatesColorMuted" value="#5a6a80">
+              </label>
+              <label>Accent colour
+                <input type="color" id="templatesColorAccent" value="#1a6b3a">
+              </label>
               <label class="span-2">Upload file
                 <input type="file" id="templatesFileInput" accept=".html,.htm,.pdf,.png,.jpg,.jpeg,.webp,.svg,.doc,.docx,application/pdf,text/html,image/*">
               </label>
             </div>
-            <p class="muted">Supported: HTML, PDF, images, DOC/DOCX (max 20 MB). Seeded pads open from the site documents folder.</p>
+            <p class="muted">Edit saves catalogue fields and print options (paper size, background, colours). Pad body text including office bearers stays as authored in the template file. Uploading a file replaces the document body. Supported: HTML, PDF, images, DOC/DOCX (max 20 MB).</p>
             <div class="btn-row">
               <button type="submit" class="btn primary" id="templatesSaveBtn">Save template</button>
               <button type="button" class="btn ghost" id="templatesResetBtn">Clear form</button>
             </div>
             <p class="muted" id="templatesStatus"></p>
-          </form>
+            </form>
+          </details>
         </div>
 
         <details class="sensitive-ops" id="sensitiveOpsBlock" data-entitlement="sensitive_ops" hidden>

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaign — Mandi Housing Welfare Society</title>
+  <meta name="theme-color" content="#15233f">
+  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --primary: #1a6b45;
+      --surface: #ffffff;
+      --bg: #f5f7fa;
+      --text: #1a2236;
+      --muted: #64748b;
+      --radius: 12px;
+    }
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .campaign-page {
+      width: 100%; max-width: 540px;
+      padding: 1.25rem 1rem 2rem;
+    }
+    .brand-bar {
+      text-align: center; margin-bottom: 1rem;
+      font-size: 0.82rem; color: var(--muted); font-weight: 500;
+    }
+    .campaign-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    .campaign-hero {
+      width: 100%; max-height: 200px;
+      object-fit: cover; opacity: 0.88;
+    }
+    .campaign-body { padding: 1.25rem; }
+    .campaign-body h1 { margin: 0 0 0.4rem; font-size: 1.25rem; }
+    .campaign-body .summary { color: var(--muted); margin: 0 0 0.75rem; font-size: 0.93rem; }
+    .campaign-body .desc { margin: 0.5rem 0 1rem; font-size: 0.9rem; line-height: 1.55; }
+    .campaign-body .desc p { margin: 0.4rem 0; }
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.5rem; margin-bottom: 0.75rem;
+    }
+    .stat-card {
+      padding: 0.6rem 0.75rem;
+      background: rgba(15,40,80,0.03);
+      border-radius: 8px; text-align: center;
+    }
+    .stat-card strong { display: block; font-size: 1.1rem; color: var(--primary); }
+    .stat-card span { font-size: 0.78rem; color: var(--muted); }
+    .stat-card.is-pledged strong { color: #b45309; }
+    .stat-card.is-raised strong { color: var(--primary); }
+    .progress-section { margin-bottom: 1rem; }
+    .progress-row { margin-bottom: 0.4rem; }
+    .progress-row label { font-size: 0.78rem; color: var(--muted); display: block; margin-bottom: 2px; }
+    .progress-bar { height: 7px; border-radius: 99px; background: rgba(15,40,80,0.08); overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #1a6b45, #22c55e); }
+    .meta-line { font-size: 0.85rem; color: var(--muted); margin: 0.3rem 0; }
+    .payment-info {
+      margin-top: 0.75rem; padding: 0.6rem 0.75rem;
+      background: rgba(34,197,94,0.07); border-radius: 8px; font-size: 0.85rem;
+    }
+    .pledge-form {
+      margin-top: 1.25rem; padding: 1rem;
+      background: rgba(15,40,80,0.025); border-radius: 10px;
+      border: 1px solid rgba(15,40,80,0.07);
+    }
+    .pledge-form h3 { margin: 0 0 0.6rem; font-size: 0.95rem; }
+    .form-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .form-row input {
+      flex: 1; min-width: 110px; padding: 0.55rem 0.7rem;
+      border: 1px solid rgba(15,40,80,0.15); border-radius: 8px; font-size: 0.9rem;
+      font-family: inherit;
+    }
+    .form-row input:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+    .submit-btn {
+      margin-top: 0.6rem; width: 100%; padding: 0.65rem;
+      background: var(--primary); color: #fff; border: 0; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .form-msg { margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+    .form-msg.success { color: var(--primary); }
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+    .error { text-align: center; padding: 3rem 1rem; color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="campaign-page">
+    <div class="brand-bar">Mandi Housing Welfare Society · Sanyard</div>
+    <div id="content"><p class="loading">Loading campaign…</p></div>
+  </div>
+<script>
+(function() {
+  const params = new URLSearchParams(location.search);
+  const campaignId = params.get('id');
+  const content = document.getElementById('content');
+  let pollTimer = null;
+  let currentCampaign = null;
+
+  if (!campaignId) {
+    content.innerHTML = '<p class="error">No campaign specified.</p>';
+    return;
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+  function rupee(n) {
+    return '₹' + Number(n || 0).toLocaleString('en-IN');
+  }
+  function fmtBody(text) {
+    if (!text) return '';
+    return text.split(/\n\s*\n/).map(p => '<p>' + esc(p).replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') + '</p>').join('');
+  }
+  function getFormState() {
+    return {
+      name: document.getElementById('pName')?.value || '',
+      house: document.getElementById('pHouse')?.value || '',
+      amount: document.getElementById('pAmount')?.value || '',
+      note: document.getElementById('pNote')?.value || '',
+    };
+  }
+  function restoreFormState(state) {
+    if (!state) return;
+    const name = document.getElementById('pName');
+    const house = document.getElementById('pHouse');
+    const amount = document.getElementById('pAmount');
+    const note = document.getElementById('pNote');
+    if (name && state.name) name.value = state.name;
+    if (house && state.house) house.value = state.house;
+    if (amount && state.amount && !amount.readOnly) amount.value = state.amount;
+    if (note && state.note) note.value = state.note;
+  }
+
+  function renderCampaign(c) {
+    currentCampaign = c;
+    const cover = c.imageUrl ? `${c.imageUrl}${c.updatedAt ? '?v=' + encodeURIComponent(c.updatedAt) : ''}` : '';
+    const pledged = c.pledgedAmount || 0;
+    const raised = c.raisedAmount || 0;
+    const target = c.targetAmount || 0;
+    const pctP = target ? Math.min(100, Math.round(100 * pledged / target)) : 0;
+    const pctR = target ? Math.min(100, Math.round(100 * raised / target)) : 0;
+    const mode = c.mode || 'both';
+    const showPledged = mode !== 'funding';
+    const showRaised = mode !== 'pledge';
+
+    document.title = (c.title || 'Campaign') + ' — MHWS Sanyard';
+
+    let html = '<div class="campaign-card">';
+    if (cover) html += `<img class="campaign-hero" src="${esc(cover)}" alt="" decoding="async" fetchpriority="high">`;
+    html += '<div class="campaign-body">';
+    html += `<h1>${esc(c.title)}</h1>`;
+    if (c.summary) html += `<p class="summary">${esc(c.summary)}</p>`;
+    if (c.details) html += `<div class="desc">${fmtBody(c.details)}</div>`;
+
+    html += '<div class="stat-grid" id="campaignStats">';
+    if (showPledged) html += `<div class="stat-card is-pledged"><strong id="statPledged">${rupee(pledged)}</strong><span id="statPledgers">Pledged · ${c.pledgerCount || 0} members</span></div>`;
+    if (showRaised) html += `<div class="stat-card is-raised"><strong id="statRaised">${rupee(raised)}</strong><span id="statContributors">Raised · ${c.contributorCount || 0} payments</span></div>`;
+    if (target) html += `<div class="stat-card"><strong>${rupee(target)}</strong><span>Target</span></div>`;
+    html += '</div>';
+
+    if (target && (showPledged || showRaised)) {
+      html += '<div class="progress-section" id="campaignProgress">';
+      if (showPledged) html += `<div class="progress-row"><label>Pledged</label><div class="progress-bar"><div class="progress-fill" id="progPledged" style="width:${pctP}%"></div></div></div>`;
+      if (showRaised) html += `<div class="progress-row"><label>Raised</label><div class="progress-bar"><div class="progress-fill" id="progRaised" style="width:${pctR}%"></div></div></div>`;
+      html += '</div>';
+    }
+
+    if (c.location) html += `<p class="meta-line">📍 ${esc(c.location)}</p>`;
+    if (c.eventDate) html += `<p class="meta-line">📅 ${esc(c.eventDate)}</p>`;
+    if (c.deadline) html += `<p class="meta-line">⏳ Deadline: ${esc(c.deadline)}</p>`;
+    if (c.paymentInstructions) html += `<div class="payment-info"><strong>Payment info:</strong> ${esc(c.paymentInstructions)}</div>`;
+
+    const canPledge = c.canPledge;
+    const canContribute = c.canContribute;
+    const isFixed = c.pledgeAmountType === 'fixed' && c.fixedPledgeAmount;
+    const fixedAmt = isFixed ? c.fixedPledgeAmount : null;
+    const label = canPledge ? 'Pledge your support' : 'Contribute';
+    const btnLabel = canPledge ? 'Submit Pledge' : 'Submit Contribution';
+
+    if (canPledge || canContribute) {
+      html += `<div class="pledge-form" id="publicPledgeForm">
+        <h3>${canPledge ? '✋' : '💰'} ${label}</h3>
+        <div class="form-row">
+          <input type="text" id="pName" placeholder="Your name" required>
+          <input type="text" id="pHouse" placeholder="House / Plot No." required>
+        </div>
+        <div class="form-row">
+          <input type="number" id="pAmount" placeholder="${fixedAmt ? 'Amount: ₹' + fixedAmt : 'Amount (₹)'}" min="1" ${fixedAmt ? 'value="' + fixedAmt + '" readonly' : ''}>
+        </div>
+        <div class="form-row">
+          <input type="text" id="pNote" placeholder="Note (optional)">
+        </div>
+        <button type="button" class="submit-btn" id="pBtn">${btnLabel}</button>
+        <p class="form-msg" id="pMsg" hidden></p>
+      </div>`;
+    }
+
+    html += '</div></div>';
+    content.innerHTML = html;
+
+    const btn = document.getElementById('pBtn');
+    if (btn) {
+      btn.addEventListener('click', submitParticipation);
+    }
+  }
+
+  function updateStats(c) {
+    const pledged = c.pledgedAmount || 0;
+    const raised = c.raisedAmount || 0;
+    const target = c.targetAmount || 0;
+    const pctP = target ? Math.min(100, Math.round(100 * pledged / target)) : 0;
+    const pctR = target ? Math.min(100, Math.round(100 * raised / target)) : 0;
+    const elP = document.getElementById('statPledged');
+    const elR = document.getElementById('statRaised');
+    const elPl = document.getElementById('statPledgers');
+    const elCo = document.getElementById('statContributors');
+    const progP = document.getElementById('progPledged');
+    const progR = document.getElementById('progRaised');
+    if (elP) elP.textContent = rupee(pledged);
+    if (elR) elR.textContent = rupee(raised);
+    if (elPl) elPl.textContent = `Pledged · ${c.pledgerCount || 0} members`;
+    if (elCo) elCo.textContent = `Raised · ${c.contributorCount || 0} payments`;
+    if (progP) progP.style.width = pctP + '%';
+    if (progR) progR.style.width = pctR + '%';
+  }
+
+  async function loadCampaign({ preserveForm = false, fullRender = false } = {}) {
+    const formState = preserveForm ? getFormState() : null;
+    try {
+      const data = await fetch('/api/rwa/public/campaigns/' + encodeURIComponent(campaignId)).then(r => r.json());
+      if (!data.ok || !data.campaign) {
+        content.innerHTML = '<p class="error">Campaign not found or not public.</p>';
+        return;
+      }
+      const c = data.campaign;
+      const settingsChanged = fullRender
+        || !currentCampaign
+        || currentCampaign.pledgeAmountType !== c.pledgeAmountType
+        || currentCampaign.fixedPledgeAmount !== c.fixedPledgeAmount
+        || currentCampaign.canPledge !== c.canPledge
+        || currentCampaign.canContribute !== c.canContribute
+        || currentCampaign.title !== c.title
+        || currentCampaign.summary !== c.summary
+        || currentCampaign.details !== c.details;
+
+      if (settingsChanged) {
+        renderCampaign(c);
+        if (formState) restoreFormState(formState);
+      } else {
+        currentCampaign = c;
+        updateStats(c);
+      }
+    } catch (e) {
+      if (!currentCampaign) {
+        content.innerHTML = '<p class="error">Failed to load campaign. Please try again.</p>';
+      }
+    }
+  }
+
+  async function submitParticipation() {
+    const c = currentCampaign;
+    if (!c) return;
+    const canPledge = c.canPledge;
+    const btnLabel = canPledge ? 'Submit Pledge' : 'Submit Contribution';
+    const name = document.getElementById('pName').value.trim();
+    const house = document.getElementById('pHouse').value.trim();
+    const amount = parseInt(document.getElementById('pAmount').value, 10);
+    const note = document.getElementById('pNote').value.trim();
+    const msg = document.getElementById('pMsg');
+    const btn = document.getElementById('pBtn');
+    if (!name || !house || !amount || amount <= 0) {
+      msg.textContent = 'Please fill all fields.'; msg.hidden = false; msg.className = 'form-msg';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    try {
+      const endpoint = canPledge
+        ? '/api/rwa/public/campaigns/' + encodeURIComponent(campaignId) + '/pledges'
+        : '/api/rwa/public/campaigns/' + encodeURIComponent(campaignId) + '/contributions';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, house, amount, note })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        msg.textContent = '✅ Thank you! Your submission has been recorded.';
+        msg.className = 'form-msg success'; msg.hidden = false;
+        btn.textContent = 'Done!';
+        document.getElementById('pName').value = '';
+        document.getElementById('pHouse').value = '';
+        if (!document.getElementById('pAmount').readOnly) document.getElementById('pAmount').value = '';
+        document.getElementById('pNote').value = '';
+        await loadCampaign({ fullRender: false });
+      } else {
+        msg.textContent = result.error || 'Something went wrong.';
+        msg.className = 'form-msg'; msg.hidden = false;
+        btn.disabled = false; btn.textContent = btnLabel;
+      }
+    } catch (e) {
+      msg.textContent = 'Network error. Please try again.';
+      msg.className = 'form-msg'; msg.hidden = false;
+      btn.disabled = false; btn.textContent = btnLabel;
+    }
+  }
+
+  loadCampaign({ fullRender: true });
+  pollTimer = setInterval(() => loadCampaign({ preserveForm: true }), 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadCampaign({ preserveForm: true });
+  });
+})();
+</script>
+</body>
+</html>

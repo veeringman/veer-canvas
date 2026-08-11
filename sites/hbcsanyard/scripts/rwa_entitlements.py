@@ -478,7 +478,7 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     ensure_ready(conn)
     rows = conn.execute(
         """
-        SELECT house_id, plot_no, section, name, official_title, role, status,
+        SELECT house_id, plot_no, section, name, phone, official_title, role, status,
                is_ec_member, is_office_bearer, ec_member_id
         FROM residents
         WHERE house_id != ?
@@ -510,6 +510,11 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         seat_id = (r["ec_member_id"] or "").strip() or ((owner or {}).get("id") or "")
         seat = household.get_member(conn, seat_id) if seat_id else None
         seat_pub = household.public_member(seat) if seat else {}
+        phone = (
+            (seat_pub.get("phone") or "").strip()
+            or (r["phone"] or "").strip()
+            or ((owner or {}).get("phone") or "").strip()
+        )
         photo = photos.get(hid) or {}
         if seat_pub.get("hasPhoto"):
             photo = {
@@ -522,6 +527,7 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             "plotNo": r["plot_no"] or hid,
             "section": r["section"] or "",
             "name": (seat_pub.get("name") or r["name"] or hid),
+            "phone": phone,
             "ownerName": (owner or {}).get("name") or r["name"] or hid,
             "primaryDelegateName": (delegate or {}).get("name") or "",
             "displayName": (

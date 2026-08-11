@@ -1550,6 +1550,92 @@ def ensure_colony_works_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def ensure_colony_campaigns_tables(conn: sqlite3.Connection) -> None:
+    """Campaigns and funding drives — plantation drives, member contributions."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS colony_campaigns (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'general'
+            CHECK(kind IN ('plantation','maintenance','development','welfare','event','general')),
+          summary TEXT,
+          details TEXT,
+          status TEXT NOT NULL DEFAULT 'draft'
+            CHECK(status IN ('draft','active','paused','completed','cancelled')),
+          audience TEXT NOT NULL DEFAULT 'members'
+            CHECK(audience IN ('members','public')),
+          target_amount INTEGER,
+          deadline TEXT,
+          event_date TEXT,
+          location TEXT,
+          payment_instructions TEXT,
+          work_id TEXT,
+          mode TEXT NOT NULL DEFAULT 'both'
+            CHECK(mode IN ('pledge','funding','both')),
+          pledge_amount_type TEXT DEFAULT 'discretionary'
+            CHECK(pledge_amount_type IN ('fixed','discretionary')),
+          fixed_pledge_amount INTEGER,
+          image_file TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_colony_campaigns_status
+          ON colony_campaigns(status, audience, updated_at DESC);
+        CREATE TABLE IF NOT EXISTS campaign_pledges (
+          id TEXT PRIMARY KEY,
+          campaign_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          member_id TEXT,
+          contributor_name TEXT NOT NULL,
+          amount INTEGER NOT NULL CHECK(amount > 0),
+          note TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (campaign_id) REFERENCES colony_campaigns(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_campaign_pledges_campaign
+          ON campaign_pledges(campaign_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS campaign_contributions (
+          id TEXT PRIMARY KEY,
+          campaign_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          member_id TEXT,
+          contributor_name TEXT,
+          amount INTEGER NOT NULL CHECK(amount > 0),
+          method TEXT NOT NULL DEFAULT 'upi'
+            CHECK(method IN ('upi','cash','bank_transfer','cheque','other')),
+          paid_on TEXT,
+          note TEXT,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','verified','rejected')),
+          files_json TEXT,
+          verified_by TEXT,
+          verified_at TEXT,
+          rejected_reason TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (campaign_id) REFERENCES colony_campaigns(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_campaign_contributions_campaign
+          ON campaign_contributions(campaign_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_campaign_contributions_house
+          ON campaign_contributions(house_id, campaign_id);
+        """
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(colony_campaigns)").fetchall()}
+    for name, sql in (
+        ("mode", "ALTER TABLE colony_campaigns ADD COLUMN mode TEXT NOT NULL DEFAULT 'both'"),
+        ("pledge_amount_type", "ALTER TABLE colony_campaigns ADD COLUMN pledge_amount_type TEXT DEFAULT 'discretionary'"),
+        ("fixed_pledge_amount", "ALTER TABLE colony_campaigns ADD COLUMN fixed_pledge_amount INTEGER"),
+        ("image_file", "ALTER TABLE colony_campaigns ADD COLUMN image_file TEXT"),
+    ):
+        if name not in cols:
+            conn.execute(sql)
+    conn.commit()
+
+
 def ensure_meeting_proceedings_table(conn: sqlite3.Connection) -> None:
     """Proceedings / MOM register — General House and Executive Committee meetings."""
     conn.executescript(

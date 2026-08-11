@@ -51,12 +51,30 @@ def _on_plate(img: Image.Image, size: int, bg: tuple[int, int, int, int], *, pad
     return plate
 
 
-def _watermark(img: Image.Image, size: int = 1024, alpha: float = 0.32) -> Image.Image:
-    base = _fit(img, size, pad_ratio=0.04)
-    r, g, b, a = base.split()
-    a = a.point(lambda v: int(v * alpha))
-    out = Image.merge("RGBA", (r, g, b, a))
-    return out
+def _watermark(img: Image.Image, size: int = 512, alpha: float = 0.13) -> Image.Image:
+    """Coloured but faint watermark from the emblem centre (no outer text ring)."""
+    from PIL import ImageChops, ImageDraw, ImageEnhance, ImageFilter
+
+    # Crop away arched outer titles that read as a vertical text strip on the page.
+    base = _fit(img, 1024, pad_ratio=0.02)
+    w, h = base.size
+    crop = 0.28
+    core = base.crop((int(w * crop), int(h * crop), int(w * (1 - crop)), int(h * (1 - crop))))
+    core = core.resize((size, size), Image.Resampling.LANCZOS)
+
+    rgb = core.convert("RGB")
+    rgb = ImageEnhance.Contrast(rgb).enhance(0.82)
+    rgb = ImageEnhance.Brightness(rgb).enhance(1.22)
+    rgb = ImageEnhance.Color(rgb).enhance(1.05)
+    r, g, b = rgb.split()
+
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    inset = max(1, int(size * 0.02))
+    draw.ellipse((inset, inset, size - 1 - inset, size - 1 - inset), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.02))))
+    a = ImageChops.multiply(core.split()[3], mask).point(lambda v: int(v * alpha))
+    return Image.merge("RGBA", (r, g, b, a))
 
 
 def _save(img: Image.Image, path: Path, *, optimize: bool = True) -> None:
@@ -130,8 +148,8 @@ def export_all() -> None:
     _save_webp(web256, LOGO_DIR / "mhws-logo-web-256.webp", quality=80)
     _save(_fit(master, 128, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-128.png")
     _save(_fit(master, 64, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-64.png")
-    # Readable watermark for HTML pads / PDF chrome (still soft, but not invisible).
-    _save(_watermark(master, 384, alpha=0.32), LOGO_DIR / "mhws-logo-watermark.png")
+    # Coloured faint centre emblem (no outer text ring — avoids “vertical text” on the left).
+    _save(_watermark(master, 512, alpha=0.11), LOGO_DIR / "mhws-logo-watermark.png")
 
     # Transparent mark used by legacy seal paths
     mark512 = _fit(master, 512, pad_ratio=0.04)
