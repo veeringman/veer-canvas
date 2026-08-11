@@ -68,7 +68,7 @@
       transform: translate(-50%, -50%);
       width: 96mm;
       height: auto;
-      opacity: 0.4;
+      opacity: 0.55;
       pointer-events: none;
       z-index: 0;
     }
@@ -253,17 +253,38 @@
       text-align: right;
     }
     @media print {
-      body { background: #fff; }
+      html, body {
+        background: #fff !important;
+        -webkit-print-color-adjust: economy;
+        print-color-adjust: economy;
+      }
       .screen-hint { display: none !important; }
       .sheet {
         margin: 0;
         border: 0;
+        background: #fff !important;
+        box-shadow: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible;
         page-break-after: always;
         break-after: page;
       }
       .sheet:last-of-type {
         page-break-after: auto;
         break-after: auto;
+      }
+      .wm { opacity: 0.78; }
+      .pad, .section, .grow {
+        background: transparent !important;
+      }
+      table.res-table th {
+        background: #e8eef6 !important;
+        color: var(--navy) !important;
+      }
+      .accent-edge, .foot-bar, .banner, table.res-table th {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
     }
   </style>

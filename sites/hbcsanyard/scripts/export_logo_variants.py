@@ -51,7 +51,7 @@ def _on_plate(img: Image.Image, size: int, bg: tuple[int, int, int, int], *, pad
     return plate
 
 
-def _watermark(img: Image.Image, size: int = 1024, alpha: float = 0.10) -> Image.Image:
+def _watermark(img: Image.Image, size: int = 1024, alpha: float = 0.32) -> Image.Image:
     base = _fit(img, size, pad_ratio=0.04)
     r, g, b, a = base.split()
     a = a.point(lambda v: int(v * alpha))
@@ -130,8 +130,8 @@ def export_all() -> None:
     _save_webp(web256, LOGO_DIR / "mhws-logo-web-256.webp", quality=80)
     _save(_fit(master, 128, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-128.png")
     _save(_fit(master, 64, pad_ratio=0.02), LOGO_DIR / "mhws-logo-icon-64.png")
-    # Very light watermark for PDF + HTML chrome (small file, low alpha).
-    _save(_watermark(master, 192, alpha=0.055), LOGO_DIR / "mhws-logo-watermark.png")
+    # Readable watermark for HTML pads / PDF chrome (still soft, but not invisible).
+    _save(_watermark(master, 384, alpha=0.32), LOGO_DIR / "mhws-logo-watermark.png")
 
     # Transparent mark used by legacy seal paths
     mark512 = _fit(master, 512, pad_ratio=0.04)

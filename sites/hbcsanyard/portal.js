@@ -497,6 +497,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       dl.removeAttribute('href');
       dl.removeAttribute('download');
     }
+    const printBtn = el('docViewerPrintBtn');
+    if (printBtn) printBtn.hidden = true;
     const nt = el('docViewerNewTabBtn');
     if (nt) {
       nt.hidden = true;
@@ -591,6 +593,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     keepLoading = false,
     newTabUrl = '',
     protectContent = false,
+    canPrint = true,
+    printAfterOpen = false,
   } = {}) {
     const dialog = el('docViewerDialog');
     if (!dialog) return;
@@ -635,7 +639,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         if (isHtml) {
           frame.setAttribute(
             'sandbox',
-            'allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms',
+            'allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals',
           );
         } else {
           frame.removeAttribute('sandbox');
@@ -643,6 +647,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         frame.onload = () => {
           if (loading) loading.hidden = true;
           if (protectedView && isHtml) injectInfoIframeProtect(frame);
+          if (printAfterOpen) {
+            window.setTimeout(() => printDocViewerContent(), 250);
+          }
         };
         if (frame.getAttribute('src') === srcUrl) {
           frame.removeAttribute('src');
@@ -659,15 +666,22 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (img) {
       img.hidden = !isImage;
-      if (isImage) img.src = srcUrl;
-      else img.removeAttribute('src');
+      if (isImage) {
+        img.onload = () => {
+          if (printAfterOpen) window.setTimeout(() => printDocViewerContent(), 200);
+        };
+        img.src = srcUrl;
+      } else {
+        img.onload = null;
+        img.removeAttribute('src');
+      }
     }
     if (fallback) {
       fallback.hidden = Boolean(showFrame || isImage);
       if (!fallback.hidden) {
         fallback.innerHTML = protectedView
           ? 'Preview is not available for this file type in Information Centre.'
-          : 'Preview is not available for this file type. Use <strong>Open in new tab</strong> or Download, then return with Go back.';
+          : 'Preview is not available for this file type. Use <strong>Open in new tab</strong>, Download, or Print after opening externally, then return with Close.';
       }
     }
     setDocViewerProtected(protectedView);
@@ -684,9 +698,43 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         else dl.removeAttribute('download');
       }
     }
+    const printBtn = el('docViewerPrintBtn');
+    if (printBtn) {
+      printBtn.hidden = Boolean(protectedView) || !canPrint || !(showFrame || isImage);
+    }
     if (protectedView) setDocViewerNewTab('');
     else setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
     openDocViewerDialog(dialog);
+  }
+
+  function printDocViewerContent() {
+    const frame = el('docViewerFrame');
+    const img = el('docViewerImage');
+    try {
+      if (frame && !frame.hidden && frame.contentWindow) {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        return;
+      }
+    } catch (_err) {
+      /* cross-origin or unavailable */
+    }
+    if (img && !img.hidden && img.src) {
+      const w = window.open('', '_blank', 'noopener,noreferrer');
+      if (!w) {
+        window.alert('Allow pop-ups to print this image, or use Download.');
+        return;
+      }
+      const src = img.src;
+      w.document.write(
+        `<!DOCTYPE html><html><head><title>Print</title>`
+        + `<style>html,body{margin:0;padding:0}img{max-width:100%;height:auto;display:block;margin:0 auto}</style>`
+        + `</head><body><img src="${src.replace(/"/g, '&quot;')}" onload="window.focus();window.print();"></body></html>`,
+      );
+      w.document.close();
+      return;
+    }
+    window.alert('Print is not available for this file type. Use Download or Open in new tab.');
   }
 
   function showDocViewerBlob(objectUrl, { title = 'Document', mime = '', filename = '', downloadUrl = '', protectContent = false } = {}) {
@@ -812,6 +860,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   el('docViewerBackBtn')?.addEventListener('click', () => closeDocViewer());
+  el('docViewerPrintBtn')?.addEventListener('click', () => printDocViewerContent());
   el('docViewerDialog')?.addEventListener('cancel', (event) => {
     event.preventDefault();
     closeDocViewer();
@@ -3189,7 +3238,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const status = el('noDuesResidentStatus');
     try {
       await downloadNoDuesRequest(id, 'digital');
-      if (status) status.textContent = 'Digital certificate opened — use Go back to return, or Download to save.';
+      if (status) status.textContent = 'Digital certificate opened — use Close to return, or Download to save.';
     } catch (err) {
       if (status) status.textContent = err.message || 'Download failed';
       window.alert(err.message || 'Download failed');
@@ -3642,7 +3691,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const status = el('noObjectionResidentStatus');
     try {
       await downloadNoObjectionRequest(id, 'digital');
-      if (status) status.textContent = 'Digital certificate opened — use Go back to return, or Download to save.';
+      if (status) status.textContent = 'Digital certificate opened — use Close to return, or Download to save.';
     } catch (err) {
       if (status) status.textContent = err.message || 'Download failed';
       window.alert(err.message || 'Download failed');
@@ -7886,11 +7935,27 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('templatesResetBtn')?.addEventListener('click', () => resetTemplatesForm());
   el('templatesList')?.addEventListener('click', (event) => {
     const openBtn = event.target.closest('[data-tpl-open]');
+    const downloadBtn = event.target.closest('[data-tpl-download]');
+    const printBtn = event.target.closest('[data-tpl-print]');
     const editBtn = event.target.closest('[data-tpl-edit]');
     const delBtn = event.target.closest('[data-tpl-delete]');
     if (openBtn) {
       openTemplate(openBtn.getAttribute('data-tpl-open')).catch((e) => {
         if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open failed';
+      });
+      return;
+    }
+    if (downloadBtn) {
+      downloadTemplate(downloadBtn.getAttribute('data-tpl-download')).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Download failed';
+        else window.alert(e.message || 'Download failed');
+      });
+      return;
+    }
+    if (printBtn) {
+      openTemplate(printBtn.getAttribute('data-tpl-print'), { printAfter: true }).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Print failed';
+        else window.alert(e.message || 'Print failed');
       });
       return;
     }
@@ -8313,6 +8378,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           </div>
           <div class="btn-row info-doc-card-actions-inline">
             <button type="button" class="btn secondary compact" data-tpl-open="${escapeHtml(doc.id)}">Open</button>
+            <button type="button" class="btn ghost compact" data-tpl-download="${escapeHtml(doc.id)}">Download</button>
+            <button type="button" class="btn ghost compact" data-tpl-print="${escapeHtml(doc.id)}">Print</button>
             <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
             <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
           </div>
@@ -8336,29 +8403,86 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   }
 
-  async function openTemplate(id) {
-    const doc = templatesCache.find((t) => t.id === id) || (await api(`/api/rwa/templates/${encodeURIComponent(id)}`)).template;
-    if (!doc?.id) throw new Error('Template not found');
+  function templateFileUrls(doc) {
+    if (!doc?.id) return { viewUrl: '', downloadUrl: '', mime: 'application/octet-stream' };
+    const mime = doc.mimeType
+      || (doc.docType === 'static' && /\.html?$/i.test(doc.publicUrl || doc.staticPath || '')
+        ? 'text/html'
+        : 'application/octet-stream');
     if (doc.docType === 'static' && doc.publicUrl) {
-      window.open(doc.publicUrl, '_blank', 'noopener');
-      return;
+      return {
+        viewUrl: doc.publicUrl,
+        downloadUrl: doc.publicUrl,
+        mime,
+        filename: doc.originalName || pathlibBasename(doc.publicUrl || doc.staticPath || 'template.html'),
+      };
     }
     const fileApi = `/api/rwa/templates/${encodeURIComponent(doc.id)}/file`;
-    const viewUrl = authDocUrl(fileApi);
-    const downloadUrl = authDocUrl(fileApi, { download: '1' });
-    const mime = doc.mimeType || 'application/octet-stream';
-    if (typeof showDocViewerSource === 'function') {
-      showDocViewerSource(viewUrl, {
-        title: doc.title || 'Template',
-        filename: doc.originalName || doc.filename || 'template',
-        mime,
-        isBlob: false,
-        downloadUrl,
-        newTabUrl: viewUrl,
-      });
+    return {
+      viewUrl: authDocUrl(fileApi),
+      downloadUrl: authDocUrl(fileApi, { download: '1' }),
+      mime,
+      filename: doc.originalName || doc.filename || 'template',
+    };
+  }
+
+  function pathlibBasename(path) {
+    const parts = String(path || '').split('/').filter(Boolean);
+    return parts[parts.length - 1] || 'template';
+  }
+
+  async function resolveTemplateDoc(id) {
+    return templatesCache.find((t) => t.id === id)
+      || (await api(`/api/rwa/templates/${encodeURIComponent(id)}`)).template;
+  }
+
+  async function openTemplate(id, { printAfter = false } = {}) {
+    const doc = await resolveTemplateDoc(id);
+    if (!doc?.id) throw new Error('Template not found');
+    const urls = templateFileUrls(doc);
+    if (!urls.viewUrl) throw new Error('Template file is missing');
+    showDocViewerSource(urls.viewUrl, {
+      title: doc.title || 'Template',
+      filename: urls.filename,
+      mime: urls.mime,
+      isBlob: false,
+      downloadUrl: urls.downloadUrl,
+      newTabUrl: urls.viewUrl,
+      canPrint: true,
+      printAfterOpen: Boolean(printAfter),
+    });
+  }
+
+  async function downloadTemplate(id) {
+    const doc = await resolveTemplateDoc(id);
+    if (!doc?.id) throw new Error('Template not found');
+    const urls = templateFileUrls(doc);
+    if (!urls.downloadUrl) throw new Error('Template file is missing');
+    const filename = urls.filename || 'template';
+    // Force a save for HTML/static pads (same-origin navigation would just open the page).
+    if (doc.docType === 'static' || /html/i.test(urls.mime || '') || /\.html?$/i.test(filename)) {
+      const res = await fetch(urls.downloadUrl, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename.endsWith('.html') || filename.endsWith('.htm')
+        ? filename
+        : `${filename.replace(/\.[^.]+$/, '') || 'template'}.html`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
       return;
     }
-    window.open(viewUrl, '_blank', 'noopener');
+    const a = document.createElement('a');
+    a.href = urls.downloadUrl;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   async function saveTemplate(event) {

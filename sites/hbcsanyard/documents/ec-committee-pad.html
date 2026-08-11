@@ -66,7 +66,7 @@
       transform: translate(-50%, -50%);
       width: 96mm;
       height: auto;
-      opacity: 0.42;
+      opacity: 0.55;
       pointer-events: none;
       z-index: 0;
     }
@@ -286,12 +286,24 @@
       margin: 2mm 0 3mm;
     }
     @media print {
-      body { background: #fff; }
+      html, body {
+        background: #fff !important;
+        -webkit-print-color-adjust: economy;
+        print-color-adjust: economy;
+      }
       .screen-hint { display: none !important; }
       .sheet {
         margin: 0;
         border-width: 0.8pt;
-        min-height: 100vh;
+        background: #fff !important;
+        box-shadow: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+      }
+      .wm { opacity: 0.78; }
+      .accent-edge, .foot-bar, .slogan-bar, .banner {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
     }
   </style>

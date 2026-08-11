@@ -1018,10 +1018,6 @@ def _draw_cash_receipt_leaf_chrome(
     canvas.setLineWidth(1.25)
     canvas.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
 
-    # Soft top wash
-    canvas.setFillColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.03))
-    canvas.rect(box_x, box_y + box_h - 18 * mm, box_w, 18 * mm, fill=1, stroke=0)
-
     _draw_mhws_watermark(
         canvas, site_root, page_w=page_w, page_h=page_h, size_mm=64, cy_frac=0.48, alpha=0.04
     )
