@@ -978,15 +978,18 @@ def _draw_mhws_letterhead_chrome(
             canvas.drawString(x, contact_y + 2.2 * mm, v)
 
 
-def _format_cash_receipt_no(receipt_no: str | None, *, fallback: str = "000001") -> str:
-    """Prefer 6-digit red-book style serials (000123); keep longer alphanumeric IDs as-is."""
+CASH_RECEIPT_SERIAL_MAX = 9_999_999
+
+
+def _format_cash_receipt_no(receipt_no: str | None, *, fallback: str = "0000001") -> str:
+    """Prefer 7-digit red-book style serials (0000123); keep longer alphanumeric IDs as-is."""
     raw = str(receipt_no or "").strip()
     if not raw:
         return fallback
     digits = "".join(c for c in raw if c.isdigit())
-    if digits.isdigit() and len(digits) <= 6 and (raw == digits or raw.upper().startswith("NO")):
+    if digits.isdigit() and len(digits) <= 7 and (raw == digits or raw.upper().startswith("NO")):
         try:
-            return f"{int(digits):06d}"
+            return f"{int(digits):07d}"
         except ValueError:
             pass
     return raw
@@ -1246,7 +1249,7 @@ def build_cash_receipt_booklet_pdf(
         layout_key, layout_spec, orientation, rl
     )
 
-    start_no = max(1, min(999999, int(start_no or 1)))
+    start_no = max(1, min(CASH_RECEIPT_SERIAL_MAX, int(start_no or 1)))
     page_count = max(1, min(100, int(page_count or 1)))
     tint = (paper_tint or "cream").strip().lower()
     pattern = (paper_pattern or "lines").strip().lower()
@@ -1312,6 +1315,8 @@ def build_cash_receipt_booklet_pdf(
                 c.circle(cx, cy, r * mm * scale, fill=0, stroke=1)
         c.restoreState()
 
+    rotate_slip = orient_key == "landscape" and layout_key in {"a4-3", "a5-2"}
+
     def _draw_slip(box_x: float, box_y: float, box_w: float, box_h: float, serial: int) -> None:
         c.setFillColor(tint_map.get(tint, tint_map["cream"]))
         c.rect(box_x, box_y, box_w, box_h, fill=1, stroke=0)
@@ -1368,7 +1373,7 @@ def build_cash_receipt_booklet_pdf(
         c.drawRightString(right, top - 3.5 * mm * scale, "CASH RECEIPT")
         c.setFillColor(colors.HexColor("#c62828"))
         c.setFont("Courier-Bold", max(9, 12 * scale))
-        c.drawRightString(right, top - 8.5 * mm * scale, f"{serial:06d}")
+        c.drawRightString(right, top - 8.5 * mm * scale, f"{serial:07d}")
         c.setFillColor(colors.HexColor(BRAND_MUTED))
         c.setFont("Helvetica", max(5.5, 6.5 * scale))
         c.drawRightString(right, top - 11.5 * mm * scale, "Date _______________")
@@ -1437,13 +1442,26 @@ def build_cash_receipt_booklet_pdf(
         c.setFont("Helvetica", max(4.8, 5.5 * scale))
         c.drawCentredString(right - sig_w / 2, box_y + 2.2 * mm * scale, "Treasurer / Office bearer")
 
+    def _draw_slip_oriented(
+        box_x: float, box_y: float, box_w: float, box_h: float, serial: int
+    ) -> None:
+        """Landscape page side-by-side: rotate slip so wide receipt fits tall cell."""
+        if rotate_slip:
+            c.saveState()
+            c.translate(box_x + box_w / 2, box_y + box_h / 2)
+            c.rotate(90)
+            _draw_slip(-box_h / 2, -box_w / 2, box_h, box_w, serial)
+            c.restoreState()
+        else:
+            _draw_slip(box_x, box_y, box_w, box_h, serial)
+
     serial = start_no
     for _page_i in range(page_count):
         for row in range(rows):
             for col in range(cols):
                 box_x = margin_x + col * (slip_w + gap_x)
                 box_y = page_h - margin_y - (row + 1) * slip_h - row * gap_y
-                _draw_slip(box_x, box_y, slip_w, slip_h, serial)
+                _draw_slip_oriented(box_x, box_y, slip_w, slip_h, serial)
                 if row < rows - 1:
                     tear_y = box_y - gap_y / 2
                     c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
@@ -1459,13 +1477,16 @@ def build_cash_receipt_booklet_pdf(
                     c.drawCentredString(0, 0, "· · · tear here · · ·")
                     c.restoreState()
                 serial += 1
-                if serial > 999999:
+                if serial > CASH_RECEIPT_SERIAL_MAX:
                     serial = 1
         c.showPage()
 
     c.save()
     end_no = start_no + page_count * slips_per_page - 1
-    fname = f"mhws-cash-receipts-{layout_key}-{orient_key}-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
+    fname = (
+        f"mhws-cash-receipts-{layout_key}-{orient_key}-"
+        f"{start_no:07d}-{min(end_no, CASH_RECEIPT_SERIAL_MAX):07d}.pdf"
+    )
     return buf.getvalue(), fname
 
 

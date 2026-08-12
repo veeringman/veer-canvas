@@ -31,18 +31,28 @@
       font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
     }
     .screen-hint {
-      max-width: 210mm;
+      max-width: min(920px, 96vw);
       margin: 0 auto;
       padding: 10px 14px;
       text-align: center;
       font: 500 13px/1.45 system-ui, sans-serif;
       color: #445;
     }
-    .sheet {
-      width: 210mm;
-      height: 297mm;
-      max-height: 297mm;
+    .sheet-viewport {
+      width: min(100%, var(--sheet-max-w, 920px));
       margin: 0 auto 18px;
+      padding: 0 4px;
+    }
+    .sheet-viewport .sheet {
+      width: 100%;
+      height: auto;
+      aspect-ratio: var(--sheet-ar, 210 / 297);
+      max-height: none;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .sheet {
+      margin: 0 auto;
       padding: 3mm 5mm;
       background: var(--paper);
       border: 1.25pt solid var(--navy);
@@ -50,13 +60,7 @@
       flex-direction: column;
       gap: 0;
       overflow: hidden;
-    }
-
-    .sheet.layout-a5-2 {
-      width: 148mm;
-      height: 210mm;
-      max-height: 210mm;
-      page: a5-sheet;
+      box-sizing: border-box;
     }
     .sheet.layout-a4-4 {
       display: grid;
@@ -67,40 +71,63 @@
     .sheet.layout-a4-4 .receipt {
       max-height: none;
     }
+    .sheet.layout-a5-2 {
+      page: a5-sheet;
+    }
     .sheet.layout-a5-2 .receipt {
       max-height: 50%;
     }
 
-    /* Landscape — slips side-by-side (vertical tear between columns) */
-    .sheet.orient-landscape.layout-a5-2 {
-      width: 210mm;
-      height: 148mm;
-      max-height: 148mm;
+    /* Portrait stack — wide (landscape) slip cells, top-to-bottom tear */
+    .orient-portrait.layout-a5-2 .receipt,
+    .orient-portrait.layout-a4-3 .receipt {
+      max-height: none;
+    }
+
+    /* Landscape page — side-by-side slots; receipt rotated to read horizontally */
+    .sheet.orient-landscape.layout-a5-2,
+    .sheet.orient-landscape.layout-a4-3 {
       flex-direction: row;
+    }
+    .sheet.orient-landscape.layout-a5-2 {
       page: a5-landscape;
     }
-    .sheet.orient-landscape.layout-a5-2 .receipt {
-      max-height: none;
-      max-width: 50%;
-      flex: 1 1 0;
-    }
     .sheet.orient-landscape.layout-a4-3 {
-      width: 297mm;
-      height: 210mm;
-      max-height: 210mm;
-      flex-direction: row;
       page: a4-landscape;
-    }
-    .sheet.orient-landscape.layout-a4-3 .receipt {
-      max-height: none;
-      max-width: 33.33%;
-      flex: 1 1 0;
     }
     .sheet.orient-landscape.layout-a4-4 {
-      width: 297mm;
-      height: 210mm;
-      max-height: 210mm;
       page: a4-landscape;
+    }
+    .receipt-slot {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .orient-landscape.layout-a5-2 .receipt-slot {
+      aspect-ratio: 105 / 148;
+    }
+    .orient-landscape.layout-a4-3 .receipt-slot {
+      aspect-ratio: 99 / 138;
+    }
+    .orient-landscape .receipt-turn {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: calc(100% * 148 / 105);
+      height: calc(100% * 105 / 148);
+      transform: translate(-50%, -50%) rotate(-90deg);
+    }
+    .orient-landscape .receipt-turn .receipt {
+      width: 100%;
+      height: 100%;
+      max-height: none;
+      max-width: none;
+      flex: none;
     }
 
     .perf-vert {
@@ -226,9 +253,9 @@
     .r-meta .rcpt-no {
       display: block;
       font-family: "Courier New", Courier, monospace;
-      font-size: 12pt;
+      font-size: 11pt;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.05em;
       color: #c62828;
       line-height: 1.1;
       margin-bottom: 0.8mm;
@@ -499,44 +526,37 @@
       .screen-hint,
       .screen-controls,
       .download-status { display: none !important; }
-      .sheet {
+      .sheet-viewport {
+        width: auto !important;
+        max-width: none !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+      }
+      .sheet-viewport .sheet {
         margin: 0 auto !important;
         border: 0 !important;
         background: #fff !important;
         box-shadow: none !important;
-        width: 204mm !important;
-        height: 291mm !important;
-        max-height: 291mm !important;
-        min-height: 0 !important;
         padding: 2mm 3mm !important;
         overflow: hidden !important;
         page-break-after: avoid !important;
         break-inside: avoid !important;
+        height: auto !important;
+        aspect-ratio: var(--sheet-ar, 210 / 297) !important;
       }
-      .sheet.orient-landscape.layout-a5-2 {
+      .sheet-viewport .sheet.orient-portrait.layout-a4-3,
+      .sheet-viewport .sheet.orient-portrait.layout-a4-4 {
         width: 204mm !important;
-        height: 142mm !important;
-        max-height: 142mm !important;
       }
-      .sheet.orient-landscape.layout-a4-3 {
-        width: 291mm !important;
-        height: 204mm !important;
-        max-height: 204mm !important;
-      }
-      .sheet.orient-landscape.layout-a4-4 {
-        width: 291mm !important;
-        height: 204mm !important;
-        max-height: 204mm !important;
-      }
-      .sheet.layout-a5-2 {
+      .sheet-viewport .sheet.orient-portrait.layout-a5-2 {
         width: 142mm !important;
-        height: 204mm !important;
-        max-height: 204mm !important;
       }
-      .sheet.layout-a4-4 {
+      .sheet-viewport .sheet.orient-landscape.layout-a5-2 {
         width: 204mm !important;
-        height: 291mm !important;
-        max-height: 291mm !important;
+      }
+      .sheet-viewport .sheet.orient-landscape.layout-a4-3,
+      .sheet-viewport .sheet.orient-landscape.layout-a4-4 {
+        width: 291mm !important;
       }
       .receipt {
         border: 0 !important;
@@ -576,7 +596,7 @@
 </head>
 <body>
   <p class="screen-hint">
-    Cash receipt booklet — choose layout and orientation. For A5, <strong>Landscape</strong> places two A6 slips side-by-side (vertical tear); <strong>Portrait</strong> stacks them with horizontal tear lines.
+    Cash receipt booklet — preview matches paper aspect ratio. <strong>Portrait</strong>: wide slips stacked top-to-bottom. <strong>Landscape</strong>: slips side-by-side with receipt turned horizontal (vertical tear). Serial numbers are 7 digits.
   </p>
 
   <div class="screen-controls" id="receiptControls">
@@ -589,12 +609,12 @@
     </label>
     <label>Orientation
       <select id="receiptOrientation">
-        <option value="portrait" selected>Portrait — stacked slips</option>
-        <option value="landscape">Landscape — side-by-side</option>
+        <option value="portrait" selected>Portrait — stacked top-to-bottom</option>
+        <option value="landscape">Landscape — side-by-side (rotated)</option>
       </select>
     </label>
     <label>Start receipt no.
-      <input id="startReceiptNo" type="number" min="1" max="999999" value="1" step="1">
+      <input id="startReceiptNo" type="number" min="1" max="9999999" value="1" step="1">
     </label>
     <label id="pageCountLabel">Pages (3 slips each)
       <input id="pageCount" type="number" min="1" max="100" value="1" step="1">
@@ -624,9 +644,11 @@
       <button type="button" class="secondary" id="downloadReceiptPdf">Download PDF</button>
     </div>
   </div>
-  <p class="download-status" id="downloadStatus">Series: <strong id="seriesRange">000001 – 000003</strong> (1 page · 3 receipts)</p>
+  <p class="download-status" id="downloadStatus">Series: <strong id="seriesRange">0000001 – 0000003</strong> (1 page · 3 receipts)</p>
 
-  <div class="sheet layout-a4-3" id="receiptSheet" aria-label="Cash receipt booklet page"></div>
+  <div class="sheet-viewport" id="receiptViewport">
+    <div class="sheet layout-a4-3 orient-portrait" id="receiptSheet" aria-label="Cash receipt booklet page"></div>
+  </div>
 
   <template id="receiptTpl">
     <article class="receipt" data-tint="cream" data-pattern="lines">
@@ -643,7 +665,7 @@
         <div class="r-meta">
           <strong>Cash Receipt</strong>
           <span class="rcpt-no-label">Receipt No.</span>
-          <span class="rcpt-no">000001</span>
+          <span class="rcpt-no">0000001</span>
           Date<span class="fill"></span>
         </div>
       </header>
@@ -713,6 +735,20 @@
     'a4-4': { slips: 4, label: '4 slips each', pageHint: 'A4' },
   };
 
+  const PAGE_AR = {
+    'a4-3': { portrait: '210 / 297', landscape: '297 / 210' },
+    'a5-2': { portrait: '148 / 210', landscape: '210 / 148' },
+    'a4-4': { portrait: '210 / 297', landscape: '297 / 210' },
+  };
+
+  const PAGE_MAX_W = {
+    'a4-3': { portrait: '920px', landscape: '1100px' },
+    'a5-2': { portrait: '720px', landscape: '920px' },
+    'a4-4': { portrait: '920px', landscape: '1100px' },
+  };
+
+  const SERIAL_MAX = 9999999;
+
   function orientationKey() {
     const el = document.getElementById('receiptOrientation');
     const v = (el && el.value) || 'portrait';
@@ -723,9 +759,9 @@
     return orientation === 'landscape' && (layout === 'a4-3' || layout === 'a5-2');
   }
 
-  function pad6(n) {
-    const v = Math.max(1, Math.min(999999, Number(n) || 1));
-    return String(v).padStart(6, '0');
+  function pad7(n) {
+    const v = Math.max(1, Math.min(SERIAL_MAX, Number(n) || 1));
+    return String(v).padStart(7, '0');
   }
 
   function layoutKey() {
@@ -737,12 +773,12 @@
   function opts() {
     const layout = layoutKey();
     const slips = LAYOUTS[layout].slips;
-    const start = Math.max(1, Math.min(999999, parseInt(document.getElementById('startReceiptNo').value, 10) || 1));
+    const start = Math.max(1, Math.min(SERIAL_MAX, parseInt(document.getElementById('startReceiptNo').value, 10) || 1));
     const pages = Math.max(1, Math.min(100, parseInt(document.getElementById('pageCount').value, 10) || 1));
     const tint = document.getElementById('paperTint').value || 'cream';
     const pattern = document.getElementById('paperPattern').value || 'lines';
     const orientation = orientationKey();
-    const end = Math.min(999999, start + pages * slips - 1);
+    const end = Math.min(SERIAL_MAX, start + pages * slips - 1);
     return { start, pages, tint, pattern, layout, orientation, slips, end, total: end - start + 1 };
   }
 
@@ -788,7 +824,7 @@
     el.setAttribute('data-tint', tint);
     el.setAttribute('data-pattern', pattern);
     const slot = el.querySelector('.rcpt-no');
-    if (slot) slot.textContent = pad6(serial);
+    if (slot) slot.textContent = pad7(serial);
     const svg = el.querySelector('.r-bg-svg');
     if (svg) {
       svg.setAttribute('viewBox', '0 0 900 400');
@@ -799,10 +835,17 @@
   function renderPreview() {
     const o = opts();
     const sheet = document.getElementById('receiptSheet');
+    const viewport = document.getElementById('receiptViewport');
     const tpl = document.getElementById('receiptTpl');
     if (!sheet || !tpl) return;
     sheet.className = `sheet layout-${o.layout} orient-${o.orientation}`;
     sheet.replaceChildren();
+    if (viewport) {
+      const ar = (PAGE_AR[o.layout] && PAGE_AR[o.layout][o.orientation]) || '210 / 297';
+      const maxW = (PAGE_MAX_W[o.layout] && PAGE_MAX_W[o.layout][o.orientation]) || '920px';
+      viewport.style.setProperty('--sheet-ar', ar);
+      viewport.style.setProperty('--sheet-max-w', maxW);
+    }
     document.body.setAttribute('data-print-layout', o.layout);
     document.body.setAttribute('data-print-orientation', o.orientation);
     const pageLabel = document.getElementById('pageCountLabel');
@@ -816,7 +859,17 @@
     for (let i = 0; i < o.slips; i += 1) {
       const node = tpl.content.firstElementChild.cloneNode(true);
       decorateReceipt(node, o.start + i, o.tint, o.pattern);
-      sheet.appendChild(node);
+      if (sideBySide) {
+        const slot = document.createElement('div');
+        slot.className = 'receipt-slot';
+        const turn = document.createElement('div');
+        turn.className = 'receipt-turn';
+        turn.appendChild(node);
+        slot.appendChild(turn);
+        sheet.appendChild(slot);
+      } else {
+        sheet.appendChild(node);
+      }
       if (i < o.slips - 1 && o.layout !== 'a4-4') {
         const perf = document.createElement('div');
         perf.className = sideBySide ? 'perf-vert' : 'perf';
@@ -845,7 +898,7 @@
     const layoutLabel = LAYOUTS[o.layout].pageHint;
     const orientLabel = o.orientation === 'landscape' ? 'landscape' : 'portrait';
     if (status) {
-      status.innerHTML = `Series: <strong id="seriesRange">${pad6(o.start)} – ${pad6(o.end)}</strong> (${o.pages} ${layoutLabel} ${orientLabel} page${o.pages > 1 ? 's' : ''} · ${o.total} receipts)`;
+      status.innerHTML = `Series: <strong id="seriesRange">${pad7(o.start)} – ${pad7(o.end)}</strong> (${o.pages} ${layoutLabel} ${orientLabel} page${o.pages > 1 ? 's' : ''} · ${o.total} receipts)`;
     }
     renderPreview();
   }
@@ -861,7 +914,7 @@
     const o = opts();
     const btn = document.getElementById('downloadReceiptPdf');
     if (btn) btn.disabled = true;
-    setStatus(`Preparing PDF — ${o.pages} page${o.pages > 1 ? 's' : ''} (${pad6(o.start)} – ${pad6(o.end)})…`);
+    setStatus(`Preparing PDF — ${o.pages} page${o.pages > 1 ? 's' : ''} (${pad7(o.start)} – ${pad7(o.end)})…`);
     try {
       const res = await fetch(bookletUrl(o));
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -872,12 +925,12 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mhws-cash-receipts-${o.layout}-${o.orientation}-${pad6(o.start)}-${pad6(o.end)}.pdf`;
+      a.download = `mhws-cash-receipts-${o.layout}-${o.orientation}-${pad7(o.start)}-${pad7(o.end)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-      setStatus(`Downloaded ${o.pages} page${o.pages > 1 ? 's' : ''}: ${pad6(o.start)} – ${pad6(o.end)}`);
+      setStatus(`Downloaded ${o.pages} page${o.pages > 1 ? 's' : ''}: ${pad7(o.start)} – ${pad7(o.end)}`);
       setTimeout(applyOpts, 2500);
     } catch (err) {
       console.error(err);
@@ -892,7 +945,7 @@
   function printSeries() {
     applyOpts();
     const o = opts();
-    setStatus(`Opening ${o.pages}-page PDF for printing (${pad6(o.start)} – ${pad6(o.end)})…`);
+    setStatus(`Opening ${o.pages}-page PDF for printing (${pad7(o.start)} – ${pad7(o.end)})…`);
     const w = window.open(bookletUrl(o, 'inline'), '_blank', 'noopener');
     if (!w) {
       setStatus('Popup blocked — allow popups, or use Download PDF then print the file.');
