@@ -45,7 +45,7 @@ chmod 600 "$EC2_KEY"
 SSH_OPTS=(-i "$EC2_KEY" -o StrictHostKeyChecking=accept-new)
 RSYNC_SSH="ssh ${SSH_OPTS[*]}"
 
-echo "VeerCanvas deploy: site=${SITE_ID} domain=${SITE_DOMAIN} web_root=${WEB_ROOT} service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}"
+echo "VeerCanvas deploy: site=${SITE_ID} domain=${SITE_DOMAIN} extra=${EXTRA_DOMAINS:-none} web_root=${WEB_ROOT} service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}"
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" 'echo "SSH OK"'
 
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "sudo mkdir -p '$WEB_ROOT' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT'"
@@ -351,7 +351,7 @@ fi
 
 echo "Running remote site-deploy (service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}) ..."
 if ! ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
-  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN ADMIN_PORT=$ADMIN_PORT VEERCANVAS_SERVICE_NAME=$SERVICE_NAME VEERCANVAS_PLATFORM=$IS_PLATFORM VEERCANVAS_OPS=$IS_OPS bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"; then
+  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN EXTRA_DOMAINS='$EXTRA_DOMAINS' ADMIN_PORT=$ADMIN_PORT VEERCANVAS_SERVICE_NAME=$SERVICE_NAME VEERCANVAS_PLATFORM=$IS_PLATFORM VEERCANVAS_OPS=$IS_OPS bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"; then
   echo "error: remote site-deploy failed" >&2
   exit 1
 fi
@@ -399,7 +399,7 @@ db = root / "data" / "rwa.db"
 conn = sqlite3.connect(db)
 conn.row_factory = sqlite3.Row
 n = rwa_portal.rebuild_all_info_share_static(
-    conn, root, origin=os.environ.get("VEERCANVAS_PUBLIC_ORIGIN") or "https://hbcsanyard.veerlabs.solutions"
+    conn, root, origin=os.environ.get("VEERCANVAS_PUBLIC_ORIGIN") or "https://housingcolonysanyard.in"
 )
 conn.close()
 print(f"wrote {n} share cards")

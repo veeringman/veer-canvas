@@ -6501,13 +6501,13 @@ def _rwa_public_origin() -> str:
             os.environ.get("VEERCANVAS_SITE_DOMAIN")
             or os.environ.get("SITE_DOMAIN")
             or os.environ.get("DOMAIN")
-            or "hbcsanyard.veerlabs.solutions"
+            or "housingcolonysanyard.in"
         ).strip()
         return f"https://{domain}"
     if proto not in {"http", "https"}:
         proto = "https"
     # Prefer https in OG URLs even if the upstream hop was http.
-    if host_l.endswith("veerlabs.solutions"):
+    if host_l.endswith("veerlabs.solutions") or host_l.endswith("housingcolonysanyard.in"):
         proto = "https"
     return f"{proto}://{host}".rstrip("/")
 
@@ -6596,7 +6596,7 @@ def api_rwa_share_rebuild():
         n = rwa_portal.rebuild_all_info_share_static(
             conn,
             SITE_ROOT,
-            origin=_rwa_public_origin() or "https://hbcsanyard.veerlabs.solutions",
+            origin=_rwa_public_origin() or "https://housingcolonysanyard.in",
         )
         return jsonify({"ok": True, "written": n})
     finally:

@@ -15,8 +15,8 @@ SITE_ID=ops EC2_KEY=/path/to/key.pem ./remote-deploy.sh --import-repos
 | `site-deploy.sh` | Runs on the host (nginx + systemd + ops install) |
 | `backup-site.sh` | Phase-1 on-box SQLite/uploads/config backup |
 | `install-ops.sh` | Cron + journald + logrotate for a site |
-| `lib/site-env.sh` | Resolves `SITE_ID` → domain, ports, flags |
-| `nginx/examples/` | Per-domain nginx configs |
+| `lib/site-env.sh` | Resolves `SITE_ID` → domain, ports, flags, extra nginx hosts from `aliases` |
+| `nginx/examples/` | Per-domain nginx configs (primary + alias vhosts) |
 | `ops/` | Alert mailer, event prune, logrotate/journald snippets |
 
 On-box backup & log rollover: [OPS-BACKUP.md](./OPS-BACKUP.md).

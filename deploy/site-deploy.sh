@@ -211,6 +211,46 @@ ensure_tls() {
   fi
 }
 
+install_extra_domains() {
+  local extra example http_example target cert_dir
+  for extra in ${EXTRA_DOMAINS:-}; do
+    [[ -n "$extra" && "$extra" != "$DOMAIN" ]] || continue
+    example="${SCRIPT_DIR}/nginx/examples/${extra}.conf"
+    http_example="${SCRIPT_DIR}/nginx/examples/${extra}.http.conf"
+    target="$NGINX_SITES_AVAILABLE/$extra"
+    cert_dir="/etc/letsencrypt/live/${extra}"
+    echo "Installing extra domain vhost: $extra (web root stays $WEB_ROOT)"
+    if [[ -f "${cert_dir}/fullchain.pem" && -f "${cert_dir}/privkey.pem" && -f "$example" ]]; then
+      cp "$example" "$target"
+    elif [[ -f "$http_example" ]]; then
+      cp "$http_example" "$target"
+    elif [[ -f "$example" ]]; then
+      cp "$example" "$target"
+    else
+      echo "warning: no nginx example for extra domain $extra" >&2
+      continue
+    fi
+    rewrite_admin_port "$target"
+    ln -sf "$target" "$NGINX_SITES_ENABLED/$extra"
+    nginx -t
+    systemctl reload nginx
+    if [[ ! -f "${cert_dir}/fullchain.pem" ]]; then
+      if command -v certbot >/dev/null 2>&1; then
+        echo "Requesting Let's Encrypt certificate for $extra ..."
+        certbot certonly --webroot -w "$WEB_ROOT" -d "$extra" -d "www.$extra" \
+          --non-interactive --agree-tos --register-unsafely-without-email \
+          || echo "warning: TLS for $extra not issued yet (check DNS A records point only at this host)" >&2
+      fi
+      if [[ -f "${cert_dir}/fullchain.pem" && -f "$example" ]]; then
+        cp "$example" "$target"
+        rewrite_admin_port "$target"
+        nginx -t
+        systemctl reload nginx
+      fi
+    fi
+  done
+}
+
 setup_admin_service() {
   if [[ ! -f "$ADMIN_APP" ]]; then
     if [[ -f "${WEB_ROOT}/deploy/admin_app.py" ]]; then
@@ -294,6 +334,8 @@ ln -sf "$NGINX_SITES_AVAILABLE/$DOMAIN" "$NGINX_SITES_ENABLED/$DOMAIN"
 nginx -t
 systemctl reload nginx
 ensure_tls
+echo "[3b/4] Extra domains (${EXTRA_DOMAINS:-none})"
+install_extra_domains
 echo "[4/4] Reload nginx"
 nginx -t
 systemctl reload nginx

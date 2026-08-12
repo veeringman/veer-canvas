@@ -24,6 +24,7 @@ Defaults used by deploy scripts (override as needed):
 | P0 | `veerlabs` | Public catalog + `/admin/` CMS |
 | P0 | `ops` | Login → observability / visits / inbox |
 | P1 | `canvas` | Site Studio create/deploy |
+| P1 | `hbcsanyard` | [housingcolonysanyard.in](https://housingcolonysanyard.in) portal + `/admin/` CMS; legacy alias `hbcsanyard.veerlabs.solutions` |
 | P2 | author sites | Per `SITE_ID` CMS |
 
 ## Deploy

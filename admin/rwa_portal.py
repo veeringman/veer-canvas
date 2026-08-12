@@ -3761,7 +3761,7 @@ def _public_origin_for_share(site_root: pathlib.Path | None = None) -> str:
     return (
         os.environ.get("VEERCANVAS_PUBLIC_ORIGIN")
         or os.environ.get("RWA_PUBLIC_ORIGIN")
-        or "https://hbcsanyard.veerlabs.solutions"
+        or "https://housingcolonysanyard.in"
     ).rstrip("/")
 
 

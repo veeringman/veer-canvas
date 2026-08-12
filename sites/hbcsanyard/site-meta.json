@@ -18,14 +18,18 @@
   "version": "v0.1.6",
   "lastUpdated": "2026-08-10T16:30:00Z",
   "platformSiteId": "hbcsanyard",
+  "publicOrigin": "https://housingcolonysanyard.in",
   "auth": {
     "agentBaseUrl": "",
     "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
     "clientId": "hbcsanyard-web",
     "gateAllLearnMore": false,
-    "futureOrigins": [
+    "publicOrigin": "https://housingcolonysanyard.in",
+    "allowedOrigins": [
       "https://housingcolonysanyard.in",
-      "https://www.housingcolonysanyard.in"
+      "https://www.housingcolonysanyard.in",
+      "https://hbcsanyard.veerlabs.solutions",
+      "https://www.hbcsanyard.veerlabs.solutions"
     ]
   },
   "logoPdf": "assets/mhws-logo/mhws-logo-seal-cert.png"

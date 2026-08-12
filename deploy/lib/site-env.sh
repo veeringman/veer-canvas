@@ -22,6 +22,7 @@ _CFG_ADMIN_PORT=""
 _CFG_SERVICE_NAME=""
 _CFG_PLATFORM="0"
 _CFG_OPS="0"
+_CFG_EXTRA_DOMAINS=""
 
 if [[ -f "$SITE_CONFIG" ]]; then
   read_site_config() {
@@ -37,6 +38,17 @@ print(admin.get("port", ""))
 print(admin.get("serviceName", ""))
 print("1" if cfg.get("platform") else "0")
 print("1" if cfg.get("ops") else "0")
+primary = (cfg.get("domain") or "").strip()
+extras = [str(x).strip() for x in (cfg.get("extraDomains") or []) if str(x).strip()]
+for alias in (cfg.get("aliases") or []):
+    a = str(alias).strip()
+    if not a or a == primary or a == f"www.{primary}":
+        continue
+    # One nginx example per apex host (www.* is in the same vhost).
+    apex = a[4:] if a.startswith("www.") else a
+    if apex != primary and apex not in extras:
+        extras.append(apex)
+print(" ".join(extras))
 PY
   }
   _i=0
@@ -50,6 +62,7 @@ PY
       5) [[ -n "$_line" ]] && _CFG_SERVICE_NAME="$_line" ;;
       6) _CFG_PLATFORM="$_line" ;;
       7) _CFG_OPS="$_line" ;;
+      8) [[ -n "$_line" ]] && _CFG_EXTRA_DOMAINS="$_line" ;;
     esac
     _i=$((_i + 1))
   done < <(read_site_config)
@@ -62,6 +75,7 @@ ADMIN_PORT="${ADMIN_PORT:-${_CFG_ADMIN_PORT:-8080}}"
 SERVICE_NAME="${VEERCANVAS_SERVICE_NAME:-${_CFG_SERVICE_NAME:-veercanvas-admin}}"
 IS_PLATFORM="${VEERCANVAS_PLATFORM:-$_CFG_PLATFORM}"
 IS_OPS="${VEERCANVAS_OPS:-$_CFG_OPS}"
+EXTRA_DOMAINS="${EXTRA_DOMAINS:-${_CFG_EXTRA_DOMAINS:-}}"
 
 IMPORT_SCRIPT="${VEERCANVAS_ROOT}/cli/scripts/import_github_projects_full.py"
 ADMIN_DIR="${VEERCANVAS_ROOT}/admin"

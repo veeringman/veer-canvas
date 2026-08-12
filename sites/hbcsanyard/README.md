@@ -5,7 +5,7 @@ Residents Welfare Association — **Himuda Housing Colony Sanyard, Mandi** (HIMU
 | | |
 |--|--|
 | **Site id** | `hbcsanyard` |
-| **Domain** | `hbcsanyard.veerlabs.solutions` |
+| **Domain** | `housingcolonysanyard.in` (primary) · `hbcsanyard.veerlabs.solutions` (legacy alias) |
 | **Database** | SQLite `data/rwa.db` |
 | **Managed by** | [VeerCanvas](https://github.com/veeringman/veer-canvas) |
 | **App repo** | `veeringman/hbcsanyard` (companion) |
@@ -26,7 +26,7 @@ EC members with `role=admin` also see an **EC desk** tab inside the portal for n
 
 Login: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. Sessions last until **Sign out**.
 
-**AuthBuddy (optional):** after email verification, residents may link AuthBuddy / BuddyAuthenticator for alternate sign-in. **One factor only** for now (`mfa_required=false` on blueprint `hbcsanyard-password-mfa`). Same email as an existing AuthBuddy account (e.g. VeerLabs) is signed in and linked — not registered twice. Future public domain: `housingcolonysanyard.in`.
+**AuthBuddy (optional):** after email verification, residents may link AuthBuddy / BuddyAuthenticator for alternate sign-in. **One factor only** for now (`mfa_required=false` on blueprint `hbcsanyard-password-mfa`). IdP remains on `authbuddy.veerlabs.solutions`; portal links and share URLs use `housingcolonysanyard.in`. Legacy host `hbcsanyard.veerlabs.solutions` stays active as an alias.
 
 ## Database + PDF import
 
@@ -65,7 +65,29 @@ python admin/admin_app.py
 # Portal: http://127.0.0.1:8084/site/   (or open sites/hbcsanyard/index.html via static host + API proxy)
 ```
 
-For static + API together, deploy behind nginx (see `deploy/nginx/examples/hbcsanyard.veerlabs.solutions.conf`).
+For static + API together, deploy behind nginx. Example vhosts (same web root, both stay enabled):
+
+- `deploy/nginx/examples/housingcolonysanyard.in.conf` — primary public domain
+- `deploy/nginx/examples/hbcsanyard.veerlabs.solutions.conf` — legacy alias
+
+On EC2, public origin for share links and AuthBuddy:
+
+```bash
+# /etc/veercanvas/hbcsanyard.env (not in git)
+VEERCANVAS_PUBLIC_ORIGIN=https://housingcolonysanyard.in
+```
+
+## PWA — Home@Sanyard
+
+| | |
+|--|--|
+| **Install name** | `Home@Sanyard` (`manifest.webmanifest`) |
+| **Theme** | Navy `#15233f` (manifest `theme_color` / icon plate) |
+| **Icons** | Regenerated via `python3 scripts/export_logo_variants.py` — larger seal on navy plate with gold ring |
+
+After icon or name changes, bump `?v=` cache keys in `manifest.webmanifest`, `index.html`, and `sw.js`, deploy, then ask residents to **remove and re-add** the home-screen shortcut (OS caches icons aggressively).
+
+Web Push requires HTTPS and (on iOS) a home-screen install. VAPID keys live in `data/vapid.env` (preserved across deploys).
 
 ## Deploy
 

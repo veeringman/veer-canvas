@@ -6,7 +6,9 @@ alwaysApply: false
 
 # HBC Sanyard — preserve live data & config
 
-Production web root: `/var/www/hbcsanyard.veerlabs.solutions`
+Production web root: `/var/www/hbcsanyard.veerlabs.solutions` (unchanged when primary domain moved to `housingcolonysanyard.in`).
+
+**Domains:** primary `https://housingcolonysanyard.in` · legacy alias `https://hbcsanyard.veerlabs.solutions` (both active; no redirect). AuthBuddy IdP stays on `authbuddy.veerlabs.solutions`.
 
 ## Never overwrite on the live site
 

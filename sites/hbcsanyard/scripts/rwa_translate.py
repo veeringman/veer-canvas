@@ -15,7 +15,7 @@ from typing import Iterable
 
 _MAX_CHARS = 4500
 _MAX_BATCH = 40
-_UA = "HBCSanyardRWA/1.0 (+https://hbcsanyard.veerlabs.solutions)"
+_UA = "HBCSanyardRWA/1.0 (+https://housingcolonysanyard.in)"
 
 
 def normalize_lang(code: str | None) -> str:

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **hbcsanyard:** primary domain `housingcolonysanyard.in` with Let's Encrypt TLS; legacy `hbcsanyard.veerlabs.solutions` alias vhost kept alongside
+- **hbcsanyard:** nginx examples `housingcolonysanyard.in.conf` (+ HTTP bootstrap) and `install_extra_domains` in `site-deploy.sh`
+- **hbcsanyard:** PWA branded **Home@Sanyard** — navy themed app icons (larger seal, gold ring) via `export_logo_variants.py`
+
+### Changed
+
+- **hbcsanyard:** portal share/campaign links and AuthBuddy `publicOrigin` use `https://housingcolonysanyard.in`
+- **deploy:** `site-env.sh` derives `EXTRA_DOMAINS` from `aliases` (apex hosts other than primary)
+- Deploy docs: extra domains, TLS bootstrap, public origin env, PWA icon regen
+
 ### Documentation
 
 - Full docs sweep: architecture, admin manual, deploy/CLI/API guides, handoff, status tracker, site READMEs

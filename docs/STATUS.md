@@ -1,6 +1,6 @@
 # VeerCanvas status tracker
 
-Last updated: **2026-07-26**
+Last updated: **2026-08-12**
 
 ## Live hosts
 
@@ -9,6 +9,7 @@ Last updated: **2026-07-26**
 | `veerlabs` | [veerlabs.solutions](https://veerlabs.solutions) | Public catalog | 8080 | `veercanvas-admin` |
 | `canvas` | [canvas.veerlabs.solutions](https://canvas.veerlabs.solutions) | Site Studio | 8081 | `veercanvas-admin-canvas` |
 | `ops` | [ops.veerlabs.solutions](https://ops.veerlabs.solutions) | Observability | 8083 | `veercanvas-admin-ops` |
+| `hbcsanyard` | [housingcolonysanyard.in](https://housingcolonysanyard.in) (+ `hbcsanyard.veerlabs.solutions` alias) | RWA resident portal + CMS | 8084 | `veercanvas-admin-hbcsanyard` |
 | `new-website` | `new-website.veerlabs.solutions` | Scaffold example (`authoring`) | 8082 | `veercanvas-admin-new-website` |
 
 ## Shipped

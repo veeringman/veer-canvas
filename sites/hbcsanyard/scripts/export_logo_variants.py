@@ -19,9 +19,10 @@ LOGO_DIR = SITE_ROOT / "assets" / "mhws-logo"
 MASTER = LOGO_DIR / "mhws-logo-official.png"
 LOCKED = LOGO_DIR / "mhws-logo-official-locked-20260810.png"
 
-# Soft cream plate for app icons (matches PWA background_color).
+# Soft cream plate for legacy favicons; navy matches manifest theme_color (#15233f).
 ICON_BG = (246, 241, 230, 255)
 NAVY_BG = (21, 35, 63, 255)
+GOLD_RING = (201, 162, 39, 110)
 
 
 def _load_master() -> Image.Image:
@@ -46,6 +47,25 @@ def _fit(img: Image.Image, size: int, *, pad_ratio: float = 0.0) -> Image.Image:
 
 def _on_plate(img: Image.Image, size: int, bg: tuple[int, int, int, int], *, pad_ratio: float = 0.12) -> Image.Image:
     plate = Image.new("RGBA", (size, size), bg)
+    mark = _fit(img, size, pad_ratio=pad_ratio)
+    plate.alpha_composite(mark)
+    return plate
+
+
+def _home_screen_icon(img: Image.Image, size: int, *, maskable: bool = False) -> Image.Image:
+    """Navy themed app icon — larger seal; maskable keeps Android safe-zone padding."""
+    from PIL import ImageDraw
+
+    pad_ratio = 0.10 if maskable else 0.05
+    plate = Image.new("RGBA", (size, size), NAVY_BG)
+    ring_inset = max(2, int(size * 0.035))
+    ring_width = max(1, size // 72)
+    draw = ImageDraw.Draw(plate)
+    draw.ellipse(
+        (ring_inset, ring_inset, size - ring_inset - 1, size - ring_inset - 1),
+        outline=GOLD_RING,
+        width=ring_width,
+    )
     mark = _fit(img, size, pad_ratio=pad_ratio)
     plate.alpha_composite(mark)
     return plate
@@ -156,26 +176,25 @@ def export_all() -> None:
     _save(mark512, SITE_ROOT / "assets" / "hbcs-sanyard-seal-mark.png")
     _save(mark512, SITE_ROOT / "assets" / "hbcs-sanyard-seal.png")
 
-    # PWA / favicon / apple-touch (cream plate — lighter, OS-safe)
-    fav192 = _on_plate(master, 192, ICON_BG, pad_ratio=0.10)
+    # PWA / favicon / apple-touch — navy themed plate, larger seal on home screen
+    fav192 = _home_screen_icon(master, 192)
     _save(fav192, SITE_ROOT / "assets" / "favicon-192.png")
-    _save_jpeg(fav192, SITE_ROOT / "assets" / "favicon-192.jpg", quality=90)
+    _save_jpeg(fav192, SITE_ROOT / "assets" / "favicon-192.jpg", quality=90, bg=(21, 35, 63))
 
-    for name, size, pad in (
-        ("apple-touch-icon.png", 180, 0.10),
-        ("apple-touch-icon-167.png", 167, 0.10),
-        ("apple-touch-icon-152.png", 152, 0.10),
+    for name, size in (
+        ("apple-touch-icon.png", 180),
+        ("apple-touch-icon-167.png", 167),
+        ("apple-touch-icon-152.png", 152),
     ):
-        icon = _on_plate(master, size, ICON_BG, pad_ratio=pad)
+        icon = _home_screen_icon(master, size)
         _save(icon, SITE_ROOT / "assets" / name)
         if name == "apple-touch-icon.png":
             _save(icon, SITE_ROOT / "apple-touch-icon.png")
 
-    # 512 any + maskable (maskable keeps more padding)
-    seal512 = _on_plate(master, 512, ICON_BG, pad_ratio=0.10)
+    seal512 = _home_screen_icon(master, 512)
     _save(seal512, SITE_ROOT / "assets" / "hbcs-sanyard-seal-512.png")
-    _save_jpeg(seal512, SITE_ROOT / "assets" / "hbcs-sanyard-seal-512.jpg", quality=90)
-    maskable = _on_plate(master, 512, NAVY_BG, pad_ratio=0.18)
+    _save_jpeg(seal512, SITE_ROOT / "assets" / "hbcs-sanyard-seal-512.jpg", quality=90, bg=(21, 35, 63))
+    maskable = _home_screen_icon(master, 512, maskable=True)
     _save(maskable, SITE_ROOT / "assets" / "hbcs-sanyard-seal-512-maskable.png")
 
     # Legacy 240 / 480 caches

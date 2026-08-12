@@ -31,6 +31,26 @@
     'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
   ]);
 
+  let publicOriginCache = '';
+  async function publicSiteOrigin() {
+    if (publicOriginCache) return publicOriginCache;
+    const tag = document.querySelector('meta[name="public-origin"]');
+    if (tag && tag.content) {
+      publicOriginCache = String(tag.content).replace(/\/$/, '');
+      return publicOriginCache;
+    }
+    try {
+      const meta = await fetch('site-meta.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {}));
+      const origin = meta.publicOrigin || meta.publicUrl;
+      if (origin) {
+        publicOriginCache = String(origin).replace(/\/$/, '');
+        return publicOriginCache;
+      }
+    } catch (_e) { /* ignore */ }
+    publicOriginCache = window.location.origin;
+    return publicOriginCache;
+  }
+
   function msgAttachAllowed(file) {
     const name = (file?.name || '').toLowerCase();
     const type = (file?.type || '').toLowerCase();
@@ -4693,8 +4713,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return `${(num / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function infoShareUrl({ folderId = '', docId = '' } = {}) {
-    const origin = window.location.origin;
+  async function infoShareUrl({ folderId = '', docId = '' } = {}) {
+    const origin = await publicSiteOrigin();
     // Static nginx HTML + cache-bust query so WhatsApp scrapes a fresh OG card.
     if (docId) return `${origin}/share/doc/${encodeURIComponent(docId)}.html?v=wa1`;
     if (folderId) return `${origin}/share/folder/${encodeURIComponent(folderId)}.html?v=wa1`;
@@ -4702,7 +4722,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   async function copyInfoShareLink({ folderId = '', docId = '', label = 'Link' } = {}) {
-    const url = infoShareUrl({ folderId, docId });
+    const url = await infoShareUrl({ folderId, docId });
     // Warm / write the nginx static OG card (deploy used to wipe /share/; Flask /s/ recreates it).
     try {
       const warm = docId
@@ -9496,10 +9516,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('campaignPledgeBtn')?.addEventListener('click', openCampaignPledgeDialog);
   el('campaignContributeBtn')?.addEventListener('click', openCampaignContributeDialog);
   el('campaignSuggestBtn')?.addEventListener('click', openCampaignSuggestDialog);
-  el('campaignShareBtn')?.addEventListener('click', () => {
+  el('campaignShareBtn')?.addEventListener('click', async () => {
     const c = campaignsState.selected;
     if (!c) return;
-    const url = `${location.origin}/campaign.html?id=${encodeURIComponent(c.id)}`;
+    const origin = await publicSiteOrigin();
+    const url = `${origin}/campaign.html?id=${encodeURIComponent(c.id)}`;
     if (navigator.share) {
       navigator.share({ title: c.title, url }).catch(() => {});
     } else if (navigator.clipboard) {
@@ -11525,8 +11546,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     event.preventDefault();
     deferredInstall = event;
     showPwaHint(
-      'Install Himuda Housing Colony Sanyard on your phone for one-tap access.' +
-      ' <button type="button" class="btn secondary compact" id="pwaInstallBtn">Add to Home Screen</button>'
+      'Install <strong>Home@Sanyard</strong> on your phone for one-tap access.' +
+      ' <button type="button" class="btn secondary compact" id="pwaInstallBtn">Install app</button>'
     );
     el('pwaInstallBtn')?.addEventListener('click', async () => {
       if (!deferredInstall) return;
@@ -11542,7 +11563,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const box = el('pwaInstallHint');
     if (box) {
       box.hidden = false;
-      box.textContent = 'Installed. Open Himuda Housing Colony Sanyard from your home screen anytime.';
+      box.textContent = 'Installed. Open Home@Sanyard from your home screen anytime.';
     }
   });
   // iOS Safari has no beforeinstallprompt — show manual tip
@@ -11550,7 +11571,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
     || window.navigator.standalone === true;
   if (isIos && !isStandalone) {
-    showPwaHint('On iPhone: tap Share → <strong>Add to Home Screen</strong> to install Himuda Housing Colony Sanyard.');
+    showPwaHint('On iPhone: tap Share → <strong>Add to Home Screen</strong> to install <strong>Home@Sanyard</strong>.');
   }
   if ('serviceWorker' in navigator) {
     let refreshing = false;

@@ -23,6 +23,7 @@ Before first deploy of a new host, point DNS (`A`/`AAAA`) at the EC2 IP so TLS c
 |----------|------|
 | `SITE_DOMAIN` | `domain` |
 | `WEB_ROOT` | `webRoot` (or `/var/www/<domain>`) |
+| `EXTRA_DOMAINS` | `extraDomains` plus non-`www` entries from `aliases` (excluding primary) |
 | `ADMIN_PORT` | `admin.port` |
 | `SERVICE_NAME` | `admin.serviceName` |
 | `IS_PLATFORM` / `IS_OPS` | `platform` / `ops` flags (or env override) |
@@ -100,7 +101,8 @@ Examples live in [`deploy/nginx/examples/`](../deploy/nginx/examples/):
 - `veerlabs.solutions.conf`
 - `canvas.veerlabs.solutions.conf`
 - `ops.veerlabs.solutions.conf`
-- `new-website.veerlabs.solutions.conf`
+- `hbcsanyard.veerlabs.solutions.conf` — legacy alias vhost (same web root as primary)
+- `housingcolonysanyard.in.conf` (+ `.http.conf` bootstrap until TLS exists)
 
 Pattern:
 
@@ -108,7 +110,49 @@ Pattern:
 - `/admin/` and `/api/` → Flask on `ADMIN_PORT`
 - Ops: `/` is the observability shell (still needs auth via admin session)
 
-`site-deploy.sh` installs the matching example when certs exist, otherwise generates a workable config.
+`site-deploy.sh` installs the matching example for **`domain`** when certs exist, otherwise generates a workable config or copies the `.http.conf` bootstrap.
+
+### Extra domains / aliases
+
+After the primary vhost is enabled, **`install_extra_domains`** loops `EXTRA_DOMAINS` (from `site.config.json` → `extraDomains`, plus apex hosts from `aliases` that are not the primary domain). For each host it:
+
+1. Copies `deploy/nginx/examples/<host>.conf` when Let's Encrypt certs exist, else `<host>.http.conf` if present
+2. Enables the site and reloads nginx
+3. Runs `certbot certonly --webroot` when certs are missing (DNS must point only at the EC2 host — remove registrar forwarding A records first)
+
+**hbcsanyard example:** primary `housingcolonysanyard.in`, web root stays `/var/www/hbcsanyard.veerlabs.solutions`, legacy alias `hbcsanyard.veerlabs.solutions` remains a separate enabled vhost (both serve the same files; no redirect between them).
+
+TLS bootstrap for a new apex domain:
+
+```bash
+# On EC2 after DNS A record → EC2 IP (no GoDaddy forwarding)
+sudo certbot certonly --webroot -w /var/www/hbcsanyard.veerlabs.solutions \
+  -d housingcolonysanyard.in -d www.housingcolonysanyard.in
+# Then redeploy or copy deploy/nginx/examples/housingcolonysanyard.in.conf into sites-enabled
+```
+
+### Public origin (RWA / share links)
+
+For RWA sites, set on the host (not in git):
+
+```bash
+# /etc/veercanvas/hbcsanyard.env
+VEERCANVAS_PUBLIC_ORIGIN=https://housingcolonysanyard.in
+```
+
+Used for Info Centre OG share cards, AuthBuddy redirect URIs, and portal canonical URLs. Deploy rebuilds `/share/*.html` for `hbcsanyard` after each push.
+
+### PWA icons (hbcsanyard)
+
+Regenerate from the master seal, then bump cache query strings in `manifest.webmanifest`, `index.html`, and `sw.js`:
+
+```bash
+cd sites/hbcsanyard
+python3 scripts/export_logo_variants.py
+# Home-screen icons: navy plate (#15233f), gold ring, larger seal — see _home_screen_icon()
+```
+
+Residents must remove and re-add the home-screen shortcut to pick up icon/name changes on iOS/Android.
 
 ## Remote unit env
 
