@@ -7111,8 +7111,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td>${escapeHtml(r.text || '')}${r.votesFor != null ? `<br><span style="font-size:7pt;color:#5a6a80">For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0}</span>` : ''}${r.passed === false ? ' · <em>Not passed</em>' : ''}</td>
         <td style="text-align:center">${r.passed === false ? 'No' : 'Yes'}</td>
       </tr>`);
-    while (rows.length < 5) {
-      rows.push('<tr><td>&nbsp;</td><td style="height:11mm"></td><td></td></tr>');
+    while (rows.length < 4) {
+      rows.push('<tr><td>&nbsp;</td><td style="height:9mm"></td><td></td></tr>');
     }
     return rows.join('');
   }
@@ -7126,8 +7126,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td>${escapeHtml(formatIstDate(a.dueDate) || a.dueDate || '')}</td>
         <td style="text-align:center">${a.done ? 'Yes' : ''}</td>
       </tr>`);
-    while (rows.length < 4) {
-      rows.push('<tr><td style="height:8mm"></td><td></td><td></td><td></td></tr>');
+    while (rows.length < 6) {
+      rows.push('<tr><td style="height:10mm"></td><td></td><td></td><td></td></tr>');
     }
     return rows.join('');
   }
@@ -7494,19 +7494,71 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function printProceedingsDetail() {
     const p = proceedingsState.selected;
-    if (!p) return;
+    if (!p) {
+      window.alert('Open a register entry first, then print.');
+      return;
+    }
     const html = buildProceedingsMomHtml(p);
-    const w = window.open('', '_blank', 'noopener');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(p.title || 'Proceedings')}</title>
+    const paperRaw = (el('proceedingsPaperSize')?.value || 'a4').toLowerCase();
+    const paperMap = {
+      a4: 'A4 portrait',
+      a5: 'A5 portrait',
+      letter: 'letter portrait',
+      legal: 'legal portrait',
+    };
+    const paper = paperMap[paperRaw] ? paperRaw : 'a4';
+    try { localStorage.setItem('mhws-mom-paper', paper); } catch (_) {}
+
+    const docHtml = `<!DOCTYPE html><html lang="en" data-paper="${paper}"><head><meta charset="utf-8">
+      <title>${escapeHtml(p.title || 'Proceedings')}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260811mom1">
-      </head><body>${html}</body></html>`);
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260812mom14">
+      <style>@page { size: ${paperMap[paper]}; margin: 0; }</style>
+      </head><body>${html}
+      <script>
+        (function(){
+          function go(){ try { window.focus(); window.print(); } catch(e) {} }
+          var links = Array.prototype.slice.call(document.querySelectorAll('link[rel=stylesheet]'));
+          if (!links.length) { setTimeout(go, 200); return; }
+          var left = links.length;
+          function done(){ if (--left <= 0) setTimeout(go, 120); }
+          links.forEach(function(l){ l.addEventListener('load', done); l.addEventListener('error', done); });
+          setTimeout(go, 1800);
+        })();
+      <\/script>
+      </body></html>`;
+
+    // Prefer iframe print — avoids popup blockers and window.open(...,'noopener') returning null
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.setAttribute('title', 'Print proceedings');
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+      document.body.appendChild(iframe);
+      const idoc = iframe.contentWindow?.document;
+      if (!idoc) throw new Error('iframe unavailable');
+      idoc.open();
+      idoc.write(docHtml);
+      idoc.close();
+      const cleanup = () => { try { iframe.remove(); } catch (_) {} };
+      iframe.contentWindow?.addEventListener?.('afterprint', cleanup);
+      setTimeout(cleanup, 120000);
+      return;
+    } catch (err) {
+      console.warn('iframe print failed, trying popup', err);
+    }
+
+    // Fallback: popup without noopener (noopener makes window.open return null)
+    const w = window.open('about:blank', '_blank');
+    if (!w) {
+      window.alert('Pop-up blocked. Allow pop-ups for this site, or use the blank MOM pad Print button.');
+      return;
+    }
+    w.document.open();
+    w.document.write(docHtml);
     w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
   }
 
   function switchPanel(name) {
@@ -9551,6 +9603,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (proceedingsState.selected) fillProceedingsForm(proceedingsState.selected);
   });
   el('proceedingsPrintBtn')?.addEventListener('click', printProceedingsDetail);
+  try {
+    const savedPaper = localStorage.getItem('mhws-mom-paper');
+    if (savedPaper && el('proceedingsPaperSize')?.querySelector(`option[value="${savedPaper}"]`)) {
+      el('proceedingsPaperSize').value = savedPaper;
+    }
+  } catch (_) {}
+  el('proceedingsPaperSize')?.addEventListener('change', () => {
+    try { localStorage.setItem('mhws-mom-paper', el('proceedingsPaperSize').value); } catch (_) {}
+  });
   el('proceedingsForm')?.addEventListener('submit', saveProceedingsForm);
   el('proceedingsTypeInput')?.addEventListener('change', () => {
     fillProceedingsSubtypeSelect(el('proceedingsTypeInput').value);

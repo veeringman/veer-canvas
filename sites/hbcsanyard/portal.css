@@ -2556,26 +2556,17 @@ body.is-view-only #grievanceForm {
   color: var(--muted);
   font-style: italic;
 }
+.proceedings-page {
+  border: 2px solid #6b4a2e;
+  background: #fdfaf3;
+  border-radius: 2px;
+  box-shadow: 0 6px 20px rgba(26, 18, 8, 0.06);
+}
 .proceedings-detail .proceedings-page {
   border: 0;
   background: transparent;
   box-shadow: none;
   padding: 0;
-}
-#proceedingsDetailBody .mom-print-root {
-  max-width: 100%;
-}
-#proceedingsDetailBody .sheet {
-  max-width: 100%;
-  height: auto;
-  min-height: 280mm;
-}
-@media (max-width: 900px) {
-  #proceedingsDetailBody .sheet {
-    width: 100%;
-    min-height: 0;
-    height: auto;
-  }
 }
 .proceedings-detail-head {
   display: flex;
@@ -2585,12 +2576,40 @@ body.is-view-only #grievanceForm {
   align-items: center;
   margin-bottom: 0.75rem;
 }
-.proceedings-detail-actions { display: flex; gap: 0.45rem; }
-.proceedings-page {
-  border: 2px solid #6b4a2e;
-  background: #fdfaf3;
-  border-radius: 2px;
-  box-shadow: 0 6px 20px rgba(26, 18, 8, 0.06);
+.proceedings-detail-actions { display: flex; gap: 0.45rem; align-items: end; flex-wrap: wrap; }
+.proceedings-paper-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #5a6a80);
+}
+.proceedings-paper-label select {
+  font: 600 0.85rem/1.2 system-ui, sans-serif;
+  padding: 0.3rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid rgba(11, 42, 86, 0.22);
+  background: #fff;
+  color: inherit;
+}
+#proceedingsDetailBody .mom-print-root {
+  max-width: 100%;
+}
+#proceedingsDetailBody .sheet {
+  max-width: 100%;
+  height: auto;
+  min-height: 280mm;
+  max-height: none;
+}
+@media (max-width: 900px) {
+  #proceedingsDetailBody .sheet {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+  }
 }
 .proceedings-page-inner {
   position: relative;
