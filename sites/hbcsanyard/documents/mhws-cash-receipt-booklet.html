@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4 portrait; margin: 4mm; }
+    @page a5-sheet { size: A5 portrait; margin: 3mm; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -47,6 +48,25 @@
       flex-direction: column;
       gap: 0;
       overflow: hidden;
+    }
+
+    .sheet.layout-a5-2 {
+      width: 148mm;
+      height: 210mm;
+      max-height: 210mm;
+      page: a5-sheet;
+    }
+    .sheet.layout-a4-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      align-content: stretch;
+    }
+    .sheet.layout-a4-4 .receipt {
+      max-height: none;
+    }
+    .sheet.layout-a5-2 .receipt {
+      max-height: 50%;
     }
 
     /* Three tear-off receipts per A4 page — no outer border */
@@ -351,6 +371,47 @@
       color: var(--green);
       font-weight: 600;
     }
+
+    /* Compact slip — A6 grid / A5 half-page */
+    .layout-a4-4 .receipt,
+    .layout-a5-2 .receipt {
+      padding: 1.5mm 2.5mm 1mm;
+    }
+    .layout-a4-4 .r-top {
+      grid-template-columns: 10mm 1fr auto;
+      gap: 1.8mm;
+      padding-bottom: 0.8mm;
+    }
+    .layout-a4-4 .r-logo { width: 9mm; }
+    .layout-a4-4 .r-org h1 { font-size: 7.8pt; }
+    .layout-a4-4 .r-org .colony { font-size: 6.4pt; }
+    .layout-a4-4 .r-org .addr { font-size: 5.8pt; }
+    .layout-a4-4 .r-meta { font-size: 6pt; min-width: 34mm; }
+    .layout-a4-4 .r-meta strong { font-size: 7pt; }
+    .layout-a4-4 .r-meta .rcpt-no { font-size: 10pt; }
+    .layout-a4-4 .r-banner { font-size: 5.8pt; padding: 0.7mm 1.5mm; margin: 0.8mm 0 1mm; }
+    .layout-a4-4 .fields { gap: 0.7mm; font-size: 6.6pt; }
+    .layout-a4-4 .row { grid-template-columns: 22mm 1fr; gap: 1.2mm; }
+    .layout-a4-4 .row.two { grid-template-columns: 22mm 1fr 18mm 1fr; }
+    .layout-a4-4 .lbl { font-size: 6pt; }
+    .layout-a4-4 .line { min-height: 2.8mm; }
+    .layout-a4-4 .amount-box { grid-template-columns: 22mm 1fr; gap: 1.2mm; }
+    .layout-a4-4 .amount-value { min-height: 5mm; font-size: 8pt; }
+    .layout-a4-4 .purpose { font-size: 6pt; gap: 1mm 2mm; }
+    .layout-a4-4 .r-foot { margin-top: 0.6mm; padding-top: 0.6mm; gap: 2mm; }
+    .layout-a4-4 .note { font-size: 5pt; }
+    .layout-a4-4 .sign .space { height: 4.5mm; }
+    .layout-a4-4 .sign { font-size: 5.5pt; }
+    .layout-a5-2 .r-top { grid-template-columns: 11mm 1fr auto; gap: 2mm; }
+    .layout-a5-2 .r-logo { width: 10mm; }
+    .layout-a5-2 .r-org h1 { font-size: 9pt; }
+    .layout-a5-2 .fields { gap: 0.85mm; font-size: 7pt; }
+    .layout-a5-2 .line { min-height: 3mm; }
+    .layout-a5-2 .amount-value { min-height: 5.5mm; font-size: 9pt; }
+    .layout-a5-2 .r-foot { margin-top: 0.8mm; padding-top: 0.8mm; }
+    .layout-a5-2 .note { font-size: 5.5pt; }
+    .layout-a5-2 .sign .space { height: 5mm; }
+
     .copy-tag {
       position: absolute;
       top: 2mm;
@@ -402,6 +463,16 @@
         page-break-after: avoid !important;
         break-inside: avoid !important;
       }
+      .sheet.layout-a5-2 {
+        width: 142mm !important;
+        height: 204mm !important;
+        max-height: 204mm !important;
+      }
+      .sheet.layout-a4-4 {
+        width: 204mm !important;
+        height: 291mm !important;
+        max-height: 291mm !important;
+      }
       .receipt {
         border: 0 !important;
         box-shadow: none !important;
@@ -440,14 +511,21 @@
 </head>
 <body>
   <p class="screen-hint">
-    Cash receipt booklet — 3 slips per A4. Set starting number and how many pages to print/download as a continuous series.
+    Cash receipt booklet — choose layout: 3 per A4 (default), 2 A6 slips per A5, or 4 A6 slips per A4. Set starting number and pages for a continuous series.
   </p>
 
   <div class="screen-controls" id="receiptControls">
+    <label>Layout
+      <select id="receiptLayout">
+        <option value="a4-3" selected>3 receipts per A4</option>
+        <option value="a5-2">2 A6 receipts per A5</option>
+        <option value="a4-4">4 A6 receipts per A4</option>
+      </select>
+    </label>
     <label>Start receipt no.
       <input id="startReceiptNo" type="number" min="1" max="999999" value="1" step="1">
     </label>
-    <label>Pages (3 slips each)
+    <label id="pageCountLabel">Pages (3 slips each)
       <input id="pageCount" type="number" min="1" max="100" value="1" step="1">
     </label>
     <label>Paper colour
@@ -477,77 +555,9 @@
   </div>
   <p class="download-status" id="downloadStatus">Series: <strong id="seriesRange">000001 – 000003</strong> (1 page · 3 receipts)</p>
 
-  <div class="sheet" aria-label="Cash receipt booklet page">
-    <!-- Receipt 1 -->
-    <article class="receipt" data-tint="cream" data-pattern="lines">
-      <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
-      <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
-      <span class="copy-tag">Original</span>
-      <header class="r-top">
-        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
-        <div class="r-org">
-          <h1>Mandi Housing Welfare Society</h1>
-          <p class="colony">Himuda Housing Colony Sanyard</p>
-          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
-        </div>
-        <div class="r-meta">
-          <strong>Cash Receipt</strong>
-          <span class="rcpt-no-label">Receipt No.</span>
-          <span class="rcpt-no" data-rcpt-slot="0">000001</span>
-          Date<span class="fill"></span>
-        </div>
-      </header>
-      <div class="r-banner">Received with thanks <span class="gold">·</span> Unity · Harmony · Progress</div>
-      <div class="fields">
-        <div class="row">
-          <span class="lbl">Received from</span>
-          <span class="line"></span>
-        </div>
-        <div class="row two">
-          <span class="lbl">Plot / House</span>
-          <span class="line"></span>
-          <span class="lbl">Block</span>
-          <span class="line"></span>
-        </div>
-        <div class="amount-box">
-          <span class="lbl">Amount (₹)</span>
-          <div class="amount-value"></div>
-        </div>
-        <div class="row">
-          <span class="lbl">In words</span>
-          <span class="line"></span>
-        </div>
-        <div class="row">
-          <span class="lbl">Towards</span>
-          <div class="purpose">
-            <span class="chk"><span class="box"></span> Maintenance / dues</span>
-            <span class="chk"><span class="box"></span> Membership</span>
-            <span class="chk"><span class="box"></span> Works / donation</span>
-            <span class="chk"><span class="box"></span> Other ________</span>
-          </div>
-        </div>
-        <div class="row">
-          <span class="lbl">Period / note</span>
-          <span class="line"></span>
-        </div>
-      </div>
-      <footer class="r-foot">
-        <p class="note">
-          <strong>Mode:</strong> Cash only on this slip.<br>
-          Subject to verification by the Society. Keep this as your acknowledgement.<br>
-          <strong>Web:</strong> housingcolonysanyard.in ·
-          <strong>Email:</strong> housingcolonysanyard@gmail.com
-        </p>
-        <div class="sign">
-          <div class="space"></div>
-          <div class="who">Authorised signatory</div>
-          <div class="role">Treasurer / Office bearer</div>
-        </div>
-      </footer>
-    </article>
-    <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
+  <div class="sheet layout-a4-3" id="receiptSheet" aria-label="Cash receipt booklet page"></div>
 
-    <!-- Receipt 2 -->
+  <template id="receiptTpl">
     <article class="receipt" data-tint="cream" data-pattern="lines">
       <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
       <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
@@ -562,7 +572,7 @@
         <div class="r-meta">
           <strong>Cash Receipt</strong>
           <span class="rcpt-no-label">Receipt No.</span>
-          <span class="rcpt-no" data-rcpt-slot="1">000002</span>
+          <span class="rcpt-no">000001</span>
           Date<span class="fill"></span>
         </div>
       </header>
@@ -614,76 +624,7 @@
         </div>
       </footer>
     </article>
-    <div class="perf" aria-hidden="true">· · · tear here · · ·</div>
-
-    <!-- Receipt 3 -->
-    <article class="receipt" data-tint="cream" data-pattern="lines">
-      <svg class="r-bg-svg" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
-      <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
-      <span class="copy-tag">Original</span>
-      <header class="r-top">
-        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
-        <div class="r-org">
-          <h1>Mandi Housing Welfare Society</h1>
-          <p class="colony">Himuda Housing Colony Sanyard</p>
-          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
-        </div>
-        <div class="r-meta">
-          <strong>Cash Receipt</strong>
-          <span class="rcpt-no-label">Receipt No.</span>
-          <span class="rcpt-no" data-rcpt-slot="2">000003</span>
-          Date<span class="fill"></span>
-        </div>
-      </header>
-      <div class="r-banner">Received with thanks <span class="gold">·</span> Unity · Harmony · Progress</div>
-      <div class="fields">
-        <div class="row">
-          <span class="lbl">Received from</span>
-          <span class="line"></span>
-        </div>
-        <div class="row two">
-          <span class="lbl">Plot / House</span>
-          <span class="line"></span>
-          <span class="lbl">Block</span>
-          <span class="line"></span>
-        </div>
-        <div class="amount-box">
-          <span class="lbl">Amount (₹)</span>
-          <div class="amount-value"></div>
-        </div>
-        <div class="row">
-          <span class="lbl">In words</span>
-          <span class="line"></span>
-        </div>
-        <div class="row">
-          <span class="lbl">Towards</span>
-          <div class="purpose">
-            <span class="chk"><span class="box"></span> Maintenance / dues</span>
-            <span class="chk"><span class="box"></span> Membership</span>
-            <span class="chk"><span class="box"></span> Works / donation</span>
-            <span class="chk"><span class="box"></span> Other ________</span>
-          </div>
-        </div>
-        <div class="row">
-          <span class="lbl">Period / note</span>
-          <span class="line"></span>
-        </div>
-      </div>
-      <footer class="r-foot">
-        <p class="note">
-          <strong>Mode:</strong> Cash only on this slip.<br>
-          Subject to verification by the Society. Keep this as your acknowledgement.<br>
-          <strong>Web:</strong> housingcolonysanyard.in ·
-          <strong>Email:</strong> housingcolonysanyard@gmail.com
-        </p>
-        <div class="sign">
-          <div class="space"></div>
-          <div class="who">Authorised signatory</div>
-          <div class="role">Treasurer / Office bearer</div>
-        </div>
-      </footer>
-    </article>
-  </div>
+  </template>
 <script>
 (function () {
   const TINTS = {
@@ -695,24 +636,39 @@
     rose: '#fbf0f2',
   };
 
+  const LAYOUTS = {
+    'a4-3': { slips: 3, label: '3 slips each', pageHint: 'A4' },
+    'a5-2': { slips: 2, label: '2 slips each', pageHint: 'A5' },
+    'a4-4': { slips: 4, label: '4 slips each', pageHint: 'A4' },
+  };
+
   function pad6(n) {
     const v = Math.max(1, Math.min(999999, Number(n) || 1));
     return String(v).padStart(6, '0');
   }
 
+  function layoutKey() {
+    const el = document.getElementById('receiptLayout');
+    const key = (el && el.value) || 'a4-3';
+    return LAYOUTS[key] ? key : 'a4-3';
+  }
+
   function opts() {
+    const layout = layoutKey();
+    const slips = LAYOUTS[layout].slips;
     const start = Math.max(1, Math.min(999999, parseInt(document.getElementById('startReceiptNo').value, 10) || 1));
     const pages = Math.max(1, Math.min(100, parseInt(document.getElementById('pageCount').value, 10) || 1));
     const tint = document.getElementById('paperTint').value || 'cream';
     const pattern = document.getElementById('paperPattern').value || 'lines';
-    const end = Math.min(999999, start + pages * 3 - 1);
-    return { start, pages, tint, pattern, end, total: end - start + 1 };
+    const end = Math.min(999999, start + pages * slips - 1);
+    return { start, pages, tint, pattern, layout, slips, end, total: end - start + 1 };
   }
 
   function bookletUrl(o, disposition) {
     const q = new URLSearchParams({
       start: String(o.start),
       pages: String(o.pages),
+      layout: o.layout,
       tint: o.tint,
       pattern: o.pattern,
       disposition: disposition || 'attachment',
@@ -745,26 +701,57 @@
     return parts.join('');
   }
 
+  function decorateReceipt(el, serial, tint, pattern) {
+    el.setAttribute('data-tint', tint);
+    el.setAttribute('data-pattern', pattern);
+    const slot = el.querySelector('.rcpt-no');
+    if (slot) slot.textContent = pad6(serial);
+    const svg = el.querySelector('.r-bg-svg');
+    if (svg) {
+      svg.setAttribute('viewBox', '0 0 900 400');
+      svg.innerHTML = buildBgSvg(tint, pattern);
+    }
+  }
+
+  function renderPreview() {
+    const o = opts();
+    const sheet = document.getElementById('receiptSheet');
+    const tpl = document.getElementById('receiptTpl');
+    if (!sheet || !tpl) return;
+    sheet.className = `sheet layout-${o.layout}`;
+    sheet.replaceChildren();
+    document.body.setAttribute('data-print-layout', o.layout);
+    const pageLabel = document.getElementById('pageCountLabel');
+    if (pageLabel) {
+      const input = pageLabel.querySelector('#pageCount');
+      pageLabel.textContent = '';
+      pageLabel.append(`Pages (${LAYOUTS[o.layout].label}) `);
+      if (input) pageLabel.appendChild(input);
+    }
+    for (let i = 0; i < o.slips; i += 1) {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      decorateReceipt(node, o.start + i, o.tint, o.pattern);
+      sheet.appendChild(node);
+      if (i < o.slips - 1 && o.layout !== 'a4-4') {
+        const perf = document.createElement('div');
+        perf.className = 'perf';
+        perf.setAttribute('aria-hidden', 'true');
+        perf.textContent = '· · · tear here · · ·';
+        sheet.appendChild(perf);
+      }
+    }
+  }
+
   function applyOpts() {
     const o = opts();
     document.getElementById('startReceiptNo').value = String(o.start);
     document.getElementById('pageCount').value = String(o.pages);
     const status = document.getElementById('downloadStatus');
+    const layoutLabel = LAYOUTS[o.layout].pageHint;
     if (status) {
-      status.innerHTML = `Series: <strong id="seriesRange">${pad6(o.start)} – ${pad6(o.end)}</strong> (${o.pages} page${o.pages > 1 ? 's' : ''} · ${o.total} receipts)`;
+      status.innerHTML = `Series: <strong id="seriesRange">${pad6(o.start)} – ${pad6(o.end)}</strong> (${o.pages} ${layoutLabel} page${o.pages > 1 ? 's' : ''} · ${o.total} receipts)`;
     }
-    // Preview first page only on screen
-    document.querySelectorAll('.receipt').forEach((el, i) => {
-      el.setAttribute('data-tint', o.tint);
-      el.setAttribute('data-pattern', o.pattern);
-      const slot = el.querySelector('.rcpt-no');
-      if (slot) slot.textContent = pad6(o.start + i);
-      const svg = el.querySelector('.r-bg-svg');
-      if (svg) {
-        svg.setAttribute('viewBox', '0 0 900 400');
-        svg.innerHTML = buildBgSvg(o.tint, o.pattern);
-      }
-    });
+    renderPreview();
   }
 
   function setStatus(msg) {
@@ -789,7 +776,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mhws-cash-receipts-${pad6(o.start)}-${pad6(o.end)}.pdf`;
+      a.download = `mhws-cash-receipts-${o.layout}-${pad6(o.start)}-${pad6(o.end)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -824,7 +811,7 @@
   document.getElementById('downloadReceiptPdf')?.addEventListener('click', () => {
     downloadPdf().catch(console.error);
   });
-  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern'].forEach((id) => {
+  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', applyOpts);
     document.getElementById(id)?.addEventListener('input', applyOpts);
   });

@@ -1187,6 +1187,19 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
     return rl["Paragraph"](text or "-", style)
 
 
+def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
+    """Page grid for blank cash-receipt booklets."""
+    layouts: dict[str, dict[str, Any]] = {
+        "a4-3": {"page": "A4", "cols": 1, "rows": 3, "slips": 3},
+        "a5-2": {"page": "A5", "cols": 1, "rows": 2, "slips": 2},
+        "a4-4": {"page": "A4", "cols": 2, "rows": 2, "slips": 4},
+    }
+    key = (layout or "a4-3").strip().lower()
+    if key not in layouts:
+        key = "a4-3"
+    return key, layouts[key]
+
+
 def build_cash_receipt_booklet_pdf(
     *,
     site_root: Path,
@@ -1194,15 +1207,21 @@ def build_cash_receipt_booklet_pdf(
     page_count: int = 1,
     paper_tint: str = "cream",
     paper_pattern: str = "lines",
+    layout: str = "a4-3",
 ) -> tuple[bytes, str]:
-    """Blank cash-receipt booklet: 3 slips per A4 page, multi-page series."""
+    """Blank cash-receipt booklet — layout: a4-3 (default), a5-2, or a4-4."""
     from reportlab.lib import colors
     from reportlab.lib.colors import Color
     from reportlab.pdfgen import canvas as pdfcanvas
 
     rl = _reportlab()
     mm = rl["mm"]
-    page_w, page_h = rl["A4"]
+    layout_key, layout_spec = _cash_receipt_layout(layout)
+    page_sizes = {"A4": rl["A4"], "A5": rl["A5"]}
+    page_w, page_h = page_sizes[layout_spec["page"]]
+    cols = int(layout_spec["cols"])
+    rows = int(layout_spec["rows"])
+    slips_per_page = int(layout_spec["slips"])
 
     start_no = max(1, min(999999, int(start_no or 1)))
     page_count = max(1, min(100, int(page_count or 1)))
@@ -1222,55 +1241,59 @@ def build_cash_receipt_booklet_pdf(
         "rose": colors.HexColor("#fbf0f2"),
     }
 
-    buf = io.BytesIO()
-    c = pdfcanvas.Canvas(buf, pagesize=rl["A4"])
     margin_x = 5 * mm
     margin_y = 4 * mm
-    gap = 2.2 * mm
-    usable_h = page_h - 2 * margin_y - 2 * gap
-    slip_h = usable_h / 3
-    slip_w = page_w - 2 * margin_x
+    gap_x = 2 * mm if cols > 1 else 0
+    gap_y = 2.2 * mm if rows > 1 else 0
+    usable_w = page_w - 2 * margin_x - (cols - 1) * gap_x
+    usable_h = page_h - 2 * margin_y - (rows - 1) * gap_y
+    slip_w = usable_w / cols
+    slip_h = usable_h / rows
+    ref_h = (rl["A4"][1] - 2 * margin_y - 2 * gap_y) / 3
+    scale = max(0.62, min(1.0, min(slip_w / (page_w - 2 * margin_x), slip_h / ref_h)))
+
+    buf = io.BytesIO()
+    c = pdfcanvas.Canvas(buf, pagesize=(page_w, page_h))
     seal = _seal_path(site_root)
 
     def _draw_pattern(box_x: float, box_y: float, box_w: float, box_h: float) -> None:
         c.saveState()
         c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.07))
         c.setLineWidth(0.35)
+        step_y = 3.2 * mm * scale
         if pattern == "lines":
-            y = box_y + 3 * mm
-            while y < box_y + box_h - 2 * mm:
-                c.line(box_x + 1.5 * mm, y, box_x + box_w - 1.5 * mm, y)
-                y += 3.2 * mm
+            y = box_y + 3 * mm * scale
+            while y < box_y + box_h - 2 * mm * scale:
+                c.line(box_x + 1.5 * mm * scale, y, box_x + box_w - 1.5 * mm * scale, y)
+                y += step_y
         elif pattern == "diagonal":
-            step = 4.5 * mm
+            step = 4.5 * mm * scale
             x0 = box_x - box_h
             while x0 < box_x + box_w + box_h:
                 c.line(x0, box_y, x0 + box_h, box_y + box_h)
                 x0 += step
         elif pattern == "dots":
             c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.09))
-            step = 3.2 * mm
-            y = box_y + 2.5 * mm
-            while y < box_y + box_h - 2 * mm:
-                x = box_x + 2.5 * mm
-                while x < box_x + box_w - 2 * mm:
-                    c.circle(x, y, 0.3 * mm, fill=1, stroke=0)
+            step = 3.2 * mm * scale
+            y = box_y + 2.5 * mm * scale
+            while y < box_y + box_h - 2 * mm * scale:
+                x = box_x + 2.5 * mm * scale
+                while x < box_x + box_w - 2 * mm * scale:
+                    c.circle(x, y, 0.3 * mm * scale, fill=1, stroke=0)
                     x += step
                 y += step
         elif pattern == "guilloche":
             c.setStrokeColor(Color(26 / 255, 107 / 255, 58 / 255, alpha=0.06))
             cx, cy = box_x + box_w / 2, box_y + box_h / 2
             for r in range(6, int(max(box_w, box_h) / mm), 7):
-                c.circle(cx, cy, r * mm, fill=0, stroke=1)
+                c.circle(cx, cy, r * mm * scale, fill=0, stroke=1)
         c.restoreState()
 
     def _draw_slip(box_x: float, box_y: float, box_w: float, box_h: float, serial: int) -> None:
-        # Tint fill — no outer border
         c.setFillColor(tint_map.get(tint, tint_map["cream"]))
         c.rect(box_x, box_y, box_w, box_h, fill=1, stroke=0)
         _draw_pattern(box_x, box_y, box_w, box_h)
 
-        # Watermark ~70% of slip height (clipped to slip)
         c.saveState()
         p = c.beginPath()
         p.rect(box_x, box_y, box_w, box_h)
@@ -1286,13 +1309,12 @@ def build_cash_receipt_booklet_pdf(
         )
         c.restoreState()
 
-        pad = 3.2 * mm
+        pad = 3.2 * mm * scale
         inner_x = box_x + pad
         top = box_y + box_h - pad
         right = box_x + box_w - pad
 
-        # Logo + org
-        logo_w = 11 * mm
+        logo_w = 11 * mm * scale
         if seal:
             try:
                 if hasattr(c, "setFillAlpha"):
@@ -1308,108 +1330,110 @@ def build_cash_receipt_booklet_pdf(
                 )
             except Exception:
                 pass
-        tx = inner_x + logo_w + 2.2 * mm
+        tx = inner_x + logo_w + 2.2 * mm * scale
         c.setFillColor(colors.HexColor(BRAND_NAVY))
-        c.setFont("Times-Bold", 9)
-        c.drawString(tx, top - 4.2 * mm, ORG_SOCIETY.upper())
-        c.setFont("Times-Bold", 8)
-        c.drawString(tx, top - 7.6 * mm, ORG_COLONY.upper())
+        c.setFont("Times-Bold", max(7, 9 * scale))
+        c.drawString(tx, top - 4.2 * mm * scale, ORG_SOCIETY.upper())
+        c.setFont("Times-Bold", max(6.5, 8 * scale))
+        c.drawString(tx, top - 7.6 * mm * scale, ORG_COLONY.upper())
         c.setFillColor(colors.HexColor(BRAND_GREEN))
-        c.setFont("Helvetica-Bold", 6.5)
-        c.drawString(tx, top - 10.5 * mm, ORG_SUBTITLE)
+        c.setFont("Helvetica-Bold", max(5.5, 6.5 * scale))
+        c.drawString(tx, top - 10.5 * mm * scale, ORG_SUBTITLE)
 
-        # Red serial
         c.setFillColor(colors.HexColor(BRAND_NAVY))
-        c.setFont("Helvetica-Bold", 8)
-        c.drawRightString(right, top - 3.5 * mm, "CASH RECEIPT")
+        c.setFont("Helvetica-Bold", max(6.5, 8 * scale))
+        c.drawRightString(right, top - 3.5 * mm * scale, "CASH RECEIPT")
         c.setFillColor(colors.HexColor("#c62828"))
-        c.setFont("Courier-Bold", 12)
-        c.drawRightString(right, top - 8.5 * mm, f"{serial:06d}")
+        c.setFont("Courier-Bold", max(9, 12 * scale))
+        c.drawRightString(right, top - 8.5 * mm * scale, f"{serial:06d}")
         c.setFillColor(colors.HexColor(BRAND_MUTED))
-        c.setFont("Helvetica", 6.5)
-        c.drawRightString(right, top - 11.5 * mm, "Date _______________")
+        c.setFont("Helvetica", max(5.5, 6.5 * scale))
+        c.drawRightString(right, top - 11.5 * mm * scale, "Date _______________")
 
-        # Header rule
-        rule_y = top - logo_w - 2 * mm
+        rule_y = top - logo_w - 2 * mm * scale
         c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
         c.setLineWidth(0.7)
         c.line(inner_x, rule_y, right, rule_y)
 
-        # Banner
-        ban_h = 5.5 * mm
-        ban_y = rule_y - ban_h - 1.4 * mm
+        ban_h = 5.5 * mm * scale
+        ban_y = rule_y - ban_h - 1.4 * mm * scale
         c.setFillColor(colors.HexColor(BRAND_NAVY))
         c.rect(inner_x, ban_y, right - inner_x, ban_h, fill=1, stroke=0)
         c.setFillColor(colors.HexColor("#f7f3ea"))
-        c.setFont("Helvetica-Bold", 7)
+        c.setFont("Helvetica-Bold", max(5.5, 7 * scale))
         c.drawCentredString(
             (inner_x + right) / 2,
-            ban_y + 1.7 * mm,
+            ban_y + 1.7 * mm * scale,
             "RECEIVED WITH THANKS   ·   UNITY · HARMONY · PROGRESS",
         )
 
-        # Ruled fields
-        y = ban_y - 4.5 * mm
-        label_w = 24 * mm
-        line_h = 5.2 * mm
+        y = ban_y - 4.5 * mm * scale
+        label_w = 24 * mm * scale
+        line_h = 5.2 * mm * scale
         fields = [
-            ("Received from", 1.0),
-            ("Plot / House", 0.55),
-            ("Amount (₹)", 0.7),
-            ("In words", 1.0),
-            ("Towards", 1.0),
-            ("Period / note", 1.0),
+            "Received from",
+            "Plot / House",
+            "Amount (₹)",
+            "In words",
+            "Towards",
+            "Period / note",
         ]
-        c.setFont("Helvetica-Bold", 6.2)
-        for label, _span in fields:
+        c.setFont("Helvetica-Bold", max(5.2, 6.2 * scale))
+        for label in fields:
             c.setFillColor(colors.HexColor(BRAND_GREEN))
             c.drawString(inner_x, y, label.upper())
             c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.4))
             c.setLineWidth(0.55)
-            c.line(inner_x + label_w, y - 0.4 * mm, right, y - 0.4 * mm)
+            c.line(inner_x + label_w, y - 0.4 * mm * scale, right, y - 0.4 * mm * scale)
             if label.startswith("Towards"):
                 c.setFillColor(colors.HexColor(BRAND_INK))
-                c.setFont("Helvetica", 6)
-                c.drawString(inner_x + label_w + 1 * mm, y + 0.8 * mm, "[ ] Maintenance   [ ] Membership   [ ] Works/donation   [ ] Other ____")
-                c.setFont("Helvetica-Bold", 6.2)
+                c.setFont("Helvetica", max(5, 6 * scale))
+                c.drawString(
+                    inner_x + label_w + 1 * mm * scale,
+                    y + 0.8 * mm * scale,
+                    "[ ] Maintenance   [ ] Membership   [ ] Works/donation   [ ] Other ____",
+                )
+                c.setFont("Helvetica-Bold", max(5.2, 6.2 * scale))
             y -= line_h
 
-        # Footer
+        foot_line = box_y + 11 * mm * scale
         c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.28))
         c.setLineWidth(0.5)
-        c.line(inner_x, box_y + 11 * mm, right, box_y + 11 * mm)
+        c.line(inner_x, foot_line, right, foot_line)
         c.setFillColor(colors.HexColor(BRAND_MUTED))
-        c.setFont("Helvetica", 5.8)
-        c.drawString(inner_x, box_y + 7.5 * mm, "Mode: Cash only. Subject to verification by the Society.")
-        c.drawString(inner_x, box_y + 4.8 * mm, f"{ORG_EMAIL}  ·  {ORG_WEB}")
+        c.setFont("Helvetica", max(5, 5.8 * scale))
+        c.drawString(inner_x, box_y + 7.5 * mm * scale, "Mode: Cash only. Subject to verification by the Society.")
+        c.drawString(inner_x, box_y + 4.8 * mm * scale, f"{ORG_EMAIL}  ·  {ORG_WEB}")
+        sig_w = 45 * mm * scale
         c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.4))
-        c.line(right - 45 * mm, box_y + 7 * mm, right, box_y + 7 * mm)
+        c.line(right - sig_w, box_y + 7 * mm * scale, right, box_y + 7 * mm * scale)
         c.setFillColor(colors.HexColor(BRAND_NAVY))
-        c.setFont("Helvetica-Bold", 6)
-        c.drawCentredString(right - 22.5 * mm, box_y + 4.2 * mm, "Authorised signatory")
+        c.setFont("Helvetica-Bold", max(5, 6 * scale))
+        c.drawCentredString(right - sig_w / 2, box_y + 4.2 * mm * scale, "Authorised signatory")
         c.setFillColor(colors.HexColor(BRAND_GREEN))
-        c.setFont("Helvetica", 5.5)
-        c.drawCentredString(right - 22.5 * mm, box_y + 2.2 * mm, "Treasurer / Office bearer")
+        c.setFont("Helvetica", max(4.8, 5.5 * scale))
+        c.drawCentredString(right - sig_w / 2, box_y + 2.2 * mm * scale, "Treasurer / Office bearer")
 
     serial = start_no
-    for page_i in range(page_count):
-        for i in range(3):
-            box_y = page_h - margin_y - (i + 1) * slip_h - i * gap
-            _draw_slip(margin_x, box_y, slip_w, slip_h, serial)
-            # Tear hint between slips
-            if i < 2:
-                tear_y = box_y - gap / 2
-                c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
-                c.setFont("Helvetica", 5)
-                c.drawCentredString(page_w / 2, tear_y - 0.8 * mm, "· · · tear here · · ·")
-            serial += 1
-            if serial > 999999:
-                serial = 1
+    for _page_i in range(page_count):
+        for row in range(rows):
+            for col in range(cols):
+                box_x = margin_x + col * (slip_w + gap_x)
+                box_y = page_h - margin_y - (row + 1) * slip_h - row * gap_y
+                _draw_slip(box_x, box_y, slip_w, slip_h, serial)
+                if row < rows - 1:
+                    tear_y = box_y - gap_y / 2
+                    c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
+                    c.setFont("Helvetica", max(4.5, 5 * scale))
+                    c.drawCentredString(box_x + slip_w / 2, tear_y - 0.8 * mm * scale, "· · · tear here · · ·")
+                serial += 1
+                if serial > 999999:
+                    serial = 1
         c.showPage()
 
     c.save()
-    end_no = start_no + page_count * 3 - 1
-    fname = f"mhws-cash-receipts-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
+    end_no = start_no + page_count * slips_per_page - 1
+    fname = f"mhws-cash-receipts-{layout_key}-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
     return buf.getvalue(), fname
 
 

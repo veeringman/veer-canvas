@@ -9,7 +9,7 @@ These files are **for print production only**. They are not linked from the resi
 | File | Purpose |
 |------|---------|
 | `mhws-letterhead-pad.html` | Official **letterhead pad** — compact header, office bearers, watermark |
-| `mhws-cash-receipt-booklet.html` | **Cash receipt booklet** — 3 tear-off slips per A4 |
+| `mhws-cash-receipt-booklet.html` | **Cash receipt booklet** — 3 per A4, 2 A6 per A5, or 4 A6 per A4 |
 | `rwa-letterhead-blank.html` | Blank **letterhead pad** — org header + empty writing area |
 | `ec-committee-pad.html` | **Executive Committee Charter** — office bearers + members (letterhead theme; regenerate from DB) |
 | `proceedings-gh-mom-pad.html` | **General House MOM Register** — 2-page blank form for detailed minutes |
