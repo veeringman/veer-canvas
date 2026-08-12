@@ -150,7 +150,7 @@ def _reportlab():
     try:
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
-        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.pagesizes import A4, A5, landscape
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
         from reportlab.platypus import (
@@ -172,6 +172,7 @@ def _reportlab():
         "TA_LEFT": TA_LEFT,
         "TA_RIGHT": TA_RIGHT,
         "A4": A4,
+        "A5": A5,
         "landscape": landscape,
         "ParagraphStyle": ParagraphStyle,
         "getSampleStyleSheet": getSampleStyleSheet,
