@@ -1189,7 +1189,7 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
 
 
 def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
-    """Page grid for blank cash-receipt booklets."""
+    """Page grid for blank cash-receipt booklets (portrait baseline)."""
     layouts: dict[str, dict[str, Any]] = {
         "a4-3": {"page": "A4", "cols": 1, "rows": 3, "slips": 3},
         "a5-2": {"page": "A5", "cols": 1, "rows": 2, "slips": 2},
@@ -1201,6 +1201,29 @@ def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
     return key, layouts[key]
 
 
+def _cash_receipt_page_grid(
+    layout_key: str,
+    layout_spec: dict[str, Any],
+    orientation: str | None,
+    rl: dict[str, Any],
+) -> tuple[float, float, int, int, int, str]:
+    """Resolve page size and slip grid; landscape flips strip layouts side-by-side."""
+    page_sizes = {"A4": rl["A4"], "A5": rl["A5"]}
+    base = page_sizes[layout_spec["page"]]
+    orient = (orientation or "portrait").strip().lower()
+    if orient not in {"portrait", "landscape"}:
+        orient = "portrait"
+    if orient == "landscape":
+        page_w, page_h = rl["landscape"](base)
+    else:
+        page_w, page_h = base
+    cols = int(layout_spec["cols"])
+    rows = int(layout_spec["rows"])
+    if orient == "landscape" and layout_key in {"a4-3", "a5-2"}:
+        cols, rows = rows, cols
+    return page_w, page_h, cols, rows, int(layout_spec["slips"]), orient
+
+
 def build_cash_receipt_booklet_pdf(
     *,
     site_root: Path,
@@ -1209,8 +1232,9 @@ def build_cash_receipt_booklet_pdf(
     paper_tint: str = "cream",
     paper_pattern: str = "lines",
     layout: str = "a4-3",
+    orientation: str = "portrait",
 ) -> tuple[bytes, str]:
-    """Blank cash-receipt booklet — layout: a4-3 (default), a5-2, or a4-4."""
+    """Blank cash-receipt booklet — layout a4-3 / a5-2 / a4-4; orientation portrait or landscape."""
     from reportlab.lib import colors
     from reportlab.lib.colors import Color
     from reportlab.pdfgen import canvas as pdfcanvas
@@ -1218,11 +1242,9 @@ def build_cash_receipt_booklet_pdf(
     rl = _reportlab()
     mm = rl["mm"]
     layout_key, layout_spec = _cash_receipt_layout(layout)
-    page_sizes = {"A4": rl["A4"], "A5": rl["A5"]}
-    page_w, page_h = page_sizes[layout_spec["page"]]
-    cols = int(layout_spec["cols"])
-    rows = int(layout_spec["rows"])
-    slips_per_page = int(layout_spec["slips"])
+    page_w, page_h, cols, rows, slips_per_page, orient_key = _cash_receipt_page_grid(
+        layout_key, layout_spec, orientation, rl
+    )
 
     start_no = max(1, min(999999, int(start_no or 1)))
     page_count = max(1, min(100, int(page_count or 1)))
@@ -1427,6 +1449,15 @@ def build_cash_receipt_booklet_pdf(
                     c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
                     c.setFont("Helvetica", max(4.5, 5 * scale))
                     c.drawCentredString(box_x + slip_w / 2, tear_y - 0.8 * mm * scale, "· · · tear here · · ·")
+                elif col < cols - 1:
+                    tear_x = box_x + slip_w + gap_x / 2
+                    c.saveState()
+                    c.setFillColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.35))
+                    c.setFont("Helvetica", max(4.5, 5 * scale))
+                    c.translate(tear_x, box_y + slip_h / 2)
+                    c.rotate(90)
+                    c.drawCentredString(0, 0, "· · · tear here · · ·")
+                    c.restoreState()
                 serial += 1
                 if serial > 999999:
                     serial = 1
@@ -1434,7 +1465,7 @@ def build_cash_receipt_booklet_pdf(
 
     c.save()
     end_no = start_no + page_count * slips_per_page - 1
-    fname = f"mhws-cash-receipts-{layout_key}-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
+    fname = f"mhws-cash-receipts-{layout_key}-{orient_key}-{start_no:06d}-{min(end_no, 999999):06d}.pdf"
     return buf.getvalue(), fname
 
 

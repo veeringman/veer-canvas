@@ -3579,7 +3579,7 @@ def api_rwa_household_member_item(house_id: str, member_id: str):
 
 @app.route("/api/rwa/public/cash-receipt-booklet.pdf", methods=["GET"])
 def api_rwa_public_cash_receipt_booklet_pdf():
-    """Blank cash-receipt booklet PDF (layout: a4-3, a5-2, a4-4). Query: start, pages, layout, tint, pattern, disposition."""
+    """Blank cash-receipt booklet PDF (layout: a4-3, a5-2, a4-4; orientation: portrait, landscape)."""
     try:
         start_no = int(request.args.get("start") or 1)
     except ValueError:
@@ -3591,6 +3591,7 @@ def api_rwa_public_cash_receipt_booklet_pdf():
     tint = (request.args.get("tint") or "cream").strip().lower()
     pattern = (request.args.get("pattern") or "lines").strip().lower()
     layout = (request.args.get("layout") or "a4-3").strip().lower()
+    orientation = (request.args.get("orientation") or "portrait").strip().lower()
     disposition = (request.args.get("disposition") or "attachment").strip().lower()
     as_attachment = disposition != "inline"
     try:
@@ -3601,6 +3602,7 @@ def api_rwa_public_cash_receipt_booklet_pdf():
             paper_tint=tint,
             paper_pattern=pattern,
             layout=layout,
+            orientation=orientation,
         )
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
