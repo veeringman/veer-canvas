@@ -3028,6 +3028,119 @@ def api_rwa_session():
         conn.close()
 
 
+@app.route("/api/rwa/login/resolve", methods=["POST"])
+def api_rwa_login_resolve():
+    """Resolve plot/member for the gate without sending an email passcode."""
+    payload = request.get_json(force=True, silent=True) or {}
+    if honeypot_tripped(payload):
+        return jsonify({"ok": True, "ignored": True})
+    house_id = str(payload.get("houseId") or payload.get("plotNo") or "").strip()
+    member_id = str(payload.get("memberId") or payload.get("member_id") or "").strip() or None
+    if not house_id:
+        return jsonify({"ok": False, "error": "House / plot number required"}), 400
+    if house_id.upper().replace(" ", "") in {"ADMIN", "__SUPERADMIN__", "SUPERADMIN"}:
+        return jsonify({"ok": False, "error": "Use Super admin password login"}), 400
+
+    reachable = False
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(
+            "http://127.0.0.1:18080/agent/v1/health",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8") or "{}")
+            reachable = str(data.get("status") or "") in ("ok", "degraded")
+    except Exception:
+        reachable = False
+
+    conn = _rwa_conn()
+    try:
+        rwa_portal.ensure_household_ready(conn)
+        resident = rwa_portal.find_resident(conn, house_id)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found in colony register"}), 404
+        if resident.get("house_id") == rwa_portal.SUPERADMIN_HOUSE_ID:
+            return jsonify({"ok": False, "error": "Use Super admin password login"}), 400
+
+        members = rwa_household.login_members_public(conn, resident["house_id"])
+        if not members:
+            return jsonify({"ok": False, "error": "No active household members for this plot"}), 400
+
+        if len(members) > 1 and not member_id:
+            any_linked = any(bool(m.get("authbuddyLinked")) for m in members)
+            return jsonify({
+                "ok": True,
+                "needsMemberPick": True,
+                "houseId": resident["house_id"],
+                "householdName": resident.get("name") or "",
+                "members": members,
+                "authbuddyReachable": reachable,
+                "anyAuthbuddyLinked": any_linked,
+                "message": "Who is signing in for this plot?",
+            })
+
+        if member_id:
+            member = rwa_household.get_member(conn, member_id)
+            if not member or member.get("house_id") != resident["house_id"]:
+                return jsonify({"ok": False, "error": "Household member not found"}), 404
+            if (member.get("status") or "active") != "active":
+                return jsonify({"ok": False, "error": "This household member is inactive"}), 400
+        else:
+            member = rwa_household.get_member(conn, members[0]["id"])
+
+        gaps = rwa_household.member_contact_gaps(member)
+        pub = rwa_household.public_member(member, include_contacts=False)
+        linked = bool(pub.get("authbuddyLinked"))
+        prefer_authbuddy = bool(reachable and linked)
+
+        if gaps["needsContact"] and not prefer_authbuddy:
+            return jsonify({
+                "ok": True,
+                "needsContact": True,
+                "houseId": resident["house_id"],
+                "memberId": member["id"],
+                "name": member.get("name") or "",
+                "missingEmail": gaps["missingEmail"],
+                "missingPhone": gaps["missingPhone"],
+                "authbuddyReachable": reachable,
+                "authbuddyLinked": linked,
+                "authbuddyUsername": pub.get("authbuddyUsername"),
+                "preferAuthbuddy": False,
+                "message": (
+                    f"Contact details are missing for {member.get('name') or 'this person'}. "
+                    "Enter them below — we email a one-time code, and only after you verify "
+                    "that code will email/phone be saved."
+                ),
+            })
+
+        return jsonify({
+            "ok": True,
+            "ready": True,
+            "houseId": resident["house_id"],
+            "memberId": member["id"],
+            "memberName": member.get("name") or "",
+            "emailMasked": pub.get("emailMasked"),
+            "hasEmail": bool(pub.get("hasEmail")),
+            "needsContact": bool(gaps["needsContact"]),
+            "missingEmail": gaps["missingEmail"],
+            "missingPhone": gaps["missingPhone"],
+            "authbuddyReachable": reachable,
+            "authbuddyLinked": linked,
+            "authbuddyUsername": pub.get("authbuddyUsername"),
+            "preferAuthbuddy": prefer_authbuddy,
+            "message": (
+                "Continue with AuthBuddy"
+                if prefer_authbuddy
+                else "Send an email passcode to continue"
+            ),
+        })
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/otp/request", methods=["POST"])
 def api_rwa_otp_request():
     payload = request.get_json(force=True, silent=True) or {}

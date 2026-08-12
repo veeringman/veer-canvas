@@ -220,32 +220,62 @@
     return method;
   }
 
+  function buildChoosableLoginMethods(options) {
+    const out = [];
+    const add = (m) => { if (m && !out.includes(m)) out.push(m); };
+    const policyOk = (m) => !policy || policyAllows(m);
+
+    if (options.has_password && (!policy || policy.password_required !== false || policyAllows('password'))) {
+      add('password');
+    }
+    if (options.has_passkey && (!policy || policy.passkey_allowed || policyAllows('passkey'))) {
+      add('passkey');
+    }
+    if (options.has_totp && policyOk('totp')) add('totp');
+    if (options.has_hotp && policyOk('hotp')) add('hotp');
+    // QR / number match are first-factor capable (BuddyAuthenticator approve).
+    if (policyOk('qr') || policyOk('number_match')) add('qr');
+    // Hybrid PQC is MFA-session oriented; still list when policy allows and account may use it after password.
+    // Offer as a primary tab only when password is not the only path — users can pick QR instead.
+    // Keep hybrid visible in pills via policyMethods(); primary tab when enrolled is unknown from options.
+    return out;
+  }
+
   function renderLoginOptions(options) {
     loginOptions = options;
     qs('loginIdentifyStep').hidden = true;
     qs('loginCredentialStep').hidden = false;
     qs('loginUserLabel').textContent = options.username;
 
+    const choosable = buildChoosableLoginMethods(options);
+    const policyList = policyMethods().length
+      ? policyMethods().map((m) => (m === 'number_match' ? 'qr' : m))
+      : choosable.slice();
+    const pillMethods = [];
+    policyList.forEach((m) => {
+      const key = m === 'number_match' ? 'qr' : m;
+      if (!pillMethods.includes(key)) pillMethods.push(key);
+    });
+    choosable.forEach((m) => {
+      if (!pillMethods.includes(m)) pillMethods.push(m);
+    });
+
     const pills = qs('loginMethodPills');
-    let methods = options.primary_methods || [];
-    // Filter by site policy when available
-    if (policy) {
-      methods = methods.filter((m) => {
-        if (m === 'password') return policy.password_required !== false || policyAllows('password');
-        if (m === 'passkey') return policy.passkey_allowed || policyAllows('passkey');
-        return policyAllows(m) || true;
-      });
-    }
-    pills.innerHTML = methods.length
-      ? methods.map((m) => `<span class="status-pill">${methodLabel(m)}</span>`).join('')
+    pills.innerHTML = pillMethods.length
+      ? pillMethods.map((m) => {
+        const label = methodLabel(m);
+        return `<span class="status-pill${choosable.includes(m) ? '' : ' is-muted'}" title="${
+          choosable.includes(m) ? 'Available now' : 'Allowed by site policy'
+        }">${label}</span>`;
+      }).join('')
       : '<span class="status-pill">No methods</span>';
 
-    const choosable = methods.filter((m) => m === 'password' || m === 'totp' || m === 'hotp' || m === 'passkey');
     if (!choosable.length) {
       setError('This account has no usable sign-in method yet. Complete authenticator setup after creating an account.');
       qs('loginPasswordBlock').hidden = true;
       qs('loginOtpBlock').hidden = true;
       qs('loginPasskeyBlock').hidden = true;
+      if (qs('loginQrBlock')) qs('loginQrBlock').hidden = true;
       qs('loginMethodTabs').hidden = true;
       qs('loginSubmitBtn').disabled = true;
       return;
@@ -254,10 +284,11 @@
     qs('loginSubmitBtn').disabled = false;
     if (choosable.includes('password')) activeLoginMethod = 'password';
     else if (choosable.includes('passkey')) activeLoginMethod = 'passkey';
+    else if (choosable.includes('qr')) activeLoginMethod = 'qr';
     else activeLoginMethod = choosable[0];
     renderLoginMethodTabs(choosable);
     applyLoginMethod(activeLoginMethod);
-    setStatus(options.message || '');
+    setStatus(options.message || 'Choose any allowed sign-in method.');
   }
 
   function renderLoginMethodTabs(methods) {
@@ -266,6 +297,7 @@
     if (methods.includes('password')) groups.push({ id: 'password', label: 'Password' });
     if (methods.includes('passkey')) groups.push({ id: 'passkey', label: 'Passkey' });
     if (methods.includes('totp') || methods.includes('hotp')) groups.push({ id: 'otp', label: 'Authenticator' });
+    if (methods.includes('qr')) groups.push({ id: 'qr', label: 'QR / Approve' });
 
     if (groups.length < 2) {
       tabs.hidden = true;
@@ -277,6 +309,7 @@
     tabs.innerHTML = groups.map((g) => {
       const active = (g.id === 'password' && activeLoginMethod === 'password')
         || (g.id === 'passkey' && activeLoginMethod === 'passkey')
+        || (g.id === 'qr' && activeLoginMethod === 'qr')
         || (g.id === 'otp' && (activeLoginMethod === 'totp' || activeLoginMethod === 'hotp'));
       return `<button type="button" class="auth-tab${active ? ' is-active' : ''}" data-login-method="${g.id}">${g.label}</button>`;
     }).join('');
@@ -286,7 +319,8 @@
         const group = btn.dataset.loginMethod;
         if (group === 'password') activeLoginMethod = 'password';
         else if (group === 'passkey') activeLoginMethod = 'passkey';
-        else if (loginOptions.has_totp) activeLoginMethod = 'totp';
+        else if (group === 'qr') activeLoginMethod = 'qr';
+        else if (loginOptions && loginOptions.has_totp) activeLoginMethod = 'totp';
         else activeLoginMethod = 'hotp';
         tabs.querySelectorAll('.auth-tab').forEach((b) => b.classList.toggle('is-active', b === btn));
         applyLoginMethod(activeLoginMethod);
@@ -299,6 +333,7 @@
     const passwordBlock = qs('loginPasswordBlock');
     const otpBlock = qs('loginOtpBlock');
     const passkeyBlock = qs('loginPasskeyBlock');
+    const qrBlock = qs('loginQrBlock');
     const submitRow = qs('loginSubmitRow');
     const pw = qs('loginPassword');
     const otp = qs('loginOtpCode');
@@ -306,9 +341,11 @@
     passwordBlock.hidden = true;
     otpBlock.hidden = true;
     passkeyBlock.hidden = true;
+    if (qrBlock) qrBlock.hidden = true;
     pw.required = false;
     otp.required = false;
     submitRow.hidden = false;
+    stopDevicePoll();
 
     if (method === 'password') {
       passwordBlock.hidden = false;
@@ -321,6 +358,13 @@
     if (method === 'passkey') {
       passkeyBlock.hidden = false;
       submitRow.hidden = true;
+      return;
+    }
+
+    if (method === 'qr') {
+      if (qrBlock) qrBlock.hidden = false;
+      submitRow.hidden = true;
+      startDeviceChallenge('login').catch((err) => setError(err.message || 'Could not start QR challenge'));
       return;
     }
 
@@ -457,7 +501,7 @@
     if (hybridBlock) hybridBlock.hidden = !isHybrid;
     if (isQr) {
       stopHybridPqcPoll();
-      startDeviceChallenge().catch((err) => setError(err.message || 'Could not start QR challenge'));
+      startDeviceChallenge('mfa').catch((err) => setError(err.message || 'Could not start QR challenge'));
     } else if (isHybrid) {
       stopDevicePoll();
       startHybridPqcChallenge().catch((err) => setError(err.message || 'Could not start Hybrid PQC challenge'));
@@ -468,47 +512,53 @@
     }
   }
 
-  async function startDeviceChallenge() {
+  async function startDeviceChallenge(purpose) {
     stopDevicePoll();
     setError('');
-    qs('mfaDeviceStatus').textContent = 'Starting challenge…';
+    const isLoginQr = purpose === 'login';
+    const statusEl = isLoginQr ? qs('loginDeviceStatus') : qs('mfaDeviceStatus');
+    const matchEl = isLoginQr ? qs('loginMatchNumber') : qs('mfaMatchNumber');
+    const img = isLoginQr ? qs('loginDeviceQrImg') : qs('mfaDeviceQrImg');
+    if (statusEl) statusEl.textContent = 'Starting challenge…';
     const username = enrollUsername
       || (loginOptions && loginOptions.username)
       || String(qs('loginUsername').value || '').trim();
     const begin = await window.VeerAuth.idpPost('/auth/mfa/device_challenge/begin', {
-      purpose: 'mfa',
+      purpose: isLoginQr ? 'login' : 'mfa',
       username: username || undefined,
       client_id: clientId(),
     });
     deviceChallengeId = begin.challenge_id;
-    qs('mfaMatchNumber').textContent = String(begin.number).padStart(2, '0');
-    const img = qs('mfaDeviceQrImg');
-    if (begin.qr_data_uri) {
-      img.src = begin.qr_data_uri;
-      img.hidden = false;
-    } else {
-      img.hidden = true;
+    if (matchEl) matchEl.textContent = String(begin.number).padStart(2, '0');
+    if (img) {
+      if (begin.qr_data_uri) {
+        img.src = begin.qr_data_uri;
+        img.hidden = false;
+      } else {
+        img.hidden = true;
+      }
     }
-    qs('mfaDeviceStatus').textContent = 'Waiting for BuddyAuthenticator approval…';
+    if (statusEl) statusEl.textContent = 'Waiting for BuddyAuthenticator approval…';
     devicePollTimer = setInterval(() => {
-      pollDeviceChallenge().catch(() => {});
+      pollDeviceChallenge(isLoginQr).catch(() => {});
     }, 2000);
   }
 
-  async function pollDeviceChallenge() {
+  async function pollDeviceChallenge(isLoginQr) {
     if (!deviceChallengeId) return;
     const st = await window.VeerAuth.idpPost('/auth/mfa/device_challenge/status', {
       challenge_id: deviceChallengeId,
     });
+    const statusEl = isLoginQr ? qs('loginDeviceStatus') : qs('mfaDeviceStatus');
     if (st.status === 'approved') {
       stopDevicePoll();
       if (st.session_id) window.VeerAuth.saveSessionId(st.session_id);
-      qs('mfaDeviceStatus').textContent = 'Approved. Continuing…';
+      if (statusEl) statusEl.textContent = 'Approved. Continuing…';
       setStatus('Verified. Continuing…');
       setTimeout(() => { continueToReturn(); }, 500);
     } else if (st.status === 'expired') {
       stopDevicePoll();
-      qs('mfaDeviceStatus').textContent = 'Challenge expired — tap Refresh QR.';
+      if (statusEl) statusEl.textContent = 'Challenge expired — tap Refresh QR.';
     }
   }
 
@@ -882,7 +932,13 @@
     const restartQr = qs('mfaRestartQrBtn');
     if (restartQr) {
       restartQr.addEventListener('click', () => {
-        startDeviceChallenge().catch((err) => setError(err.message || 'Could not refresh QR'));
+        startDeviceChallenge('mfa').catch((err) => setError(err.message || 'Could not refresh QR'));
+      });
+    }
+    const loginRestartQr = qs('loginRestartQrBtn');
+    if (loginRestartQr) {
+      loginRestartQr.addEventListener('click', () => {
+        startDeviceChallenge('login').catch((err) => setError(err.message || 'Could not refresh QR'));
       });
     }
     const restartHybrid = qs('mfaRestartHybridPqcBtn');
@@ -901,7 +957,49 @@
     }
 
     const existing = await window.VeerAuth.getSession(true);
-    if (window.VeerAuth.isAuthenticated(existing)) {
+    const purpose = params().get('purpose') || '';
+    const linkedUsername = (
+      params().get('username')
+      || params().get('authbuddyUsername')
+      || ''
+    ).trim();
+    // Colony gate login/bridge must always challenge. A leftover AuthBuddy
+    // session (e.g. after portal-only Sign out) must not auto-enter.
+    const forceCredentialChallenge = purpose === 'login' || purpose === 'bridge';
+    if (forceCredentialChallenge) {
+      // Drop SSO so password / passkey / TOTP / QR is required again.
+      try { window.VeerAuth.saveSessionId(''); } catch (_e) { /* ignore */ }
+      try {
+        await fetch('/agent/v1/logout?return_to=' + encodeURIComponent(window.location.href), {
+          method: 'GET',
+          credentials: 'include',
+          redirect: 'manual',
+        });
+      } catch (_e) { /* ignore */ }
+      try {
+        await fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+      } catch (_e) { /* ignore */ }
+      showTab('login');
+      const prior = linkedUsername
+        || (existing && existing.session
+          ? (existing.session.username || existing.session.email || '')
+          : '');
+      if (prior && qs('loginUsername')) {
+        qs('loginUsername').value = prior;
+      }
+      if (prior) {
+        qs('authSubtitle').textContent = `Sign in as ${prior} with any method allowed for HBC Sanyard.`;
+        setStatus('Choose password, passkey, authenticator code, or QR approve.');
+        await continueWithUsername();
+      } else {
+        setStatus('Sign in with AuthBuddy to continue to the colony portal.');
+      }
+    } else if (window.VeerAuth.isAuthenticated(existing)) {
       // Already signed in — continue to the gated page (e.g. Learn more → project).
       if (params().get('return_to')) {
         setStatus('You are signed in. Continuing…');
@@ -916,6 +1014,11 @@
       } else {
         showMfaEnrollPanel('You are signed in. Optionally enroll another authenticator.', { forced: false });
       }
+    } else if (linkedUsername) {
+      showTab('login');
+      if (qs('loginUsername')) qs('loginUsername').value = linkedUsername;
+      setStatus('Choose a sign-in method.');
+      await continueWithUsername();
     } else if (window.VeerAuth.savedSessionId()) {
       // Enrollment-only cookie may still exist — prompt to finish setup.
       showMfaEnrollPanel('Finish authenticator setup to access protected pages.', { forced: true });

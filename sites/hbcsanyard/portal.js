@@ -7,6 +7,11 @@
     missingEmail: false,
     missingPhone: false,
     authbuddyLinked: false,
+    authbuddyReachable: false,
+    preferAuthbuddy: false,
+    authbuddyUsername: '',
+    pendingMemberName: '',
+    pendingEmailMasked: '',
     msgThreads: [],
     msgActiveThreadId: null,
     msgCanModerate: false,
@@ -7679,8 +7684,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     el('otpMemberForm') && (el('otpMemberForm').hidden = true);
     el('otpContactForm') && (el('otpContactForm').hidden = true);
     el('otpVerifyForm') && (el('otpVerifyForm').hidden = true);
-    if (el('authbuddyGatePane')) el('authbuddyGatePane').hidden = true;
-    if (el('authbuddyContinueBtn')) el('authbuddyContinueBtn').hidden = true;
+    if (el('authChoicePane')) el('authChoicePane').hidden = true;
+    if (el('authbuddyPrimaryBlock')) el('authbuddyPrimaryBlock').hidden = true;
+    if (el('emailPasscodePrimaryBlock')) el('emailPasscodePrimaryBlock').hidden = true;
+    if (el('authbuddyContinueBtn')) el('authbuddyContinueBtn').hidden = false;
     if (el('authbuddySignInBtn')) el('authbuddySignInBtn').hidden = true;
     if (el('otpInput')) el('otpInput').value = '';
     if (el('otpContactEmail')) el('otpContactEmail').value = '';
@@ -7692,45 +7699,100 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     state.missingEmail = false;
     state.missingPhone = false;
     state.authbuddyLinked = false;
+    state.authbuddyReachable = false;
+    state.preferAuthbuddy = false;
+    state.authbuddyUsername = '';
+    state.pendingMemberName = '';
+    state.pendingEmailMasked = '';
     showError('');
   }
 
-  async function refreshAuthbuddyGate() {
-    const pane = el('authbuddyGatePane');
-    const cont = el('authbuddyContinueBtn');
-    const sign = el('authbuddySignInBtn');
-    if (!pane || !cont || !sign) return;
-    const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
-    if (!houseId) {
-      pane.hidden = true;
+  function hideGateStepsExcept(keepId) {
+    ['otpRequestForm', 'otpMemberForm', 'otpContactForm', 'authChoicePane', 'otpVerifyForm'].forEach((id) => {
+      if (!el(id)) return;
+      el(id).hidden = id !== keepId;
+    });
+  }
+
+  function showAuthChoicePane(data) {
+    state.pendingHouse = data.houseId || state.pendingHouse;
+    state.pendingMemberId = data.memberId || state.pendingMemberId || '';
+    state.pendingMemberName = data.memberName || data.name || '';
+    state.pendingEmailMasked = data.emailMasked || '';
+    state.authbuddyLinked = Boolean(data.authbuddyLinked);
+    state.authbuddyReachable = Boolean(data.authbuddyReachable);
+    state.preferAuthbuddy = Boolean(data.preferAuthbuddy);
+    state.authbuddyUsername = data.authbuddyUsername || state.authbuddyUsername || '';
+
+    hideGateStepsExcept('authChoicePane');
+    const who = state.pendingMemberName ? ` · ${escapeHtml(state.pendingMemberName)}` : '';
+    const hint = el('authChoiceHint');
+    if (hint) {
+      hint.innerHTML = `Plot <strong>${escapeHtml(state.pendingHouse)}</strong>${who}`;
+    }
+
+    const abBlock = el('authbuddyPrimaryBlock');
+    const emailBlock = el('emailPasscodePrimaryBlock');
+    const abHint = el('authbuddyGateHint');
+    const emailHint = el('emailPasscodeHint');
+    const signBtn = el('authbuddySignInBtn');
+
+    if (state.preferAuthbuddy) {
+      if (abBlock) abBlock.hidden = false;
+      if (emailBlock) emailBlock.hidden = false;
+      // Linked: AuthBuddy is primary; email is secondary ghost already in abBlock.
+      if (emailBlock) emailBlock.hidden = true;
+      if (abHint) {
+        const uname = data.authbuddyUsername ? ` (${escapeHtml(data.authbuddyUsername)})` : '';
+        abHint.innerHTML = `AuthBuddy is linked${uname}. Sign in with password, passkey, authenticator code, or QR approve — one factor is enough.`;
+      }
+    } else {
+      if (abBlock) abBlock.hidden = true;
+      if (emailBlock) emailBlock.hidden = false;
+      if (signBtn) {
+        // Offer AuthBuddy only when reachable (even if not yet linked — register/sign-in path).
+        signBtn.hidden = !state.authbuddyReachable;
+        const label = signBtn.querySelector('span') || signBtn;
+        label.textContent = state.authbuddyLinked ? 'Continue with AuthBuddy' : 'Sign in / register with AuthBuddy';
+      }
+      if (emailHint) {
+        const dest = state.pendingEmailMasked
+          ? ` to ${escapeHtml(state.pendingEmailMasked)}`
+          : '';
+        emailHint.innerHTML = `A one-time code will be emailed${dest} only when you tap <strong>Send email passcode</strong>.`;
+      }
+    }
+  }
+
+  async function resolveLogin(payload) {
+    return api('/api/rwa/login/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ website: '', ...payload }),
+    });
+  }
+
+  async function handleLoginResolveResult(data, houseId) {
+    state.pendingHouse = data.houseId || houseId;
+    if (data.memberId) state.pendingMemberId = data.memberId;
+    if (data.needsMemberPick) {
+      showMemberPicker(data);
       return;
     }
-    try {
-      const q = new URLSearchParams({ houseId });
-      if (state.pendingMemberId) q.set('memberId', state.pendingMemberId);
-      const st = await api('/api/rwa/authbuddy/status?' + q.toString());
-      if (!st.reachable) {
-        pane.hidden = true;
-        return;
-      }
-      pane.hidden = false;
-      state.authbuddyLinked = Boolean(st.linked);
-      cont.hidden = !st.linked;
-      sign.hidden = false;
-      const hint = el('authbuddyGateHint');
-      if (hint) {
-        hint.textContent = st.linked
-          ? 'Linked to AuthBuddy — password, passkey, TOTP, or QR approve (one factor). BuddyAuthenticator preferred; iOS may use Google/Microsoft Authenticator for TOTP only.'
-          : 'Link AuthBuddy after email passcode. BuddyAuthenticator preferred; on iOS Google/Microsoft Authenticator works for TOTP codes only. OTP still works.';
-      }
-    } catch (_e) {
-      pane.hidden = true;
+    if (data.needsContact) {
+      showContactForm(data);
+      return;
     }
+    if (data.ready) {
+      showAuthChoicePane(data);
+      return;
+    }
+    showError(data.message || 'Could not continue sign-in');
   }
 
   function authbuddyAuthUrl(purpose) {
     const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
     const memberId = state.pendingMemberId || '';
+    const username = state.authbuddyUsername || '';
     const returnTo = new URL('index.html', window.location.href);
     returnTo.hash = 'home';
     const auth = new URL('auth.html', window.location.href);
@@ -7738,7 +7800,30 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     auth.searchParams.set('purpose', purpose || 'login');
     if (houseId) auth.searchParams.set('houseId', houseId);
     if (memberId) auth.searchParams.set('memberId', memberId);
+    if (username) auth.searchParams.set('username', username);
     return auth.href;
+  }
+
+  async function sendEmailPasscodeNow() {
+    showError('');
+    const payload = {
+      houseId: state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '',
+      memberId: state.pendingMemberId || undefined,
+    };
+    if (!payload.houseId) {
+      showError('Enter your house / plot number first');
+      return;
+    }
+    const data = await requestOtp(payload);
+    if (data.needsMemberPick) {
+      showMemberPicker(data);
+      return;
+    }
+    if (data.needsContact) {
+      showContactForm(data);
+      return;
+    }
+    showVerifyForm(data);
   }
 
   const AUTHBUDDY_LINK_DISMISS_KEY = 'hbcsanyard_authbuddy_link_dismissed';
@@ -7911,23 +7996,24 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function showMemberPicker(data) {
     state.pendingHouse = data.houseId || state.pendingHouse;
     state.pendingMemberId = '';
-    el('otpRequestForm').hidden = true;
-    el('otpContactForm').hidden = true;
-    el('otpVerifyForm').hidden = true;
-    el('otpMemberForm').hidden = false;
+    hideGateStepsExcept('otpMemberForm');
     const name = data.householdName ? ` (${escapeHtml(data.householdName)})` : '';
     el('otpMemberHint').innerHTML = data.message
       || `Who is signing in for plot <strong>${escapeHtml(state.pendingHouse)}</strong>${name}?`;
     const list = el('otpMemberList');
-    list.innerHTML = (data.members || []).map((m) => `
+    list.innerHTML = (data.members || []).map((m) => {
+      const ab = m.authbuddyLinked
+        ? ' · <span class="gate-ab-badge"><img class="authbuddy-mark" src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="14" height="14" alt="" decoding="async"> AuthBuddy</span>'
+        : '';
+      return `
       <button type="button" class="member-pick-btn" data-member-id="${escapeHtml(m.id)}">
         ${personAvatarHtml({ ...m, photoUrl: '' }, { size: 'md' })}
         <span class="member-pick-text">
           <strong>${escapeHtml(m.name || 'Member')}</strong>
-          <span class="muted">${escapeHtml(m.relationLabel || m.relation || '')}${m.viewOnly ? ' · view only' : ''}${m.emailMasked ? ` · ${escapeHtml(m.emailMasked)}` : ''}</span>
+          <span class="muted">${escapeHtml(m.relationLabel || m.relation || '')}${m.viewOnly ? ' · view only' : ''}${m.emailMasked ? ` · ${escapeHtml(m.emailMasked)}` : ''}${ab}</span>
         </span>
-      </button>
-    `).join('');
+      </button>`;
+    }).join('');
   }
 
   function showContactForm(data) {
@@ -7935,10 +8021,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     state.pendingMemberId = data.memberId || state.pendingMemberId;
     state.missingEmail = Boolean(data.missingEmail);
     state.missingPhone = Boolean(data.missingPhone);
-    el('otpRequestForm').hidden = true;
-    el('otpMemberForm') && (el('otpMemberForm').hidden = true);
-    el('otpVerifyForm').hidden = true;
-    el('otpContactForm').hidden = false;
+    hideGateStepsExcept('otpContactForm');
     const name = data.name ? ` for ${data.name}` : '';
     el('otpContactHint').textContent = data.message
       || `Plot ${state.pendingHouse}${name} is missing contact details. Enter them below. They are saved only after you verify the emailed code.`;
@@ -7958,10 +8041,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     state.pendingHouse = data.houseId || state.pendingHouse;
     state.pendingMemberId = data.memberId || state.pendingMemberId;
     state.pendingContact = Boolean(data.contactPending || data.pendingContact);
-    el('otpRequestForm').hidden = true;
-    el('otpMemberForm') && (el('otpMemberForm').hidden = true);
-    el('otpContactForm').hidden = true;
-    el('otpVerifyForm').hidden = false;
+    hideGateStepsExcept('otpVerifyForm');
     const who = data.memberName ? ` · ${escapeHtml(data.memberName)}` : '';
     let hint = `Code sent for plot <strong>${escapeHtml(state.pendingHouse)}</strong>${who}`;
     if (data.emailMasked) hint += ` to ${escapeHtml(data.emailMasked)}`;
@@ -7970,7 +8050,6 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       hint += '. Enter the code to confirm — email/phone are saved only after verification.';
     }
     el('otpHint').innerHTML = hint;
-    refreshAuthbuddyGate().catch(() => {});
   }
 
   async function requestOtp(payload) {
@@ -8000,10 +8079,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const houseId = el('houseIdInput').value.trim();
     el('requestOtpBtn').disabled = true;
     try {
-      const data = await requestOtp({ houseId });
-      await handleOtpRequestResult(data, houseId);
+      const data = await resolveLogin({ houseId });
+      await handleLoginResolveResult(data, houseId);
     } catch (err) {
-      showError(err.message || 'Could not send code');
+      showError(err.message || 'Could not continue');
     } finally {
       el('requestOtpBtn').disabled = false;
     }
@@ -8016,18 +8095,43 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const memberId = btn.getAttribute('data-member-id');
     btn.disabled = true;
     try {
-      const data = await requestOtp({
+      const data = await resolveLogin({
         houseId: state.pendingHouse,
         memberId,
       });
-      await handleOtpRequestResult(data, state.pendingHouse);
+      await handleLoginResolveResult(data, state.pendingHouse);
     } catch (err) {
-      showError(err.message || 'Could not send code');
+      showError(err.message || 'Could not continue');
       btn.disabled = false;
     }
   });
 
   el('otpMemberBackBtn')?.addEventListener('click', () => resetLoginForms());
+  el('authChoiceBackBtn')?.addEventListener('click', () => resetLoginForms());
+
+  el('useEmailPasscodeBtn')?.addEventListener('click', async () => {
+    const btn = el('useEmailPasscodeBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await sendEmailPasscodeNow();
+    } catch (err) {
+      showError(err.message || 'Could not send code');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('sendEmailPasscodeBtn')?.addEventListener('click', async () => {
+    const btn = el('sendEmailPasscodeBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await sendEmailPasscodeNow();
+    } catch (err) {
+      showError(err.message || 'Could not send code');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 
   el('otpContactForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -8458,9 +8562,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     try { await api('/api/rwa/logout', { method: 'POST', body: '{}' }); } catch (_e) { /* ignore */ }
     clearAuthbuddyLinkDismissed();
     document.getElementById('authbuddyLinkModal')?.remove();
-    setAuthed(null);
-    resetLoginForms();
-    showLanding();
+    // Colony Sign out must also end AuthBuddy SSO. Otherwise auth.html sees a
+    // live /agent/v1/session cookie and auto-enters without a challenge.
+    const returnTo = new URL('index.html', window.location.href).href;
+    if (window.VeerAuth && typeof window.VeerAuth.logout === 'function') {
+      window.VeerAuth.logout(returnTo);
+      return;
+    }
+    try { localStorage.removeItem('hbcsanyard_authbuddy_session'); } catch (_e) { /* ignore */ }
+    window.location.replace('/agent/v1/logout?return_to=' + encodeURIComponent(returnTo));
   });
 
   document.querySelectorAll('.tab').forEach((tab) => {

@@ -7,12 +7,12 @@
   <meta name="description" content="Link or sign in with AuthBuddy for Himuda Housing Colony Sanyard.">
   <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260812auth2">
+  <link rel="stylesheet" href="portal.css?v=20260812ab3">
   <!-- Do not load style.css here — it is the dark catalog theme and washes out this form. -->
-  <script src="site-utils.js?v=20260812auth2" defer></script>
-  <script src="site-meta.js?v=20260812auth2" defer></script>
-  <script src="auth.js?v=20260812auth2" defer></script>
-  <script src="auth-page.js?v=20260812auth2" defer></script>
+  <script src="site-utils.js?v=20260812ab3" defer></script>
+  <script src="site-meta.js?v=20260812ab3" defer></script>
+  <script src="auth.js?v=20260812ab3" defer></script>
+  <script src="auth-page.js?v=20260812ab3" defer></script>
   <style>
     body.auth-body {
       color: #15233f;
@@ -26,6 +26,18 @@
       padding: 1.5rem 1rem 3rem;
       color: #15233f;
     }
+    .auth-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-bottom: 0.35rem;
+    }
+    .authbuddy-mark {
+      display: block;
+      flex: 0 0 auto;
+      border-radius: 10px;
+    }
+    .authbuddy-mark-lg { width: 48px; height: 48px; }
     .auth-hero h1 { font-size: 1.6rem; margin: 0.25rem 0; color: #15233f; }
     .auth-hero .lede,
     .auth-hero .muted,
@@ -76,6 +88,10 @@
       color: #0c7c7a;
       font-size: 0.75rem;
     }
+    .status-pill.is-muted {
+      background: #eef1f5;
+      color: rgba(21, 35, 63, 0.55);
+    }
     #authError { color: #b3261e; margin-top: 0.75rem; }
     #authStatus { color: #0c7c7a; margin-top: 0.75rem; }
     fieldset { border: 1px solid #c5d0de; border-radius: 12px; padding: 0.75rem 1rem; }
@@ -87,8 +103,13 @@
   <main class="auth-page">
     <p class="auth-back"><a class="btn ghost compact" href="index.html">← Back to portal</a></p>
     <header class="auth-hero">
-      <p class="eyebrow">HBC Sanyard · AuthBuddy</p>
-      <h1 id="authTitle">Sign in</h1>
+      <div class="auth-brand-row">
+        <img class="authbuddy-mark authbuddy-mark-lg" src="assets/authbuddy/authbuddy-mark.png?v=20260812ab1" width="48" height="48" alt="AuthBuddy" decoding="async">
+        <div>
+          <p class="eyebrow">HBC Sanyard · AuthBuddy</p>
+          <h1 id="authTitle">Sign in</h1>
+        </div>
+      </div>
       <p class="lede muted" id="authSubtitle">Use the same AuthBuddy account as other VeerLabs apps if you already have one. Colony access still starts with your plot + email passcode.</p>
       <div id="methodPills"></div>
       <p class="muted" id="policyNotes"></p>
@@ -123,6 +144,12 @@
           </div>
           <div id="loginPasskeyBlock" hidden>
             <button type="button" class="btn primary" id="loginPasskeyBtn">Use passkey</button>
+          </div>
+          <div id="loginQrBlock" hidden>
+            <p>Match number: <strong id="loginMatchNumber">--</strong></p>
+            <img id="loginDeviceQrImg" alt="Device challenge QR" width="180" height="180" hidden>
+            <p class="muted" id="loginDeviceStatus"></p>
+            <button type="button" class="btn ghost" id="loginRestartQrBtn">Refresh QR</button>
           </div>
           <div id="loginSubmitRow">
             <button type="submit" class="btn primary" id="loginSubmitBtn">Sign in</button>

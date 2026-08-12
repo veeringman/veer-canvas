@@ -20,10 +20,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260812auth3">
+  <link rel="stylesheet" href="portal.css?v=20260812ab1">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260811mom1">
-  <script src="auth.js?v=20260812auth1" defer></script>
-  <script src="portal.js?v=20260812auth1" defer></script>
+  <script src="auth.js?v=20260812ab3" defer></script>
+  <script src="portal.js?v=20260812ab3" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -120,7 +120,7 @@
     <section class="gate-card" id="loginCard">
       <div id="plotLoginPane">
         <h2>Residents</h2>
-        <p class="muted">Sign in with your house / plot number as registered with the RWA. A one-time code is emailed when an address is on file.</p>
+        <p class="muted" id="gateIntroCopy">Enter your house / plot number. If AuthBuddy is linked for your member, that will be offered first — email passcodes are only sent when you choose them.</p>
         <form id="otpRequestForm" class="stack" method="post" action="#" onsubmit="return false;">
           <label>
             House / plot number
@@ -148,6 +148,28 @@
           <button type="submit" class="btn primary" id="otpContactSubmitBtn">Send verification code</button>
           <button type="button" class="btn ghost" id="otpContactBackBtn">Back</button>
         </form>
+
+        <div id="authChoicePane" class="stack gate-auth-choice" hidden>
+          <p class="muted" id="authChoiceHint"></p>
+          <div id="authbuddyPrimaryBlock" class="stack" hidden>
+            <button type="button" class="btn primary btn-with-icon" id="authbuddyContinueBtn">
+              <img class="authbuddy-mark" src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="22" height="22" alt="" decoding="async">
+              <span>Continue with AuthBuddy</span>
+            </button>
+            <p class="muted gate-auth-note" id="authbuddyGateHint">Password, passkey, authenticator code, or QR approve — one factor is enough.</p>
+            <button type="button" class="btn ghost" id="useEmailPasscodeBtn">Use email passcode instead</button>
+          </div>
+          <div id="emailPasscodePrimaryBlock" class="stack" hidden>
+            <button type="button" class="btn primary" id="sendEmailPasscodeBtn">Send email passcode</button>
+            <p class="muted gate-auth-note" id="emailPasscodeHint">A one-time code will be emailed only when you tap Send.</p>
+            <button type="button" class="btn ghost btn-with-icon" id="authbuddySignInBtn" hidden>
+              <img class="authbuddy-mark" src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="20" height="20" alt="" decoding="async">
+              <span>Sign in with AuthBuddy</span>
+            </button>
+          </div>
+          <button type="button" class="btn ghost" id="authChoiceBackBtn">Use a different plot</button>
+        </div>
+
         <form id="otpVerifyForm" class="stack" hidden method="post" action="#" onsubmit="return false;">
           <p class="muted" id="otpHint"></p>
           <label>
@@ -157,13 +179,6 @@
           <button type="submit" class="btn primary" id="verifyOtpBtn">Verify &amp; enter</button>
           <button type="button" class="btn ghost" id="restartLoginBtn">Use a different plot</button>
         </form>
-
-        <div id="authbuddyGatePane" class="stack" hidden>
-          <hr class="gate-sep" style="border:0;border-top:1px solid #d5dee8;margin:0.5rem 0 0.25rem">
-          <p class="muted" id="authbuddyGateHint">BuddyAuthenticator preferred (codes, QR, approve). On iOS you may use Google/Microsoft Authenticator for TOTP codes only. Password/passkey work in browser. Email passcode still works.</p>
-          <button type="button" class="btn primary" id="authbuddyContinueBtn" hidden>Continue with AuthBuddy</button>
-          <button type="button" class="btn ghost" id="authbuddySignInBtn" hidden>Sign in with AuthBuddy</button>
-        </div>
       </div>
 
       <div id="adminLoginPane" hidden>
