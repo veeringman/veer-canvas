@@ -1195,19 +1195,18 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
 def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
     """Page grid for blank cash-receipt booklets.
 
-    A6 landscape slip = 148×105 mm. Two stack on A5 portrait; four stack 1×4 on A4 portrait.
+    All slips share the same width: A6 landscape (148 mm). Stacked on portrait paper:
+    A5 → 1×2, A4 → 1×3 or 1×4. Extra side margin on A4 centres the column.
     """
     layouts: dict[str, dict[str, Any]] = {
-        # Tall 1/3-page slips (legacy booklet)
         "a4-3": {
             "page": "A4",
             "page_orient": "portrait",
             "cols": 1,
             "rows": 3,
             "slips": 3,
-            "slip": "tall",
+            "slip": "a6-landscape",
         },
-        # Exact A6 landscape × 2 on A5
         "a5-2": {
             "page": "A5",
             "page_orient": "portrait",
@@ -1216,7 +1215,6 @@ def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
             "slips": 2,
             "slip": "a6-landscape",
         },
-        # A6-landscape-style × 4 stacked on A4 (1×4)
         "a4-4": {
             "page": "A4",
             "page_orient": "portrait",
@@ -1238,30 +1236,15 @@ def _cash_receipt_page_grid(
     orientation: str | None,
     rl: dict[str, Any],
 ) -> tuple[float, float, int, int, int, str, str]:
-    """Resolve page size and slip grid.
-
-    For A6 layouts (a5-2 / a4-4), page orientation is fixed so each slip is a full
-    A6-landscape form (wide × short). Orientation only applies to a4-3.
-    """
+    """Resolve page size and slip grid. Receipt width is always A6 landscape."""
     page_sizes = {"A4": rl["A4"], "A5": rl["A5"], "A6": rl["A6"]}
     base = page_sizes[layout_spec["page"]]
-    slip_kind = str(layout_spec.get("slip") or "tall")
-    fixed = str(layout_spec.get("page_orient") or "portrait")
-    orient = (orientation or "portrait").strip().lower()
-    if orient not in {"portrait", "landscape"}:
-        orient = "portrait"
-    # A6 multi-up always uses the fixed page orientation (stacked landscape slips).
-    if slip_kind == "a6-landscape":
-        orient = fixed
-    if orient == "landscape":
-        page_w, page_h = rl["landscape"](base)
-    else:
-        page_w, page_h = base
+    slip_kind = str(layout_spec.get("slip") or "a6-landscape")
+    # Stacked landscape slips always print on portrait paper.
+    orient = "portrait"
+    page_w, page_h = base
     cols = int(layout_spec["cols"])
     rows = int(layout_spec["rows"])
-    # Only a4-3 tall slips may flip to side-by-side on landscape pages.
-    if slip_kind == "tall" and orient == "landscape" and layout_key == "a4-3":
-        cols, rows = rows, cols
     return page_w, page_h, cols, rows, int(layout_spec["slips"]), orient, slip_kind
 
 
@@ -1275,7 +1258,7 @@ def build_cash_receipt_booklet_pdf(
     layout: str = "a4-3",
     orientation: str = "portrait",
 ) -> tuple[bytes, str]:
-    """Blank cash-receipt booklet — layout a4-3 / a5-2 / a4-4; A6 slips are landscape."""
+    """Blank cash-receipt booklet — all slips share A6-landscape width (148 mm)."""
     from reportlab.lib import colors
     from reportlab.lib.colors import Color
     from reportlab.pdfgen import canvas as pdfcanvas
@@ -1305,30 +1288,16 @@ def build_cash_receipt_booklet_pdf(
         "rose": colors.HexColor("#fbf0f2"),
     }
 
-    # A6 landscape = 148×105. Use near-zero gutter so slips fill the cut size.
-    if slip_kind == "a6-landscape":
-        margin_x = 2.5 * mm
-        margin_y = 2.5 * mm
-        gap_x = 0
-        gap_y = 1.2 * mm if rows > 1 else 0
-    else:
-        margin_x = 5 * mm
-        margin_y = 4 * mm
-        gap_x = 2 * mm if cols > 1 else 0
-        gap_y = 2.2 * mm if rows > 1 else 0
-
-    usable_w = page_w - 2 * margin_x - (cols - 1) * gap_x
-    usable_h = page_h - 2 * margin_y - (rows - 1) * gap_y
-    slip_w = usable_w / cols
-    slip_h = usable_h / rows
-
-    # Scale content to the slip box. A6 landscape is wide & short — scale by height.
+    # Canonical slip width = A6 landscape (148 mm). Height stacks to fill the page.
     a6_w, a6_h = rl["landscape"](rl["A6"])
-    if slip_kind == "a6-landscape":
-        scale = max(0.72, min(1.05, min(slip_w / a6_w, slip_h / a6_h)))
-    else:
-        ref_h = (rl["A4"][1] - 2 * margin_y - 2 * gap_y) / 3
-        scale = max(0.62, min(1.0, min(slip_w / (page_w - 2 * margin_x), slip_h / ref_h)))
+    margin_y = 2.5 * mm
+    gap_y = 1.2 * mm if rows > 1 else 0
+    gap_x = 0
+    slip_w = min(a6_w, page_w - 5 * mm)
+    margin_x = max(2.5 * mm, (page_w - cols * slip_w - (cols - 1) * gap_x) / 2)
+    usable_h = page_h - 2 * margin_y - (rows - 1) * gap_y
+    slip_h = usable_h / rows
+    scale = max(0.70, min(1.05, min(slip_w / a6_w, slip_h / a6_h)))
 
     buf = io.BytesIO()
     c = pdfcanvas.Canvas(buf, pagesize=(page_w, page_h))

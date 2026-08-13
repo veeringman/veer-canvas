@@ -53,33 +53,36 @@
     }
     .sheet {
       margin: 0 auto;
-      padding: 3mm 5mm;
+      padding: 2.5mm;
       background: var(--paper);
       border: 1.25pt solid var(--navy);
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 0;
       overflow: hidden;
       box-sizing: border-box;
     }
-    .sheet.layout-a4-4 {
-      display: flex;
-      flex-direction: column;
-    }
-    .sheet.layout-a4-4 .receipt {
-      max-height: none;
+    /* Fixed receipt width = A6 landscape (148 mm) on every layout */
+    .sheet .receipt,
+    .sheet .perf {
+      width: min(148mm, 100%);
       flex: 1 1 0;
+      max-height: none;
+    }
+    .sheet .perf {
+      flex: 0 0 auto;
+    }
+    .sheet.layout-a4-3,
+    .sheet.layout-a4-4,
+    .sheet.layout-a5-2 {
+      flex-direction: column;
     }
     .sheet.layout-a5-2 {
       page: a5-sheet;
-      flex-direction: column;
-    }
-    .sheet.layout-a5-2 .receipt {
-      max-height: none;
-      flex: 1 1 0;
     }
 
-    /* A6 landscape slips — wide × short, fill each cell (no rotation) */
+    /* A6 landscape slip chrome — same form width on A4 / A5 */
     .sheet.slip-a6 .receipt {
       padding: 1.6mm 2.8mm 1.2mm;
     }
@@ -109,39 +112,14 @@
     .sheet.slip-a6 .sign .space { height: 4.2mm; }
     .sheet.slip-a6 .sign { font-size: 5.5pt; }
 
-    /* a4-3 landscape still side-by-side (tall slips only) */
-    .sheet.orient-landscape.layout-a4-3:not(.slip-a6) {
-      flex-direction: row;
-      page: a4-landscape;
-    }
-    .sheet.orient-landscape.layout-a4-3:not(.slip-a6) .receipt {
-      max-height: none;
-      max-width: 33.33%;
-      flex: 1 1 0;
-    }
-
     .perf-vert {
-      flex: 0 0 auto;
-      width: 0;
-      align-self: stretch;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      font-size: 5pt;
-      letter-spacing: 0.12em;
-      color: rgba(11, 42, 86, 0.35);
-      text-transform: uppercase;
-      padding: 0 0.5mm;
+      display: none;
     }
 
-    /* Three tear-off receipts per A4 page — no outer border */
+    /* Receipt body */
     .receipt {
       position: relative;
-      flex: 1 1 0;
       min-height: 0;
-      max-height: 33.33%;
       border: 0;
       padding: 2mm 3.5mm 1.5mm;
       display: flex;
@@ -501,8 +479,10 @@
       .sheet-viewport .sheet.layout-a5-2 {
         width: 142mm !important;
       }
-      .sheet-viewport .sheet.orient-landscape.layout-a4-3:not(.slip-a6) {
-        width: 291mm !important;
+      .sheet .receipt,
+      .sheet .perf {
+        width: 148mm !important;
+        max-width: 100% !important;
       }
       .receipt {
         border: 0 !important;
@@ -542,22 +522,16 @@
 </head>
 <body>
   <p class="screen-hint">
-    A6 receipts print as <strong>landscape</strong> slips (wide × short), filling each cut size.
-    <strong>A5</strong> = 2 stacked (1×2). <strong>A4</strong> = 4 stacked (1×4). Serial numbers are 7 digits.
+    Every receipt is <strong>A6 landscape width (148&nbsp;mm)</strong> — same form on every layout.
+    <strong>A5</strong>: 2 stacked (1×2). <strong>A4</strong>: 3 or 4 stacked (1×3 / 1×4), centred on the page. Serials are 7 digits.
   </p>
 
   <div class="screen-controls" id="receiptControls">
     <label>Layout
       <select id="receiptLayout">
-        <option value="a4-3" selected>3 receipts per A4</option>
+        <option value="a4-3" selected>3 × A6-width on A4 (1×3)</option>
         <option value="a5-2">2 × A6 landscape on A5 (1×2)</option>
-        <option value="a4-4">4 × A6 landscape on A4 (1×4)</option>
-      </select>
-    </label>
-    <label id="orientLabel">Orientation
-      <select id="receiptOrientation">
-        <option value="portrait" selected>Portrait — stacked top-to-bottom</option>
-        <option value="landscape">Landscape — side-by-side</option>
+        <option value="a4-4">4 × A6-width on A4 (1×4)</option>
       </select>
     </label>
     <label>Start receipt no.
@@ -677,20 +651,20 @@
   };
 
   const LAYOUTS = {
-    'a4-3': { slips: 3, label: '3 slips each', pageHint: 'A4', slip: 'tall' },
-    'a5-2': { slips: 2, label: '2 A6 slips each', pageHint: 'A5', slip: 'a6-landscape' },
-    'a4-4': { slips: 4, label: '4 A6 slips each', pageHint: 'A4', slip: 'a6-landscape' },
+    'a4-3': { slips: 3, label: '3 A6-width slips', pageHint: 'A4', slip: 'a6-landscape' },
+    'a5-2': { slips: 2, label: '2 A6 slips', pageHint: 'A5', slip: 'a6-landscape' },
+    'a4-4': { slips: 4, label: '4 A6-width slips', pageHint: 'A4', slip: 'a6-landscape' },
   };
 
-  // Page aspect ratios — A6 layouts always use portrait page with stacked landscape slips.
+  // Page aspect ratios — always portrait; receipt column is 148 mm wide.
   const PAGE_AR = {
-    'a4-3': { portrait: '210 / 297', landscape: '297 / 210' },
+    'a4-3': { portrait: '210 / 297', landscape: '210 / 297' },
     'a5-2': { portrait: '148 / 210', landscape: '148 / 210' },
     'a4-4': { portrait: '210 / 297', landscape: '210 / 297' },
   };
 
   const PAGE_MAX_W = {
-    'a4-3': { portrait: '920px', landscape: '1100px' },
+    'a4-3': { portrait: '920px', landscape: '920px' },
     'a5-2': { portrait: '720px', landscape: '720px' },
     'a4-4': { portrait: '920px', landscape: '920px' },
   };
@@ -698,18 +672,11 @@
   const SERIAL_MAX = 9999999;
 
   function orientationKey() {
-    const layout = layoutKey();
-    // A6 multi-up always stacked on portrait paper (A6 landscape slips).
-    if (LAYOUTS[layout] && LAYOUTS[layout].slip === 'a6-landscape') {
-      return 'portrait';
-    }
-    const el = document.getElementById('receiptOrientation');
-    const v = (el && el.value) || 'portrait';
-    return v === 'landscape' ? 'landscape' : 'portrait';
+    return 'portrait';
   }
 
-  function isLandscapeSideBySide(layout, orientation) {
-    return orientation === 'landscape' && layout === 'a4-3';
+  function isLandscapeSideBySide() {
+    return false;
   }
 
   function pad7(n) {
@@ -791,7 +758,7 @@
     const viewport = document.getElementById('receiptViewport');
     const tpl = document.getElementById('receiptTpl');
     if (!sheet || !tpl) return;
-    const slipClass = LAYOUTS[o.layout].slip === 'a6-landscape' ? ' slip-a6' : '';
+    const slipClass = ' slip-a6';
     sheet.className = `sheet layout-${o.layout} orient-${o.orientation}${slipClass}`;
     sheet.replaceChildren();
     if (viewport) {
@@ -809,19 +776,13 @@
       pageLabel.append(`Pages (${LAYOUTS[o.layout].label}) `);
       if (input) pageLabel.appendChild(input);
     }
-    const orientWrap = document.getElementById('orientLabel');
-    if (orientWrap) {
-      const a6 = LAYOUTS[o.layout].slip === 'a6-landscape';
-      orientWrap.style.display = a6 ? 'none' : '';
-    }
-    const sideBySide = isLandscapeSideBySide(o.layout, o.orientation);
     for (let i = 0; i < o.slips; i += 1) {
       const node = tpl.content.firstElementChild.cloneNode(true);
       decorateReceipt(node, o.start + i, o.tint, o.pattern);
       sheet.appendChild(node);
       if (i < o.slips - 1) {
         const perf = document.createElement('div');
-        perf.className = sideBySide ? 'perf-vert' : 'perf';
+        perf.className = 'perf';
         perf.setAttribute('aria-hidden', 'true');
         perf.textContent = '· · · tear here · · ·';
         sheet.appendChild(perf);
@@ -830,12 +791,7 @@
   }
 
   function syncOrientationDefault() {
-    const layout = layoutKey();
-    const orientEl = document.getElementById('receiptOrientation');
-    if (!orientEl) return;
-    if (LAYOUTS[layout] && LAYOUTS[layout].slip === 'a6-landscape') {
-      orientEl.value = 'portrait';
-    }
+    /* Orientation fixed to portrait — receipt width is always A6 landscape. */
   }
 
   function applyOpts() {
@@ -908,12 +864,8 @@
   document.getElementById('downloadReceiptPdf')?.addEventListener('click', () => {
     downloadPdf().catch(console.error);
   });
-  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout', 'receiptOrientation'].forEach((id) => {
+  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', () => {
-      if (id === 'receiptOrientation') {
-        const el = document.getElementById('receiptOrientation');
-        if (el) el.dataset.userPicked = '1';
-      }
       if (id === 'receiptLayout') syncOrientationDefault();
       applyOpts();
     });
