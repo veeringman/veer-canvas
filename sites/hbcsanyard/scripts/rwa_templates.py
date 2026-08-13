@@ -77,7 +77,7 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
     {
         "id": "tpl-cash-receipt",
         "title": "Cash Receipt Booklet",
-        "description": "Blank cash receipts — 3 per A4, 2 A6 per A5, or 4 A6 per A4.",
+        "description": "Blank cash receipts — 3 per A4, 2 A6 landscape on A5 (1×2), or 4 A6 landscape on A4 (1×4).",
         "category": "receipt",
         "tags": ["cash", "treasury", "a4", "a5", "a6", "booklet"],
         "static_path": "documents/mhws-cash-receipt-booklet.html",

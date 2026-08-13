@@ -63,71 +63,61 @@
       box-sizing: border-box;
     }
     .sheet.layout-a4-4 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      align-content: stretch;
+      display: flex;
+      flex-direction: column;
     }
     .sheet.layout-a4-4 .receipt {
       max-height: none;
+      flex: 1 1 0;
     }
     .sheet.layout-a5-2 {
       page: a5-sheet;
+      flex-direction: column;
     }
     .sheet.layout-a5-2 .receipt {
-      max-height: 50%;
-    }
-
-    /* Portrait stack — wide (landscape) slip cells, top-to-bottom tear */
-    .orient-portrait.layout-a5-2 .receipt,
-    .orient-portrait.layout-a4-3 .receipt {
       max-height: none;
-    }
-
-    /* Landscape page — side-by-side slots; receipt rotated to read horizontally */
-    .sheet.orient-landscape.layout-a5-2,
-    .sheet.orient-landscape.layout-a4-3 {
-      flex-direction: row;
-    }
-    .sheet.orient-landscape.layout-a5-2 {
-      page: a5-landscape;
-    }
-    .sheet.orient-landscape.layout-a4-3 {
-      page: a4-landscape;
-    }
-    .sheet.orient-landscape.layout-a4-4 {
-      page: a4-landscape;
-    }
-    .receipt-slot {
       flex: 1 1 0;
-      min-width: 0;
-      min-height: 0;
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
-    .orient-landscape.layout-a5-2 .receipt-slot {
-      aspect-ratio: 105 / 148;
+
+    /* A6 landscape slips — wide × short, fill each cell (no rotation) */
+    .sheet.slip-a6 .receipt {
+      padding: 1.6mm 2.8mm 1.2mm;
     }
-    .orient-landscape.layout-a4-3 .receipt-slot {
-      aspect-ratio: 99 / 138;
+    .sheet.slip-a6 .r-top {
+      grid-template-columns: 10mm 1fr auto;
+      gap: 1.8mm;
+      padding-bottom: 0.8mm;
     }
-    .orient-landscape .receipt-turn {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: calc(100% * 148 / 105);
-      height: calc(100% * 105 / 148);
-      transform: translate(-50%, -50%) rotate(-90deg);
+    .sheet.slip-a6 .r-logo { width: 9mm; }
+    .sheet.slip-a6 .r-org h1 { font-size: 8.5pt; }
+    .sheet.slip-a6 .r-org .colony { font-size: 6.6pt; }
+    .sheet.slip-a6 .r-org .addr { font-size: 5.8pt; }
+    .sheet.slip-a6 .r-meta { font-size: 6.2pt; min-width: 38mm; }
+    .sheet.slip-a6 .r-meta strong { font-size: 7.2pt; }
+    .sheet.slip-a6 .r-meta .rcpt-no { font-size: 10.5pt; }
+    .sheet.slip-a6 .r-banner { font-size: 6pt; padding: 0.7mm 1.6mm; margin: 0.8mm 0 1mm; }
+    .sheet.slip-a6 .fields { gap: 0.7mm; font-size: 6.8pt; }
+    .sheet.slip-a6 .row { grid-template-columns: 22mm 1fr; gap: 1.4mm; }
+    .sheet.slip-a6 .row.two { grid-template-columns: 22mm 1fr 18mm 1fr; }
+    .sheet.slip-a6 .lbl { font-size: 6pt; }
+    .sheet.slip-a6 .line { min-height: 2.8mm; }
+    .sheet.slip-a6 .amount-box { grid-template-columns: 22mm 1fr; }
+    .sheet.slip-a6 .amount-value { min-height: 5mm; font-size: 8.5pt; }
+    .sheet.slip-a6 .purpose { font-size: 6pt; gap: 1mm 2.5mm; }
+    .sheet.slip-a6 .r-foot { margin-top: 0.6mm; padding-top: 0.6mm; gap: 2mm; }
+    .sheet.slip-a6 .note { font-size: 5.2pt; }
+    .sheet.slip-a6 .sign .space { height: 4.2mm; }
+    .sheet.slip-a6 .sign { font-size: 5.5pt; }
+
+    /* a4-3 landscape still side-by-side (tall slips only) */
+    .sheet.orient-landscape.layout-a4-3:not(.slip-a6) {
+      flex-direction: row;
+      page: a4-landscape;
     }
-    .orient-landscape .receipt-turn .receipt {
-      width: 100%;
-      height: 100%;
+    .sheet.orient-landscape.layout-a4-3:not(.slip-a6) .receipt {
       max-height: none;
-      max-width: none;
-      flex: none;
+      max-width: 33.33%;
+      flex: 1 1 0;
     }
 
     .perf-vert {
@@ -449,46 +439,6 @@
       font-weight: 600;
     }
 
-    /* Compact slip — A6 grid / A5 half-page */
-    .layout-a4-4 .receipt,
-    .layout-a5-2 .receipt {
-      padding: 1.5mm 2.5mm 1mm;
-    }
-    .layout-a4-4 .r-top {
-      grid-template-columns: 10mm 1fr auto;
-      gap: 1.8mm;
-      padding-bottom: 0.8mm;
-    }
-    .layout-a4-4 .r-logo { width: 9mm; }
-    .layout-a4-4 .r-org h1 { font-size: 7.8pt; }
-    .layout-a4-4 .r-org .colony { font-size: 6.4pt; }
-    .layout-a4-4 .r-org .addr { font-size: 5.8pt; }
-    .layout-a4-4 .r-meta { font-size: 6pt; min-width: 34mm; }
-    .layout-a4-4 .r-meta strong { font-size: 7pt; }
-    .layout-a4-4 .r-meta .rcpt-no { font-size: 10pt; }
-    .layout-a4-4 .r-banner { font-size: 5.8pt; padding: 0.7mm 1.5mm; margin: 0.8mm 0 1mm; }
-    .layout-a4-4 .fields { gap: 0.7mm; font-size: 6.6pt; }
-    .layout-a4-4 .row { grid-template-columns: 22mm 1fr; gap: 1.2mm; }
-    .layout-a4-4 .row.two { grid-template-columns: 22mm 1fr 18mm 1fr; }
-    .layout-a4-4 .lbl { font-size: 6pt; }
-    .layout-a4-4 .line { min-height: 2.8mm; }
-    .layout-a4-4 .amount-box { grid-template-columns: 22mm 1fr; gap: 1.2mm; }
-    .layout-a4-4 .amount-value { min-height: 5mm; font-size: 8pt; }
-    .layout-a4-4 .purpose { font-size: 6pt; gap: 1mm 2mm; }
-    .layout-a4-4 .r-foot { margin-top: 0.6mm; padding-top: 0.6mm; gap: 2mm; }
-    .layout-a4-4 .note { font-size: 5pt; }
-    .layout-a4-4 .sign .space { height: 4.5mm; }
-    .layout-a4-4 .sign { font-size: 5.5pt; }
-    .layout-a5-2 .r-top { grid-template-columns: 11mm 1fr auto; gap: 2mm; }
-    .layout-a5-2 .r-logo { width: 10mm; }
-    .layout-a5-2 .r-org h1 { font-size: 9pt; }
-    .layout-a5-2 .fields { gap: 0.85mm; font-size: 7pt; }
-    .layout-a5-2 .line { min-height: 3mm; }
-    .layout-a5-2 .amount-value { min-height: 5.5mm; font-size: 9pt; }
-    .layout-a5-2 .r-foot { margin-top: 0.8mm; padding-top: 0.8mm; }
-    .layout-a5-2 .note { font-size: 5.5pt; }
-    .layout-a5-2 .sign .space { height: 5mm; }
-
     .copy-tag {
       position: absolute;
       top: 2mm;
@@ -544,18 +494,14 @@
         height: auto !important;
         aspect-ratio: var(--sheet-ar, 210 / 297) !important;
       }
-      .sheet-viewport .sheet.orient-portrait.layout-a4-3,
-      .sheet-viewport .sheet.orient-portrait.layout-a4-4 {
+      .sheet-viewport .sheet.layout-a4-3,
+      .sheet-viewport .sheet.layout-a4-4 {
         width: 204mm !important;
       }
-      .sheet-viewport .sheet.orient-portrait.layout-a5-2 {
+      .sheet-viewport .sheet.layout-a5-2 {
         width: 142mm !important;
       }
-      .sheet-viewport .sheet.orient-landscape.layout-a5-2 {
-        width: 204mm !important;
-      }
-      .sheet-viewport .sheet.orient-landscape.layout-a4-3,
-      .sheet-viewport .sheet.orient-landscape.layout-a4-4 {
+      .sheet-viewport .sheet.orient-landscape.layout-a4-3:not(.slip-a6) {
         width: 291mm !important;
       }
       .receipt {
@@ -596,21 +542,22 @@
 </head>
 <body>
   <p class="screen-hint">
-    Cash receipt booklet — preview matches paper aspect ratio. <strong>Portrait</strong>: wide slips stacked top-to-bottom. <strong>Landscape</strong>: slips side-by-side with receipt turned horizontal (vertical tear). Serial numbers are 7 digits.
+    A6 receipts print as <strong>landscape</strong> slips (wide × short), filling each cut size.
+    <strong>A5</strong> = 2 stacked (1×2). <strong>A4</strong> = 4 stacked (1×4). Serial numbers are 7 digits.
   </p>
 
   <div class="screen-controls" id="receiptControls">
     <label>Layout
       <select id="receiptLayout">
         <option value="a4-3" selected>3 receipts per A4</option>
-        <option value="a5-2">2 A6 receipts per A5</option>
-        <option value="a4-4">4 A6 receipts per A4</option>
+        <option value="a5-2">2 × A6 landscape on A5 (1×2)</option>
+        <option value="a4-4">4 × A6 landscape on A4 (1×4)</option>
       </select>
     </label>
-    <label>Orientation
+    <label id="orientLabel">Orientation
       <select id="receiptOrientation">
         <option value="portrait" selected>Portrait — stacked top-to-bottom</option>
-        <option value="landscape">Landscape — side-by-side (rotated)</option>
+        <option value="landscape">Landscape — side-by-side</option>
       </select>
     </label>
     <label>Start receipt no.
@@ -730,33 +677,39 @@
   };
 
   const LAYOUTS = {
-    'a4-3': { slips: 3, label: '3 slips each', pageHint: 'A4' },
-    'a5-2': { slips: 2, label: '2 slips each', pageHint: 'A5' },
-    'a4-4': { slips: 4, label: '4 slips each', pageHint: 'A4' },
+    'a4-3': { slips: 3, label: '3 slips each', pageHint: 'A4', slip: 'tall' },
+    'a5-2': { slips: 2, label: '2 A6 slips each', pageHint: 'A5', slip: 'a6-landscape' },
+    'a4-4': { slips: 4, label: '4 A6 slips each', pageHint: 'A4', slip: 'a6-landscape' },
   };
 
+  // Page aspect ratios — A6 layouts always use portrait page with stacked landscape slips.
   const PAGE_AR = {
     'a4-3': { portrait: '210 / 297', landscape: '297 / 210' },
-    'a5-2': { portrait: '148 / 210', landscape: '210 / 148' },
-    'a4-4': { portrait: '210 / 297', landscape: '297 / 210' },
+    'a5-2': { portrait: '148 / 210', landscape: '148 / 210' },
+    'a4-4': { portrait: '210 / 297', landscape: '210 / 297' },
   };
 
   const PAGE_MAX_W = {
     'a4-3': { portrait: '920px', landscape: '1100px' },
-    'a5-2': { portrait: '720px', landscape: '920px' },
-    'a4-4': { portrait: '920px', landscape: '1100px' },
+    'a5-2': { portrait: '720px', landscape: '720px' },
+    'a4-4': { portrait: '920px', landscape: '920px' },
   };
 
   const SERIAL_MAX = 9999999;
 
   function orientationKey() {
+    const layout = layoutKey();
+    // A6 multi-up always stacked on portrait paper (A6 landscape slips).
+    if (LAYOUTS[layout] && LAYOUTS[layout].slip === 'a6-landscape') {
+      return 'portrait';
+    }
     const el = document.getElementById('receiptOrientation');
     const v = (el && el.value) || 'portrait';
     return v === 'landscape' ? 'landscape' : 'portrait';
   }
 
   function isLandscapeSideBySide(layout, orientation) {
-    return orientation === 'landscape' && (layout === 'a4-3' || layout === 'a5-2');
+    return orientation === 'landscape' && layout === 'a4-3';
   }
 
   function pad7(n) {
@@ -838,7 +791,8 @@
     const viewport = document.getElementById('receiptViewport');
     const tpl = document.getElementById('receiptTpl');
     if (!sheet || !tpl) return;
-    sheet.className = `sheet layout-${o.layout} orient-${o.orientation}`;
+    const slipClass = LAYOUTS[o.layout].slip === 'a6-landscape' ? ' slip-a6' : '';
+    sheet.className = `sheet layout-${o.layout} orient-${o.orientation}${slipClass}`;
     sheet.replaceChildren();
     if (viewport) {
       const ar = (PAGE_AR[o.layout] && PAGE_AR[o.layout][o.orientation]) || '210 / 297';
@@ -855,22 +809,17 @@
       pageLabel.append(`Pages (${LAYOUTS[o.layout].label}) `);
       if (input) pageLabel.appendChild(input);
     }
+    const orientWrap = document.getElementById('orientLabel');
+    if (orientWrap) {
+      const a6 = LAYOUTS[o.layout].slip === 'a6-landscape';
+      orientWrap.style.display = a6 ? 'none' : '';
+    }
     const sideBySide = isLandscapeSideBySide(o.layout, o.orientation);
     for (let i = 0; i < o.slips; i += 1) {
       const node = tpl.content.firstElementChild.cloneNode(true);
       decorateReceipt(node, o.start + i, o.tint, o.pattern);
-      if (sideBySide) {
-        const slot = document.createElement('div');
-        slot.className = 'receipt-slot';
-        const turn = document.createElement('div');
-        turn.className = 'receipt-turn';
-        turn.appendChild(node);
-        slot.appendChild(turn);
-        sheet.appendChild(slot);
-      } else {
-        sheet.appendChild(node);
-      }
-      if (i < o.slips - 1 && o.layout !== 'a4-4') {
+      sheet.appendChild(node);
+      if (i < o.slips - 1) {
         const perf = document.createElement('div');
         perf.className = sideBySide ? 'perf-vert' : 'perf';
         perf.setAttribute('aria-hidden', 'true');
@@ -884,9 +833,8 @@
     const layout = layoutKey();
     const orientEl = document.getElementById('receiptOrientation');
     if (!orientEl) return;
-    // A5 booklet is usually cut with slips side-by-side on landscape A5.
-    if (layout === 'a5-2' && !orientEl.dataset.userPicked) {
-      orientEl.value = 'landscape';
+    if (LAYOUTS[layout] && LAYOUTS[layout].slip === 'a6-landscape') {
+      orientEl.value = 'portrait';
     }
   }
 
