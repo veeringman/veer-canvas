@@ -1,0 +1,13 @@
+[package]
+name = "plate-ocr"
+version = "0.1.0"
+edition = "2021"
+description = "Native Indian number-plate reader for the Sanyard gate scanner"
+
+[[bin]]
+name = "plate-ocr"
+path = "src/main.rs"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+serde_json = "1"

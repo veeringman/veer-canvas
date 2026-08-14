@@ -204,6 +204,8 @@ echo "Syncing site ${SITE_ID} to ${EC2_USER}@${EC2_HOST}:${WEB_ROOT} ..."
 rsync -az --delete \
   -e "$RSYNC_SSH" \
   --filter 'P veercanvas/' \
+  --filter 'P venv/' \
+  --filter 'P venv/***' \
   --filter 'P assets/site/' \
   --filter 'P assets/site/***' \
   --filter 'P engagement.json' \
@@ -215,6 +217,8 @@ rsync -az --delete \
   --filter 'P share/***' \
   --exclude 'data/' \
   --exclude 'share/' \
+  --exclude 'venv/' \
+  --exclude 'plate-ocr/target/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \

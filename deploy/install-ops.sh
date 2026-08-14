@@ -31,12 +31,19 @@ chmod +x "${SCRIPT_DIR}/backup-site.sh" \
   "${SCRIPT_DIR}/ops/sync-to-drive.py" \
   "${SCRIPT_DIR}/ops/authorize-drive.py"
 
-# Hot SQLite backups need the CLI.
+# Hot SQLite backups need the CLI. Plate OCR uses Tesseract when no native binary is present.
+NEED_APT=()
 if ! command -v sqlite3 >/dev/null 2>&1; then
-  echo "install-ops: installing sqlite3…"
+  NEED_APT+=(sqlite3)
+fi
+if ! command -v tesseract >/dev/null 2>&1; then
+  NEED_APT+=(tesseract-ocr tesseract-ocr-eng)
+fi
+if ((${#NEED_APT[@]})); then
+  echo "install-ops: installing ${NEED_APT[*]}…"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq sqlite3
+  apt-get install -y -qq "${NEED_APT[@]}"
 fi
 
 # Drive sync Python deps in a dedicated venv (PEP 668 / Ubuntu 24+)

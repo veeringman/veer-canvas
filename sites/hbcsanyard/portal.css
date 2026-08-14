@@ -3261,61 +3261,142 @@ body.is-view-only #grievanceForm {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
-/* Dues tiles need tighter sizing than analytics stats on phones */
-#duesCard .stat-grid {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 0.65rem;
+.dues-card-wrap {
+  margin-bottom: 1rem;
 }
-#duesCard .stat {
-  padding: 0.8rem 0.75rem;
-  border-radius: 12px;
+.dues-bill,
+.ledger-card {
+  padding: 0.95rem 1rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf8, #f5f1e8);
+  box-shadow: 0 8px 22px rgba(14, 24, 44, 0.06);
   min-width: 0;
 }
-#duesCard .stat > span {
+.dues-bill-head,
+.ledger-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.dues-bill-head span,
+.ledger-card-due span {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dues-bill-head strong,
+.ledger-card-due strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: var(--font-amount);
+  font-size: clamp(1.45rem, 5vw, 1.85rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  color: var(--navy-deep);
+  line-height: 1.15;
+  text-align: right;
+}
+.dues-bill.is-cleared .dues-bill-head strong,
+.ledger-card.is-cleared .ledger-card-due strong {
+  color: #2f6b46;
+}
+.dues-bill-metrics,
+.ledger-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+.dues-bill-metrics > div,
+.ledger-card-metrics > div {
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(21, 35, 63, 0.045);
+}
+.dues-bill-metrics dt,
+.ledger-card-metrics dt {
   font-size: 0.66rem;
-  line-height: 1.22;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
-#duesCard .stat-treasury strong {
-  font-family: var(--font);
-  font-size: 1rem;
-  font-weight: 650;
-  margin-top: 0.45rem;
+.dues-bill-metrics dd,
+.ledger-card-metrics dd {
+  margin: 0.18rem 0 0;
+  font-family: var(--font-amount);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--navy);
+  overflow-wrap: anywhere;
 }
-#duesCard .stat-treasury .treasury-seal {
-  display: inline-flex;
+.dues-bill-meta,
+.ledger-card-meta {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  max-width: 100%;
-  color: #f3f1ea;
+  justify-content: space-between;
+  gap: 0.45rem 0.85rem;
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+  color: var(--muted);
 }
-#duesCard .stat-treasury .treasury-seal-icon,
-#duesCard .stat-treasury .treasury-seal-label {
-  display: inline-flex;
-  opacity: 1;
+.ledger-cards {
+  display: none;
 }
-#duesCard .stat-treasury .treasury-seal-label {
-  color: inherit;
-  font-size: 0.95rem;
+.ledger-cards-empty {
+  margin: 0;
+  padding: 1rem 0.2rem;
+}
+.ledger-card-who {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ledger-card-plot {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+.ledger-card-name {
+  margin: 0.2rem 0 0;
   font-weight: 650;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
+  color: var(--navy);
+  overflow-wrap: anywhere;
 }
-#duesCard .stat-treasury .treasury-seal.is-pending {
-  color: #f0d58a;
+.ledger-card-due {
+  flex: 0 0 auto;
+  text-align: right;
 }
-#duesCard .stat-treasury .treasury-seal.is-validated {
-  color: #9ec5f0;
+.ledger-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
 }
-#duesCard .stat-treasury .treasury-seal.is-confirmed {
-  color: #9ee0b0;
+.ledger-card-actions .btn {
+  flex: 1 1 calc(50% - 0.4rem);
+  width: auto;
+  min-width: 0;
 }
-#duesCard .stat-treasury .treasury-seal-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  background: rgba(255, 255, 255, 0.12);
-  border-color: currentColor;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+@media (min-width: 901px) {
+  .dues-bill {
+    max-width: 42rem;
+  }
+  .dues-bill-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 .ledger-table,
 #ledgerSummary,
@@ -5635,13 +5716,9 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
 
   .pay-card-body { grid-template-columns: 1fr; }
   .pay-qr { width: min(160px, 55vw); justify-self: start; }
-  #duesCard .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
-    margin-bottom: 0.55rem;
-  }
-  #duesCard .stat {
-    padding: 0.7rem 0.62rem;
+  .dues-bill-head strong,
+  .ledger-card-due strong {
+    font-size: 1.5rem;
   }
   .bank-qr-preview {
     flex-direction: column;
@@ -5711,13 +5788,17 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   .obs-columns { grid-template-columns: 1fr; }
 
   /* Wide tables → stacked labeled cards */
-  .roster-wrap,
-  .ledger-wrap {
+  .roster-wrap {
     max-height: none;
     overflow: visible;
     border: none;
     border-radius: 0;
     background: transparent;
+  }
+  .ledger-wrap { display: none; }
+  .ledger-cards {
+    display: grid;
+    gap: 0.75rem;
   }
   .table-wrap {
     overflow-x: visible;
@@ -5806,24 +5887,6 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
     max-width: none;
     font-size: 0.82rem;
   }
-  .ledger-table.cardable-table td:not(.row-actions) {
-    font-variant-numeric: tabular-nums;
-    align-items: start;
-    min-width: 0;
-  }
-  .ledger-table.cardable-table td[data-label="HH code"],
-  .ledger-table.cardable-table td[data-label="Name"],
-  .ledger-table.cardable-table .hh-code {
-    white-space: nowrap !important;
-    overflow-wrap: normal;
-    word-break: normal;
-  }
-  .ledger-table.cardable-table td[data-label="HH code"],
-  .ledger-table.cardable-table td[data-label="Name"] {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    max-width: 100%;
-  }
 }
 
 @media (max-width: 640px) {
@@ -5853,11 +5916,9 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  #duesCard .stat-grid {
-    grid-template-columns: 1fr;
-  }
-  #duesCard .stat strong {
-    font-size: 1.16rem;
+  .dues-bill-head strong,
+  .ledger-card-due strong {
+    font-size: 1.42rem;
   }
   .info-source .check,
   label.check {
@@ -6471,6 +6532,44 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
     #14110d 12px 22px
   );
 }
+/* Household staff — plum */
+.parking-card.is-staff {
+  background:
+    radial-gradient(120% 80% at 100% 100%, rgba(196, 168, 220, 0.32), transparent 48%),
+    linear-gradient(145deg, #3a2a48 0%, #241830 42%, #140e1c 100%);
+}
+.parking-card.is-staff .parking-card-brand { color: #d4b8e8; }
+.parking-card.is-staff .parking-card-chip {
+  background: linear-gradient(135deg, #ead6f4, #7a5a9e 40%, #3d2a52);
+}
+.parking-card.is-staff .parking-card-badge { background: #7a5a9e; color: #f6f1e6; }
+.parking-card.is-staff .parking-card-stripe {
+  background: repeating-linear-gradient(
+    90deg,
+    #241830 0 10px,
+    #7a5a9e 10px 12px,
+    #140e1c 12px 22px
+  );
+}
+.parking-staff-selfie {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0.15rem;
+}
+.parking-staff-preview {
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0b1220;
+}
+.parking-staff-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .parking-card-face {
   width: 3.4rem;
   height: 3.4rem;
@@ -6552,6 +6651,20 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   font-size: 1.05rem;
   margin: 0.1rem 0 0;
 }
+.parking-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.15rem;
+}
+.parking-card-title-row .parking-card-title {
+  margin: 0;
+}
+.parking-card-title-row .parking-card-face {
+  width: 2.85rem;
+  height: 2.85rem;
+  transform: none;
+}
 .parking-card-chip {
   width: 34px;
   height: 26px;
@@ -6584,6 +6697,9 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   color: var(--cream);
   font-size: 0.78rem;
   font-weight: 600;
+}
+.parking-card-meta span {
+  display: block;
 }
 .parking-card-qr {
   width: 64px;
@@ -6691,11 +6807,38 @@ a.parking-wallet-google:hover {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
 }
+.parking-ocr-options {
+  margin: 0.85rem 0 0.35rem;
+  padding: 0.75rem 0.85rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 0.45rem;
+}
+.parking-ocr-options legend {
+  font-weight: 650;
+  padding: 0 0.35rem;
+}
+.parking-ocr-options .check {
+  margin: 0;
+}
+.parking-ocr-options .muted {
+  font-weight: 400;
+}
 @media (max-width: 520px) {
   .parking-detail dl { grid-template-columns: 1fr; }
   .parking-detail dt { font-size: 0.75rem; }
 }
 
+.parking-ocr-note {
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: #fff6e5;
+  border: 1px solid #e6d2a8;
+  color: #5c4a1f;
+  font-size: 0.9rem;
+}
 .parking-scan-dialog {
   width: min(100vw - 1rem, 28rem);
   max-width: 100%;

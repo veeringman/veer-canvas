@@ -31,6 +31,8 @@ BUSINESS_CATEGORIES: dict[str, str] = {
     "tuition": "Tuition / coaching",
     "medical": "Medical / pharmacy",
     "food": "Food / tiffin",
+    "maid": "Maid / domestic help",
+    "cook": "Cook",
     "hardware": "Hardware / repair",
     "other": "Other",
 }
@@ -42,6 +44,8 @@ NEED_CATEGORIES: dict[str, str] = {
     "plumber": "Need plumber",
     "carpenter": "Need carpenter",
     "labour": "Need labour / help",
+    "maid": "Need maid / domestic help",
+    "cook": "Need cook",
     "tuition": "Need tutor",
     "medical": "Need medical help",
     "other": "Other need",

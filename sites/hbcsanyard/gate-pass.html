@@ -301,6 +301,8 @@
             <option value="hawker" data-i18n-opt="catHawker">Hawker</option>
             <option value="scrap" data-i18n-opt="catScrap">Scrap collector</option>
             <option value="labour" data-i18n-opt="catLabour">Labourer</option>
+            <option value="maid" data-i18n-opt="catMaid">Maid</option>
+            <option value="cook" data-i18n-opt="catCook">Cook</option>
             <option value="delivery" data-i18n-opt="catDelivery">Delivery</option>
             <option value="other" data-i18n-opt="catOther">Other</option>
           </select>
@@ -530,6 +532,8 @@
         catHawker: 'Hawker',
         catScrap: 'Scrap collector',
         catLabour: 'Labourer',
+        catMaid: 'Maid',
+        catCook: 'Cook',
         catDelivery: 'Delivery',
         catOther: 'Other',
         subBrowse: 'Browse',
@@ -616,6 +620,8 @@
         catHawker: 'फेरीवाला',
         catScrap: 'कबाड़ी',
         catLabour: 'मजदूर',
+        catMaid: 'मेड / घरेलू मदद',
+        catCook: 'रसोइया',
         catDelivery: 'डिलीवरी',
         catOther: 'अन्य',
         subBrowse: 'देखें',
@@ -676,7 +682,7 @@
 
     const CAT_KEYS = {
       hawker: 'catHawker', scrap: 'catScrap', labour: 'catLabour',
-      delivery: 'catDelivery', other: 'catOther',
+      maid: 'catMaid', cook: 'catCook', delivery: 'catDelivery', other: 'catOther',
     };
 
     let lang = 'en';
@@ -809,6 +815,8 @@
         : [
             { id: 'auto_hire', label: 'Auto for hire' },
             { id: 'cab_rent', label: 'Car / cab for rent' },
+            { id: 'maid', label: 'Maid / domestic help' },
+            { id: 'cook', label: 'Cook' },
             { id: 'other', label: 'Other' },
           ];
       ['bizCategory', 'bizEditCategory'].forEach((id) => {

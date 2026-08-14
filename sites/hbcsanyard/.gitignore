@@ -21,7 +21,7 @@ data/drive-token.json
 data/imports/*.pdf
 data/imports/*.xlsx
 data/imports/*.xls
-data/payments/
+data/bin/
 data/templates/
 __pycache__/
 .DS_Store

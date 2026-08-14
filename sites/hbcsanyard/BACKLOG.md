@@ -28,7 +28,9 @@ Prefer A4, RWA letterhead styling consistent with `documents/` print pads.
 ## Colony life & operations
 
 - [ ] **Maintenance vote / consent board** — EC posts work + cost; one vote per plot (Approve / Object / Abstain); link to Works & Events
+- [x] **Household staff pass** — signed-in plot issues a selfie pass (maid / cook / gardener / driver / caretaker) tied to the plot; gate sees photo + name + plot
 - [ ] **Visitor / guest pass QR** — timed QR for guests/delivery; plot + validity window
+- [ ] **Plate OCR (open-world detector)** — EC can enable phone Tesseract, server Tesseract, native Rust (`data/bin/plate-ocr`), live auto-scan, and lookalike match independently under Pass settings. A YOLO/ONNX detector is only needed if the gate must read *unregistered* visitor plates from a messy full-car photo.
 - [ ] **Water / power / tank schedule** — calendar of cuts or tanker days; opt-in alerts
 - [ ] **Plot “attention” flags** — soft EC signals (dues reminder, missing contact, visit due)
 

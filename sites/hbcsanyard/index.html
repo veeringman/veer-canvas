@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260814gwallet">
+  <link rel="stylesheet" href="portal.css?v=20260814staff4">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260814gwallet" defer></script>
+  <script src="portal.js?v=20260814staff4" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -423,7 +423,7 @@
           </header>
           <div id="bankCard" class="pay-card"></div>
         </div>
-        <div id="duesCard" class="stat-grid"></div>
+        <div id="duesCard" class="dues-card-wrap"></div>
         <div class="roster-block vault-resident-block" id="vaultResidentBlock">
           <header class="panel-head">
             <h3>Documents vault</h3>
@@ -550,24 +550,27 @@
             <button type="button" class="btn secondary compact" id="duesRemindPendingBtn" title="Push dues reminder to plots with outstanding balance">Remind pending</button>
             <p class="muted" id="ledgerEditStatus"></p>
           </div>
-          <div class="table-wrap ledger-wrap">
-            <table class="ledger-table cardable-table">
-              <thead>
-                <tr>
-                  <th>Plot</th>
-                  <th>Name</th>
-                  <th>Prev total</th>
-                  <th>Prev paid</th>
-                  <th>Prev pending</th>
-                  <th>Year total</th>
-                  <th>Pending / dues</th>
-                  <th>HH code</th>
-                  <th>Treasury</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="ledgerRows"></tbody>
-            </table>
+          <div id="ledgerList">
+            <div class="table-wrap ledger-wrap">
+              <table class="ledger-table cardable-table">
+                <thead>
+                  <tr>
+                    <th>Plot</th>
+                    <th>Name</th>
+                    <th>Prev total</th>
+                    <th>Prev paid</th>
+                    <th>Prev pending</th>
+                    <th>Year total</th>
+                    <th>Pending / dues</th>
+                    <th>HH code</th>
+                    <th>Treasury</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerRows"></tbody>
+              </table>
+            </div>
+            <div id="ledgerCards" class="ledger-cards mobile-list"></div>
           </div>
 
         </div>
@@ -1582,7 +1585,7 @@
       <section class="panel" id="panel-directory" hidden>
         <header class="panel-head">
           <h2>Resident directory</h2>
-          <p class="muted">Active plots in Himuda Housing Colony Sanyard. Household codes are for first-time registration and dues circulars.</p>
+          <p class="muted">Active plots in Himuda Housing Colony Sanyard. Your household code is on your own plot card; EC Admin can see every code (registration / dues circulars).</p>
         </header>
         <div class="directory-toolbar">
           <label class="roster-search directory-lookup">
@@ -1597,7 +1600,7 @@
       <section class="panel" id="panel-parking" hidden>
         <header class="panel-head">
           <h2>Parking pass</h2>
-          <p class="muted">Register your own vehicles for a permanent member pass. Tenants of this plot are recorded separately (not as household logins); their vehicles get a monthly lease. Guest vehicles get a timed visitor pass.</p>
+          <p class="muted">Register your own vehicles for a permanent member pass. Tenants of this plot are recorded separately (not as household logins); their vehicles get a monthly lease. Guest vehicles get a timed visitor pass. Household staff (maid, cook, gardener) get a selfie pass tied to this plot.</p>
         </header>
 
         <div class="roster-block parking-validate-block" id="parkingEcBlock" data-entitlement="pass_general" hidden>
@@ -1654,7 +1657,16 @@
                   <option value="24" selected>24 hours</option>
                 </select>
               </label>
-              <button type="submit" class="btn ghost compact">Save default</button>
+              <fieldset class="parking-ocr-options">
+                <legend>Plate reader</legend>
+                <p class="muted">Turn each engine on or off. The gate can use more than one at a time.</p>
+                <label class="check"><input type="checkbox" id="parkingOcrPhone" checked> Read plates on the phone (Tesseract in the browser)</label>
+                <label class="check"><input type="checkbox" id="parkingOcrLive" checked> Auto-read while the camera is open</label>
+                <label class="check"><input type="checkbox" id="parkingOcrFuzzy" checked> Match lookalikes against registered plates (I/1, O/0)</label>
+                <label class="check"><input type="checkbox" id="parkingOcrServer" checked> Server Tesseract <span class="muted" id="parkingOcrServerAvail"></span></label>
+                <label class="check"><input type="checkbox" id="parkingOcrRust"> Native Rust reader <span class="muted" id="parkingOcrRustAvail"></span></label>
+              </fieldset>
+              <button type="submit" class="btn ghost compact">Save pass settings</button>
               <p class="muted" id="parkingHoursStatus"></p>
             </form>
           </div>
@@ -1787,11 +1799,63 @@
           </form>
         </div>
 
+        <div class="roster-block" id="parkingStaffBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Household staff pass</h3>
+              <p class="muted">Maid, cook, gardener, driver, or caretaker for this plot. Selfie + name. The gate sees the photo and your plot — not a walk-in hawker pass.</p>
+            </div>
+          </div>
+          <form id="parkingStaffForm" class="stack narrow">
+            <div class="settings-grid">
+              <label>Name
+                <input id="parkingStaffName" maxlength="80" required autocomplete="name" placeholder="Full name">
+              </label>
+              <label>Role
+                <select id="parkingStaffCategory">
+                  <option value="maid" selected>Maid</option>
+                  <option value="cook">Cook</option>
+                  <option value="gardener">Gardener</option>
+                  <option value="driver">Driver</option>
+                  <option value="caretaker">Caretaker</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Valid for
+                <select id="parkingStaffMonths">
+                  <option value="1">1 month</option>
+                  <option value="3" selected>3 months</option>
+                  <option value="6">6 months</option>
+                  <option value="12">12 months</option>
+                </select>
+              </label>
+              <label>Mobile <span class="muted">(optional)</span>
+                <input id="parkingStaffPhone" maxlength="16" inputmode="tel" autocomplete="tel" placeholder="10-digit number">
+              </label>
+            </div>
+            <div class="parking-staff-selfie">
+              <p class="muted">Selfie of the staff member (required)</p>
+              <div class="parking-staff-preview" id="parkingStaffPreview" hidden>
+                <img id="parkingStaffSnap" alt="Staff selfie">
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn secondary compact" id="parkingStaffCaptureBtn">Take selfie</button>
+                <button type="button" class="btn ghost compact" id="parkingStaffRetakeBtn" hidden>Retake</button>
+              </div>
+              <input type="file" id="parkingStaffFile" accept="image/*" capture="user" hidden>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="parkingStaffBtn">Issue staff pass</button>
+            </div>
+            <p class="muted" id="parkingStaffStatus"></p>
+          </form>
+        </div>
+
         <div class="roster-block" id="parkingListBlock">
           <div class="roster-toolbar">
             <div>
               <h3>Your passes</h3>
-              <p class="muted">Permanent member vehicles, tenant leases, and visitor cards for this plot.</p>
+              <p class="muted">Permanent member vehicles, tenant leases, visitor cards, and household staff for this plot.</p>
             </div>
             <button type="button" class="btn ghost compact" id="parkingRefreshBtn">Refresh</button>
           </div>
@@ -2471,6 +2535,7 @@
                   <option value="member">Member</option>
                   <option value="visitor">Visitor</option>
                   <option value="tenant">Tenant</option>
+                  <option value="staff">Staff</option>
                   <option value="adhoc">Ad-hoc</option>
                 </select>
               </label>

@@ -422,7 +422,7 @@ DATASETS_META = {
     "passes": {
         "id": "passes",
         "title": "Passes",
-        "description": "Member, visitor, tenant, and ad-hoc gate passes",
+        "description": "Member, visitor, tenant, household staff, and ad-hoc gate passes",
         "fields": PASSES_FIELDS,
         "defaultFilters": {"status": "all", "search": "", "houseIds": [], "kind": "all"},
         "filterUi": {"section": False, "search": True, "plots": True, "passStatus": True, "passKind": True},
@@ -2201,7 +2201,7 @@ def query_passes_rows(conn, *, filters: dict | None = None) -> list[dict]:
             "expiresAtLabel": item.get("expiresAtLabel") or (item.get("expiresAt") or "")[:16],
             "memberName": item.get("memberName") or "",
             "colour": item.get("colour") or "",
-            "adhocCategoryLabel": item.get("adhocCategoryLabel") or "",
+            "adhocCategoryLabel": item.get("categoryLabel") or item.get("staffCategoryLabel") or item.get("adhocCategoryLabel") or "",
         }
         if search:
             blob = " ".join(str(row.get(k) or "") for k in row).lower()

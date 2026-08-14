@@ -31,12 +31,14 @@ KIND_COLORS = {
     "tenant": ("rgb(28, 48, 36)", "rgb(246, 241, 230)", "rgb(183, 221, 184)"),
     "visitor": ("rgb(58, 32, 22)", "rgb(255, 248, 242)", "rgb(240, 196, 168)"),
     "adhoc": ("rgb(42, 34, 18)", "rgb(255, 248, 236)", "rgb(232, 212, 160)"),
+    "staff": ("rgb(36, 24, 48)", "rgb(246, 241, 230)", "rgb(212, 184, 232)"),
 }
 KIND_HEX = {
     "member": "#15233F",
     "tenant": "#1C3024",
     "visitor": "#3A2016",
     "adhoc": "#2A2212",
+    "staff": "#241830",
 }
 
 _ENV_LOADED_FOR: str = ""
@@ -383,8 +385,9 @@ def pass_payload(item: dict[str, Any], material: dict[str, Any]) -> dict[str, An
     who = str(item.get("tenantName") or item.get("visitorName") or item.get("memberName") or "").strip()
     plot = "Main gate" if kind == "adhoc" else str(item.get("plotNo") or item.get("houseId") or "").strip()
     valid = "Permanent" if item.get("permanent") else str(item.get("expiresAtLabel") or "—")
-    primary_value = plate if plate and kind != "adhoc" else (who or item.get("kindLabel") or "Pass")
-    primary_label = "VEHICLE" if plate and kind != "adhoc" else ("NAME" if who else "PASS")
+    identity = kind in ("adhoc", "staff")
+    primary_value = plate if plate and not identity else (who or item.get("kindLabel") or "Pass")
+    primary_label = "VEHICLE" if plate and not identity else ("NAME" if who else "PASS")
     code = str(item.get("code") or item.get("id") or "")
     verify = _verify_url(item)
     barcode = {
@@ -616,7 +619,7 @@ def google_pass_payload(item: dict[str, Any], material: dict[str, Any]) -> dict[
     who = str(item.get("tenantName") or item.get("visitorName") or item.get("memberName") or "").strip()
     plot = "Main gate" if kind == "adhoc" else str(item.get("plotNo") or item.get("houseId") or "").strip()
     valid = "Permanent" if item.get("permanent") else str(item.get("expiresAtLabel") or "—")
-    header = plate if plate and kind != "adhoc" else (who or str(item.get("kindLabel") or "Pass"))
+    header = plate if plate and kind not in ("adhoc", "staff") else (who or str(item.get("kindLabel") or "Pass"))
     code = str(item.get("code") or item.get("id") or "")
     verify = _verify_url(item)
     origin = _public_origin()

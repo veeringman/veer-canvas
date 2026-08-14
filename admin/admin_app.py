@@ -22,6 +22,7 @@ from functools import wraps
 from urllib.parse import urlparse
 
 from flask import Flask, Response, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session, url_for
+from werkzeug.exceptions import HTTPException
 import sqlite3
 
 APP_DIR = pathlib.Path(__file__).resolve().parent
@@ -173,6 +174,57 @@ class _ReverseProxied:
 
 
 app.wsgi_app = _ReverseProxied(app.wsgi_app)
+
+_API_HTTP_ERRORS = {
+    400: "That could not be saved.",
+    401: "Please sign in again.",
+    403: "You don't have access to that.",
+    404: "That was not found.",
+    405: "That action is not available.",
+    408: "That took too long. Try again.",
+    409: "That conflicts with existing data.",
+    413: "That file is too large.",
+    415: "That file type is not supported.",
+    422: "Please check the details and try again.",
+    429: "Too many tries. Wait a moment.",
+    500: "Something went wrong. Try again.",
+    502: "Service is busy. Try again.",
+    503: "Service is restarting. Try again.",
+    504: "That took too long. Try again.",
+}
+
+
+def _api_error_payload(status: int, message: str | None = None) -> dict:
+    fallback = _API_HTTP_ERRORS.get(int(status or 500), "Something went wrong. Try again.")
+    text = str(message or "").strip()
+    if int(status or 500) >= 500 or not text or len(text) > 120:
+        text = fallback
+    return {"ok": False, "error": text}
+
+
+def _wants_json_error() -> bool:
+    path = request.path or ""
+    if path.startswith("/api/"):
+        return True
+    accept = (request.headers.get("Accept") or "").lower()
+    return "application/json" in accept and "text/html" not in accept.split(",")[0]
+
+
+@app.errorhandler(HTTPException)
+def _handle_http_exception(exc: HTTPException):
+    if _wants_json_error():
+        return jsonify(_api_error_payload(exc.code or 500)), exc.code or 500
+    return exc
+
+
+@app.errorhandler(Exception)
+def _handle_uncaught_exception(exc: Exception):
+    if isinstance(exc, HTTPException):
+        return _handle_http_exception(exc)
+    app.logger.exception("Unhandled error")
+    if _wants_json_error():
+        return jsonify(_api_error_payload(500)), 500
+    raise exc
 
 
 def get_db():
@@ -4674,13 +4726,20 @@ def api_rwa_directory():
         occupancy = bool(
             rwa_entitlements.is_ec_admin(actor) or actor.get("superAdmin")
         )
+        rows = rwa_portal.directory(
+            conn,
+            include_contacts=False,
+            include_occupancy=occupancy,
+        )
+        reveal_hh = occupancy
+        own = str(actor.get("houseId") or "").strip()
+        if not reveal_hh:
+            for item in rows:
+                if str(item.get("houseId") or "") != own:
+                    item["householdCode"] = ""
         return jsonify({
             "ok": True,
-            "residents": rwa_portal.directory(
-                conn,
-                include_contacts=False,
-                include_occupancy=occupancy,
-            ),
+            "residents": rows,
             "canViewOccupancy": occupancy,
         })
     finally:
@@ -7756,9 +7815,10 @@ def _notify_parking(conn, *, event_type: str, item: dict, extra_body: str = ""):
         "first_renew_ec": "Visitor pass renewed (1st)",
         "member": "Member vehicle registered",
         "adhoc": "Ad-hoc gate pass issued",
+        "staff": "Household staff pass issued",
     }
     body = extra_body or f"{plate} · plot {plot}"
-    if house_id and house_id != getattr(rwa_parking, "ADHOC_HOUSE_ID", "") and event_type in ("issued", "renewed", "approved", "rejected", "revoked", "member"):
+    if house_id and house_id != getattr(rwa_parking, "ADHOC_HOUSE_ID", "") and event_type in ("issued", "renewed", "approved", "rejected", "revoked", "member", "staff"):
         _rwa_notify(
             conn,
             event_type="parking",
@@ -7767,7 +7827,7 @@ def _notify_parking(conn, *, event_type: str, item: dict, extra_body: str = ""):
             body=body,
             url="/#parking",
         )
-    if event_type in ("pending", "first_renew_ec", "adhoc"):
+    if event_type in ("pending", "first_renew_ec", "adhoc", "staff"):
         _rwa_notify(
             conn,
             event_type="parking",
@@ -7783,7 +7843,7 @@ def api_rwa_parking_gate():
     """Public gate meta + QR for the main-gate ad-hoc pass poster."""
     conn = _rwa_conn()
     try:
-        meta = rwa_parking.settings(conn)
+        meta = rwa_parking.settings(conn, SITE_ROOT)
         png = rwa_parking.gate_qr_png(SITE_ROOT)
         return jsonify({
             "ok": True,
@@ -8190,29 +8250,112 @@ def api_rwa_marketplace_patch(item_id):
         conn.close()
 
 
+@app.route("/api/rwa/parking/staff", methods=["POST"])
+def api_rwa_parking_staff_issue():
+    """Signed-in: issue a household staff selfie pass tied to the plot."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        name = (request.form.get("name") or request.form.get("visitorName") or "").strip()
+        months_raw = request.form.get("months") or request.form.get("leaseMonths")
+        category = request.form.get("category") or request.form.get("staffCategory") or "other"
+        phone = request.form.get("phone") or request.form.get("tenantPhone") or ""
+        upload = request.files.get("photo") or request.files.get("selfie") or request.files.get("image")
+        if not upload:
+            return jsonify({"ok": False, "error": "Selfie is required"}), 400
+        raw = upload.read()
+        item = rwa_parking.issue_staff_pass(
+            conn,
+            actor=sess["resident"],
+            name=name,
+            photo_bytes=raw,
+            category=category,
+            months=int(months_raw) if months_raw not in (None, "") else None,
+            phone=phone,
+            site_root=SITE_ROOT,
+        )
+        _notify_parking(
+            conn,
+            event_type="staff",
+            item=item,
+            extra_body=(
+                f"{item.get('visitorName')} · {item.get('staffCategoryLabel') or 'Staff'} · "
+                f"plot {item.get('plotNo')} · {item.get('leaseMonths')} mo · {item.get('code')}"
+            ),
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except (ValueError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/parking/passes/<pass_id>/photo", methods=["GET"])
 def api_rwa_parking_pass_photo(pass_id):
-    """Serve ad-hoc selfie (signed-in residents with Pass · general or manage)."""
+    """Serve a pass selfie to the plot owner or Pass · general / manage."""
     conn = _rwa_conn()
     try:
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
         actor = sess["resident"]
-        if not (
-            rwa_entitlements.actor_has(actor, "pass_manage")
-            or rwa_entitlements.actor_has(actor, "pass_general")
-        ):
-            return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
         item = rwa_parking.get_pass(conn, pass_id)
         if not item or not item.get("photoFilename"):
             return jsonify({"ok": False, "error": "Photo not found"}), 404
-        # Own-plot or manage: always; for others only manage sees photo of foreign plots —
-        # ad-hoc is GATE house so general may still need photo when validating at gate.
+        actor_house = str(actor.get("houseId") or "").strip()
+        pass_house = str(item.get("houseId") or "").strip()
+        own_plot = bool(actor_house and pass_house and actor_house == pass_house)
+        if not (
+            own_plot
+            or rwa_entitlements.actor_has(actor, "pass_manage")
+            or rwa_entitlements.actor_has(actor, "pass_general")
+        ):
+            return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
         path = rwa_parking.adhoc_photo_path(SITE_ROOT, item.get("photoFilename"))
         if not path:
             return jsonify({"ok": False, "error": "Photo not found"}), 404
         return send_file(path, mimetype="image/webp", max_age=3600, conditional=True)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/card.png", methods=["GET"])
+def api_rwa_parking_card_png(pass_id):
+    """PNG of the plastic pass card with transparent corners."""
+    conn = _rwa_conn()
+    try:
+        item = rwa_parking.get_pass(conn, pass_id, site_root=SITE_ROOT, with_qr=True)
+        if not item:
+            return jsonify({"ok": False, "error": "Pass not found"}), 404
+        code = (request.args.get("code") or "").strip()
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        actor = sess["resident"] if sess else None
+        can_manage = bool(actor and rwa_entitlements.actor_has(actor, "pass_manage"))
+        can_general = bool(actor and rwa_entitlements.actor_has(actor, "pass_general"))
+        if not rwa_parking.can_export_card(
+            item, actor, code=code, can_manage=can_manage, can_general=can_general
+        ):
+            if not sess and not code:
+                return jsonify({"ok": False, "error": "Sign in required"}), 401
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        photo_path = rwa_parking.adhoc_photo_path(SITE_ROOT, item.get("photoFilename"))
+        blob = rwa_parking.render_pass_card_png(item, site_root=SITE_ROOT, photo_path=photo_path)
+        filename = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{item.get('code') or 'sanyard-pass'}.png")
+        resp = send_file(
+            io.BytesIO(blob),
+            mimetype="image/png",
+            as_attachment=True,
+            download_name=filename,
+            max_age=0,
+        )
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
     finally:
         conn.close()
 
@@ -8293,18 +8436,29 @@ def api_rwa_parking_settings():
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
         if request.method == "GET":
-            return jsonify({"ok": True, **rwa_parking.settings(conn)})
+            return jsonify({"ok": True, **rwa_parking.settings(conn, SITE_ROOT)})
         if not rwa_entitlements.actor_has(sess["resident"], "pass_manage"):
             return jsonify({"ok": False, "error": "Pass · manage entitlement required"}), 403
         payload = request.get_json(force=True, silent=True) or {}
-        hours = rwa_parking.set_default_hours(
-            conn,
-            payload.get("defaultHours") or payload.get("hours"),
-            actor=sess["resident"],
-        )
-        return jsonify({"ok": True, **rwa_parking.settings(conn), "defaultHours": hours})
+        if "defaultHours" in payload or "hours" in payload:
+            rwa_parking.set_default_hours(
+                conn,
+                payload.get("defaultHours") or payload.get("hours"),
+                actor=sess["resident"],
+            )
+        if "ocr" in payload:
+            rwa_parking.set_ocr_settings(
+                conn,
+                payload.get("ocr") or {},
+                actor=sess["resident"],
+                site_root=SITE_ROOT,
+            )
+        return jsonify({"ok": True, **rwa_parking.settings(conn, SITE_ROOT)})
     except (ValueError, TypeError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("parking settings failed")
+        return jsonify({"ok": False, "error": "Could not save pass settings. Try again."}), 500
     finally:
         conn.close()
 
@@ -8337,7 +8491,7 @@ def api_rwa_parking_passes():
                 "adhoc": adhoc,
                 "tenants": tenants,
                 "canManagePass": rwa_entitlements.actor_has(actor, "pass_manage"),
-                **rwa_parking.settings(conn),
+                **rwa_parking.settings(conn, SITE_ROOT),
             })
         item = rwa_parking.issue_pass(
             conn,
@@ -8403,15 +8557,106 @@ def api_rwa_parking_lookup():
         if not can_manage and not can_general:
             return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
         q = (request.args.get("q") or request.args.get("plate") or request.args.get("pass") or "").strip()
-        item = rwa_parking.lookup_pass(conn, q, site_root=SITE_ROOT)
+        raw_cands = (request.args.get("candidates") or "").strip()
+        candidates = [part.strip() for part in raw_cands.split(",") if part.strip()]
+        ocr_opts = rwa_parking.ocr_settings(conn, SITE_ROOT)
+        ocr = (request.args.get("ocr") or "").strip().lower() in ("1", "true", "yes") and bool(ocr_opts.get("fuzzy"))
+        item, match = rwa_parking.lookup_pass(
+            conn,
+            q,
+            site_root=SITE_ROOT,
+            candidates=candidates,
+            ocr=ocr,
+        )
         if not item:
             return jsonify({"ok": True, "pass": None, "error": "No pass found for that vehicle or code"})
         return jsonify({
             "ok": True,
             "pass": rwa_parking.lookup_view_for_actor(item, actor, can_manage=can_manage),
+            "match": match,
         })
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("parking lookup failed")
+        return jsonify({"ok": False, "error": "Could not look up that vehicle. Try again."}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/ocr", methods=["POST"])
+def api_rwa_parking_ocr():
+    """Read a plate photo on the server (native binary or Tesseract) and look up the pass."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        can_manage = rwa_entitlements.actor_has(actor, "pass_manage")
+        can_general = rwa_entitlements.actor_has(actor, "pass_general")
+        if not can_manage and not can_general:
+            return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
+        upload = request.files.get("image") or request.files.get("file") or request.files.get("photo")
+        if not upload:
+            return jsonify({"ok": False, "error": "Attach a plate photo"}), 400
+        raw = upload.read() or b""
+        extra = [part.strip() for part in (request.form.get("candidates") or "").split(",") if part.strip()]
+        ocr_opts = rwa_parking.ocr_settings(conn, SITE_ROOT)
+        if not ocr_opts.get("server") and not ocr_opts.get("rust"):
+            return jsonify({
+                "ok": True,
+                "engine": "none",
+                "candidates": extra,
+                "pass": None,
+                "match": None,
+                "error": "Server plate reader is turned off in Pass settings.",
+            })
+        ocr = rwa_parking.ocr_plate_image(raw, site_root=SITE_ROOT, engines=ocr_opts)
+        candidates = []
+        for plate in list(ocr.get("candidates") or []) + extra:
+            key = rwa_parking.compact_plate(plate)
+            if key and key not in candidates:
+                candidates.append(key)
+        if not candidates:
+            engine = ocr.get("engine") or "none"
+            if engine == "none":
+                return jsonify({
+                    "ok": True,
+                    "engine": engine,
+                    "candidates": [],
+                    "pass": None,
+                    "match": None,
+                    "error": "Server plate reader is not installed. Use the on-phone scan, or type the number.",
+                })
+            return jsonify({
+                "ok": True,
+                "engine": engine,
+                "candidates": [],
+                "pass": None,
+                "match": None,
+                "error": "Could not read a registration number from that photo",
+            })
+        item, match = rwa_parking.lookup_pass(
+            conn,
+            candidates[0],
+            site_root=SITE_ROOT,
+            candidates=candidates,
+            ocr=bool(ocr_opts.get("fuzzy")),
+        )
+        return jsonify({
+            "ok": True,
+            "engine": ocr.get("engine") or "",
+            "candidates": candidates[:8],
+            "pass": rwa_parking.lookup_view_for_actor(item, actor, can_manage=can_manage) if item else None,
+            "match": match,
+            "error": None if item else "No pass found for that vehicle or code",
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("parking ocr failed")
+        return jsonify({"ok": False, "error": "Could not read that plate. Try again."}), 500
     finally:
         conn.close()
 

@@ -21,6 +21,7 @@
     msgLastId: null,
     msgIsAiThread: false,
     msgSending: false,
+    parkingOcr: null,
   };
   let rosterCache = [];
   const MSG_EMOJI = ['😀', '😁', '😂', '😊', '😍', '🤔', '👍', '👏', '🙏', '❤️', '🎉', '✅', '❌', '🙂', '😅', '🙌', '💪', '🌹', '🏠', '☀️'];
@@ -203,17 +204,59 @@
     if (!isForm) headers['Content-Type'] = 'application/json';
     const token = state.session?.token || loadStoredToken();
     if (token) headers['X-RWA-Token'] = token;
-    const res = await fetch(path, {
-      credentials: 'same-origin',
-      ...options,
-      headers,
-    });
-    const data = await res.json().catch(() => ({}));
+    let res;
+    try {
+      res = await fetch(path, {
+        credentials: 'same-origin',
+        ...options,
+        headers,
+      });
+    } catch (_err) {
+      throw new Error('Could not reach the server. Try again.');
+    }
+    const text = await res.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_err) {
+      data = {};
+    }
     if (res.status === 401 && path.startsWith('/api/rwa/') && path !== '/api/rwa/login' && !path.includes('/otp/')) {
       clearPersistedAuth();
     }
-    if (!res.ok) throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(friendlyApiError(res, data));
     return data;
+  }
+
+  function friendlyApiError(res, data) {
+    const status = Number(res?.status) || 0;
+    const raw = String((data && (data.error || data.message)) || '').trim();
+    const mapped = {
+      400: 'That could not be saved.',
+      401: 'Please sign in again.',
+      403: "You don't have access to that.",
+      404: 'That was not found.',
+      405: 'That action is not available.',
+      408: 'That took too long. Try again.',
+      409: 'That conflicts with existing data.',
+      413: 'That file is too large.',
+      415: 'That file type is not supported.',
+      422: 'Please check the details and try again.',
+      429: 'Too many tries. Wait a moment.',
+      500: 'Something went wrong. Try again.',
+      502: 'Service is busy. Try again.',
+      503: 'Service is restarting. Try again.',
+      504: 'That took too long. Try again.',
+    };
+    const looksTech = !raw
+      || raw.length > 120
+      || /internal server error|traceback|exception|werkzeug|nginx|bad gateway|method not allowed|not found|failed to fetch|http\s*\d|sql(ite)?|typeerror/i.test(raw);
+    if (status >= 500) {
+      if (raw && !looksTech) return raw;
+      return mapped[status] || mapped[500];
+    }
+    if (raw && !looksTech) return raw;
+    return mapped[status] || 'Something went wrong. Try again.';
   }
 
   let docViewerObjectUrl = '';
@@ -1777,7 +1820,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function refreshMobileListUi() {
-    applyMobileListLimit(el('ledgerRows'), 'tr:not(.is-empty-row)', 5);
+    if (isMobileLayout()) applyMobileListLimit(el('ledgerCards'), '.ledger-card', 5);
+    else applyMobileListLimit(el('ledgerRows'), 'tr:not(.is-empty-row)', 5);
     applyMobileListLimit(el('rosterRows'), 'tr:not(.is-empty-row)', 5);
     applyMobileListLimit(el('revisionRows'), 'tr:not(.is-empty-row)', 5);
     applyMobileListLimit(el('obsRecentRows'), 'tr:not(.is-empty-row)', 8);
@@ -2570,10 +2614,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     business: [
       { id: 'auto_hire', label: 'Auto for hire' },
       { id: 'cab_rent', label: 'Car / cab for rent' },
+      { id: 'maid', label: 'Maid / domestic help' },
+      { id: 'cook', label: 'Cook' },
       { id: 'other', label: 'Other' },
     ],
     service_need: [
       { id: 'auto_hire', label: 'Need auto / taxi' },
+      { id: 'maid', label: 'Need maid / domestic help' },
+      { id: 'cook', label: 'Need cook' },
       { id: 'other', label: 'Other need' },
     ],
     ad: [],
@@ -3198,15 +3246,24 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (!p) {
         card.innerHTML = '<p class="muted">No ledger row for this plot yet.</p>';
       } else {
+        const pending = Number(p.pendingDues ?? p.balanceOutstanding ?? 0);
         card.innerHTML = `
-          <div class="stat-grid">
-            <div class="stat"><span>Previous total</span><strong>${inr(p.previousTotal ?? p.balancePrev)}</strong></div>
-            <div class="stat"><span>Previous paid</span><strong>${inr(p.previousPaid ?? 0)}</strong></div>
-            <div class="stat"><span>Previous pending / dues</span><strong>${inr(p.previousPending ?? p.balancePrev)}</strong></div>
-            <div class="stat"><span>Current year total</span><strong>${inr(p.currentYearTotal ?? p.feeAmount)}</strong></div>
-            <div class="stat"><span>Pending / dues</span><strong>${inr(p.pendingDues ?? p.balanceOutstanding)}</strong></div>
-            <div class="stat stat-treasury"><span>Treasury</span><strong>${treasuryStatusIcon(p)}</strong></div>
-          </div>`;
+          <article class="dues-bill${pending <= 0 ? ' is-cleared' : ''}">
+            <header class="dues-bill-head">
+              <span>${pending <= 0 ? 'Dues' : 'Pending / dues'}</span>
+              <strong>${inr(p.pendingDues ?? p.balanceOutstanding)}</strong>
+            </header>
+            <dl class="dues-bill-metrics">
+              <div><dt>Previous total</dt><dd>${inr(p.previousTotal ?? p.balancePrev)}</dd></div>
+              <div><dt>Previous paid</dt><dd>${inr(p.previousPaid ?? 0)}</dd></div>
+              <div><dt>Previous pending</dt><dd>${inr(p.previousPending ?? p.balancePrev)}</dd></div>
+              <div><dt>Year total</dt><dd>${inr(p.currentYearTotal ?? p.feeAmount)}</dd></div>
+            </dl>
+            <footer class="dues-bill-meta">
+              <span>Treasury</span>
+              ${treasuryStatusIcon(p)}
+            </footer>
+          </article>`;
       }
     }
     const bank = el('bankCard');
@@ -5020,43 +5077,84 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function renderLedgerRows() {
     const tbody = el('ledgerRows');
-    if (!tbody) return;
+    const cards = el('ledgerCards');
+    if (!tbody && !cards) return;
     const q = (el('ledgerSearch')?.value || '').trim().toLowerCase();
     const rows = ledgerCache.filter((r) => {
       if (!q) return true;
       return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.householdCode || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
     });
     if (!rows.length) {
-      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="10" class="muted">No matching ledger rows.</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr class="is-empty-row"><td colspan="10" class="muted">No matching ledger rows.</td></tr>';
+      if (cards) cards.innerHTML = '<p class="muted ledger-cards-empty">No matching ledger rows.</p>';
       refreshMobileListUi();
       return;
     }
     const canTreasury = hasEntitlement('treasury');
-    tbody.innerHTML = rows.map((r) => {
-      const tActs = canTreasury ? treasuryActionButtons('ledger', r.houseId, r.treasuryStatus) : '';
-      return `
-      <tr data-house="${escapeHtml(r.houseId)}">
-        <td data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
-        <td data-label="Name">${escapeHtml(r.name || '')}</td>
-        <td data-label="Prev total">${inr(r.previousTotal ?? r.balancePrev)}</td>
-        <td data-label="Prev paid">${inr(r.previousPaid ?? 0)}</td>
-        <td data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
-        <td data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
-        <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
-        <td data-label="HH code"><code class="hh-code">${escapeHtml(r.householdCode || '—')}</code></td>
-        <td data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
-        <td data-label="Actions" class="row-actions">
-          <button type="button" class="btn ghost compact vault-open" data-vault-house="${escapeHtml(r.houseId)}" title="Documents vault">
+    const vaultBtn = (houseId) => `
+          <button type="button" class="btn ghost compact vault-open" data-vault-house="${escapeHtml(houseId)}" title="Documents vault">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 7.5V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2H12L9.5 5H5a2 2 0 0 0-2 2.5z"/>
             </svg>
             Vault
-          </button>
+          </button>`;
+    if (tbody) {
+      tbody.innerHTML = rows.map((r) => {
+        const tActs = canTreasury ? treasuryActionButtons('ledger', r.houseId, r.treasuryStatus) : '';
+        return `
+      <tr data-house="${escapeHtml(r.houseId)}">
+        <td class="ledger-plot" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
+        <td class="ledger-name" data-label="Name">${escapeHtml(r.name || '')}</td>
+        <td class="ledger-amt" data-label="Prev total">${inr(r.previousTotal ?? r.balancePrev)}</td>
+        <td class="ledger-amt" data-label="Prev paid">${inr(r.previousPaid ?? 0)}</td>
+        <td class="ledger-amt" data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
+        <td class="ledger-amt" data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
+        <td class="ledger-due" data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
+        <td class="ledger-hh" data-label="HH code"><code class="hh-code">${escapeHtml(r.householdCode || '—')}</code></td>
+        <td class="ledger-treas" data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
+        <td data-label="Actions" class="row-actions">
+          ${vaultBtn(r.houseId)}
           <button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button>
           ${tActs}
         </td>
       </tr>`;
-    }).join('');
+      }).join('');
+    }
+    if (cards) {
+      cards.innerHTML = rows.map((r) => {
+        const pending = Number(r.pendingDues ?? r.balanceOutstanding ?? 0);
+        const tActs = canTreasury ? treasuryActionButtons('ledger', r.houseId, r.treasuryStatus) : '';
+        const hh = (r.householdCode || '').trim();
+        return `
+      <article class="ledger-card${pending <= 0 ? ' is-cleared' : ''}" data-house="${escapeHtml(r.houseId)}">
+        <header class="ledger-card-head">
+          <div class="ledger-card-who">
+            <p class="ledger-card-plot"><code>${escapeHtml(r.houseId)}</code></p>
+            <p class="ledger-card-name">${escapeHtml(r.name || '—')}</p>
+          </div>
+          <div class="ledger-card-due">
+            <span>${pending <= 0 ? 'Cleared' : 'Pending'}</span>
+            <strong>${inr(r.pendingDues ?? r.balanceOutstanding)}</strong>
+          </div>
+        </header>
+        <dl class="ledger-card-metrics">
+          <div><dt>Prev total</dt><dd>${inr(r.previousTotal ?? r.balancePrev)}</dd></div>
+          <div><dt>Prev paid</dt><dd>${inr(r.previousPaid ?? 0)}</dd></div>
+          <div><dt>Prev pending</dt><dd>${inr(r.previousPending ?? r.balancePrev)}</dd></div>
+          <div><dt>Year total</dt><dd>${inr(r.currentYearTotal ?? r.feeAmount)}</dd></div>
+        </dl>
+        <div class="ledger-card-meta">
+          ${hh ? `<code class="hh-code">HH ${escapeHtml(hh)}</code>` : '<span class="muted">No HH code</span>'}
+          ${treasuryStatusIcon(r)}
+        </div>
+        <div class="ledger-card-actions row-actions">
+          ${vaultBtn(r.houseId)}
+          <button type="button" class="btn secondary compact ledger-edit" data-house="${escapeHtml(r.houseId)}">Edit</button>
+          ${tActs}
+        </div>
+      </article>`;
+      }).join('');
+    }
     refreshMobileListUi();
   }
 
@@ -5165,7 +5263,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   el('ledgerSearch')?.addEventListener('input', () => renderLedgerRows());
-  el('ledgerRows')?.addEventListener('click', async (event) => {
+  el('ledgerList')?.addEventListener('click', async (event) => {
     const vaultBtn = event.target.closest('[data-vault-house]');
     if (vaultBtn) {
       openVault(vaultBtn.getAttribute('data-vault-house')).catch(console.error);
@@ -5230,6 +5328,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     renderDirectory();
   }
 
+  function directoryCanShowHouseholdCode(r) {
+    if (isEcAdmin()) return true;
+    const own = String(state.session?.resident?.houseId || '').trim();
+    return Boolean(own) && own === String(r?.houseId || '').trim();
+  }
+
   function directorySearchHay(r) {
     const extra = directoryCanViewOccupancy
       ? [
@@ -5237,8 +5341,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           (r.vehicles || []).map((v) => [v.plate, v.kindLabel, v.vehicleTypeLabel].join(' ')).join(' '),
         ]
       : [];
+    const hh = directoryCanShowHouseholdCode(r) ? (r.householdCode || '') : '';
     return [
-      r.houseId, r.plotNo, r.section, r.householdCode,
+      r.houseId, r.plotNo, r.section, hh,
       r.ownerName, r.name, r.primaryDelegateName, r.displayName,
       r.phone, r.email, r.officialTitle, committeeRoleLabel(r),
       r.ecSeatHolderName, ...extra,
@@ -5290,7 +5395,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const delegateName = (r.primaryDelegateName || '').trim();
       const phone = (r.phone || '').trim();
       const email = (r.email || '').trim();
-      const hhCode = (r.householdCode || '').trim();
+      const hhCode = directoryCanShowHouseholdCode(r) ? (r.householdCode || '').trim() : '';
       const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
       const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
         ? `<p class="dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</p>`
@@ -8331,15 +8436,21 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return Object.fromEntries(new URLSearchParams(q));
   }
 
+  function parkingIsIdentityKind(kind) {
+    return kind === 'adhoc' || kind === 'staff';
+  }
+
   function parkingCardHtml(item, { ec = false } = {}) {
     const status = item.status || 'expired';
     const kind = item.kind || 'visitor';
+    const identity = parkingIsIdentityKind(kind);
     const cls = [
       'parking-card',
       kind === 'member' ? 'is-member' : '',
       kind === 'tenant' ? 'is-tenant' : '',
       kind === 'visitor' ? 'is-visitor' : '',
       kind === 'adhoc' ? 'is-adhoc' : '',
+      kind === 'staff' ? 'is-staff' : '',
       status === 'expired' ? 'is-expired' : '',
       status === 'pending_renewal' ? 'is-pending' : '',
       status === 'revoked' ? 'is-revoked' : '',
@@ -8352,16 +8463,25 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const qr = item.qrDataUrl
       ? `<img class="parking-card-qr" src="${item.qrDataUrl}" alt="Pass QR">`
       : '';
-    const plateLine = kind === 'adhoc'
-      ? (item.adhocCategoryLabel || 'Ad-hoc')
+    const plateLine = identity
+      ? (item.categoryLabel || item.staffCategoryLabel || item.adhocCategoryLabel || item.kindLabel || 'Pass')
       : (item.plateDisplay || item.plate || '');
+    const plotLine = kind === 'adhoc' ? 'Main gate' : `Plot ${escapeHtml(item.plotNo || item.houseId || '')}`;
+    const extras = identity
+      ? ''
+      : (item.colour || item.vehicleTypeLabel ? ` · ${escapeHtml([item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · '))}` : '');
+    const removeLabel = kind === 'staff' ? 'End staff pass' : 'Remove vehicle';
+    const title = escapeHtml(item.kindLabel || 'Pass');
+    const titleBlock = identity && photo
+      ? `<div class="parking-card-title-row"><p class="parking-card-title">${title}</p>${photo}</div>`
+      : `<p class="parking-card-title">${title}</p>`;
     return `
       <article class="${cls}" data-id="${escapeHtml(item.id || '')}">
         <div class="parking-card-stripe"></div>
         <div class="parking-card-top">
           <div>
             <div class="parking-card-brand">Himuda Housing Colony Sanyard</div>
-            <p class="parking-card-title">${escapeHtml(item.kindLabel || 'Pass')}</p>
+            ${titleBlock}
           </div>
           <div class="parking-card-chip" aria-hidden="true"></div>
         </div>
@@ -8370,18 +8490,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <div class="parking-card-meta">
           <div>
             <strong>${escapeHtml(who || '—')}</strong>
-            ${kind === 'adhoc' ? 'Main gate' : `Plot ${escapeHtml(item.plotNo || item.houseId || '')}`}
-            ${item.colour || item.vehicleTypeLabel ? ` · ${escapeHtml([item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · '))}` : ''}
+            ${plotLine}${extras}
             <span>Valid ${escapeHtml(valid)}</span>
             <span>${escapeHtml(item.code || '')}</span>
           </div>
-          ${photo}${qr}
+          ${qr}
         </div>
       </article>
       <div class="parking-card-actions">
         ${item.canRenew ? `<button type="button" class="btn secondary compact parking-renew" data-id="${escapeHtml(item.id)}">${item.needsEcApproval ? 'Request EC renewal' : 'Renew pass'}</button>` : ''}
         ${parkingWalletLinks(item)}
-        ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}">Remove vehicle</button>` : ''}
+        ${item.id ? `<button type="button" class="btn ghost compact parking-save-photo" data-id="${escapeHtml(item.id)}" data-code="${escapeHtml(item.code || '')}">Save photo</button>` : ''}
+        ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}" data-kind="${escapeHtml(kind)}">${removeLabel}</button>` : ''}
         ${ec && status === 'pending_renewal' ? `<button type="button" class="btn primary compact parking-approve" data-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="btn ghost compact parking-reject" data-id="${escapeHtml(item.id)}">Decline</button>` : ''}
         ${ec && (status === 'active' || status === 'pending_renewal') ? `<button type="button" class="btn ghost compact parking-revoke" data-id="${escapeHtml(item.id)}">Revoke</button>` : ''}
       </div>`;
@@ -8389,7 +8509,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function parkingDetailHtml(item) {
     if (!item) return '<p class="muted">No pass found.</p>';
-    if (item.detailLevel === 'general') {
+    if (item.detailLevel === 'general' && !parkingIsIdentityKind(item.kind)) {
       const valid = Boolean(item.valid);
       return `<div class="parking-detail parking-detail-general ${valid ? 'is-valid' : 'is-invalid'}">
         <p class="parking-validity-flag">${valid ? 'Valid' : 'Not valid'}</p>
@@ -8400,15 +8520,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         </dl>
       </div>`;
     }
+    const identity = parkingIsIdentityKind(item.kind);
+    const catLabel = item.categoryLabel || item.staffCategoryLabel || item.adhocCategoryLabel || '';
     const rows = [
       ['Kind', item.kindLabel],
       ['Status', item.statusLabel],
-      item.kind === 'adhoc' ? ['Category', item.adhocCategoryLabel || '—'] : ['Vehicle', item.plateDisplay],
-      item.kind === 'adhoc' ? null : ['Type / colour', [item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · ') || '—'],
+      identity ? ['Role', catLabel || '—'] : ['Vehicle', item.plateDisplay],
+      identity ? null : ['Type / colour', [item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · ') || '—'],
       ['Plot', item.kind === 'adhoc' ? 'Main gate' : (item.plotNo || item.houseId)],
-      item.kind === 'adhoc' ? null : ['Registered by', item.memberName],
+      identity ? ['Sponsored by', item.memberName] : ['Registered by', item.memberName],
       ['Name', item.tenantName || item.visitorName || '—'],
       item.kind === 'tenant' ? ['Tenant phone', item.tenantPhone || '—'] : null,
+      item.kind === 'staff' && item.tenantPhone ? ['Mobile', item.tenantPhone] : null,
       item.kind === 'tenant' ? ['Tenant email', item.tenantEmail || '—'] : null,
       item.kind === 'tenant' ? ['Note', item.tenantNote || '—'] : null,
       ['Pass code', item.code],
@@ -8418,9 +8541,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const face = item.hasPhoto && item.photoUrl
       ? `<img class="parking-detail-face" src="${escapeHtml(item.photoUrl)}" alt="">`
       : '';
+    const title = identity
+      ? (item.visitorName || item.kindLabel || 'Pass')
+      : (item.plateDisplay || item.plate || 'Pass');
     return `<div class="parking-detail">
       ${face}
-      <h4>${escapeHtml(item.kind === 'adhoc' ? (item.visitorName || 'Ad-hoc') : (item.plateDisplay || item.plate || 'Pass'))}</h4>
+      <h4>${escapeHtml(title)}</h4>
       <dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd>`).join('')}</dl>
       ${parkingWalletLinks(item) ? `<div class="parking-card-actions">${parkingWalletLinks(item)}</div>` : ''}
     </div>`;
@@ -8477,6 +8603,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   }
 
+  function fillParkingStaffCategories(categories) {
+    const sel = el('parkingStaffCategory');
+    if (!sel || !Array.isArray(categories) || !categories.length) return;
+    const current = sel.value || 'maid';
+    sel.innerHTML = categories.map((c) => {
+      const id = c.id || c;
+      const label = c.label || String(id);
+      return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+    }).join('');
+    if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+  }
+
   async function loadParkingPanel() {
     const list = el('parkingCardList');
     const status = el('parkingListStatus');
@@ -8493,12 +8631,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (el('parkingHours') && data.defaultHours) el('parkingHours').value = String(data.defaultHours);
       if (el('parkingDefaultHours') && data.defaultHours) el('parkingDefaultHours').value = String(data.defaultHours);
       if (el('parkingTenantMonths') && data.defaultMonths) el('parkingTenantMonths').value = String(data.defaultMonths);
+      if (el('parkingStaffMonths') && (data.defaultStaffMonths || data.defaultMonths)) {
+        el('parkingStaffMonths').value = String(data.defaultStaffMonths || data.defaultMonths);
+      }
+      fillParkingStaffCategories(data.staffCategories);
+      fillParkingOcrSettings(data.ocr);
       fillParkingTenantSelect(data.tenants || []);
       const passes = data.passes || [];
       if (list) {
         list.innerHTML = passes.length
           ? passes.map((p) => parkingCardHtml(p)).join('')
-          : '<p class="muted">No passes yet. Register a member vehicle, a tenant vehicle, or issue a visitor pass.</p>';
+          : '<p class="muted">No passes yet. Register a member vehicle, issue a visitor pass, or add household staff.</p>';
       }
       if (status) status.textContent = passes.length ? `${passes.length} pass(es)` : '';
       const pendingWrap = el('parkingPendingList');
@@ -8630,6 +8773,43 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     window.prompt('Copy this connect link:', url);
   }
 
+  async function saveParkingCardPhoto(id, code) {
+    const token = state.session?.token || loadStoredToken();
+    const url = new URL(`/api/rwa/parking/passes/${encodeURIComponent(id)}/card.png`, window.location.origin);
+    if (code) url.searchParams.set('code', code);
+    const standalone = Boolean(window.navigator.standalone)
+      || window.matchMedia('(display-mode: standalone)').matches;
+    if (standalone && token) url.searchParams.set('token', token);
+    const res = await fetch(url.pathname + url.search, {
+      credentials: 'same-origin',
+      headers: token ? { 'X-RWA-Token': token } : {},
+    });
+    if (!res.ok) {
+      let data = {};
+      try { data = await res.json(); } catch (_e) { data = {}; }
+      throw new Error(friendlyApiError(res, data));
+    }
+    const blob = await res.blob();
+    const filename = `${String(code || 'sanyard-pass').replace(/[^\w.-]+/g, '-')}.png`;
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Pass card' });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 4000);
+  }
+
   async function issueParkingPass(payload, statusEl) {
     if (statusEl) statusEl.textContent = 'Issuing…';
     const data = await api('/api/rwa/parking/passes', {
@@ -8648,54 +8828,84 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return data.pass;
   }
 
-  async function lookupParkingPass(query) {
+  async function lookupParkingPass(query, extra = {}) {
     const status = el('parkingLookupStatus');
-    const box = el('parkingLookupResult');
     if (status) status.textContent = 'Looking up…';
     try {
-      const data = await api(`/api/rwa/parking/lookup?q=${encodeURIComponent(query)}`);
-      if (status) status.textContent = data.pass ? 'Match found.' : (data.error || 'No pass found.');
-      if (box) {
-        if (!data.pass) {
-          box.innerHTML = `<p class="muted">${escapeHtml(data.error || 'No pass found.')}</p>`;
-        } else if (data.pass.detailLevel === 'general') {
-          box.innerHTML = parkingDetailHtml(data.pass);
-        } else if (data.pass.detailLevel === 'manage') {
-          box.innerHTML = `${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: true })}`;
-        } else {
-          // Own-plot vehicle: full details, no EC revoke/approve controls
-          box.innerHTML = `${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: false })}`;
-        }
-      }
+      const params = new URLSearchParams({ q: String(query || '').trim() });
+      if (extra.ocr && parkingOcr().fuzzy) params.set('ocr', '1');
+      const cands = (extra.candidates || []).map((c) => String(c || '').trim()).filter(Boolean);
+      if (cands.length) params.set('candidates', cands.slice(0, 8).join(','));
+      const data = await api(`/api/rwa/parking/lookup?${params.toString()}`);
+      applyParkingLookupResult(data, query);
     } catch (err) {
-      if (status) status.textContent = err.message || 'Lookup failed';
-      if (box) box.innerHTML = `<p class="error">${escapeHtml(err.message || 'Lookup failed')}</p>`;
+      applyParkingLookupError(err);
     }
   }
 
-  function extractIndianPlate(text) {
-    const raw = String(text || '').toUpperCase().replace(/[^A-Z0-9\s\-]/g, ' ');
-    const compact = raw.replace(/[\s\-]/g, '');
-    // Prefer fuller RTO forms first: HP33A1234 / HP33AB1234 / BH01AA1234
+  function applyParkingLookupError(err) {
+    const status = el('parkingLookupStatus');
+    const box = el('parkingLookupResult');
+    if (status) status.textContent = err.message || 'Lookup failed';
+    if (box) box.innerHTML = `<p class="error">${escapeHtml(err.message || 'Lookup failed')}</p>`;
+  }
+
+  function applyParkingLookupResult(data, query) {
+    const status = el('parkingLookupStatus');
+    const box = el('parkingLookupResult');
+    const match = data.match || {};
+    const fuzzy = match.kind && match.kind !== 'exact';
+    if (status) {
+      if (!data.pass) status.textContent = data.error || 'No pass found.';
+      else if (fuzzy) status.textContent = `Closest registered plate: ${data.pass.plateDisplay || match.plate || query}. Confirm visually.`;
+      else status.textContent = 'Match found.';
+    }
+    if (box) {
+      if (!data.pass) {
+        box.innerHTML = `<p class="muted">${escapeHtml(data.error || 'No pass found.')}</p>`;
+      } else {
+        const note = fuzzy
+          ? `<p class="parking-ocr-note">OCR was not exact — confirm this is <strong>${escapeHtml(data.pass.plateDisplay || match.plate || '')}</strong> before waving through.</p>`
+          : '';
+        if (data.pass.detailLevel === 'general') {
+          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}`;
+        } else if (data.pass.detailLevel === 'manage') {
+          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: true })}`;
+        } else {
+          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: false })}`;
+        }
+      }
+    }
+  }
+
+  function extractIndianPlates(text) {
+    let compact = String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    compact = compact.replace(/INDIA/g, '').replace(/IND/g, '');
     const patterns = [
       /([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{3,4})/g,
+      /(\d{2}BH\d{4}[A-Z]{1,2})/g,
       /([A-Z]{2})(\d{2})(\d{4})/g,
     ];
     const found = [];
+    const seen = new Set();
+    const add = (plate) => {
+      const key = String(plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (key.length >= 6 && key.length <= 12 && !seen.has(key)) {
+        seen.add(key);
+        found.push(key);
+      }
+    };
     for (const re of patterns) {
       let m;
-      while ((m = re.exec(compact)) !== null) {
-        const plate = m[0];
-        if (plate.length >= 7 && plate.length <= 11) found.push(plate);
-      }
+      while ((m = re.exec(compact)) !== null) add(m[0]);
     }
-    if (found.length) {
-      found.sort((a, b) => b.length - a.length);
-      return found[0];
-    }
-    const spaced = raw.match(/\b([A-Z]{2})\s*(\d{1,2})\s*([A-Z]{1,3})\s*(\d{3,4})\b/);
-    if (spaced) return `${spaced[1]}${spaced[2]}${spaced[3]}${spaced[4]}`;
-    return '';
+    if (compact.length >= 6 && compact.length <= 12) add(compact);
+    found.sort((a, b) => b.length - a.length);
+    return found.filter((plate, _i, all) => !all.some((keep) => keep !== plate && keep.startsWith(plate)));
+  }
+
+  function extractIndianPlate(text) {
+    return extractIndianPlates(text)[0] || '';
   }
 
   function parseParkingQrPayload(raw) {
@@ -8721,7 +8931,74 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return plate || q;
   }
 
+  const PARKING_OCR_DEFAULTS = {
+    phone: true,
+    live: true,
+    fuzzy: true,
+    server: true,
+    rust: false,
+    engines: { tesseract: false, rust: false },
+  };
+
+  function parkingOcr() {
+    return { ...PARKING_OCR_DEFAULTS, ...(state.parkingOcr || {}) };
+  }
+
+  function parkingOcrServerEnabled() {
+    const ocr = parkingOcr();
+    return Boolean(ocr.server || ocr.rust);
+  }
+
+  function fillParkingOcrSettings(ocr) {
+    if (!ocr || typeof ocr !== 'object') return;
+    const on = (v, fallback) => {
+      if (v === undefined || v === null) return fallback;
+      return v === true || v === 1 || v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    };
+    const opts = {
+      ...PARKING_OCR_DEFAULTS,
+      phone: on(ocr.phone, PARKING_OCR_DEFAULTS.phone),
+      live: on(ocr.live, PARKING_OCR_DEFAULTS.live),
+      fuzzy: on(ocr.fuzzy, PARKING_OCR_DEFAULTS.fuzzy),
+      server: on(ocr.server, PARKING_OCR_DEFAULTS.server),
+      rust: on(ocr.rust, PARKING_OCR_DEFAULTS.rust),
+      engines: { ...PARKING_OCR_DEFAULTS.engines, ...(ocr.engines || {}) },
+    };
+    state.parkingOcr = opts;
+    const setCheck = (id, value) => {
+      const box = el(id);
+      if (box) box.checked = Boolean(value);
+    };
+    setCheck('parkingOcrPhone', opts.phone);
+    setCheck('parkingOcrLive', opts.live);
+    setCheck('parkingOcrFuzzy', opts.fuzzy);
+    setCheck('parkingOcrServer', opts.server);
+    setCheck('parkingOcrRust', opts.rust);
+    const engines = opts.engines || {};
+    const serverAvail = el('parkingOcrServerAvail');
+    if (serverAvail) {
+      serverAvail.textContent = engines.tesseract ? '(installed)' : '(not installed on server yet)';
+    }
+    const rustAvail = el('parkingOcrRustAvail');
+    if (rustAvail) {
+      rustAvail.textContent = engines.rust
+        ? '(binary ready at data/bin/plate-ocr)'
+        : '(build plate-ocr and copy to data/bin/plate-ocr)';
+    }
+  }
+
+  function readParkingOcrForm() {
+    return {
+      phone: Boolean(el('parkingOcrPhone')?.checked),
+      live: Boolean(el('parkingOcrLive')?.checked),
+      fuzzy: Boolean(el('parkingOcrFuzzy')?.checked),
+      server: Boolean(el('parkingOcrServer')?.checked),
+      rust: Boolean(el('parkingOcrRust')?.checked),
+    };
+  }
+
   let parkingTesseractPromise = null;
+  let parkingOcrWorker = null;
   let parkingScan = {
     mode: 'plate',
     stream: null,
@@ -8729,14 +9006,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     busy: false,
     lastPlate: '',
     hits: 0,
+    variant: 0,
+    votes: {},
+    ticks: 0,
+    serverTried: false,
   };
 
   async function loadParkingTesseract() {
-    if (window.Tesseract?.recognize) return window.Tesseract;
+    if (window.Tesseract?.createWorker || window.Tesseract?.recognize) return window.Tesseract;
     if (parkingTesseractPromise) return parkingTesseractPromise;
     parkingTesseractPromise = new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-parking-ocr="1"]');
-      if (existing && window.Tesseract?.recognize) {
+      if (existing && (window.Tesseract?.createWorker || window.Tesseract?.recognize)) {
         resolve(window.Tesseract);
         return;
       }
@@ -8745,13 +9026,28 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       script.async = true;
       script.dataset.parkingOcr = '1';
       script.onload = () => {
-        if (window.Tesseract?.recognize) resolve(window.Tesseract);
+        if (window.Tesseract?.createWorker || window.Tesseract?.recognize) resolve(window.Tesseract);
         else reject(new Error('Plate reader failed to load'));
       };
       script.onerror = () => reject(new Error('Could not load plate reader. Check network, or type the number.'));
       document.head.appendChild(script);
     });
     return parkingTesseractPromise;
+  }
+
+  async function getParkingOcrWorker() {
+    if (parkingOcrWorker) return parkingOcrWorker;
+    const Tesseract = await loadParkingTesseract();
+    if (typeof Tesseract.createWorker === 'function') {
+      parkingOcrWorker = await Tesseract.createWorker('eng', 1, { logger() {} });
+      await parkingOcrWorker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: '7',
+        user_defined_dpi: '300',
+      });
+      return parkingOcrWorker;
+    }
+    return Tesseract;
   }
 
   function setParkingScanLive(text) {
@@ -8767,6 +9063,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     parkingScan.busy = false;
     parkingScan.lastPlate = '';
     parkingScan.hits = 0;
+    parkingScan.votes = {};
+    parkingScan.ticks = 0;
+    parkingScan.serverTried = false;
     const video = el('parkingScanVideo');
     if (video) {
       video.pause();
@@ -8780,7 +9079,96 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (dialog?.open) dialog.close();
   }
 
-  function cropParkingGuideFrame(video, canvas, mode) {
+  function scalePlateCanvas(src, minHeight) {
+    const h = Math.max(minHeight, src.height || 0);
+    const scale = h / Math.max(1, src.height || 1);
+    const w = Math.max(32, Math.round((src.width || 1) * scale));
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext('2d', { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, w, h);
+    return out;
+  }
+
+  function otsuThreshold(gray) {
+    const hist = new Array(256).fill(0);
+    for (let i = 0; i < gray.length; i += 1) hist[gray[i]] += 1;
+    const total = gray.length || 1;
+    let sum = 0;
+    for (let i = 0; i < 256; i += 1) sum += i * hist[i];
+    let sumB = 0;
+    let wB = 0;
+    let max = 0;
+    let thresh = 128;
+    for (let t = 0; t < 256; t += 1) {
+      wB += hist[t];
+      if (!wB) continue;
+      const wF = total - wB;
+      if (!wF) break;
+      sumB += t * hist[t];
+      const mB = sumB / wB;
+      const mF = (sum - sumB) / wF;
+      const between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > max) {
+        max = between;
+        thresh = t;
+      }
+    }
+    return thresh;
+  }
+
+  function rotatePlateCanvas(src, degrees) {
+    if (!degrees) return src;
+    const rad = (degrees * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(rad));
+    const cos = Math.abs(Math.cos(rad));
+    const w = src.width;
+    const h = src.height;
+    const out = document.createElement('canvas');
+    out.width = Math.max(32, Math.round(w * cos + h * sin));
+    out.height = Math.max(16, Math.round(w * sin + h * cos));
+    const ctx = out.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(src, -w / 2, -h / 2);
+    return out;
+  }
+
+  function binarizePlateCanvas(src, { invert = false, threshold = 0 } = {}) {
+    const canvas = document.createElement('canvas');
+    canvas.width = src.width;
+    canvas.height = src.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(src, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = img.data;
+    let min = 255;
+    let max = 0;
+    const gray = new Uint8Array(d.length / 4);
+    for (let i = 0, p = 0; i < d.length; i += 4, p += 1) {
+      const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+      gray[p] = g;
+      if (g < min) min = g;
+      if (g > max) max = g;
+    }
+    const span = Math.max(1, max - min);
+    const cut = threshold || otsuThreshold(gray);
+    for (let p = 0, i = 0; p < gray.length; p += 1, i += 4) {
+      let v = ((gray[p] - min) / span) * 255;
+      v = v > cut ? 255 : 0;
+      if (invert) v = 255 - v;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
+  function cropParkingGuideFrame(video, canvas, mode, bandShift = 0) {
     const vw = video.videoWidth || 0;
     const vh = video.videoHeight || 0;
     if (!vw || !vh) return null;
@@ -8791,50 +9179,138 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       sx = Math.floor((vw - sw) / 2);
       sy = Math.floor((vh - sh) / 2);
     } else {
-      // Number-plate aspect ~ 4.7:1, capture a wide band mid-frame
-      sw = Math.floor(vw * 0.82);
-      sh = Math.floor(sw / 4.2);
+      sw = Math.floor(vw * 0.88);
+      sh = Math.floor(sw / 4.4);
       sx = Math.floor((vw - sw) / 2);
-      sy = Math.floor((vh - sh) * 0.55);
+      sy = Math.floor((vh - sh) * (0.48 + bandShift));
+      sy = Math.max(0, Math.min(vh - sh, sy));
     }
     canvas.width = sw;
     canvas.height = sh;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
-    // Boost contrast for plate OCR
-    if (mode === 'plate') {
-      const img = ctx.getImageData(0, 0, sw, sh);
-      const d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const v = g > 140 ? 255 : (g < 90 ? 0 : g);
-        d[i] = d[i + 1] = d[i + 2] = v;
-      }
-      ctx.putImageData(img, 0, 0);
-    }
     return canvas;
   }
 
-  async function recognizePlateFromCanvas(canvas) {
-    const Tesseract = await loadParkingTesseract();
-    const result = await Tesseract.recognize(canvas, 'eng', {
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
-      tessedit_pageseg_mode: '7',
+  async function ocrPlateCanvas(canvas, { allVariants = false } = {}) {
+    if (!parkingOcr().phone) return [];
+    const worker = await getParkingOcrWorker();
+    const scaled = scalePlateCanvas(canvas, 144);
+    const bases = allVariants
+      ? [scaled, rotatePlateCanvas(scaled, -4), rotatePlateCanvas(scaled, 4)]
+      : [parkingScan.variant % 3 === 1 ? rotatePlateCanvas(scaled, -4)
+        : parkingScan.variant % 3 === 2 ? rotatePlateCanvas(scaled, 4)
+        : scaled];
+    const variants = [];
+    bases.forEach((img) => {
+      variants.push(binarizePlateCanvas(img));
+      if (allVariants || parkingScan.variant % 2 === 1) {
+        variants.push(binarizePlateCanvas(img, { invert: true }));
+      }
     });
-    return extractIndianPlate(result?.data?.text || '');
+    parkingScan.variant += 1;
+    const found = [];
+    const seen = new Set();
+    const add = (plate) => {
+      if (plate && !seen.has(plate)) {
+        seen.add(plate);
+        found.push(plate);
+      }
+    };
+    for (const variant of variants) {
+      let text = '';
+      if (worker.recognize && worker.setParameters) {
+        const result = await worker.recognize(variant);
+        text = result?.data?.text || '';
+      } else {
+        const Tesseract = await loadParkingTesseract();
+        const result = await Tesseract.recognize(variant, 'eng');
+        text = result?.data?.text || '';
+      }
+      extractIndianPlates(text).forEach(add);
+      if (found.length && !allVariants) break;
+    }
+    return found;
   }
 
-  async function finishParkingScan(value) {
+  function mergePlateCandidates(...lists) {
+    const found = [];
+    const seen = new Set();
+    lists.flat().forEach((plate) => {
+      const key = String(plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (key.length >= 6 && key.length <= 12 && !seen.has(key)) {
+        seen.add(key);
+        found.push(key);
+      }
+    });
+    return found;
+  }
+
+  function canvasToJpegBlob(canvas, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      if (typeof canvas.toBlob !== 'function') {
+        reject(new Error('Could not capture frame'));
+        return;
+      }
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Could not capture frame'));
+      }, 'image/jpeg', quality);
+    });
+  }
+
+  async function ocrPlateOnServer(blob, candidates = []) {
+    if (!blob || !parkingOcrServerEnabled()) return null;
+    const body = new FormData();
+    body.append('image', blob, 'plate.jpg');
+    if (candidates.length) body.append('candidates', candidates.slice(0, 8).join(','));
+    try {
+      return await api('/api/rwa/parking/ocr', { method: 'POST', body });
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  async function finishParkingScanFromOcr(data, fallbackQuery, candidates) {
+    const q = (data?.candidates && data.candidates[0]) || fallbackQuery || '';
+    if (data?.pass) {
+      stopParkingScanner();
+      if (el('parkingLookupInput') && q) el('parkingLookupInput').value = q;
+      applyParkingLookupResult(data, q);
+      return true;
+    }
+    if (q) {
+      await finishParkingScan(q, { ocr: true, candidates: mergePlateCandidates(candidates, data?.candidates) });
+      return true;
+    }
+    return false;
+  }
+
+  async function recognizePlateFromCanvas(canvas) {
+    const plates = await ocrPlateCanvas(canvas);
+    return plates[0] || '';
+  }
+
+  function parkingScanTopVotes() {
+    return Object.entries(parkingScan.votes || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([plate]) => plate);
+  }
+
+  async function finishParkingScan(value, extra = {}) {
     const q = String(value || '').trim();
     if (!q) return;
+    const fromQr = parkingScan.mode === 'qr';
+    const candidates = extra.candidates || parkingScanTopVotes();
+    const ocr = !fromQr || Boolean(extra.ocr);
     stopParkingScanner();
     if (el('parkingLookupInput')) el('parkingLookupInput').value = q;
     if (el('parkingLookupStatus')) {
-      el('parkingLookupStatus').textContent = parkingScan.mode === 'qr'
+      el('parkingLookupStatus').textContent = fromQr
         ? `QR read: ${q}. Looking up…`
         : `Plate read: ${q}. Looking up…`;
     }
-    await lookupParkingPass(q);
+    await lookupParkingPass(q, { ocr, candidates });
   }
 
   async function tickParkingScanner() {
@@ -8866,21 +9342,33 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         return;
       }
       setParkingScanLive('Looking for number plate…');
-      const plate = await recognizePlateFromCanvas(frame);
-      if (!plate) {
-        setParkingScanLive('Align the plate in the frame…');
-        parkingScan.hits = 0;
-        parkingScan.lastPlate = '';
+      parkingScan.ticks = (parkingScan.ticks || 0) + 1;
+      const shifts = [0, -0.08, 0.08];
+      const shift = shifts[parkingScan.variant % shifts.length];
+      const plateFrame = cropParkingGuideFrame(video, canvas, 'plate', shift) || frame;
+      const plates = await ocrPlateCanvas(plateFrame);
+      plates.forEach((plate) => {
+        parkingScan.votes[plate] = (parkingScan.votes[plate] || 0) + 1;
+      });
+      const ranked = parkingScanTopVotes();
+      const best = ranked[0];
+      const votes = best ? (parkingScan.votes[best] || 0) : 0;
+      if (best) setParkingScanLive(`Reading ${best}${votes < 2 ? ' — hold steady…' : ''}`);
+      else setParkingScanLive('Align the plate in the yellow frame…');
+      if (votes >= 2) {
+        await finishParkingScan(best, { ocr: true, candidates: ranked });
         return;
       }
-      if (plate === parkingScan.lastPlate) parkingScan.hits += 1;
-      else {
-        parkingScan.lastPlate = plate;
-        parkingScan.hits = 1;
+      if (!parkingScan.serverTried && parkingScan.ticks >= (parkingOcr().phone ? 5 : 2)) {
+        parkingScan.serverTried = true;
+        setParkingScanLive('Trying the server plate reader…');
+        try {
+          const blob = await canvasToJpegBlob(plateFrame);
+          const server = await ocrPlateOnServer(blob, ranked);
+          if (await finishParkingScanFromOcr(server, best, ranked)) return;
+        } catch (_err) { /* keep scanning on device */ }
+        setParkingScanLive(best ? `Reading ${best} — hold steady…` : 'Align the plate in the yellow frame…');
       }
-      setParkingScanLive(`Detected ${plate}${parkingScan.hits < 2 ? ' — hold steady…' : ''}`);
-      // Require two consecutive reads to reduce false positives
-      if (parkingScan.hits >= 2) await finishParkingScan(plate);
     } catch (err) {
       setParkingScanLive(err.message || 'Scanner busy…');
     } finally {
@@ -8902,11 +9390,26 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (title) title.textContent = parkingScan.mode === 'qr' ? 'Scan pass QR' : 'Scan vehicle plate';
     if (hint) {
-      hint.textContent = parkingScan.mode === 'qr'
-        ? 'Centre the QR from the pass card in the square. It will read automatically.'
-        : 'Align the number plate inside the yellow frame. The camera will identify the registration.';
+      const ocr = parkingOcr();
+      if (parkingScan.mode === 'qr') {
+        hint.textContent = 'Centre the QR from the pass card in the square. It will read automatically.';
+      } else if (!ocr.phone && !parkingOcrServerEnabled()) {
+        hint.textContent = 'Plate reading is turned off in Pass settings. Type the registration number instead.';
+      } else if (!ocr.live) {
+        hint.textContent = 'Align the number plate inside the yellow frame, then tap Read now.';
+      } else if (!ocr.phone && parkingOcrServerEnabled()) {
+        hint.textContent = 'Align the number plate. The server reader will identify the registration.';
+      } else {
+        hint.textContent = 'Align the number plate inside the yellow frame. The camera will identify the registration.';
+      }
     }
     if (frame) frame.dataset.mode = parkingScan.mode;
+    parkingScan.votes = {};
+    parkingScan.variant = 0;
+    parkingScan.hits = 0;
+    parkingScan.lastPlate = '';
+    parkingScan.ticks = 0;
+    parkingScan.serverTried = false;
     setParkingScanLive('Starting camera…');
     if (!dialog.open) dialog.showModal();
     try {
@@ -8923,17 +9426,28 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         },
       });
       parkingScan.stream = stream;
+      try {
+        const track = stream.getVideoTracks()[0];
+        const caps = track?.getCapabilities?.() || {};
+        const extra = {};
+        if (caps.focusMode && caps.focusMode.includes('continuous')) extra.focusMode = 'continuous';
+        if (Object.keys(extra).length) await track.applyConstraints(extra);
+      } catch (_e) { /* torch/focus optional */ }
       video.srcObject = stream;
       await video.play();
       setParkingScanLive(parkingScan.mode === 'qr' ? 'Point at the QR…' : 'Align the number plate…');
       if (parkingScan.timer) clearInterval(parkingScan.timer);
-      // Plate OCR is heavier; poll less often than QR
-      parkingScan.timer = window.setInterval(
-        () => { tickParkingScanner().catch(() => {}); },
-        parkingScan.mode === 'qr' ? 650 : 1400,
-      );
-      // Warm plate OCR in background
-      if (parkingScan.mode === 'plate') loadParkingTesseract().catch(() => {});
+      const ocr = parkingOcr();
+      const livePlate = parkingScan.mode === 'plate' && ocr.live && (ocr.phone || parkingOcrServerEnabled());
+      if (parkingScan.mode === 'qr' || livePlate) {
+        parkingScan.timer = window.setInterval(
+          () => { tickParkingScanner().catch(() => {}); },
+          parkingScan.mode === 'qr' ? 650 : 900,
+        );
+      } else if (parkingScan.mode === 'plate') {
+        setParkingScanLive('Align the plate, then tap Read now.');
+      }
+      if (parkingScan.mode === 'plate' && ocr.phone) getParkingOcrWorker().catch(() => {});
     } catch (err) {
       setParkingScanLive(err.message || 'Camera unavailable');
       if (el('parkingLookupStatus')) {
@@ -8960,10 +9474,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       await finishParkingScan(q);
       return;
     }
-    const plate = await recognizePlateFromCanvas(frame);
-    if (!plate) throw new Error('Could not read the plate. Move closer and tap Read now again.');
-    if (status) status.textContent = `Plate read: ${plate}`;
-    await finishParkingScan(plate);
+    const plates = await ocrPlateCanvas(frame, { allVariants: true });
+    let server = null;
+    try {
+      const blob = await canvasToJpegBlob(frame);
+      server = await ocrPlateOnServer(blob, plates);
+    } catch (_err) { /* device OCR is enough */ }
+    if (await finishParkingScanFromOcr(server, plates[0], plates)) return;
+    if (!plates[0]) throw new Error('Could not read the plate. Move closer and tap Read now again.');
   }
 
   async function scanParkingPlateFile(file) {
@@ -8971,32 +9489,43 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const status = el('parkingLookupStatus');
     if (status) status.textContent = 'Reading plate from photo…';
     const bmp = await createImageBitmap(file);
-    const canvas = document.createElement('canvas');
-    // Prefer a mid-band crop similar to live guide
-    const sw = bmp.width;
-    const sh = Math.max(40, Math.floor(bmp.height * 0.35));
-    const sy = Math.floor((bmp.height - sh) * 0.55);
-    canvas.width = sw;
-    canvas.height = sh;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bmp, 0, sy, sw, sh, 0, 0, sw, sh);
-    const plate = await recognizePlateFromCanvas(canvas);
-    if (!plate) {
-      // Fallback: full image
+    const bands = [0.55, 0.35, 0.7];
+    const found = [];
+    for (const pos of bands) {
+      const canvas = document.createElement('canvas');
+      const sw = bmp.width;
+      const sh = Math.max(48, Math.floor(bmp.height * 0.32));
+      const sy = Math.max(0, Math.min(bmp.height - sh, Math.floor((bmp.height - sh) * pos)));
+      canvas.width = sw;
+      canvas.height = sh;
+      canvas.getContext('2d').drawImage(bmp, 0, sy, sw, sh, 0, 0, sw, sh);
+      const plates = await ocrPlateCanvas(canvas, { allVariants: true });
+      plates.forEach((p) => { if (!found.includes(p)) found.push(p); });
+      if (found.length) break;
+    }
+    if (!found.length) {
       const full = document.createElement('canvas');
       full.width = bmp.width;
       full.height = bmp.height;
       full.getContext('2d').drawImage(bmp, 0, 0);
-      const again = await recognizePlateFromCanvas(full);
-      if (!again) throw new Error('Could not read a registration number. Retake closer to the plate, or type it.');
-      if (el('parkingLookupInput')) el('parkingLookupInput').value = again;
-      if (status) status.textContent = `Plate read: ${again}. Looking up…`;
-      await lookupParkingPass(again);
+      const plates = await ocrPlateCanvas(full, { allVariants: true });
+      plates.forEach((p) => { if (!found.includes(p)) found.push(p); });
+    }
+    const plate = found[0];
+    if (el('parkingLookupInput') && plate) el('parkingLookupInput').value = plate;
+    if (status) status.textContent = plate ? `Plate read: ${plate}. Looking up…` : 'Reading plate from photo…';
+    let server = null;
+    try {
+      server = await ocrPlateOnServer(file, found);
+    } catch (_err) { /* device OCR is enough */ }
+    if (server?.pass) {
+      applyParkingLookupResult(server, (server.candidates && server.candidates[0]) || plate);
       return;
     }
-    if (el('parkingLookupInput')) el('parkingLookupInput').value = plate;
-    if (status) status.textContent = `Plate read: ${plate}. Looking up…`;
-    await lookupParkingPass(plate);
+    const merged = mergePlateCandidates(found, server?.candidates);
+    if (!merged[0]) throw new Error('Could not read a registration number. Retake closer to the plate, or type it.');
+    if (el('parkingLookupInput')) el('parkingLookupInput').value = merged[0];
+    await lookupParkingPass(merged[0], { ocr: true, candidates: merged });
   }
 
   async function scanParkingQrFile(file) {
@@ -10083,6 +10612,80 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
 
+  let parkingStaffBlob = null;
+
+  function resetParkingStaffSelfie() {
+    parkingStaffBlob = null;
+    const preview = el('parkingStaffPreview');
+    const snap = el('parkingStaffSnap');
+    const retake = el('parkingStaffRetakeBtn');
+    const file = el('parkingStaffFile');
+    if (preview) preview.hidden = true;
+    if (snap) snap.removeAttribute('src');
+    if (retake) retake.hidden = true;
+    if (file) file.value = '';
+  }
+
+  function setParkingStaffSelfie(file) {
+    if (!file) return;
+    parkingStaffBlob = file;
+    const snap = el('parkingStaffSnap');
+    const preview = el('parkingStaffPreview');
+    const retake = el('parkingStaffRetakeBtn');
+    if (snap) snap.src = URL.createObjectURL(file);
+    if (preview) preview.hidden = false;
+    if (retake) retake.hidden = false;
+  }
+
+  el('parkingStaffCaptureBtn')?.addEventListener('click', () => {
+    el('parkingStaffFile')?.click();
+  });
+  el('parkingStaffRetakeBtn')?.addEventListener('click', () => {
+    resetParkingStaffSelfie();
+    el('parkingStaffFile')?.click();
+  });
+  el('parkingStaffFile')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) setParkingStaffSelfie(file);
+  });
+
+  el('parkingStaffForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('parkingStaffStatus');
+    if (!parkingStaffBlob) {
+      if (status) status.textContent = 'Take a selfie of the staff member first.';
+      return;
+    }
+    const name = (el('parkingStaffName')?.value || '').trim();
+    if (name.length < 2) {
+      if (status) status.textContent = 'Enter the staff member’s full name.';
+      return;
+    }
+    try {
+      if (status) status.textContent = 'Issuing…';
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('category', el('parkingStaffCategory')?.value || 'other');
+      fd.append('months', el('parkingStaffMonths')?.value || '3');
+      fd.append('phone', (el('parkingStaffPhone')?.value || '').trim());
+      fd.append('photo', parkingStaffBlob, parkingStaffBlob.name || 'selfie.jpg');
+      const data = await api('/api/rwa/parking/staff', { method: 'POST', body: fd });
+      const mailed = data.pass?.emailDelivery?.channel === 'email';
+      if (status) {
+        status.textContent = mailed
+          ? 'Staff pass issued and emailed. It is listed below.'
+          : (data.pass?.emailDelivery?.reason === 'no_email'
+            ? 'Staff pass issued. Add an email on Profile to receive a copy.'
+            : 'Staff pass issued and listed below.');
+      }
+      el('parkingStaffForm').reset();
+      resetParkingStaffSelfie();
+      await loadParkingPanel();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not issue staff pass';
+    }
+  });
+
   el('parkingRefreshBtn')?.addEventListener('click', () => loadParkingPanel().catch(() => {}));
 
   el('parkingGatePrintBtn')?.addEventListener('click', () => printParkingGatePoster());
@@ -10239,6 +10842,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('parkingScanPlateBtn')?.addEventListener('click', () => {
+    const ocr = parkingOcr();
+    if (!ocr.phone && !parkingOcrServerEnabled()) {
+      const status = el('parkingLookupStatus');
+      if (status) status.textContent = 'Plate reading is turned off in Pass settings. Type the registration, or enable a reader.';
+      return;
+    }
     openParkingScanner('plate').catch((err) => {
       const status = el('parkingLookupStatus');
       if (status) status.textContent = err.message || 'Could not open plate scanner';
@@ -10312,11 +10921,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const status = el('parkingHoursStatus');
     if (status) status.textContent = 'Saving…';
     try {
-      await api('/api/rwa/parking/settings', {
+      const saved = await api('/api/rwa/parking/settings', {
         method: 'PATCH',
-        body: JSON.stringify({ defaultHours: Number(el('parkingDefaultHours').value) }),
+        body: JSON.stringify({
+          defaultHours: Number(el('parkingDefaultHours').value),
+          ocr: readParkingOcrForm(),
+        }),
       });
-      if (status) status.textContent = 'Default visitor lease saved.';
+      fillParkingOcrSettings(saved.ocr);
+      if (status) status.textContent = saved.ocr?.rust
+        ? 'Pass settings saved. Native Rust reader is on.'
+        : 'Pass settings saved.';
       if (el('parkingHours')) el('parkingHours').value = el('parkingDefaultHours').value;
     } catch (err) {
       if (status) status.textContent = err.message || 'Could not save';
@@ -10339,7 +10954,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/renew`, { method: 'POST', body: '{}' });
         await loadParkingPanel();
       } else if (btn.classList.contains('parking-remove')) {
-        if (!window.confirm('Remove this registered member vehicle?')) return;
+        const staff = btn.getAttribute('data-kind') === 'staff';
+        if (!window.confirm(staff ? 'End this household staff pass?' : 'Remove this registered member vehicle?')) return;
         await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/remove`, { method: 'POST', body: '{}' });
         await loadParkingPanel();
       } else if (btn.classList.contains('parking-approve')) {
@@ -10352,6 +10968,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           body: JSON.stringify({ note }),
         });
         await loadParkingPanel();
+      } else if (btn.classList.contains('parking-save-photo')) {
+        btn.disabled = true;
+        try {
+          await saveParkingCardPhoto(id, btn.getAttribute('data-code') || '');
+        } finally {
+          btn.disabled = false;
+        }
       } else if (btn.classList.contains('parking-revoke')) {
         if (!window.confirm('Revoke this pass?')) return;
         await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: '{}' });
