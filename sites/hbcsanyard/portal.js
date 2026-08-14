@@ -5220,49 +5220,128 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return 'Resident';
   }
 
+  let directoryCache = [];
+  let directoryCanViewOccupancy = false;
+
   async function loadDirectory() {
     const data = await api('/api/rwa/directory');
-    const rows = data.residents || [];
-    const box = el('directoryRows');
+    directoryCache = data.residents || [];
+    directoryCanViewOccupancy = Boolean(data.canViewOccupancy) && isEcAdmin();
+    renderDirectory();
+  }
+
+  function directorySearchHay(r) {
+    const extra = directoryCanViewOccupancy
+      ? [
+          (r.tenants || []).map((t) => t.name || '').join(' '),
+          (r.vehicles || []).map((v) => [v.plate, v.kindLabel, v.vehicleTypeLabel].join(' ')).join(' '),
+        ]
+      : [];
+    return [
+      r.houseId, r.plotNo, r.section, r.householdCode,
+      r.ownerName, r.name, r.primaryDelegateName, r.displayName,
+      r.phone, r.email, r.officialTitle, committeeRoleLabel(r),
+      r.ecSeatHolderName, ...extra,
+    ].map((v) => String(v || '').toLowerCase()).join(' ');
+  }
+
+  function directoryFoldHtml(title, count, rowsHtml, emptyText) {
+    const n = Number(count) || 0;
+    return `
+      <details class="dir-fold">
+        <summary>
+          <span>${escapeHtml(title)}</span>
+          <span class="dir-count">${n}</span>
+        </summary>
+        ${n ? `<ul class="dir-fold-list">${rowsHtml}</ul>` : `<p class="muted dir-fold-empty">${escapeHtml(emptyText)}</p>`}
+      </details>`;
+  }
+
+  function renderDirectory() {
+    const box = el('directoryList');
+    const meta = el('directoryLookupMeta');
+    const lookup = el('directoryLookup');
+    if (lookup) {
+      lookup.placeholder = directoryCanViewOccupancy
+        ? 'Look up plot, owner, phone, tenant, vehicle…'
+        : 'Look up plot, owner, phone…';
+    }
     if (!box) return;
+    const q = (el('directoryLookup')?.value || '').trim().toLowerCase();
+    const rows = !q
+      ? directoryCache
+      : directoryCache.filter((r) => directorySearchHay(r).includes(q));
+    if (meta) {
+      if (!directoryCache.length) meta.textContent = '';
+      else if (!q) meta.textContent = `${directoryCache.length} household${directoryCache.length === 1 ? '' : 's'}`;
+      else meta.textContent = `${rows.length} of ${directoryCache.length} household${directoryCache.length === 1 ? '' : 's'}`;
+    }
+    if (!directoryCache.length) {
+      box.innerHTML = '<p class="muted">No active plots in the directory.</p>';
+      return;
+    }
     if (!rows.length) {
-      box.innerHTML = '<tr class="is-empty-row"><td colspan="6" class="muted">No active plots in the directory.</td></tr>';
+      box.innerHTML = '<p class="muted">No households match that lookup.</p>';
       return;
     }
     box.innerHTML = rows.map((r) => {
       const roleLabel = committeeRoleLabel(r);
-      const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
-      const ownerName = (r.ownerName || r.name || '').trim();
+      const ownerName = (r.ownerName || r.name || '').trim() || '—';
       const delegateName = (r.primaryDelegateName || '').trim();
-      const nameHtml = delegateName
-        ? `<span class="dir-owner">${escapeHtml(ownerName)}</span>`
-          + `<span class="dir-sep muted"> / </span>`
-          + `<span class="dir-delegate">${escapeHtml(delegateName)}</span>`
-          + `<span class="dir-identity muted"> · Owner / Primary delegate</span>`
-        : `<span>${escapeHtml(ownerName)}</span>`;
-      const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
-        ? `<div class="muted dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</div>`
-        : '';
       const phone = (r.phone || '').trim();
       const email = (r.email || '').trim();
       const hhCode = (r.householdCode || '').trim();
+      const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
+      const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
+        ? `<p class="dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</p>`
+        : '';
       const phoneHtml = phone
         ? `<a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
         : '<span class="muted">—</span>';
       const emailHtml = email
         ? `<a class="dir-contact" href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
         : '<span class="muted">—</span>';
+      const tenants = r.tenants || [];
+      const vehicles = r.vehicles || [];
+      const tenantRows = tenants.map((t) => `<li>${escapeHtml(t.name || 'Tenant')}</li>`).join('');
+      const vehicleRows = vehicles.map((v) => {
+        const bits = [v.plate, v.vehicleTypeLabel, v.kindLabel].filter(Boolean);
+        return `<li><span class="dir-plate">${escapeHtml(v.plate || '')}</span>${bits.length > 1 ? `<span class="muted"> · ${escapeHtml(bits.slice(1).join(' · '))}</span>` : ''}</li>`;
+      }).join('');
+      const occupancyHtml = directoryCanViewOccupancy ? `
+        <div class="dir-folds">
+          ${directoryFoldHtml('Tenants', tenants.length, tenantRows, 'No tenants recorded for this plot.')}
+          ${directoryFoldHtml('Vehicles', vehicles.length, vehicleRows, 'No member or tenant vehicles registered.')}
+        </div>` : '';
       return `
-      <tr>
-        <td class="plot-cell" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
-        <td data-label="HH code"><code class="hh-code">${escapeHtml(hhCode || '—')}</code></td>
-        <td data-label="Name"><span class="person-inline">${personAvatarHtml(r)}<span>${nameHtml}${seatBit}</span></span></td>
-        <td data-label="Role">${escapeHtml(roleLabel)}${titleBit}</td>
-        <td data-label="Phone">${phoneHtml}</td>
-        <td data-label="Email" class="dir-email">${emailHtml}</td>
-      </tr>`;
+      <article class="dir-card" data-house-id="${escapeHtml(r.houseId)}">
+        <header class="dir-card-head">
+          ${personAvatarHtml(r, { size: 'md' })}
+          <div class="dir-card-head-copy">
+            <p class="dir-plot"><code>${escapeHtml(r.houseId)}</code>${hhCode ? `<span class="dir-hh">HH ${escapeHtml(hhCode)}</span>` : ''}</p>
+            <p class="dir-role">${escapeHtml(roleLabel)}${titleBit}</p>
+          </div>
+        </header>
+        <dl class="dir-fields">
+          <div class="dir-field">
+            <dt>Owner</dt>
+            <dd class="dir-name">${escapeHtml(ownerName)}</dd>
+          </div>
+          ${delegateName ? `<div class="dir-field"><dt>Primary delegate</dt><dd class="dir-name">${escapeHtml(delegateName)}</dd></div>` : ''}
+          <div class="dir-field">
+            <dt>Phone</dt>
+            <dd>${phoneHtml}</dd>
+          </div>
+          <div class="dir-field">
+            <dt>Email</dt>
+            <dd>${emailHtml}</dd>
+          </div>
+        </dl>
+        ${seatBit}
+        ${occupancyHtml}
+      </article>`;
     }).join('');
-    await hydrateAvatars(box);
+    hydrateAvatars(box).catch(() => {});
   }
 
   let infoCategoriesCache = [];
@@ -8301,6 +8380,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       </article>
       <div class="parking-card-actions">
         ${item.canRenew ? `<button type="button" class="btn secondary compact parking-renew" data-id="${escapeHtml(item.id)}">${item.needsEcApproval ? 'Request EC renewal' : 'Renew pass'}</button>` : ''}
+        ${parkingWalletLink(item)}
         ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}">Remove vehicle</button>` : ''}
         ${ec && status === 'pending_renewal' ? `<button type="button" class="btn primary compact parking-approve" data-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="btn ghost compact parking-reject" data-id="${escapeHtml(item.id)}">Decline</button>` : ''}
         ${ec && (status === 'active' || status === 'pending_renewal') ? `<button type="button" class="btn ghost compact parking-revoke" data-id="${escapeHtml(item.id)}">Revoke</button>` : ''}
@@ -8342,7 +8422,33 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       ${face}
       <h4>${escapeHtml(item.kind === 'adhoc' ? (item.visitorName || 'Ad-hoc') : (item.plateDisplay || item.plate || 'Pass'))}</h4>
       <dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd>`).join('')}</dl>
+      ${parkingWalletLink(item) ? `<div class="parking-card-actions">${parkingWalletLink(item)}</div>` : ''}
     </div>`;
+  }
+
+  function appleWalletLikely() {
+    const ua = navigator.userAgent || '';
+    return !/Android/i.test(ua);
+  }
+
+  function parkingWalletHref(item) {
+    const path = item.walletUrl || '';
+    if (!path) return '';
+    const url = new URL(path, window.location.origin);
+    const standalone = Boolean(window.navigator.standalone)
+      || window.matchMedia('(display-mode: standalone)').matches;
+    if (standalone) {
+      const token = state.session?.token || loadStoredToken();
+      if (token) url.searchParams.set('token', token);
+    }
+    return url.pathname + url.search;
+  }
+
+  function parkingWalletLink(item) {
+    if (!item?.walletEnabled || !item.walletUrl || !appleWalletLikely()) return '';
+    const href = parkingWalletHref(item);
+    if (!href) return '';
+    return `<a class="btn compact parking-wallet" href="${escapeHtml(href)}">Add to iPhone Wallet</a>`;
   }
 
   function fillParkingTenantSelect(tenants) {
@@ -8952,7 +9058,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       refreshPushUi().catch(() => {});
       refreshProfileAuthbuddyCard().catch(() => {});
     }
-    if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr class="is-empty-row"><td colspan="6">${escapeHtml(e.message)}</td></tr>`; });
+    if (name === 'directory') loadDirectory().catch((e) => {
+      if (el('directoryList')) el('directoryList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    });
     if (name === 'parking') loadParkingPanel().catch((e) => {
       if (el('parkingListStatus')) el('parkingListStatus').textContent = e.message || 'Pass list failed';
     });
@@ -9905,6 +10013,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
   el('pushPrefsSaveBtn')?.addEventListener('click', () => savePushPrefs());
+  el('directoryLookup')?.addEventListener('input', () => renderDirectory());
+  el('directoryLookup')?.addEventListener('search', () => renderDirectory());
 
   el('parkingMemberForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -10205,6 +10315,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   el('parkingCardList')?.addEventListener('click', onParkingActionClick);
   el('parkingPendingList')?.addEventListener('click', onParkingActionClick);
+  el('parkingAdhocList')?.addEventListener('click', onParkingActionClick);
   el('parkingLookupResult')?.addEventListener('click', onParkingActionClick);
 
   async function onParkingActionClick(event) {

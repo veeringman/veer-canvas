@@ -191,7 +191,16 @@ def settings(conn: sqlite3.Connection) -> dict[str, Any]:
         "adhocCategories": [{"id": k, "label": v} for k, v in ADHOC_CATEGORIES.items()],
         "gatePassUrl": gate_pass_public_url(),
         "vehicleTypes": [{"id": k, "label": VEHICLE_LABELS[k]} for k in VEHICLE_TYPES if k != "foot"],
+        "walletEnabled": _wallet_configured(),
     }
+
+
+def _wallet_configured() -> bool:
+    try:
+        import rwa_wallet
+        return rwa_wallet.is_configured()
+    except ImportError:
+        return False
 
 
 def gate_pass_public_url(site_root: pathlib.Path | None = None) -> str:
@@ -365,7 +374,7 @@ def _row_pass(row: sqlite3.Row | None) -> dict[str, Any] | None:
     else:
         status_label = STATUS_LABELS.get(status, status.replace("_", " ").title())
     photo_filename = data.get("photo_filename") or ""
-    return {
+    item = {
         "id": data.get("id"),
         "code": data.get("public_code") or "",
         "kind": kind,
@@ -413,6 +422,40 @@ def _row_pass(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "canRemove": permanent and status == "active",
         "verifyUrl": "",
     }
+    item.update(_wallet_public_fields(item))
+    return item
+
+
+def _wallet_public_fields(item: dict[str, Any]) -> dict[str, Any]:
+    try:
+        import rwa_wallet
+    except ImportError:
+        return {"walletEnabled": False, "walletUrl": ""}
+    return rwa_wallet.public_fields(item)
+
+
+def can_download_wallet(
+    item: dict[str, Any] | None,
+    actor: dict | None,
+    *,
+    code: str = "",
+    can_manage: bool = False,
+    can_general: bool = False,
+) -> bool:
+    """Owner plot, pass staff, or possession of the public pass code."""
+    if not item:
+        return False
+    if str(item.get("status") or "") not in ("active", "pending_renewal"):
+        return False
+    pub = str(item.get("code") or "").strip().upper()
+    offered = (code or "").strip().upper()
+    if pub and offered and pub == offered:
+        return True
+    if can_manage or can_general:
+        return True
+    actor_house = str((actor or {}).get("houseId") or (actor or {}).get("house_id") or "").strip()
+    pass_house = str(item.get("houseId") or item.get("house_id") or "").strip()
+    return bool(actor_house and pass_house and actor_house == pass_house)
 
 
 def _attach_qr(item: dict[str, Any], site_root: pathlib.Path | None) -> dict[str, Any]:

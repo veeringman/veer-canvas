@@ -303,6 +303,7 @@ Environment=PATH=$WEB_ROOT/venv/bin:/usr/bin:/bin
 EnvironmentFile=-$WEB_ROOT/data/smtp.env
 EnvironmentFile=-$WEB_ROOT/data/vapid.env
 EnvironmentFile=-$WEB_ROOT/data/ai.env
+EnvironmentFile=-$WEB_ROOT/data/apple-wallet.env
 EnvironmentFile=-/etc/veercanvas/${SITE_ID}.env
 ExecStart=$WEB_ROOT/venv/bin/python $ADMIN_APP
 Restart=always

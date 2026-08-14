@@ -177,7 +177,7 @@ sqlite_backup "${WEB_ROOT}/admin/admin.db" "${RUN_DIR}/db/admin-legacy.db" || tr
 
 # --- Uploads + secrets (mode 600 for env) ---
 UPLOAD_LIST=()
-for rel in data/profile-photos data/receipts data/no-dues data/no-objection data/vault data/payments data/info-centre data/attestations data/imports data/messages data/smtp.env data/vapid.env data/ai.env; do
+for rel in data/profile-photos data/receipts data/no-dues data/no-objection data/vault data/payments data/info-centre data/attestations data/imports data/messages data/smtp.env data/vapid.env data/ai.env data/apple-wallet.env data/apple-wallet; do
   if [[ -e "${WEB_ROOT}/${rel}" ]]; then
     UPLOAD_LIST+=("$rel")
   fi

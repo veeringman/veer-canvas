@@ -4203,84 +4203,194 @@ th, td {
 }
 th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 
-.directory-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+.directory-toolbar {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
 }
-.directory-table {
+@media (max-width: 900px) {
+  .directory-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding: 0.15rem 0 0.55rem;
+    background: linear-gradient(180deg, rgba(255, 252, 246, 0.98), rgba(255, 252, 246, 0.92));
+  }
+}
+.directory-lookup {
+  max-width: 36rem;
   width: 100%;
-  table-layout: fixed;
-  font-size: 0.84rem;
 }
-.directory-table th,
-.directory-table td {
-  vertical-align: middle;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.directory-lookup input {
+  min-height: 2.6rem;
+  font-size: 1rem;
 }
-/* Plot | HH code | Name | Role | Phone | Email */
-.directory-table th:nth-child(1),
-.directory-table td:nth-child(1),
-.directory-table td.plot-cell {
-  width: 3.6rem;
-  white-space: nowrap;
+.directory-list {
+  display: grid;
+  gap: 0.75rem;
 }
-.directory-table th:nth-child(2),
-.directory-table td:nth-child(2) {
-  width: 5.6rem;
-  white-space: nowrap;
+.dir-card {
+  padding: 0.9rem 0.95rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf8, #f5f1e8);
+  box-shadow: 0 8px 22px rgba(14, 24, 44, 0.06);
+  min-width: 0;
 }
-.directory-table th:nth-child(3),
-.directory-table td:nth-child(3) {
-  width: 22%;
-  white-space: nowrap;
+.dir-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 0;
+  padding-bottom: 0.7rem;
+  margin-bottom: 0.65rem;
+  border-bottom: 1px solid var(--line);
 }
-.directory-table th:nth-child(4),
-.directory-table td:nth-child(4) {
-  width: 9.5rem;
-  white-space: nowrap;
+.dir-card-head-copy {
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.directory-table th:nth-child(5),
-.directory-table td:nth-child(5) {
-  width: 6.8rem;
-  white-space: nowrap;
+.dir-plot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
-.directory-table th:nth-child(6),
-.directory-table td:nth-child(6),
-.directory-table td.dir-email {
-  width: 11rem;
-  white-space: nowrap;
-}
-.directory-table .hh-code {
+.dir-hh {
   font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.directory-table .dir-contact {
+.dir-role {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.dir-fields {
+  display: grid;
+  gap: 0.55rem 0.85rem;
+  margin: 0;
+}
+.dir-field {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+.dir-field dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dir-field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+.dir-name {
+  font-weight: 650;
+  line-height: 1.35;
+}
+.dir-contact {
   color: var(--navy);
   text-decoration: none;
-  white-space: nowrap;
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.directory-table .dir-contact:hover {
-  text-decoration: underline;
+.dir-contact:hover { text-decoration: underline; }
+.dir-seat {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
 }
-.directory-table .person-inline {
-  display: inline-flex;
-  align-items: center;
+.dir-folds {
+  display: grid;
   gap: 0.45rem;
-  min-width: 0;
-  max-width: 100%;
+  margin-top: 0.75rem;
 }
-.directory-table .person-inline > span {
+.dir-fold {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.dir-fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  font-weight: 650;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dir-fold summary::-webkit-details-marker { display: none; }
+.dir-fold summary::after {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  margin-left: 0.35rem;
+  flex: 0 0 auto;
+}
+.dir-fold[open] summary::after { transform: rotate(-135deg); }
+.dir-fold summary span:first-child { flex: 1 1 auto; min-width: 0; }
+.dir-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 1.4rem;
+  text-align: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(21, 35, 63, 0.08);
+  color: var(--navy);
+  flex: 0 0 auto;
+}
+.dir-fold-list {
+  margin: 0;
+  padding: 0 0.75rem 0.65rem 1.35rem;
+}
+.dir-fold-list li {
+  padding: 0.18rem 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.dir-plate {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+.dir-fold-empty {
+  margin: 0;
+  padding: 0 0.75rem 0.65rem;
+  font-size: 0.82rem;
+}
+@media (min-width: 720px) {
+  .dir-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dir-field:nth-child(1),
+  .dir-field:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 980px) {
+  .directory-list {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @keyframes rise {
@@ -5698,22 +5808,9 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   }
   .ledger-table.cardable-table td:not(.row-actions) {
     font-variant-numeric: tabular-nums;
-  }
-  /* Mobile cards: keep emails / codes / amounts on one line (scroll if needed). */
-  .directory-table.cardable-table td,
-  .ledger-table.cardable-table td:not(.row-actions) {
     align-items: start;
-  }
-  .directory-table.cardable-table td > *:not(script),
-  .ledger-table.cardable-table td:not(.row-actions) {
     min-width: 0;
   }
-  .directory-table.cardable-table .dir-email,
-  .directory-table.cardable-table .dir-contact,
-  .directory-table.cardable-table .hh-code,
-  .directory-table.cardable-table td[data-label="Phone"],
-  .directory-table.cardable-table td[data-label="HH code"],
-  .directory-table.cardable-table td[data-label="Role"],
   .ledger-table.cardable-table td[data-label="HH code"],
   .ledger-table.cardable-table td[data-label="Name"],
   .ledger-table.cardable-table .hh-code {
@@ -5721,27 +5818,11 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
     overflow-wrap: normal;
     word-break: normal;
   }
-  .directory-table.cardable-table td.dir-email,
-  .directory-table.cardable-table td[data-label="Email"],
-  .directory-table.cardable-table td[data-label="Phone"],
-  .directory-table.cardable-table td[data-label="HH code"],
-  .directory-table.cardable-table td[data-label="Name"] .person-inline > span,
   .ledger-table.cardable-table td[data-label="HH code"],
   .ledger-table.cardable-table td[data-label="Name"] {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
-  }
-  .directory-table.cardable-table .dir-contact {
-    display: inline-block;
-    max-width: none;
-    overflow: visible;
-    text-overflow: clip;
-  }
-  .directory-table.cardable-table .person-inline > span {
-    white-space: nowrap;
-    overflow: visible;
-    text-overflow: clip;
   }
 }
 
@@ -6535,6 +6616,16 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
   flex-wrap: wrap;
   gap: 0.4rem;
   justify-content: center;
+}
+a.parking-wallet {
+  background: #111;
+  color: #fff;
+  border: 0;
+  text-decoration: none;
+}
+a.parking-wallet:hover {
+  background: #000;
+  color: #fff;
 }
 .parking-validate-actions {
   flex-wrap: wrap;

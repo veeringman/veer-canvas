@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260814biz1">
+  <link rel="stylesheet" href="portal.css?v=20260814wallet">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260814biz1" defer></script>
+  <script src="portal.js?v=20260814wallet" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -1584,21 +1584,14 @@
           <h2>Resident directory</h2>
           <p class="muted">Active plots in Himuda Housing Colony Sanyard. Household codes are for first-time registration and dues circulars.</p>
         </header>
-        <div class="table-wrap directory-wrap">
-          <table class="directory-table cardable-table">
-            <thead>
-              <tr>
-                <th>Plot</th>
-                <th>HH code</th>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Phone</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody id="directoryRows"></tbody>
-          </table>
+        <div class="directory-toolbar">
+          <label class="roster-search directory-lookup">
+            <span class="sr-only">Look up a plot, owner, phone, tenant, or vehicle</span>
+            <input id="directoryLookup" type="search" placeholder="Look up plot, owner, phone, tenant, vehicle…" autocomplete="off" enterkeyhint="search">
+          </label>
+          <p class="muted" id="directoryLookupMeta"></p>
         </div>
+        <div id="directoryList" class="directory-list"></div>
       </section>
 
       <section class="panel" id="panel-parking" hidden>

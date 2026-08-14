@@ -223,7 +223,7 @@ rsync -az --delete \
 
 # First-deploy bootstrap only: create empty runtime dirs + seed DB/example if missing (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/parking-adhoc' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' '$WEB_ROOT/data/templates' '$WEB_ROOT/share/doc' '$WEB_ROOT/share/folder' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data' '$WEB_ROOT/share'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/parking-adhoc' '$WEB_ROOT/data/apple-wallet' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' '$WEB_ROOT/data/templates' '$WEB_ROOT/share/doc' '$WEB_ROOT/share/folder' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data' '$WEB_ROOT/share'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \
@@ -253,6 +253,11 @@ if [[ -f "$SITE_DIR/data/city-hub.env.example" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/city-hub.env.example" \
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/city-hub.env.example"
+fi
+if [[ -f "$SITE_DIR/data/apple-wallet.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/apple-wallet.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/apple-wallet.env.example"
 fi
 if [[ -f "$SITE_DIR/data/syndicate.env.example" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
@@ -297,6 +302,15 @@ if [[ ! -f "$WEB_ROOT/data/city-hub.env" && -f "$WEB_ROOT/data/city-hub.env.exam
   echo "Created data/city-hub.env from example (same-host sharing reads city syndicate.env)."
 else
   echo "Preserved existing data/city-hub.env (or no example present)."
+fi
+if [[ ! -f "$WEB_ROOT/data/apple-wallet.env" && -f "$WEB_ROOT/data/apple-wallet.env.example" ]]; then
+  cp "$WEB_ROOT/data/apple-wallet.env.example" "$WEB_ROOT/data/apple-wallet.env"
+  chmod 600 "$WEB_ROOT/data/apple-wallet.env" || true
+  mkdir -p "$WEB_ROOT/data/apple-wallet"
+  chmod 700 "$WEB_ROOT/data/apple-wallet" || true
+  echo "Created data/apple-wallet.env from example (needs Pass Type ID certificate)."
+else
+  echo "Preserved existing data/apple-wallet.env (or no example present)."
 fi
 # Do not create syndicate.env from the example — civic_hub writes a live token on first boot.
 if [[ -f "$WEB_ROOT/data/drive-sa.json" ]]; then

@@ -120,12 +120,25 @@
     }
     button.btn {
       appearance: none;
-      border: none;
-      border-radius: 999px;
-      padding: 0.65rem 1rem;
-      font: inherit;
-      font-weight: 650;
+      border: 0;
+      border-radius: 12px;
+      padding: 0.7rem 0.9rem;
+      font: 650 0.92rem/1.2 inherit;
       cursor: pointer;
+    }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      border-radius: 12px;
+      padding: 0.7rem 0.9rem;
+      font: 650 0.92rem/1.2 inherit;
+    }
+    a.btn.wallet {
+      background: #111;
+      color: #fff;
+      flex: 1 1 8rem;
     }
     button.btn.primary { background: var(--navy); color: #f7f3eb; flex: 1 1 8rem; }
     button.btn.secondary { background: var(--accent); color: #15233f; flex: 1 1 8rem; }
@@ -321,6 +334,7 @@
         <img class="pass-qr" id="issuedQr" alt="Pass QR">
         <p class="disclaimer" data-i18n="issuedHint">Show this screen at the gate if asked. The pass expires automatically.</p>
         <div class="btn-row" style="justify-content:center;margin-top:0.85rem">
+          <a class="btn wallet" id="issuedWallet" hidden href="#" data-i18n="walletAdd">Add to iPhone Wallet</a>
           <button type="button" class="btn ghost" id="anotherBtn" data-i18n="another">Issue another</button>
         </div>
       </section>
@@ -503,6 +517,7 @@
         fCode: 'Code',
         fValid: 'Valid until',
         issuedHint: 'Show this screen at the gate if asked. The pass expires automatically.',
+        walletAdd: 'Add to iPhone Wallet',
         another: 'Issue another',
         hourUnit: 'hours',
         catHawker: 'Hawker',
@@ -587,6 +602,7 @@
         fCode: 'कोड',
         fValid: 'मान्य तक',
         issuedHint: 'माँगने पर यह स्क्रीन गेट पर दिखाएँ। पास अपने आप समाप्त हो जाएगा।',
+        walletAdd: 'iPhone Wallet में जोड़ें',
         another: 'एक और पास',
         hourUnit: 'घंटे',
         catHawker: 'फेरीवाला',
@@ -856,6 +872,11 @@
       document.getElementById('submitBtn').disabled = true;
       document.getElementById('formCard').hidden = false;
       document.getElementById('issuedCard').hidden = true;
+      const wallet = document.getElementById('issuedWallet');
+      if (wallet) {
+        wallet.hidden = true;
+        wallet.removeAttribute('href');
+      }
       document.getElementById('nameInput').value = '';
       startCam().catch(() => {});
     }
@@ -971,6 +992,17 @@
         document.getElementById('issuedCode').textContent = item.code || '—';
         document.getElementById('issuedValid').textContent = item.expiresAtLabel || '—';
         document.getElementById('issuedQr').src = item.qrDataUrl || '';
+        const wallet = document.getElementById('issuedWallet');
+        const android = /Android/i.test(navigator.userAgent || '');
+        if (wallet) {
+          if (item.walletEnabled && item.walletUrl && !android) {
+            wallet.href = item.walletUrl;
+            wallet.hidden = false;
+          } else {
+            wallet.hidden = true;
+            wallet.removeAttribute('href');
+          }
+        }
         stopCam();
       } catch (err) {
         status.textContent = err.message || 'Error';

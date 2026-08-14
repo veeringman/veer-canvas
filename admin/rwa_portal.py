@@ -56,6 +56,8 @@ from init_rwa_db import (  # noqa: E402
     ensure_notice_shares_table,
     ensure_notice_engagement_tables,
     ensure_household_members_table,
+    ensure_household_tenants_table,
+    ensure_parking_passes_table,
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
@@ -601,6 +603,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         _load_env_file(pathlib.Path(site_root) / "data" / "smtp.env")
         _load_env_file(pathlib.Path(site_root) / "data" / "vapid.env")
         _load_env_file(pathlib.Path(site_root) / "data" / "ai.env")
+        _load_env_file(pathlib.Path(site_root) / "data" / "apple-wallet.env")
     except Exception:
         pass
     try:
@@ -1406,7 +1409,78 @@ def mask_phone(phone: str | None) -> str:
     return f"{'*' * max(0, len(digits) - 4)}{digits[-4:]}"
 
 
-def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> list[dict]:
+def _directory_household_extras(
+    conn: sqlite3.Connection, house_ids: list[str]
+) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    """Active tenants and registered vehicles for directory cards (batch)."""
+    tenants_by: dict[str, list[dict]] = {}
+    vehicles_by: dict[str, list[dict]] = {}
+    ids = [str(h).strip() for h in house_ids if str(h).strip()]
+    if not ids:
+        return tenants_by, vehicles_by
+    placeholders = ",".join("?" for _ in ids)
+    try:
+        ensure_household_tenants_table(conn)
+        rows = conn.execute(
+            f"""
+            SELECT house_id, name
+            FROM household_tenants
+            WHERE status = 'active' AND house_id IN ({placeholders})
+            ORDER BY name COLLATE NOCASE
+            """,
+            ids,
+        ).fetchall()
+        for row in rows:
+            hid = row["house_id"] or ""
+            name = (row["name"] or "").strip()
+            if not hid or not name:
+                continue
+            tenants_by.setdefault(hid, []).append({"name": name})
+    except sqlite3.OperationalError:
+        pass
+    try:
+        import rwa_parking
+        ensure_parking_passes_table(conn)
+        kind_labels = getattr(rwa_parking, "KIND_LABELS", {}) or {}
+        type_labels = getattr(rwa_parking, "VEHICLE_LABELS", {}) or {}
+        rows = conn.execute(
+            f"""
+            SELECT house_id, plate_display, plate, kind, vehicle_type, status
+            FROM parking_passes
+            WHERE status = 'active'
+              AND COALESCE(kind, 'visitor') IN ('member', 'tenant')
+              AND house_id IN ({placeholders})
+            ORDER BY
+              CASE COALESCE(kind, 'visitor') WHEN 'member' THEN 0 ELSE 1 END,
+              COALESCE(plate_display, plate) COLLATE NOCASE
+            """,
+            ids,
+        ).fetchall()
+        for row in rows:
+            hid = row["house_id"] or ""
+            plate = (row["plate_display"] or row["plate"] or "").strip()
+            if not hid or not plate:
+                continue
+            kind = (row["kind"] or "member").strip().lower()
+            vtype = (row["vehicle_type"] or "car").strip().lower()
+            vehicles_by.setdefault(hid, []).append({
+                "plate": plate,
+                "kind": kind,
+                "kindLabel": kind_labels.get(kind) or kind.title(),
+                "vehicleType": vtype,
+                "vehicleTypeLabel": type_labels.get(vtype) or vtype.replace("_", " ").title(),
+            })
+    except (sqlite3.OperationalError, ImportError):
+        pass
+    return tenants_by, vehicles_by
+
+
+def directory(
+    conn: sqlite3.Connection,
+    *,
+    include_contacts: bool = False,
+    include_occupancy: bool = False,
+) -> list[dict]:
     entitlements.ensure_ready(conn)
     household.ensure_household_codes(conn)
     exclude_sql, exclude_ids = system_house_exclude_sql("house_id")
@@ -1489,6 +1563,12 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
                 else (entitlements.load_grants(conn, r["house_id"]) if is_mem else [])
             )
         out.append(item)
+    if include_occupancy:
+        tenants_by, vehicles_by = _directory_household_extras(conn, [row["houseId"] for row in out])
+        for item in out:
+            hid = item.get("houseId") or ""
+            item["tenants"] = tenants_by.get(hid) or []
+            item["vehicles"] = vehicles_by.get(hid) or []
     out.sort(
         key=lambda row: section_plot_sort_key(
             row.get("section"),

@@ -9,6 +9,8 @@ data/vapid.env
 vapid.env
 data/ai.env
 ai.env
+data/apple-wallet.env
+data/apple-wallet/
 data/drive.env
 data/city-hub.env
 data/drive-sa.json
