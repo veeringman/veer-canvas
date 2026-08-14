@@ -1,6 +1,6 @@
 # City of Mandi
 
-Unofficial one-stop hub for **Mandi, Himachal Pradesh**. Independent civic landing — not a Municipal Corporation, District Administration, or HIMUDA website.
+Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website.
 
 | | |
 |--|--|
