@@ -9,12 +9,12 @@
   <meta name="public-origin" content="https://housingcolonysanyard.in">
   <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260812domain1">
+  <link rel="stylesheet" href="portal.css?v=20260813auth1">
   <!-- Do not load style.css here — it is the dark catalog theme and washes out this form. -->
   <script src="site-utils.js?v=20260812domain1" defer></script>
   <script src="site-meta.js?v=20260812domain1" defer></script>
-  <script src="auth.js?v=20260812domain1" defer></script>
-  <script src="auth-page.js?v=20260812domain1" defer></script>
+  <script src="auth.js?v=20260813auth1" defer></script>
+  <script src="auth-page.js?v=20260813auth1" defer></script>
   <style>
     body.auth-body {
       color: #15233f;
@@ -98,6 +98,37 @@
     #authStatus { color: #0c7c7a; margin-top: 0.75rem; }
     fieldset { border: 1px solid #c5d0de; border-radius: 12px; padding: 0.75rem 1rem; }
     legend { padding: 0 0.35rem; font-weight: 600; }
+    .device-match-label {
+      margin: 0.35rem 0 0.25rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgba(21, 35, 63, 0.72);
+    }
+    .device-match-number {
+      margin: 0.25rem 0 0.85rem;
+      font-size: 2.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      line-height: 1;
+      color: #0c7c7a;
+      font-variant-numeric: tabular-nums;
+    }
+    .device-approve-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .device-approve-actions .btn { margin-top: 0; text-decoration: none; }
+    .device-qr-img {
+      display: block;
+      margin: 0.5rem 0;
+      border-radius: 12px;
+      background: #fff;
+    }
+    @media (max-width: 820px) {
+      .device-qr-img { max-width: 140px; height: auto; }
+    }
   </style>
 </head>
 <body class="auth-body">
@@ -148,10 +179,15 @@
             <button type="button" class="btn primary" id="loginPasskeyBtn">Use passkey</button>
           </div>
           <div id="loginQrBlock" hidden>
-            <p>Match number: <strong id="loginMatchNumber">--</strong></p>
-            <img id="loginDeviceQrImg" alt="Device challenge QR" width="180" height="180" hidden>
+            <p class="device-match-label">Match this number in BuddyAuthenticator → Approvals</p>
+            <p class="device-match-number" id="loginMatchNumber">--</p>
+            <div class="device-approve-actions">
+              <a class="btn primary" id="loginOpenBuddyBtn" hidden>Approve in BuddyAuthenticator</a>
+              <button type="button" class="btn ghost" id="loginCopyMatchBtn" hidden>Copy number</button>
+            </div>
+            <img id="loginDeviceQrImg" class="device-qr-img" alt="Device challenge QR" width="180" height="180" hidden>
             <p class="muted" id="loginDeviceStatus"></p>
-            <button type="button" class="btn ghost" id="loginRestartQrBtn">Refresh QR</button>
+            <button type="button" class="btn ghost" id="loginRestartQrBtn">Refresh QR / number</button>
           </div>
           <div id="loginSubmitRow">
             <button type="submit" class="btn primary" id="loginSubmitBtn">Sign in</button>
@@ -211,10 +247,15 @@
             <button type="button" class="btn primary" id="confirmMfaVerify">Verify</button>
           </div>
           <div id="mfaVerifyQrBlock" hidden>
-            <p>Match number: <strong id="mfaMatchNumber">--</strong></p>
-            <img id="mfaDeviceQrImg" alt="Device challenge QR" width="180" height="180" hidden>
+            <p class="device-match-label">Match this number in BuddyAuthenticator → Approvals</p>
+            <p class="device-match-number" id="mfaMatchNumber">--</p>
+            <div class="device-approve-actions">
+              <a class="btn primary" id="mfaOpenBuddyBtn" hidden>Approve in BuddyAuthenticator</a>
+              <button type="button" class="btn ghost" id="mfaCopyMatchBtn" hidden>Copy number</button>
+            </div>
+            <img id="mfaDeviceQrImg" class="device-qr-img" alt="Device challenge QR" width="180" height="180" hidden>
             <p class="muted" id="mfaDeviceStatus"></p>
-            <button type="button" class="btn ghost" id="mfaRestartQrBtn">Refresh QR</button>
+            <button type="button" class="btn ghost" id="mfaRestartQrBtn">Refresh QR / number</button>
           </div>
           <div id="mfaVerifyHybridPqcBlock" hidden>
             <p class="muted" id="mfaHybridPqcStatus"></p>

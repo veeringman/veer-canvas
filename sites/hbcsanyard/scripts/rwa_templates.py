@@ -19,6 +19,7 @@ from init_rwa_db import utc_now
 
 TEMPLATE_CATEGORIES: list[tuple[str, str]] = [
     ("letterhead", "Letterhead"),
+    ("envelope", "Envelope"),
     ("receipt", "Cash receipt"),
     ("form", "Form"),
     ("certificate", "Certificate"),
@@ -42,11 +43,13 @@ TEMPLATE_EXT_MIME = {
 
 _STATIC_ALLOWED_PREFIXES = ("documents/", "assets/")
 
-PAPER_SIZES = ("A4", "A5", "Letter")
+PAPER_SIZES = ("A4", "A5", "A6", "Letter")
 BACKGROUND_STYLES = ("watermark", "none", "plain")
+ORIENTATIONS = ("portrait", "landscape")
 
 DEFAULT_TEMPLATE_OPTIONS: dict[str, Any] = {
     "paperSize": "A4",
+    "orientation": "portrait",
     "background": "watermark",
     "colors": {
         "heading": "#0b2a56",
@@ -75,6 +78,15 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
         "static_path": "documents/rwa-letterhead-blank.html",
     },
     {
+        "id": "tpl-mhws-envelope",
+        "title": "Official Envelope",
+        "description": "Printable envelope face on India-standard C-series stock: C6 holds A6, C5 holds A5, C4 holds A4. Return address pre-filled; type the recipient before printing.",
+        "category": "envelope",
+        "tags": ["envelope", "c6", "c5", "c4", "a6", "print", "official"],
+        "static_path": "documents/mhws-envelope-pad.html",
+        "options": {"paperSize": "A5", "orientation": "landscape", "background": "watermark"},
+    },
+    {
         "id": "tpl-cash-receipt",
         "title": "Cash Receipt Booklet",
         "description": "Blank cash receipts — 210 mm wide on every layout: 2 on A5 landscape, 3 or 4 on A4 portrait.",
@@ -89,6 +101,14 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
         "category": "chart",
         "tags": ["ec", "office bearers", "charter"],
         "static_path": "documents/ec-committee-pad.html",
+    },
+    {
+        "id": "tpl-ec-press-release",
+        "title": "Press Release — New Executive Committee",
+        "description": "Official press release announcing the new Executive Committee (office bearers & members).",
+        "category": "notice",
+        "tags": ["press release", "ec", "media", "notice"],
+        "static_path": "documents/ec-press-release.html",
     },
     {
         "id": "tpl-proceedings-gh-mom",
@@ -172,6 +192,9 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         paper = paper.upper()
     if paper not in PAPER_SIZES:
         paper = base["paperSize"]
+    orientation = str(data.get("orientation") or base.get("orientation") or "portrait").strip().lower()
+    if orientation not in ORIENTATIONS:
+        orientation = base.get("orientation") or "portrait"
     bg = str(data.get("background") or base["background"]).strip().lower()
     if bg not in BACKGROUND_STYLES:
         bg = base["background"]
@@ -180,7 +203,7 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         key: _hex_color(colors_in.get(key), fallback)
         for key, fallback in base["colors"].items()
     }
-    return {"paperSize": paper, "background": bg, "colors": colors}
+    return {"paperSize": paper, "orientation": orientation, "background": bg, "colors": colors}
 
 
 def option_presets() -> dict[str, Any]:
@@ -209,13 +232,14 @@ def seed_default_templates(conn: sqlite3.Connection, site_root: pathlib.Path) ->
         path = pathlib.Path(site_root) / item["static_path"]
         size = path.stat().st_size if path.is_file() else None
         mime = TEMPLATE_EXT_MIME.get(path.suffix.lower(), "text/html")
+        options = item.get("options") or DEFAULT_TEMPLATE_OPTIONS
         conn.execute(
             """
             INSERT INTO print_templates(
               id, title, description, category, tags_json, doc_type,
               filename, original_name, mime_type, size_bytes, static_path,
-              status, created_by, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              options_json, status, created_by, created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 item["id"],
@@ -229,6 +253,7 @@ def seed_default_templates(conn: sqlite3.Connection, site_root: pathlib.Path) ->
                 mime,
                 size,
                 item["static_path"],
+                json.dumps(normalize_options(options), ensure_ascii=False),
                 "published",
                 "system",
                 now,
@@ -626,25 +651,48 @@ def _html_escape(text: Any) -> str:
     )
 
 
-def _runtime_options_css(options: dict[str, Any]) -> str:
+def _runtime_options_css(
+    options: dict[str, Any],
+    *,
+    landscape: bool | None = None,
+    envelope: bool = False,
+) -> str:
     colors = options.get("colors") or {}
     paper = options.get("paperSize") or "A4"
     bg = options.get("background") or "watermark"
+    orient = "landscape" if landscape else (options.get("orientation") or "portrait")
+    if orient not in ORIENTATIONS:
+        orient = "portrait"
     heading = colors.get("heading") or "#0b2a56"
     body = colors.get("body") or "#12233f"
     muted = colors.get("muted") or "#5a6a80"
     accent = colors.get("accent") or "#1a6b3a"
     gold = colors.get("gold") or "#c9a227"
-    page_size = {
-        "A4": "A4 portrait",
-        "A5": "A5 portrait",
-        "Letter": "letter portrait",
-    }.get(paper, "A4 portrait")
-    sheet_w = {"A4": "210mm", "A5": "148mm", "Letter": "8.5in"}.get(paper, "210mm")
-    sheet_min_h = {"A4": "297mm", "A5": "210mm", "Letter": "11in"}.get(paper, "297mm")
+    dims = {
+        "A4": ("210mm", "297mm"),
+        "A5": ("148mm", "210mm"),
+        "A6": ("105mm", "148mm"),
+        "Letter": ("8.5in", "11in"),
+    }.get(paper, ("210mm", "297mm"))
+    sheet_w, sheet_min_h = dims
+    if orient == "landscape":
+        sheet_w, sheet_min_h = sheet_min_h, sheet_w
+    page_size = f"{paper if paper != 'Letter' else 'letter'} {orient}"
+    if envelope:
+        env_key = {"A6": "C6", "A5": "C5", "A4": "C4", "C6": "C6", "C5": "C5", "C4": "C4"}.get(paper, "C5")
+        # ISO C-series (India-standard envelope stock), landscape face.
+        env_dims = {
+            "C6": ("162mm", "114mm"),  # holds A6
+            "C5": ("229mm", "162mm"),  # holds A5
+            "C4": ("324mm", "229mm"),  # holds A4
+        }
+        sheet_w, sheet_min_h = env_dims[env_key]
+        page_size = f"{sheet_w} {sheet_min_h}"
     hide_wm = bg in {"none", "plain"}
     if hide_wm:
         wm_css = "img.wm, .receipt::before { opacity: 0 !important; visibility: hidden !important; }"
+    elif envelope:
+        wm_css = ""
     else:
         wm_css = (
             "img.wm {"
@@ -661,6 +709,13 @@ def _runtime_options_css(options: dict[str, Any]) -> str:
             "}"
         )
     plain_css = "body { background: #fff !important; }" if bg == "plain" else ""
+    sheet_css = ""
+    if not envelope:
+        sheet_css = f"""
+  .sheet {{
+    width: {sheet_w};
+    min-height: {sheet_min_h};
+  }}"""
     return f"""
 <style id="tpl-runtime-opts">
   :root {{
@@ -673,10 +728,7 @@ def _runtime_options_css(options: dict[str, Any]) -> str:
     --paper: #ffffff;
   }}
   @page {{ size: {page_size}; }}
-  .sheet {{
-    width: {sheet_w};
-    min-height: {sheet_min_h};
-  }}
+  {sheet_css}
   {wm_css}
   {plain_css}
 </style>
@@ -838,10 +890,28 @@ def _replace_marked_block(html: str, marker: str, inner: str) -> str:
         return html
     return f"{html[: open_m.start()]}<{tag}{attrs}>{inner}</{tag}>{html[close_end:]}"
 
+def _set_html_attr(html: str, name: str, value: str) -> str:
+    match = re.search(r"<html\b[^>]*>", html, flags=re.IGNORECASE)
+    if not match:
+        return html
+    tag = match.group(0)
+    attr_re = re.compile(rf"\b{re.escape(name)}\s*=\s*([\"']).*?\1", re.IGNORECASE | re.DOTALL)
+    if attr_re.search(tag):
+        tag = attr_re.sub(f'{name}="{_html_escape(value)}"', tag, count=1)
+    else:
+        tag = re.sub(r">\s*$", f' {name}="{_html_escape(value)}">', tag, count=1)
+    return html[: match.start()] + tag + html[match.end() :]
+
+
 def inject_template_runtime(html: str, *, options: dict[str, Any], conn: sqlite3.Connection, base_href: str | None = None) -> str:
     """Inject print options CSS only (pads keep their authored office-bearer markup)."""
     opts = normalize_options(options)
-    css = _runtime_options_css(opts)
+    is_envelope = bool(re.search(r'envelope-pad|data-tpl=["\']envelope["\']', html, re.I))
+    css = _runtime_options_css(
+        opts,
+        landscape=True if is_envelope else None,
+        envelope=is_envelope,
+    )
     base_tag = ""
     if base_href:
         href = base_href if base_href.endswith("/") else f"{base_href}/"
@@ -852,6 +922,12 @@ def inject_template_runtime(html: str, *, options: dict[str, Any], conn: sqlite3
         html = html.replace("</head>", f"{head_inject}\n</head>", 1)
     else:
         html = head_inject + html
+    paper = str(opts.get("paperSize") or "A4")
+    if is_envelope:
+        paper = {"A6": "C6", "A5": "C5", "A4": "C4"}.get(paper, paper)
+        if paper not in {"C4", "C5", "C6"}:
+            paper = "C5"
+    html = _set_html_attr(html, "data-paper-size", paper)
     return html
 
 

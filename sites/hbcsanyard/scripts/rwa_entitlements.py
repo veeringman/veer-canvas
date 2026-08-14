@@ -9,6 +9,8 @@ Roles (nested):
 - issue_no_dues / issue_no_objection are explicit (not auto for EC Admins); default seed grants them to President.
 - treasury is explicit; default seed grants it to Treasurer.
 - manage_proceedings default seed grants it to General Secretary (EC Committee register).
+- pass_general is implicit for every signed-in resident (request + limited validate).
+- pass_manage is grantable; default-seeded to all EC members (EC Admin can change).
 """
 
 from __future__ import annotations
@@ -22,6 +24,16 @@ from rwa_household import primary_member_photo_map
 import rwa_household as household
 
 ENTITLEMENT_DEFS: list[dict[str, str]] = [
+    {
+        "id": "pass_general",
+        "label": "Pass · general",
+        "description": "Request parking passes and validate (type, validity, code; full details for own-plot vehicles).",
+    },
+    {
+        "id": "pass_manage",
+        "label": "Pass · manage",
+        "description": "Full pass validation for all plots, renewals, and settings (default for EC members; EC Admin can change)",
+    },
     {"id": "manage_roster", "label": "Resident roster", "description": "View and edit plot contacts"},
     {"id": "manage_dues", "label": "Dues ledger", "description": "View and curate colony dues"},
     {
@@ -67,8 +79,12 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
 EC_ADMIN_ONLY_ENTITLEMENTS = frozenset({"sensitive_ops", "manage_roles"})
 # Stored grants only — never implied by EC Admin role.
 EXPLICIT_GRANT_ENTITLEMENTS = frozenset({"issue_no_dues", "issue_no_objection", "treasury"})
+# Implicit for every signed-in resident (not an EC desk grant).
+RESIDENT_IMPLICIT_ENTITLEMENTS = frozenset({"pass_general"})
 GRANTABLE_ENTITLEMENTS = frozenset(
-    e["id"] for e in ENTITLEMENT_DEFS if e["id"] not in EC_ADMIN_ONLY_ENTITLEMENTS
+    e["id"]
+    for e in ENTITLEMENT_DEFS
+    if e["id"] not in EC_ADMIN_ONLY_ENTITLEMENTS and e["id"] not in RESIDENT_IMPLICIT_ENTITLEMENTS
 )
 ALL_ENTITLEMENTS = frozenset(e["id"] for e in ENTITLEMENT_DEFS)
 # What EC Admins get without a row in resident_entitlements.
@@ -81,6 +97,7 @@ def entitlements_meta() -> dict:
         "entitlements": ENTITLEMENT_DEFS,
         "grantable": sorted(GRANTABLE_ENTITLEMENTS),
         "explicit": sorted(EXPLICIT_GRANT_ENTITLEMENTS),
+        "residentImplicit": sorted(RESIDENT_IMPLICIT_ENTITLEMENTS),
         "ecAdminOnly": sorted(EC_ADMIN_ONLY_ENTITLEMENTS),
         "roles": [
             {"id": "ec_member", "label": "EC Member", "description": "Committee member; may receive one-off entitlements"},
@@ -96,6 +113,7 @@ def ensure_ready(conn: sqlite3.Connection) -> None:
     ensure_default_no_objection_issuer(conn)
     ensure_default_treasury(conn)
     ensure_default_proceedings_secretary(conn)
+    ensure_default_pass_manage(conn)
 
 
 def _seed_explicit_grant_for_title(
@@ -199,6 +217,77 @@ def ensure_default_proceedings_secretary(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_default_pass_manage(conn: sqlite3.Connection) -> None:
+    """Once: grant pass_manage to every active EC member / office bearer / EC admin plot."""
+    ensure_entitlements_schema(conn)
+    flagged = conn.execute(
+        "SELECT value FROM meta WHERE key = ?",
+        ("pass_manage_defaulted",),
+    ).fetchone()
+    if flagged:
+        return
+    now = utc_now()
+    rows = conn.execute(
+        """
+        SELECT house_id, role, is_ec_member, is_office_bearer, official_title
+        FROM residents
+        WHERE house_id != ?
+          AND status = 'active'
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    for r in rows:
+        is_admin = (r["role"] or "") == "admin"
+        is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(str(r["official_title"] or "").strip()) or is_admin
+        is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_admin
+        if not is_mem:
+            continue
+        # EC Admins get pass_manage implicitly — no stored row needed.
+        if is_admin:
+            continue
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
+            VALUES (?, 'pass_manage', 'system:default', ?)
+            """,
+            (r["house_id"], now),
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+        ("pass_manage_defaulted", now),
+    )
+    conn.commit()
+
+
+def grant_pass_manage_if_needed(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    granted_by: str | None = None,
+    commit: bool = False,
+) -> None:
+    """Grant pass_manage when a plot joins the EC (skipped for EC Admin — implicit)."""
+    ensure_entitlements_schema(conn)
+    hid = (house_id or "").strip()
+    if not hid or hid == SUPERADMIN_HOUSE_ID:
+        return
+    row = conn.execute(
+        "SELECT role FROM residents WHERE house_id = ?",
+        (hid,),
+    ).fetchone()
+    if not row or (row["role"] or "") == "admin":
+        return
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
+        VALUES (?, 'pass_manage', ?, ?)
+        """,
+        (hid, (granted_by or "system:ec_join")[:80], utc_now()),
+    )
+    if commit:
+        conn.commit()
+
+
 def _is_super(actor: dict | None) -> bool:
     if not actor:
         return False
@@ -279,16 +368,19 @@ def actor_holds_ec_seat(actor: dict | None) -> bool:
 def entitlements_for_actor(conn: sqlite3.Connection, actor: dict | None) -> list[str]:
     if not actor:
         return []
+    if actor.get("viewOnly"):
+        return []
+    base = set(RESIDENT_IMPLICIT_ENTITLEMENTS)
     if _is_super(actor):
         return sorted(EC_ADMIN_ENTITLEMENTS)
-    if actor.get("viewOnly") or not actor_holds_ec_seat(actor):
-        return []
+    if not actor_holds_ec_seat(actor):
+        return sorted(base)
     grants = load_grants(conn, actor.get("houseId") or "")
     if (actor.get("role") or "") == "admin":
         return sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants))
     if not is_ec_member(actor):
-        return []
-    return grants
+        return sorted(base)
+    return sorted(base | set(grants))
 
 
 def enrich_actor(conn: sqlite3.Connection, actor: dict) -> dict:
@@ -348,7 +440,10 @@ def enrich_actor(conn: sqlite3.Connection, actor: dict) -> dict:
         actor["officialTitle"] = ""
         if (actor.get("role") or "") == "admin":
             actor["role"] = "resident"
-        actor["entitlements"] = []
+        if actor.get("viewOnly"):
+            actor["entitlements"] = []
+        else:
+            actor["entitlements"] = sorted(RESIDENT_IMPLICIT_ENTITLEMENTS)
         return actor
 
     actor["isEcAdmin"] = is_ec_admin(actor) and not actor.get("viewOnly") and holds
@@ -365,7 +460,12 @@ def actor_has(actor: dict | None, key: str) -> bool:
         return False
     if _is_super(actor):
         return True
-    if actor.get("viewOnly") or not actor_holds_ec_seat(actor):
+    if actor.get("viewOnly"):
+        return False
+    # Every signed-in resident can request / limited-validate passes.
+    if key in RESIDENT_IMPLICIT_ENTITLEMENTS:
+        return True
+    if not actor_holds_ec_seat(actor):
         return False
     ents = actor.get("entitlements")
     if isinstance(ents, list):
@@ -385,7 +485,7 @@ def actor_can_open_ec_desk(actor: dict | None) -> bool:
         return False
     if (actor.get("role") or "") == "admin" or actor.get("isEcAdmin"):
         return True
-    ents = actor.get("entitlements") or []
+    ents = set(actor.get("entitlements") or []) - RESIDENT_IMPLICIT_ENTITLEMENTS
     return bool(ents)
 
 
@@ -504,7 +604,11 @@ def list_office_and_ec(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(r["official_title"]) or is_ec
         is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
         grants = load_grants(conn, hid)
-        effective = sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants)) if is_ec else grants
+        effective = (
+            sorted(EC_ADMIN_IMPLICIT_ENTITLEMENTS | set(grants) | RESIDENT_IMPLICIT_ENTITLEMENTS)
+            if is_ec
+            else sorted(set(grants) | RESIDENT_IMPLICIT_ENTITLEMENTS)
+        )
         owner = household.primary_member(conn, hid)
         delegate = household.primary_delegate_member(conn, hid)
         seat_id = (r["ec_member_id"] or "").strip() or ((owner or {}).get("id") or "")

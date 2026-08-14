@@ -23,6 +23,7 @@ ADMIN_PORT="${ADMIN_PORT:-8080}"
 IS_PLATFORM="${VEERCANVAS_PLATFORM:-0}"
 IS_OPS="${VEERCANVAS_OPS:-0}"
 SITE_ID="${VEERCANVAS_SITE_ID:-}"
+CMS_PREFIX="${CMS_PREFIX:-${VEERCANVAS_ADMIN_PREFIX:-/admin}}"
 
 if [[ ! -f "$WEB_ROOT/index.html" ]]; then
   echo "error: site index.html not found in WEB_ROOT=$WEB_ROOT" >&2
@@ -295,7 +296,7 @@ Environment=VEER_SITE_ROOT=$WEB_ROOT
 Environment=VEERCANVAS_SITE_ID=${SITE_ID}
 Environment=VEERCANVAS_PLATFORM=${platform_env}
 Environment=VEERCANVAS_OPS=${ops_env}
-Environment=VEERCANVAS_ADMIN_PREFIX=/admin
+Environment=VEERCANVAS_ADMIN_PREFIX=${CMS_PREFIX:-/admin}
 Environment=PORT=${ADMIN_PORT}
 Environment=VEERCANVAS_ADMIN_PORT=${ADMIN_PORT}
 Environment=PATH=$WEB_ROOT/venv/bin:/usr/bin:/bin
@@ -348,4 +349,7 @@ if [[ -n "${SITE_ID}" ]]; then
 fi
 
 echo "Site: https://$DOMAIN/ (or http if cert pending)"
-echo "Admin: https://$DOMAIN/admin/"
+echo "CMS: https://$DOMAIN${CMS_PREFIX}/"
+if [[ "${CMS_PREFIX}" != "/admin" ]]; then
+  echo "Portal desk: https://$DOMAIN/admin/"
+fi

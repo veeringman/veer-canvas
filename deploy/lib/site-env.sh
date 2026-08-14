@@ -23,6 +23,7 @@ _CFG_SERVICE_NAME=""
 _CFG_PLATFORM="0"
 _CFG_OPS="0"
 _CFG_EXTRA_DOMAINS=""
+_CFG_CMS_PREFIX=""
 
 if [[ -f "$SITE_CONFIG" ]]; then
   read_site_config() {
@@ -49,6 +50,7 @@ for alias in (cfg.get("aliases") or []):
     if apex != primary and apex not in extras:
         extras.append(apex)
 print(" ".join(extras))
+print(((cfg.get("admin") or {}).get("cmsPrefix") or "/admin").strip() or "/admin")
 PY
   }
   _i=0
@@ -63,6 +65,7 @@ PY
       6) _CFG_PLATFORM="$_line" ;;
       7) _CFG_OPS="$_line" ;;
       8) [[ -n "$_line" ]] && _CFG_EXTRA_DOMAINS="$_line" ;;
+      9) [[ -n "$_line" ]] && _CFG_CMS_PREFIX="$_line" ;;
     esac
     _i=$((_i + 1))
   done < <(read_site_config)
@@ -76,6 +79,7 @@ SERVICE_NAME="${VEERCANVAS_SERVICE_NAME:-${_CFG_SERVICE_NAME:-veercanvas-admin}}
 IS_PLATFORM="${VEERCANVAS_PLATFORM:-$_CFG_PLATFORM}"
 IS_OPS="${VEERCANVAS_OPS:-$_CFG_OPS}"
 EXTRA_DOMAINS="${EXTRA_DOMAINS:-${_CFG_EXTRA_DOMAINS:-}}"
+CMS_PREFIX="${CMS_PREFIX:-${_CFG_CMS_PREFIX:-/admin}}"
 
 IMPORT_SCRIPT="${VEERCANVAS_ROOT}/cli/scripts/import_github_projects_full.py"
 ADMIN_DIR="${VEERCANVAS_ROOT}/admin"

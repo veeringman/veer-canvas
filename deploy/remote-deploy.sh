@@ -45,7 +45,7 @@ chmod 600 "$EC2_KEY"
 SSH_OPTS=(-i "$EC2_KEY" -o StrictHostKeyChecking=accept-new)
 RSYNC_SSH="ssh ${SSH_OPTS[*]}"
 
-echo "VeerCanvas deploy: site=${SITE_ID} domain=${SITE_DOMAIN} extra=${EXTRA_DOMAINS:-none} web_root=${WEB_ROOT} service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}"
+echo "VeerCanvas deploy: site=${SITE_ID} domain=${SITE_DOMAIN} extra=${EXTRA_DOMAINS:-none} cms=${CMS_PREFIX:-/admin} web_root=${WEB_ROOT} service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}"
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" 'echo "SSH OK"'
 
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "sudo mkdir -p '$WEB_ROOT' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT'"
@@ -54,7 +54,7 @@ ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "sudo mkdir -p '$WEB_ROOT' && sud
 # This prevents local git from resurrecting deleted/disabled projects on deploy.
 if [[ "${OVERRIDE_CATALOG:-0}" != "1" ]]; then
   echo "Pulling live CMS catalog from server (set OVERRIDE_CATALOG=1 to skip)..."
-  for catalog_file in projects.json projects-public.json catalog-exclusions.json site-meta.json; do
+  for catalog_file in projects.json projects-public.json catalog-exclusions.json site-meta.json hub.json businesses.json; do
     rsync -az -e "$RSYNC_SSH" \
       "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/$catalog_file" \
       "$SITE_DIR/$catalog_file" 2>/dev/null \
@@ -223,7 +223,7 @@ rsync -az --delete \
 
 # First-deploy bootstrap only: create empty runtime dirs + seed DB/example if missing (never overwrite).
 echo "Bootstrapping missing runtime data (ignore-existing) ..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' '$WEB_ROOT/data/templates' '$WEB_ROOT/share/doc' '$WEB_ROOT/share/folder' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data' '$WEB_ROOT/share'"
+ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/data/imports' '$WEB_ROOT/data/payments' '$WEB_ROOT/data/profile-photos' '$WEB_ROOT/data/parking-adhoc' '$WEB_ROOT/data/receipts' '$WEB_ROOT/data/no-dues' '$WEB_ROOT/data/no-objection' '$WEB_ROOT/data/vault' '$WEB_ROOT/data/info-centre' '$WEB_ROOT/data/attestations' '$WEB_ROOT/data/messages' '$WEB_ROOT/data/templates' '$WEB_ROOT/share/doc' '$WEB_ROOT/share/folder' && sudo chown -R ubuntu:ubuntu '$WEB_ROOT/data' '$WEB_ROOT/share'"
 if [[ -f "$SITE_DIR/data/rwa.db" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/rwa.db" \
@@ -244,7 +244,22 @@ if [[ -f "$SITE_DIR/data/ai.env.example" ]]; then
     "$SITE_DIR/data/ai.env.example" \
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/ai.env.example"
 fi
-# Never push a real smtp.env / vapid.env / ai.env from the laptop; only create from example when absent.
+if [[ -f "$SITE_DIR/data/drive.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/drive.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/drive.env.example"
+fi
+if [[ -f "$SITE_DIR/data/city-hub.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/city-hub.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/city-hub.env.example"
+fi
+if [[ -f "$SITE_DIR/data/syndicate.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/syndicate.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/syndicate.env.example"
+fi
+# Never push real smtp/vapid/ai/drive secrets from the laptop; only create from example when absent.
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_ENV'
 set -euo pipefail
 WEB_ROOT="$1"
@@ -269,13 +284,32 @@ if [[ ! -f "$WEB_ROOT/data/ai.env" && -f "$WEB_ROOT/data/ai.env.example" ]]; the
 else
   echo "Preserved existing data/ai.env (or no example present)."
 fi
+if [[ ! -f "$WEB_ROOT/data/drive.env" && -f "$WEB_ROOT/data/drive.env.example" ]]; then
+  cp "$WEB_ROOT/data/drive.env.example" "$WEB_ROOT/data/drive.env"
+  chmod 600 "$WEB_ROOT/data/drive.env" || true
+  echo "Created data/drive.env from example (enable via Super admin Settings)."
+else
+  echo "Preserved existing data/drive.env (or no example present)."
+fi
+if [[ ! -f "$WEB_ROOT/data/city-hub.env" && -f "$WEB_ROOT/data/city-hub.env.example" ]]; then
+  cp "$WEB_ROOT/data/city-hub.env.example" "$WEB_ROOT/data/city-hub.env"
+  chmod 600 "$WEB_ROOT/data/city-hub.env" || true
+  echo "Created data/city-hub.env from example (same-host sharing reads city syndicate.env)."
+else
+  echo "Preserved existing data/city-hub.env (or no example present)."
+fi
+# Do not create syndicate.env from the example — civic_hub writes a live token on first boot.
+if [[ -f "$WEB_ROOT/data/drive-sa.json" ]]; then
+  chmod 600 "$WEB_ROOT/data/drive-sa.json" || true
+  echo "Preserved data/drive-sa.json on server."
+fi
 if [[ -f "$WEB_ROOT/data/rwa.db" ]]; then
   echo "Preserved data/rwa.db on server."
 else
   echo "Warning: data/rwa.db still missing — app will seed on first start if scripts available."
 fi
 # Sanity: confirm protected upload dirs still exist after sync
-for d in receipts no-dues no-objection vault info-centre profile-photos payments imports attestations messages; do
+for d in receipts no-dues no-objection vault info-centre profile-photos parking-adhoc payments imports attestations messages; do
   if [[ -d "$WEB_ROOT/data/$d" ]]; then
     echo "OK data/$d preserved ($(find "$WEB_ROOT/data/$d" -type f 2>/dev/null | wc -l | tr -d ' ') files)."
   else
@@ -351,7 +385,7 @@ fi
 
 echo "Running remote site-deploy (service=${SERVICE_NAME} port=${ADMIN_PORT} platform=${IS_PLATFORM} ops=${IS_OPS}) ..."
 if ! ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" \
-  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN EXTRA_DOMAINS='$EXTRA_DOMAINS' ADMIN_PORT=$ADMIN_PORT VEERCANVAS_SERVICE_NAME=$SERVICE_NAME VEERCANVAS_PLATFORM=$IS_PLATFORM VEERCANVAS_OPS=$IS_OPS bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"; then
+  "sudo VEERCANVAS_SITE_ID=$SITE_ID VEERCANVAS_SITE_ROOT=$WEB_ROOT WEB_ROOT=$WEB_ROOT DOMAIN=$SITE_DOMAIN EXTRA_DOMAINS='$EXTRA_DOMAINS' ADMIN_PORT=$ADMIN_PORT CMS_PREFIX='$CMS_PREFIX' VEERCANVAS_SERVICE_NAME=$SERVICE_NAME VEERCANVAS_PLATFORM=$IS_PLATFORM VEERCANVAS_OPS=$IS_OPS bash $WEB_ROOT/veercanvas/deploy/site-deploy.sh"; then
   echo "error: remote site-deploy failed" >&2
   exit 1
 fi
@@ -369,13 +403,17 @@ VERIFY_URL="https://${SITE_DOMAIN}/site-meta.json"
 if curl -fsSL "$VERIFY_URL" >/dev/null 2>&1; then
   curl -fsSL "$VERIFY_URL"
   echo
-  ADMIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "https://${SITE_DOMAIN}/admin/")
-  echo "Admin HTTP status: $ADMIN_CODE"
+  ADMIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "https://${SITE_DOMAIN}${CMS_PREFIX}/")
+  echo "CMS HTTP status: $ADMIN_CODE"
+  if [[ "$CMS_PREFIX" != "/admin" ]]; then
+    DESK_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "https://${SITE_DOMAIN}/admin/")
+    echo "Portal desk HTTP status: $DESK_CODE"
+  fi
 else
   curl -fsSL "http://${SITE_DOMAIN}/site-meta.json" || true
   echo
-  ADMIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "http://${SITE_DOMAIN}/admin/" || true)
-  echo "Admin HTTP status (http): $ADMIN_CODE"
+  ADMIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L "http://${SITE_DOMAIN}${CMS_PREFIX}/" || true)
+  echo "CMS HTTP status (http): $ADMIN_CODE"
 fi
 
 # Rebuild Info Centre OG share cards (static /share/*.html) so WhatsApp links do not 404.

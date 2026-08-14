@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="City of Mandi">
+  <defs>
+    <clipPath id="f-disc"><circle cx="32" cy="32" r="27.5"/></clipPath>
+    <linearGradient id="f-peak" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#f3efe6"/>
+      <stop offset="100%" stop-color="#163c44"/>
+    </linearGradient>
+    <linearGradient id="f-ring" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#e8c48a"/>
+      <stop offset="50%" stop-color="#c4844a"/>
+      <stop offset="100%" stop-color="#9a6430"/>
+    </linearGradient>
+    <linearGradient id="f-river" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7ec4c8"/>
+      <stop offset="100%" stop-color="#c4844a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="#081618"/>
+  <circle cx="32" cy="32" r="30.2" fill="none" stroke="url(#f-ring)" stroke-width="2.6"/>
+  <g clip-path="url(#f-disc)">
+    <circle cx="32" cy="32" r="27.5" fill="#163c44"/>
+    <path fill="#25555f" d="M5 38 L16 26 L24 34 L32 16 L40 34 L48 26 L59 38 V52 H5 Z"/>
+    <path fill="url(#f-peak)" d="M32 13 L47 40 L17 40 Z"/>
+    <path fill="#f7f3eb" d="M32 13 L36.5 21 L27.5 21 Z"/>
+    <path fill="url(#f-river)" d="M5 46 C16 42 24 50 32 45 C40 40 48 50 59 46 V58 H5 Z"/>
+    <path fill="#c4844a" d="M32 30 L39 42 H25 Z"/>
+    <circle cx="32" cy="28.2" r="1.6" fill="#e8c48a"/>
+  </g>
+</svg>

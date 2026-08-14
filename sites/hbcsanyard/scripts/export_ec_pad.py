@@ -24,10 +24,10 @@ SUPERADMIN = "__SUPERADMIN__"
 
 # Fallback executive members when the roster has no non-office-bearer EC rows yet.
 FALLBACK_GENERAL = [
-    {"name": "Hari Singh Dogra", "phone": ""},
-    {"name": "Roop Lal Sharma", "phone": ""},
-    {"name": "Jitesh Sharma", "phone": ""},
-    {"name": "Rajesh Kumar Saini", "phone": ""},
+    {"name": "Hari Singh Dogra", "phone": "9418465098"},
+    {"name": "Jitesh Kumar Sharma", "phone": "9418450854"},
+    {"name": "Rajesh Kumar Saini", "phone": "9018700541"},
+    {"name": "Roop Lal Sharma", "phone": "9418490722"},
 ]
 
 TITLE_RANK = {
@@ -111,29 +111,19 @@ def office_rows(office: list[dict], general: list[dict]) -> str:
 def member_tables(general: list[dict], start_no: int) -> str:
     if not general:
         return '<p class="empty-members">—</p>'
-    mid = (len(general) + 1) // 2
-    left, right = general[:mid], general[mid:]
-
-    def table_chunk(items: list[dict], offset: int) -> str:
-        if not items:
-            return ""
-        rows = []
-        for j, m in enumerate(items, offset):
-            rows.append(
-                f"<tr><td>{j}</td><td>{html.escape(m['name'])}</td>"
-                f"<td>{html.escape(fmt_phone(m.get('phone')))}</td></tr>"
-            )
-        return (
-            '<table class="member-table"><thead><tr>'
-            "<th>S.No.</th><th>Name</th><th>Mobile</th>"
-            "</tr></thead><tbody>"
-            + "\n".join(rows)
-            + "</tbody></table>"
+    rows = []
+    for j, m in enumerate(general, start_no):
+        rows.append(
+            f"<tr><td>{j}</td><td>Member</td>"
+            f"<td>{html.escape(m['name'])}</td>"
+            f"<td>{html.escape(fmt_phone(m.get('phone')))}</td></tr>"
         )
-
     return (
-        f'<div class="member-columns">{table_chunk(left, start_no)}'
-        f"{table_chunk(right, start_no + len(left))}</div>"
+        '<table class="office-table"><thead><tr>'
+        "<th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th>"
+        "</tr></thead><tbody>"
+        + "\n".join(rows)
+        + "</tbody></table>"
     )
 
 
@@ -157,7 +147,7 @@ def render(office: list[dict], general: list[dict]) -> str:
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page {{ size: A4 portrait; margin: 6mm; }}
+    @page {{ size: A4 portrait; margin: 0; }}
     * {{ box-sizing: border-box; }}
     :root {{
       --navy: #0b2a56;
@@ -359,18 +349,6 @@ def render(office: list[dict], general: list[dict]) -> str:
       color: var(--green);
       white-space: nowrap;
     }}
-    .member-columns {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4mm;
-    }}
-    .member-table td:nth-child(2) {{
-      font-weight: 700;
-      color: var(--navy);
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }}
-    .member-table td:first-child {{ width: 10mm; }}
     .empty-members {{ text-align: center; color: var(--muted); font-size: 9pt; }}
     .body-spacer {{ flex: 1; min-height: 12mm; }}
     .foot {{ margin-top: auto; padding: 0; }}
@@ -435,12 +413,33 @@ def render(office: list[dict], general: list[dict]) -> str:
       margin: 2mm 0 3mm;
     }}
     @media print {{
-      body {{ background: #fff; }}
+      html, body {{
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }}
       .screen-hint {{ display: none !important; }}
       .sheet {{
-        margin: 0;
-        border-width: 0.8pt;
-        min-height: 100vh;
+        width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        margin: 0 !important;
+        border: 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }}
+      .wm {{ opacity: 0.7; }}
+      .accent-edge, .slogan-bar, .banner, th {{
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }}
     }}
   </style>

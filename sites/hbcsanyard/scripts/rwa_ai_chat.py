@@ -21,6 +21,7 @@ AI_AUTHOR_NAME = "RWA Assistant"
 AI_AVATAR_URL = "/assets/rwa-assistant-avatar.svg"
 
 _SUPERADMIN = "__SUPERADMIN__"
+_ADHOC_GATE = "__ADHOC_GATE__"
 
 
 def _load_env_file(path: pathlib.Path) -> None:
@@ -419,6 +420,7 @@ def _build_ec_roster_doc(conn) -> dict[str, str] | None:
                    is_ec_member, is_office_bearer
             FROM residents
             WHERE house_id != ?
+              AND house_id != ?
               AND status = 'active'
               AND (
                 is_ec_member = 1 OR is_office_bearer = 1 OR role = 'admin'
@@ -433,7 +435,7 @@ def _build_ec_roster_doc(conn) -> dict[str, str] | None:
               plot_no COLLATE NOCASE
             LIMIT 40
             """,
-            (_SUPERADMIN,),
+            (_SUPERADMIN, _ADHOC_GATE),
         ).fetchall()
     except Exception:
         return None
@@ -1289,8 +1291,8 @@ def build_corpus(
 
     try:
         n = conn.execute(
-            "SELECT COUNT(*) AS n FROM residents WHERE status='active' AND house_id != ?",
-            (_SUPERADMIN,),
+            "SELECT COUNT(*) AS n FROM residents WHERE status='active' AND house_id != ? AND house_id != ?",
+            (_SUPERADMIN, _ADHOC_GATE),
         ).fetchone()["n"]
         docs.append({
             "id": "dir:stats",

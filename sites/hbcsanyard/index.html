@@ -22,66 +22,169 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260812mom14">
-  <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260812mom14">
-  <script src="auth.js?v=20260812domain1" defer></script>
-  <script src="portal.js?v=20260812pwa4" defer></script>
+  <link rel="stylesheet" href="portal.css?v=20260814biz1">
+  <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
+  <script src="auth.js?v=20260813auth1" defer></script>
+  <script src="portal.js?v=20260814biz1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
 
   <div id="landingView" class="shell landing-shell">
-    <header class="landing-top">
-      <div class="landing-top-brand">
+    <header class="landing-top" id="landingTop">
+      <a class="landing-top-brand" href="#landingHero" aria-label="Housing Colony Sanyard home">
         <picture>
           <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp?v=20260810lite1">
           <img class="landing-top-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="" width="36" height="36" decoding="async">
         </picture>
-        <span class="landing-top-name">Mandi Housing Welfare Society</span>
-      </div>
+        <span class="landing-top-name">Housing Colony Sanyard</span>
+      </a>
+      <nav class="landing-nav" aria-label="Colony sections">
+        <a href="#landing-news">News</a>
+        <a href="#landing-services">Services</a>
+        <a href="#landing-ads">Ads</a>
+        <a href="#landing-committee">Committee</a>
+        <a href="/cityofmandi" class="landing-nav-city">City of Mandi</a>
+        <a href="/gate-pass.html#needs" class="landing-nav-connect">Connect</a>
+      </nav>
       <button type="button" class="landing-signin" id="landingMembersBtn">
         <span>Resident sign-in</span>
         <span class="landing-signin-arrow" aria-hidden="true">→</span>
       </button>
     </header>
 
-    <section class="landing-hero" aria-labelledby="landingHeroTitle">
-      <div class="landing-hero-seal">
-        <picture>
-          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
-          <img
-            class="landing-seal"
-            src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
-            width="220"
-            height="220"
-            alt="Himuda Housing Colony Sanyard"
-            decoding="async"
-            fetchpriority="high"
-          >
-        </picture>
+    <section class="landing-hero" id="landingHero" aria-labelledby="landingHeroTitle">
+      <div class="landing-hero-glow" aria-hidden="true"></div>
+      <div class="landing-hero-inner">
+        <div class="landing-hero-seal">
+          <picture>
+            <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
+            <img
+              class="landing-seal"
+              src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
+              width="240"
+              height="240"
+              alt="Himuda Housing Colony Sanyard"
+              decoding="async"
+              fetchpriority="high"
+            >
+          </picture>
+        </div>
+        <div class="landing-hero-copy">
+          <p class="landing-hero-kicker" id="landingEyebrow">Mandi Housing Welfare Society · Mandi, HP</p>
+          <h1 id="landingHeroTitle">Himuda Housing Colony Sanyard</h1>
+          <p class="landing-greeting" id="landingGreeting">Unity · Harmony · Progress — the colony’s public face for residents and the city.</p>
+          <div class="landing-hero-cta">
+            <button type="button" class="btn primary landing-cta-primary" id="landingHeroSignInBtn">Resident sign-in</button>
+            <a class="btn ghost landing-cta-secondary" href="/gate-pass.html#needs">Connect with the colony</a>
+            <a class="btn ghost landing-cta-city" href="/cityofmandi">City of Mandi</a>
+          </div>
+        </div>
       </div>
-      <p class="eyebrow" id="landingEyebrow">Mandi Housing Welfare Society · RWA · Mandi</p>
-      <h1 id="landingHeroTitle">Himuda Housing Colony Sanyard</h1>
-      <p class="landing-greeting" id="landingGreeting">Welcome to Mandi Housing Welfare Society.</p>
+      <a class="landing-scroll-hint" href="#landing-board" aria-label="Browse colony board">
+        <span>Explore</span>
+      </a>
     </section>
 
-    <section class="landing-section landing-updates" aria-labelledby="landingUpdatesTitle">
-      <h2 id="landingUpdatesTitle">Latest updates</h2>
-      <p class="muted landing-section-lede">Public news from the society.</p>
-      <div id="landingUpdatesList" class="landing-list">
-        <p class="muted">Loading updates…</p>
-      </div>
-    </section>
+    <div class="landing-board" id="landing-board" hidden>
+      <aside class="landing-side" aria-label="Quick links">
+        <p class="landing-side-label">On this page</p>
+        <nav class="landing-side-nav">
+          <a href="#landing-news">News</a>
+          <a href="#landing-services">Businesses &amp; services</a>
+          <a href="#landing-ads">Ads</a>
+          <a href="#landing-committee">Executive Committee</a>
+          <a href="/cityofmandi">City of Mandi</a>
+        </nav>
+        <div class="landing-side-cards">
+          <a class="landing-side-card landing-side-card-city" href="/cityofmandi">
+            <strong>City of Mandi</strong>
+            <span>Unofficial civic hub for Mandi — news, ads, services, and places</span>
+          </a>
+          <a class="landing-side-card" href="/gate-pass.html#needs">
+            <strong>City QR desk</strong>
+            <span>Service needs · register a business · gate pass</span>
+          </a>
+        </div>
+      </aside>
 
-    <section class="landing-section landing-committee" aria-labelledby="landingCommitteeTitle">
-      <h2 id="landingCommitteeTitle">Executive Committee</h2>
-      <p class="muted landing-section-lede">Office bearers serving Himuda Housing Colony Sanyard.</p>
-      <div id="landingCommitteeList" class="landing-list">
-        <p class="muted">Loading committee…</p>
+      <div class="landing-main">
+        <section class="landing-section landing-news" id="landing-news" aria-labelledby="landingUpdatesTitle">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Board</p>
+              <h2 id="landingUpdatesTitle">News</h2>
+            </div>
+            <p class="muted landing-section-lede">Public updates from the society.</p>
+          </header>
+          <div id="landingUpdatesList" class="landing-grid landing-grid-news">
+            <p class="muted">Loading news…</p>
+          </div>
+        </section>
+
+        <section class="landing-section landing-business" id="landing-services" aria-labelledby="landingBusinessTitle">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Marketplace</p>
+              <h2 id="landingBusinessTitle">Businesses &amp; services</h2>
+            </div>
+            <p class="muted landing-section-lede">Autos, cabs, repairs and more — connected with the colony. <a href="/gate-pass.html#register">Register via city QR</a> · <a href="/gate-pass.html#manage">Manage listing</a></p>
+          </header>
+          <div id="landingBusinessList" class="landing-grid landing-grid-biz">
+            <p class="muted">Loading businesses…</p>
+          </div>
+          <div class="landing-needs-wrap" id="landingNeedsWrap" hidden>
+            <h3 class="landing-subhead">Service needs</h3>
+            <div id="landingNeedsList" class="landing-grid landing-grid-needs"></div>
+          </div>
+        </section>
+
+        <section class="landing-section landing-ads" id="landing-ads" aria-labelledby="landingAdsTitle">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Community</p>
+              <h2 id="landingAdsTitle">Ads</h2>
+            </div>
+            <p class="muted landing-section-lede">Colony announcements and classifieds.</p>
+          </header>
+          <div id="landingAdsList" class="landing-grid landing-grid-ads">
+            <p class="muted">Loading ads…</p>
+          </div>
+        </section>
+
+        <section class="landing-section landing-committee" id="landing-committee" aria-labelledby="landingCommitteeTitle">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Leadership</p>
+              <h2 id="landingCommitteeTitle">Executive Committee</h2>
+            </div>
+            <p class="muted landing-section-lede">Office bearers serving Himuda Housing Colony Sanyard.</p>
+          </header>
+          <div id="landingCommitteeList" class="landing-committee-grid">
+            <p class="muted">Loading committee…</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <section class="landing-connect-band" id="landing-connect-band" aria-labelledby="landingConnectTitle" hidden>
+      <div class="landing-connect-inner">
+        <div>
+          <p class="landing-section-kicker">City &amp; gate</p>
+          <h2 id="landingConnectTitle">One QR. Connect with Sanyard.</h2>
+          <p class="muted">Scan at the main gate or around Mandi — get a short gate pass, register a business, or see what residents need.</p>
+        </div>
+        <div class="landing-connect-actions">
+          <a class="btn primary" href="/gate-pass.html#needs">Open connect page</a>
+          <a class="btn ghost" href="/gate-pass.html#register">Register a business</a>
+          <a class="btn ghost" href="/gate-pass.html#manage">Manage listing</a>
+          <a class="btn ghost" href="/cityofmandi">City of Mandi</a>
+        </div>
       </div>
     </section>
 
     <footer class="landing-foot muted">
+      <p class="landing-foot-brand">Mandi Housing Welfare Society · Registration No. 467 · Mandi HP 175001 · <a href="/cityofmandi">City of Mandi</a></p>
       <p class="gate-managed">
         <span>Managed By</span>
         <picture>
@@ -137,7 +240,11 @@
           <button type="button" class="btn ghost" id="otpMemberBackBtn">Use a different plot</button>
         </form>
         <form id="otpContactForm" class="stack" hidden method="post" action="#" onsubmit="return false;">
-          <p class="muted" id="otpContactHint">This plot is missing contact details. Enter them to receive a login code. They are saved only after you verify the code.</p>
+          <p class="muted" id="otpContactHint">This plot is missing contact details. Enter your household code from the dues circular, then email/phone. Contacts are saved only after you verify the emailed code.</p>
+          <label id="otpHouseholdCodeWrap">
+            Household code
+            <input id="otpHouseholdCode" name="householdCode" autocomplete="one-time-code" placeholder="e.g. 30-R7KQ" required>
+          </label>
           <label id="otpContactEmailWrap">
             Email address
             <input id="otpContactEmail" name="email" type="email" autocomplete="email" placeholder="you@example.com">
@@ -265,6 +372,7 @@
             <span class="tab-long">Proceedings</span><span class="tab-short" aria-hidden="true">MOM</span>
           </button>
           <button type="button" class="tab" data-panel="directory" aria-selected="false">Directory</button>
+          <button type="button" class="tab" data-panel="parking" aria-selected="false">Pass</button>
           <button type="button" class="tab" data-panel="profile" aria-selected="false">Profile</button>
           <button type="button" class="tab admin-only" data-panel="admin" hidden aria-selected="false" aria-label="EC desk">
             <span class="tab-long">EC desk</span><span class="tab-short" aria-hidden="true">EC</span>
@@ -453,6 +561,7 @@
                   <th>Prev pending</th>
                   <th>Year total</th>
                   <th>Pending / dues</th>
+                  <th>HH code</th>
                   <th>Treasury</th>
                   <th></th>
                 </tr>
@@ -581,6 +690,68 @@
               <div class="lang-overlay-body" id="concernsLangOverlayBody"></div>
             </div>
           </div>
+        </div>
+
+        <div class="roster-block" data-entitlement="manage_notices" id="marketplaceAdsBlock" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Manage Ads</h3>
+              <p class="muted">Publish, edit, disable, or remove ads on the public homepage.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Ad status</span>
+              <select id="marketplaceAdsStatusFilter">
+                <option value="published" selected>Published</option>
+                <option value="archived">Disabled</option>
+                <option value="all">All ads</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="marketplaceAdsRefreshBtn">Refresh</button>
+          </div>
+          <form id="marketplaceAdForm" class="stack narrow notice-manage-form">
+            <h3 id="marketplaceAdFormTitle">New ad</h3>
+            <input type="hidden" id="marketplaceAdEditId" value="">
+            <p class="muted">Ads go live on the homepage Ads section.</p>
+            <div class="settings-grid">
+              <label>Ad title
+                <input id="marketplaceAdTitle" maxlength="120" required>
+              </label>
+              <label>Category
+                <select id="marketplaceAdCategory">
+                  <option value="colony">Colony announcement</option>
+                  <option value="event">Event</option>
+                  <option value="sale">Sale / offer</option>
+                  <option value="lost_found">Lost &amp; found</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label>Details
+              <textarea id="marketplaceAdDesc" rows="2" maxlength="800"></textarea>
+            </label>
+            <label>Photo <span class="muted">(optional, up to 5 MB)</span>
+              <input id="marketplaceAdImage" type="file" accept="image/jpeg,image/png,image/webp">
+            </label>
+            <img id="marketplaceAdImagePreview" class="listing-photo-preview" alt="" hidden>
+            <div class="settings-grid">
+              <label>Contact name
+                <input id="marketplaceAdName" maxlength="80" required>
+              </label>
+              <label>Mobile
+                <input id="marketplaceAdPhone" maxlength="15" required inputmode="tel">
+              </label>
+            </div>
+            <label class="check" for="marketplaceShareCityInput">
+              <input type="checkbox" id="marketplaceShareCityInput">
+              <span>Also share on City of Mandi (pending city review)</span>
+            </label>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary compact" id="marketplaceAdSubmitBtn">Publish ad</button>
+              <button type="button" class="btn ghost compact" id="marketplaceAdCancelBtn" hidden>Cancel edit</button>
+            </div>
+            <p class="muted" id="marketplaceAdStatus"></p>
+          </form>
+          <div id="marketplaceAdsList" class="landing-list"></div>
         </div>
       </section>
 
@@ -1411,13 +1582,14 @@
       <section class="panel" id="panel-directory" hidden>
         <header class="panel-head">
           <h2>Resident directory</h2>
-          <p class="muted">Active plots in Himuda Housing Colony Sanyard.</p>
+          <p class="muted">Active plots in Himuda Housing Colony Sanyard. Household codes are for first-time registration and dues circulars.</p>
         </header>
         <div class="table-wrap directory-wrap">
           <table class="directory-table cardable-table">
             <thead>
               <tr>
                 <th>Plot</th>
+                <th>HH code</th>
                 <th>Name</th>
                 <th>Role</th>
                 <th>Phone</th>
@@ -1426,6 +1598,212 @@
             </thead>
             <tbody id="directoryRows"></tbody>
           </table>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-parking" hidden>
+        <header class="panel-head">
+          <h2>Parking pass</h2>
+          <p class="muted">Register your own vehicles for a permanent member pass. Tenants of this plot are recorded separately (not as household logins); their vehicles get a monthly lease. Guest vehicles get a timed visitor pass.</p>
+        </header>
+
+        <div class="roster-block parking-validate-block" id="parkingEcBlock" data-entitlement="pass_general" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Validate a pass</h3>
+              <p class="muted" id="parkingValidateHint">Type a number, or scan the vehicle plate / QR. Everyone sees type, validity, and code; full details only for vehicles on your plot.</p>
+            </div>
+          </div>
+          <form id="parkingLookupForm" class="stack narrow">
+            <div class="settings-grid">
+              <label>Vehicle / registration / pass code
+                <input id="parkingLookupInput" maxlength="24" autocomplete="off" placeholder="HP 33 A 1234 or MP-A3F9" enterkeyhint="search" autocapitalize="characters">
+              </label>
+            </div>
+            <div class="btn-row parking-validate-actions">
+              <button type="submit" class="btn primary compact" id="parkingLookupBtn">Look up</button>
+              <button type="button" class="btn secondary compact" id="parkingScanPlateBtn">Scan plate</button>
+              <button type="button" class="btn ghost compact" id="parkingScanQrBtn">Scan QR</button>
+            </div>
+            <input id="parkingScanPlateFile" type="file" accept="image/*" capture="environment" hidden>
+            <input id="parkingScanQrFile" type="file" accept="image/*" capture="environment" hidden>
+          </form>
+          <p class="muted" id="parkingLookupStatus"></p>
+          <div id="parkingLookupResult" class="parking-lookup-result"></div>
+          <div id="parkingManageExtras" data-entitlement="pass_manage" hidden>
+            <div class="parking-gate-poster" id="parkingGatePoster">
+              <div class="roster-toolbar">
+                <div>
+                  <h4>City connect QR</h4>
+                  <p class="muted">Print this QR for the main gate and city spots. People open the connect page: <strong>Gate pass</strong> (selfie ad-hoc pass) or <strong>Businesses &amp; services</strong> (register a business / browse needs). English / Hindi.</p>
+                </div>
+              </div>
+              <div class="parking-gate-poster-body">
+                <img id="parkingGateQrImg" class="parking-gate-qr" alt="Main gate QR" hidden>
+                <div>
+                  <p class="muted" id="parkingGateUrl"></p>
+                  <div class="btn-row">
+                    <a class="btn secondary compact" id="parkingGateOpenLink" href="/gate-pass.html#needs" target="_blank" rel="noopener">Open connect page</a>
+                    <button type="button" class="btn ghost compact" id="parkingGatePrintBtn">Print poster</button>
+                    <button type="button" class="btn ghost compact" id="parkingGateShareBtn" hidden>Share link</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="parkingAdhocList" class="parking-pending-list"></div>
+            <div id="parkingPendingList" class="parking-pending-list"></div>
+            <form id="parkingHoursForm" class="stack narrow parking-hours-form">
+              <label>Default visitor lease
+                <select id="parkingDefaultHours">
+                  <option value="4">4 hours</option>
+                  <option value="8">8 hours</option>
+                  <option value="12">12 hours</option>
+                  <option value="24" selected>24 hours</option>
+                </select>
+              </label>
+              <button type="submit" class="btn ghost compact">Save default</button>
+              <p class="muted" id="parkingHoursStatus"></p>
+            </form>
+          </div>
+        </div>
+
+        <div class="roster-block" id="parkingMemberBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Register your vehicle</h3>
+              <p class="muted">Permanent member pass for cars registered to this plot. Issued at once and emailed to you.</p>
+            </div>
+          </div>
+          <form id="parkingMemberForm" class="stack narrow">
+            <div class="settings-grid">
+              <label>Vehicle number
+                <input id="parkingMemberPlate" maxlength="14" required autocomplete="off" placeholder="HP 33 A 1234" autocapitalize="characters">
+              </label>
+              <label>Colour <span class="muted">(optional)</span>
+                <input id="parkingMemberColour" maxlength="40" placeholder="White">
+              </label>
+              <label>Type
+                <select id="parkingMemberType">
+                  <option value="car" selected>Car</option>
+                  <option value="suv">SUV</option>
+                  <option value="van">Van</option>
+                  <option value="bike">Motorcycle</option>
+                  <option value="scooter">Scooter</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label>Registered to <span class="muted">(optional)</span>
+              <input id="parkingMemberDriver" maxlength="80" placeholder="Owner / driver name">
+            </label>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="parkingMemberBtn">Register vehicle</button>
+            </div>
+            <p class="muted" id="parkingMemberStatus"></p>
+          </form>
+        </div>
+
+        <div class="roster-block" id="parkingTenantBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Tenant vehicle</h3>
+              <p class="muted">Monthly lease for a vehicle belonging to a tenant of this plot. Register the tenant under Profile first — tenants are not household logins.</p>
+            </div>
+          </div>
+          <form id="parkingTenantForm" class="stack narrow">
+            <label>Tenant
+              <select id="parkingTenantSelect" required>
+                <option value="">Select a registered tenant</option>
+              </select>
+            </label>
+            <p class="muted" id="parkingTenantHint"><a href="#profile">Add or update tenants in Profile</a></p>
+            <div class="settings-grid">
+              <label>Vehicle number
+                <input id="parkingTenantPlate" maxlength="14" required autocomplete="off" placeholder="HP 33 A 1234" autocapitalize="characters">
+              </label>
+              <label>Colour <span class="muted">(optional)</span>
+                <input id="parkingTenantColour" maxlength="40" placeholder="White">
+              </label>
+              <label>Type
+                <select id="parkingTenantType">
+                  <option value="car" selected>Car</option>
+                  <option value="suv">SUV</option>
+                  <option value="van">Van</option>
+                  <option value="bike">Motorcycle</option>
+                  <option value="scooter">Scooter</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Lease
+                <select id="parkingTenantMonths">
+                  <option value="1">1 month</option>
+                  <option value="3">3 months</option>
+                  <option value="6" selected>6 months</option>
+                  <option value="12">12 months</option>
+                </select>
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary" id="parkingTenantBtn">Issue tenant pass</button>
+            </div>
+            <p class="muted" id="parkingTenantStatus"></p>
+          </form>
+        </div>
+
+        <div class="roster-block" id="parkingRequestBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Visitor pass</h3>
+              <p class="muted">Timed lease for a guest vehicle. Vehicle number is required.</p>
+            </div>
+          </div>
+          <form id="parkingRequestForm" class="stack narrow">
+            <div class="settings-grid">
+              <label>Vehicle number
+                <input id="parkingPlate" maxlength="14" required autocomplete="off" placeholder="HP 33 A 1234" autocapitalize="characters">
+              </label>
+              <label>Colour <span class="muted">(optional)</span>
+                <input id="parkingColour" maxlength="40" placeholder="White">
+              </label>
+              <label>Type
+                <select id="parkingVehicleType">
+                  <option value="car" selected>Car</option>
+                  <option value="suv">SUV</option>
+                  <option value="van">Van</option>
+                  <option value="bike">Motorcycle</option>
+                  <option value="scooter">Scooter</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Lease
+                <select id="parkingHours">
+                  <option value="4">4 hours</option>
+                  <option value="8">8 hours</option>
+                  <option value="12">12 hours</option>
+                  <option value="24" selected>24 hours</option>
+                </select>
+              </label>
+            </div>
+            <label>Visitor name <span class="muted">(optional)</span>
+              <input id="parkingVisitor" maxlength="80" placeholder="Guest name">
+            </label>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary" id="parkingRequestBtn">Issue visitor pass</button>
+            </div>
+            <p class="muted" id="parkingRequestStatus"></p>
+          </form>
+        </div>
+
+        <div class="roster-block" id="parkingListBlock">
+          <div class="roster-toolbar">
+            <div>
+              <h3>Your passes</h3>
+              <p class="muted">Permanent member vehicles, tenant leases, and visitor cards for this plot.</p>
+            </div>
+            <button type="button" class="btn ghost compact" id="parkingRefreshBtn">Refresh</button>
+          </div>
+          <div id="parkingCardList" class="parking-card-list"></div>
+          <p class="muted" id="parkingListStatus"></p>
         </div>
       </section>
 
@@ -1554,6 +1932,29 @@
           </form>
         </div>
 
+        <div class="roster-block household-block" id="householdTenantBlock" hidden>
+          <header class="panel-head">
+            <h3>Tenants of this plot</h3>
+            <p class="muted">Occupancy records only — tenants do not get a colony login and are not mixed with household members. Register them here, then issue a tenant vehicle pass from Pass.</p>
+          </header>
+          <div id="householdTenantList" class="household-member-list"></div>
+          <form id="householdTenantForm" class="stack narrow" hidden>
+            <h4>Add tenant</h4>
+            <div class="settings-grid">
+              <label>Name <input id="htName" name="name" required maxlength="120"></label>
+              <label>Mobile <input id="htPhone" name="phone" type="tel" required placeholder="10-digit mobile"></label>
+              <label>Email <input id="htEmail" name="email" type="email" placeholder="optional"></label>
+              <label>Occupancy from <input id="htFrom" name="occupancyStart" type="date"></label>
+              <label>Occupancy until <input id="htUntil" name="occupancyEnd" type="date"></label>
+            </div>
+            <label>ID / address / note
+              <input id="htNote" name="note" maxlength="240" placeholder="Optional ID number or occupancy note">
+            </label>
+            <button type="submit" class="btn secondary">Save tenant</button>
+            <p class="muted" id="householdTenantStatus"></p>
+          </form>
+        </div>
+
         <div class="roster-block" id="profileNotificationsBlock">
           <header class="panel-head">
             <h3>Notifications</h3>
@@ -1575,6 +1976,7 @@
               <label class="check"><input type="checkbox" data-pref="treasury" checked> Treasury</label>
               <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues certificate</label>
               <label class="check"><input type="checkbox" data-pref="no_objection" checked> No Objection certificate</label>
+              <label class="check"><input type="checkbox" data-pref="parking" checked> Parking pass</label>
             </fieldset>
             <p class="muted" id="pushCertPrefsHint">Issuers with the No Dues / No Objection entitlement are alerted when a resident raises a request. Residents are alerted when a certificate is issued, rejected, or sent back.</p>
             <button type="button" class="btn secondary compact" id="pushPrefsSaveBtn">Save preferences</button>
@@ -1865,6 +2267,7 @@
               <thead>
                 <tr>
                   <th>Plot</th>
+                  <th>HH code</th>
                   <th>Title</th>
                   <th>Name</th>
                   <th>Profession</th>
@@ -1884,27 +2287,18 @@
           <p class="muted" id="rosterStatus"></p>
         </div>
 
-        <div class="roster-block" id="noticeDraftsBlock" data-entitlement="manage_notices">
+        <div class="roster-block" id="noticeManageBlock" data-entitlement="manage_notices">
           <div class="roster-toolbar">
             <div>
-              <h3>Draft notices</h3>
-              <p class="muted" id="noticeDraftStats">Your drafts and those shared with you.</p>
+              <h3>Manage Notices</h3>
+              <p class="muted" id="noticeDraftStats">Write, save drafts, share with EC, and publish to the colony board.</p>
             </div>
             <button type="button" class="btn ghost compact" id="noticeDraftRefreshBtn">Refresh</button>
           </div>
           <div id="noticeDraftList" class="notice-draft-list"></div>
-        </div>
-
-        <div class="roster-block" data-entitlement="manage_notices" id="noticeComposeBlock">
-          <div class="roster-toolbar">
-            <div>
-              <h3>Write notice</h3>
-              <p class="muted">Publish to the colony board or save a draft for later.</p>
-            </div>
-          </div>
-        <form id="noticeForm" class="stack">
+        <form id="noticeForm" class="stack notice-manage-form">
           <div class="form-lang-row">
-            <h3 id="noticeFormTitle" class="sr-only">Write notice</h3>
+            <h3 id="noticeFormTitle">New notice</h3>
             <div class="author-lang-toggle" data-author-form="notice" role="group" aria-label="Writing language">
               <button type="button" class="lang-btn is-active" data-author-lang="en" aria-pressed="true">EN</button>
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
@@ -1930,6 +2324,7 @@
               <option value="payments">Payments</option>
               <option value="maintenance">Maintenance</option>
               <option value="events">Events</option>
+              <option value="ad">Ad / classified</option>
             </select>
           </label>
           <label class="check" for="noticePinnedInput">
@@ -1940,6 +2335,14 @@
             <input type="checkbox" name="publicLanding" id="noticePublicLandingInput">
             <span>Also show on public landing page</span>
           </label>
+          <label class="check" for="noticeShareCityInput">
+            <input type="checkbox" name="shareCity" id="noticeShareCityInput">
+            <span>Also share on City of Mandi (pending city review)</span>
+          </label>
+          <label>Photo <span class="muted">(optional — up to 5 MB; trimmed automatically for fast loading)</span>
+            <input type="file" id="noticeImageInput" accept="image/jpeg,image/png,image/webp">
+          </label>
+          <img id="noticeImagePreview" class="listing-photo-preview" alt="" hidden>
           <div class="btn-row">
             <button type="submit" class="btn primary" id="noticeSubmitBtn">Publish notice</button>
             <button type="button" class="btn secondary" id="noticeDraftBtn">Save draft</button>
@@ -1947,6 +2350,69 @@
           </div>
           <p class="muted" id="noticeFormStatus"></p>
         </form>
+        </div>
+
+        <div class="roster-block" data-entitlement="manage_notices" id="marketplaceModerateBlock" hidden>
+          <div class="roster-toolbar">
+            <div>
+              <h3>Moderate city listings</h3>
+              <p class="muted">Approve, edit, suspend, or remove businesses and service needs from the city QR.</p>
+            </div>
+            <label class="roster-search">
+              <span class="sr-only">Listing status</span>
+              <select id="marketplaceModerateStatusFilter">
+                <option value="pending" selected>Pending review</option>
+                <option value="published">Published</option>
+                <option value="rejected">Rejected</option>
+                <option value="archived">Suspended</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <button type="button" class="btn ghost compact" id="marketplaceRefreshBtn">Refresh</button>
+          </div>
+          <form id="marketplaceListingForm" class="stack narrow notice-manage-form" hidden>
+            <h3 id="marketplaceListingFormTitle">Edit listing</h3>
+            <input type="hidden" id="marketplaceListingEditId" value="">
+            <p class="muted" id="marketplaceListingMeta"></p>
+            <div class="settings-grid">
+              <label>Title
+                <input id="marketplaceListingTitle" maxlength="120" required>
+              </label>
+              <label>Category
+                <select id="marketplaceListingCategory"></select>
+              </label>
+            </div>
+            <label>Details
+              <textarea id="marketplaceListingDesc" rows="2" maxlength="800"></textarea>
+            </label>
+            <label>Photo <span class="muted">(optional, up to 5 MB)</span>
+              <input id="marketplaceListingImage" type="file" accept="image/jpeg,image/png,image/webp">
+            </label>
+            <img id="marketplaceListingImagePreview" class="listing-photo-preview" alt="" hidden>
+            <div class="settings-grid">
+              <label>Contact name
+                <input id="marketplaceListingName" maxlength="80" required>
+              </label>
+              <label>Mobile
+                <input id="marketplaceListingPhone" maxlength="15" required inputmode="tel">
+              </label>
+              <label>Email (optional)
+                <input id="marketplaceListingEmail" type="email" maxlength="120">
+              </label>
+              <label id="marketplaceListingWebsiteWrap">Website (optional)
+                <input id="marketplaceListingWebsite" maxlength="200" inputmode="url">
+              </label>
+              <label>Area (optional)
+                <input id="marketplaceListingArea" maxlength="80">
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn secondary compact" id="marketplaceListingSubmitBtn">Save listing</button>
+              <button type="button" class="btn ghost compact" id="marketplaceListingCancelBtn">Cancel</button>
+            </div>
+            <p class="muted" id="marketplaceListingStatus"></p>
+          </form>
+          <div id="marketplacePendingList" class="landing-list"></div>
         </div>
 
         <div class="roster-block report-section" data-entitlement="generate_reports" id="reportsBlock">
@@ -1966,6 +2432,9 @@
                   <option value="dues">Dues / ledger</option>
                   <option value="directory">Resident directory</option>
                   <option value="concerns">Resident concerns</option>
+                  <option value="passes">Passes</option>
+                  <option value="tenants">Tenants</option>
+                  <option value="vehicles">Vehicles</option>
                 </select>
               </label>
               <label>Template name (to save)
@@ -2003,6 +2472,31 @@
                   <option value="all">All</option>
                 </select>
               </label>
+              <label id="reportPassKindWrap" hidden>Pass kind
+                <select id="reportPassKind">
+                  <option value="all" selected>All</option>
+                  <option value="member">Member</option>
+                  <option value="visitor">Visitor</option>
+                  <option value="tenant">Tenant</option>
+                  <option value="adhoc">Ad-hoc</option>
+                </select>
+              </label>
+              <label id="reportPassStatusWrap" hidden>Pass / vehicle status
+                <select id="reportPassStatus">
+                  <option value="all" selected>All</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="pending_renewal">Pending renewal</option>
+                  <option value="revoked">Revoked</option>
+                </select>
+              </label>
+              <label id="reportTenantStatusWrap" hidden>Tenant status
+                <select id="reportTenantStatus">
+                  <option value="active" selected>Active</option>
+                  <option value="ended">Ended</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
             </div>
             <div class="btn-row">
               <button type="submit" class="btn primary" id="reportDownloadBtn">Download PDF</button>
@@ -2018,7 +2512,7 @@
           <div class="roster-toolbar">
             <div>
               <h3>Templates</h3>
-              <p class="muted">Printable letterheads, cash receipts, and forms for EC / press use. Upload files with title, category, and tags.</p>
+              <p class="muted">Printable letterheads, envelopes, cash receipts, and forms for EC / press use. Upload files with title, category, and tags.</p>
             </div>
             <button type="button" class="btn ghost compact" id="templatesRefreshBtn">Refresh</button>
           </div>
@@ -2069,8 +2563,8 @@
                 <select id="templatesPaperSizeInput">
                   <option value="A4" selected>A4</option>
                   <option value="A5">A5</option>
+                  <option value="A6">A6</option>
                   <option value="Letter">Letter</option>
-                  <option value="Legal">Legal</option>
                 </select>
               </label>
               <label>Background
@@ -2116,7 +2610,7 @@
             <div class="roster-toolbar">
               <div>
                 <h3>Roles &amp; entitlements</h3>
-                <p class="muted">EC Member → Office Bearer → EC Admin. Members and bearers can receive one-off entitlements; EC Admins have all access.</p>
+                <p class="muted">EC Member → Office Bearer → EC Admin. Members and bearers can receive one-off entitlements (including Pass · manage); EC Admins have all access. Every resident has Pass · general (type, validity, code; full details for own-plot vehicles).</p>
               </div>
               <button type="button" class="btn ghost compact" id="rolesRefreshBtn">Refresh</button>
             </div>
@@ -2214,13 +2708,13 @@
 
           <div class="settings-block ops-settings-block" style="margin-top:1.5rem">
             <h3>Backups &amp; server vitals</h3>
-            <p class="muted">Daily on-box backups (02:30) and vitals checks (every 15 min). Alerts use SMTP above. Saved in <code>data/smtp.env</code> with platform settings.</p>
+            <p class="muted">Daily on-box backups (02:30) sync to Google Drive when enabled. Vitals every 15 min. Alerts use SMTP above.</p>
             <div id="opsStatusPanel" class="ops-status-panel muted">Loading server status…</div>
             <form id="opsSettingsForm" class="stack" style="margin-top:0.85rem">
               <div class="settings-grid">
                 <label>Alert email <input type="email" id="opsAlertTo" placeholder="defaults to From address"></label>
                 <label class="check"><input type="checkbox" id="opsVitalsEnabled" checked> Enable vitals monitoring (15 min)</label>
-                <label>Backup retention (days) <input type="number" id="opsBackupRetainDays" min="3" max="90" value="14"></label>
+                <label>Backup retention on disk (days) <input type="number" id="opsBackupRetainDays" min="3" max="90" value="7"></label>
                 <label>Backup min disk free % <input type="number" id="opsBackupDiskMinPct" min="5" max="50" value="15"></label>
                 <label>Event history (days) <input type="number" id="opsAccessEventsDays" min="30" max="365" value="90"></label>
                 <label>Disk warn / crit % free <span class="inline-pair"><input type="number" id="opsDiskWarnPct" min="5" max="40" value="20"> <input type="number" id="opsDiskCritPct" min="3" max="25" value="10"></span></label>
@@ -2228,6 +2722,13 @@
                 <label>Load warn / crit (× CPUs) <span class="inline-pair"><input type="number" id="opsLoadWarnRatio" min="0.5" max="5" step="0.1" value="1.5"> <input type="number" id="opsLoadCritRatio" min="1" max="8" step="0.1" value="2.5"></span></label>
                 <label>Max backup age (hours) <input type="number" id="opsBackupMaxAgeHours" min="6" max="168" value="28"></label>
                 <label>Alert repeat warn / crit (hours) <span class="inline-pair"><input type="number" id="opsAlertCooldownWarnH" min="1" max="48" value="6"> <input type="number" id="opsAlertCooldownCritH" min="1" max="24" value="1"></span></label>
+              </div>
+              <h4 style="margin:1rem 0 0.35rem">Google Drive (off-box)</h4>
+              <p class="muted" id="opsDriveSaHint">Service account JSON must be at <code>data/drive-sa.json</code> on the server. Share the Drive folder with that SA email (Editor).</p>
+              <div class="settings-grid">
+                <label class="check"><input type="checkbox" id="opsDriveEnabled"> Enable nightly Drive sync</label>
+                <label>Drive folder ID <input type="text" id="opsDriveFolderId" placeholder="from drive.google.com/drive/folders/…" autocomplete="off"></label>
+                <label>Drive retention (days) <input type="number" id="opsDriveRetainDays" min="3" max="90" value="14"></label>
               </div>
               <div class="btn-row">
                 <button type="submit" class="btn secondary" id="opsSettingsSaveBtn">Save ops settings</button>
@@ -2356,19 +2857,19 @@
     <dialog id="docViewerDialog" class="doc-viewer-dialog" aria-labelledby="docViewerTitle">
       <div class="doc-viewer-shell">
         <header class="doc-viewer-bar">
-          <button type="button" class="btn secondary compact doc-viewer-back" id="docViewerBackBtn" aria-label="Close document view">
+          <button type="button" class="btn secondary compact doc-viewer-back" id="docViewerBackBtn" aria-label="Close document and return to app">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M15 18l-6-6 6-6"/>
             </svg>
-            <span>Close</span>
+            <span>Back to app</span>
           </button>
           <div class="doc-viewer-titles">
             <strong id="docViewerTitle">Document</strong>
             <p class="muted" id="docViewerMeta"></p>
           </div>
-          <button type="button" class="btn ghost compact" id="docViewerPrintBtn" hidden>Print</button>
+          <button type="button" class="btn secondary compact" id="docViewerPrintBtn" hidden>Print</button>
+          <a class="btn secondary compact" id="docViewerDownloadBtn" hidden download>Download</a>
           <a class="btn ghost compact" id="docViewerNewTabBtn" hidden target="_blank" rel="noopener">Open in new tab</a>
-          <a class="btn ghost compact" id="docViewerDownloadBtn" hidden download>Download</a>
         </header>
         <div class="doc-viewer-stage" id="docViewerStage">
           <p class="muted doc-viewer-loading" id="docViewerLoading" hidden>Opening PDF…</p>
@@ -2384,6 +2885,14 @@
             Return to this screen to continue reading.
           </div>
         </div>
+        <footer class="doc-viewer-mobile-bar" id="docViewerMobileBar">
+          <div class="doc-viewer-mobile-actions">
+            <button type="button" class="btn secondary" id="docViewerMobilePrintBtn" hidden>Print</button>
+            <a class="btn secondary" id="docViewerMobileDownloadBtn" hidden download>Download</a>
+          </div>
+          <button type="button" class="btn secondary" id="docViewerMobileBackBtn">← Back to app</button>
+          <p class="doc-viewer-mobile-hint">Print or Download here — then Back to return to the app.</p>
+        </footer>
       </div>
     </dialog>
 
@@ -2563,6 +3072,30 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="parkingScanDialog" class="parking-scan-dialog" aria-labelledby="parkingScanTitle">
+      <div class="parking-scan-shell">
+        <header class="parking-scan-head">
+          <div>
+            <h3 id="parkingScanTitle">Scan vehicle plate</h3>
+            <p class="muted" id="parkingScanHint">Align the number plate inside the frame. The camera will read the registration automatically.</p>
+          </div>
+          <button type="button" class="btn ghost compact" id="parkingScanCloseBtn" aria-label="Close scanner">✕</button>
+        </header>
+        <div class="parking-scan-stage">
+          <video id="parkingScanVideo" playsinline muted autoplay></video>
+          <canvas id="parkingScanCanvas" hidden></canvas>
+          <div class="parking-scan-frame" id="parkingScanFrame" aria-hidden="true"></div>
+          <p class="parking-scan-live" id="parkingScanLive">Starting camera…</p>
+        </div>
+        <div class="btn-row parking-scan-actions">
+          <button type="button" class="btn primary" id="parkingScanCaptureBtn">Read now</button>
+          <button type="button" class="btn ghost" id="parkingScanFallbackBtn">Use photo instead</button>
+          <button type="button" class="btn ghost" id="parkingScanCancelBtn">Cancel</button>
+        </div>
+      </div>
+    </dialog>
+
     <footer class="app-foot">
       <span class="app-foot-managed">
         <span>Managed By</span>

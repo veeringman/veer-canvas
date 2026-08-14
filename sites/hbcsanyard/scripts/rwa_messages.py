@@ -11,6 +11,7 @@ from typing import Any
 from init_rwa_db import (
     COLONY_THREAD_ID,
     SUPERADMIN_HOUSE_ID,
+    ADHOC_GATE_HOUSE_ID,
     ensure_messages_and_push_tables,
     ensure_msg_likes_and_ai,
     normalize_house_id,
@@ -1155,9 +1156,12 @@ def directory_peers(conn: sqlite3.Connection, actor: dict, q: str = "") -> list[
         """
         SELECT house_id, name, plot_no, section, phone
         FROM residents
-        WHERE status = 'active' AND house_id != ? AND house_id != ?
+        WHERE status = 'active'
+          AND house_id != ?
+          AND house_id != ?
+          AND house_id != ?
         """,
-        (SUPERADMIN_HOUSE_ID, my or ""),
+        (SUPERADMIN_HOUSE_ID, ADHOC_GATE_HOUSE_ID, my or ""),
     ).fetchall()
     out = []
     for r in rows:

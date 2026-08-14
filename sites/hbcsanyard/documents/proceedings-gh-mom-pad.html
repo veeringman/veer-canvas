@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 0; }
+    @page { size: A4 portrait; margin: 10mm; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -19,6 +19,7 @@
       --muted: #5a6a80;
       --paper: #ffffff;
       --line: rgba(11, 42, 86, 0.10);
+      --mom-print-h: 250mm;
     }
     body {
       margin: 0;
@@ -112,6 +113,13 @@
       font-size: 7.8pt;
       font-weight: 600;
       color: var(--green);
+    }
+    .brand .reg-no {
+      margin: 0.5mm 0 0;
+      font-size: 6.8pt;
+      font-weight: 700;
+      color: var(--muted, #5a6a80);
+      letter-spacing: 0.02em;
     }
     .reg-box {
       border: 1pt solid rgba(11, 42, 86, 0.4);
@@ -256,19 +264,20 @@
     }
     @media print {
       html, body {
-        width: 210mm;
+        width: auto !important;
+        height: auto !important;
         margin: 0 !important;
         padding: 0 !important;
         background: #fff !important;
-        -webkit-print-color-adjust: economy;
-        print-color-adjust: economy;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       .screen-hint { display: none !important; }
       .sheet {
-        width: 210mm !important;
-        height: 297mm !important;
-        min-height: 297mm !important;
-        max-height: 297mm !important;
+        width: 100% !important;
+        height: var(--mom-print-h) !important;
+        min-height: 0 !important;
+        max-height: var(--mom-print-h) !important;
         margin: 0 !important;
         border: 0 !important;
         background: #fff !important;
@@ -283,6 +292,19 @@
         page-break-after: auto;
         break-after: auto;
       }
+      .pad { padding: 2mm 6mm 0; }
+      .foot-bar { margin-left: -6mm; margin-right: -6mm; }
+      .ruled-block.sm { min-height: 12mm !important; }
+      .ruled-block.md { min-height: 20mm !important; }
+      .ruled-block.lg { min-height: 28mm !important; }
+      .ruled-block.xl { min-height: 42mm !important; }
+      .ruled-block.xxl { min-height: 95mm !important; }
+      .grow .ruled-block.xxl { min-height: 70mm !important; }
+      .section { margin: 1.2mm 0; }
+      .sign-row { margin-top: 3mm; }
+      .banner { margin: 1mm 0 2mm; padding: 1.6mm 3mm; }
+      .brand { padding-bottom: 1.2mm; }
+      .meta-grid { margin-bottom: 1.5mm; gap: 1.5mm 3mm; }
       .wm { opacity: 0.7; }
       .pad, .section, .grow {
         background: transparent !important;
@@ -312,6 +334,7 @@
   <p class="screen-hint">
     General House MOM Register — <strong>2 pages</strong>. Print duplex or both sides / consecutive sheets.<br>
     Page 1: attendance &amp; agenda · Page 2: detailed proceedings, resolutions, actions &amp; signatures.
+    Print uses a slightly shorter page height so the header is not cut at the top.
   </p>
 
   <!-- PAGE 1 -->
@@ -328,6 +351,7 @@
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
           <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+          <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
         </div>
         <div class="reg-box">
           <strong>Register No.</strong>
@@ -383,6 +407,7 @@
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
           <p class="addr">General House MOM — continued</p>
+          <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
         </div>
         <div class="reg-box">
           <strong>Register No.</strong>

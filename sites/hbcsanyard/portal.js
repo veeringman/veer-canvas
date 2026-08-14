@@ -169,9 +169,39 @@
       .replace(/'/g, '&#39;');
   }
 
+  const RWA_TOKEN_KEY = 'hbcsanyard_rwa_token';
+  const LAST_HOUSE_KEY = 'hbcsanyard_last_house';
+
+  function loadStoredToken() {
+    try { return localStorage.getItem(RWA_TOKEN_KEY) || ''; } catch (_e) { return ''; }
+  }
+
+  function saveStoredToken(token) {
+    try {
+      if (token) localStorage.setItem(RWA_TOKEN_KEY, String(token));
+      else localStorage.removeItem(RWA_TOKEN_KEY);
+    } catch (_e) { /* ignore */ }
+  }
+
+  function loadLastHouseId() {
+    try { return localStorage.getItem(LAST_HOUSE_KEY) || ''; } catch (_e) { return ''; }
+  }
+
+  function saveLastHouseId(houseId) {
+    const id = String(houseId || '').trim();
+    if (!id || id.startsWith('__')) return;
+    try { localStorage.setItem(LAST_HOUSE_KEY, id); } catch (_e) { /* ignore */ }
+  }
+
+  function clearPersistedAuth() {
+    saveStoredToken('');
+  }
+
   async function api(path, options = {}) {
-    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    const token = state.session?.token;
+    const isForm = options.body instanceof FormData;
+    const headers = { ...(options.headers || {}) };
+    if (!isForm) headers['Content-Type'] = 'application/json';
+    const token = state.session?.token || loadStoredToken();
     if (token) headers['X-RWA-Token'] = token;
     const res = await fetch(path, {
       credentials: 'same-origin',
@@ -179,6 +209,9 @@
       headers,
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && path.startsWith('/api/rwa/') && path !== '/api/rwa/login' && !path.includes('/otp/')) {
+      clearPersistedAuth();
+    }
     if (!res.ok) throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
     return data;
   }
@@ -525,6 +558,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     const printBtn = el('docViewerPrintBtn');
     if (printBtn) printBtn.hidden = true;
+    const mobileDl = el('docViewerMobileDownloadBtn');
+    if (mobileDl) {
+      mobileDl.hidden = true;
+      mobileDl.removeAttribute('href');
+      mobileDl.removeAttribute('download');
+    }
+    const mobilePrint = el('docViewerMobilePrintBtn');
+    if (mobilePrint) mobilePrint.hidden = true;
     const nt = el('docViewerNewTabBtn');
     if (nt) {
       nt.hidden = true;
@@ -568,7 +609,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function setDocViewerNewTab(url) {
     const nt = el('docViewerNewTabBtn');
     if (!nt) return;
-    if (!url) {
+    // Mobile / installed PWA: opening PDF in a new tab often has no path back into the app.
+    const narrow = window.matchMedia('(max-width: 820px)').matches;
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || Boolean(window.navigator.standalone);
+    if (!url || narrow || standalone) {
       nt.hidden = true;
       nt.removeAttribute('href');
       return;
@@ -608,6 +654,67 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       else if (isImage) effectiveMime = 'image/*';
     }
     return { effectiveMime, isImage, isPdf, isHtml };
+  }
+
+  function syncDocViewerActionButtons({ canDownload = false, downloadUrl = '', filename = '', canPrint = false } = {}) {
+    const saveName = filename || 'document';
+    const dlButtons = [el('docViewerDownloadBtn'), el('docViewerMobileDownloadBtn')];
+    dlButtons.forEach((dl) => {
+      if (!dl) return;
+      if (!canDownload || !downloadUrl) {
+        dl.hidden = true;
+        dl.removeAttribute('href');
+        dl.removeAttribute('download');
+        return;
+      }
+      dl.hidden = false;
+      dl.href = downloadUrl;
+      dl.setAttribute('download', saveName);
+    });
+    const printButtons = [el('docViewerPrintBtn'), el('docViewerMobilePrintBtn')];
+    printButtons.forEach((btn) => {
+      if (!btn) return;
+      btn.hidden = !canPrint;
+    });
+  }
+
+  async function downloadDocViewerContent(event) {
+    if (event) event.preventDefault();
+    const dl = el('docViewerDownloadBtn');
+    const href = dl?.getAttribute('href') || '';
+    if (!href || dl?.hidden) {
+      window.alert('Download is not available for this document.');
+      return;
+    }
+    const filename = dl.getAttribute('download')
+      || el('docViewerTitle')?.textContent
+      || 'document';
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    try {
+      if (href.startsWith('blob:')) {
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+      const res = await fetch(href, { credentials: 'same-origin', headers });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    } catch (err) {
+      window.alert(err?.message || 'Download failed');
+    }
   }
 
   function showDocViewerSource(srcUrl, {
@@ -711,23 +818,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }
     }
     setDocViewerProtected(protectedView);
-    const dl = el('docViewerDownloadBtn');
-    if (dl) {
-      if (protectedView || !downloadUrl) {
-        dl.hidden = true;
-        dl.removeAttribute('href');
-        dl.removeAttribute('download');
-      } else {
-        dl.hidden = false;
-        dl.href = downloadUrl || srcUrl;
-        if (isBlob) dl.setAttribute('download', filename || title || 'document');
-        else dl.removeAttribute('download');
-      }
-    }
-    const printBtn = el('docViewerPrintBtn');
-    if (printBtn) {
-      printBtn.hidden = Boolean(protectedView) || !canPrint || !(showFrame || isImage);
-    }
+    syncDocViewerActionButtons({
+      canDownload: !protectedView && Boolean(downloadUrl),
+      downloadUrl: downloadUrl || '',
+      filename: filename || title || 'document',
+      canPrint: !protectedView && Boolean(canPrint) && Boolean(showFrame || isImage),
+    });
     if (protectedView) setDocViewerNewTab('');
     else setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
     openDocViewerDialog(dialog);
@@ -806,18 +902,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       loading.textContent = isPdf ? 'Opening PDF…' : 'Loading document…';
     }
     setDocViewerProtected(Boolean(protectContent));
-    const dl = el('docViewerDownloadBtn');
-    if (dl) {
-      if (protectContent || !downloadUrl) {
-        dl.hidden = true;
-        dl.removeAttribute('href');
-        dl.removeAttribute('download');
-      } else {
-        dl.hidden = false;
-        dl.href = downloadUrl;
-        dl.removeAttribute('download');
-      }
-    }
+    syncDocViewerActionButtons({
+      canDownload: !protectContent && Boolean(downloadUrl),
+      downloadUrl: downloadUrl || '',
+      filename: filename || title || 'document',
+      canPrint: false,
+    });
     if (protectContent) setDocViewerNewTab('');
     else setDocViewerNewTab(newTabUrl || downloadUrl || '');
     openDocViewerDialog(dialog);
@@ -886,7 +976,38 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   el('docViewerBackBtn')?.addEventListener('click', () => closeDocViewer());
+  el('docViewerMobileBackBtn')?.addEventListener('click', () => closeDocViewer());
   el('docViewerPrintBtn')?.addEventListener('click', () => printDocViewerContent());
+  el('docViewerMobilePrintBtn')?.addEventListener('click', () => printDocViewerContent());
+  el('docViewerDownloadBtn')?.addEventListener('click', (event) => {
+    downloadDocViewerContent(event);
+  });
+  el('docViewerMobileDownloadBtn')?.addEventListener('click', (event) => {
+    downloadDocViewerContent(event);
+  });
+  window.addEventListener('message', (event) => {
+    // Templates inside the doc-viewer iframe can ask the portal to show a PDF
+    // in-app (keeps mobile / PWA users from getting trapped in system PDF chrome).
+    const data = event?.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type !== 'rwa-open-pdf' || !data.url) return;
+    const frame = el('docViewerFrame');
+    if (!frame || frame.hidden) return;
+    try {
+      if (event.source && frame.contentWindow && event.source !== frame.contentWindow) return;
+    } catch (_err) {
+      return;
+    }
+    showDocViewerSource(String(data.url), {
+      title: data.title || 'PDF',
+      filename: data.filename || 'document.pdf',
+      mime: 'application/pdf',
+      isBlob: false,
+      downloadUrl: data.downloadUrl || String(data.url),
+      newTabUrl: '',
+      canPrint: true,
+    });
+  });
   el('docViewerDialog')?.addEventListener('cancel', (event) => {
     event.preventDefault();
     closeDocViewer();
@@ -949,7 +1070,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function hasEntitlement(key, r = state.session?.resident) {
     if (!r) return false;
     if (isSuperAdmin(r)) return true;
-    if (r.viewOnly || r.holdsEcSeat === false) return false;
+    if (r.viewOnly) return false;
+    // Pass · general: every signed-in resident (request + limited validate)
+    if (key === 'pass_general') return true;
+    if (r.holdsEcSeat === false) return false;
     const ents = r.entitlements;
     if (Array.isArray(ents) && ents.length) return ents.includes(key);
     // Fallback for older sessions: EC admin role implies all
@@ -978,7 +1102,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (isSuperAdmin(r)) return true;
     if (r.viewOnly || r.holdsEcSeat === false) return false;
     if (isEcAdmin(r)) return true;
-    const ents = r.entitlements;
+    const ents = (r.entitlements || []).filter((k) => k !== 'pass_general');
     return Array.isArray(ents) && ents.length > 0;
   }
 
@@ -1589,6 +1713,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       '#panel-info > .roster-block',
       '#panel-works > .roster-block',
       '#panel-proceedings > .roster-block',
+      '#panel-parking > .roster-block',
       '#panel-concerns .desk-tablet',
       '#panel-profile > .roster-block',
     ].join(', '));
@@ -1698,6 +1823,98 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   let landingLoaded = false;
 
+  const LANDING_BOARD_HASHES = new Set([
+    'landing-board',
+    'landing-news',
+    'landing-services',
+    'landing-ads',
+    'landing-committee',
+  ]);
+
+  function isLandingBoardHash(hash) {
+    const key = (hash || '').replace(/^#/, '');
+    return LANDING_BOARD_HASHES.has(key);
+  }
+
+  function openLandingBoard({ scrollTo = 'landing-news', updateHash = true } = {}) {
+    const shell = el('landingView');
+    const board = el('landing-board');
+    const connect = el('landing-connect-band');
+    if (!shell || !board) return;
+    shell.classList.add('board-open');
+    board.hidden = false;
+    if (connect) connect.hidden = false;
+    if (!landingLoaded) loadLanding().catch(() => {});
+    const targetId = scrollTo || 'landing-news';
+    if (updateHash) {
+      const nextHash = `#${targetId}`;
+      if (location.hash !== nextHash) {
+        history.pushState(null, '', `${location.pathname}${location.search}${nextHash}`);
+      }
+    }
+    requestAnimationFrame(() => {
+      const node = document.getElementById(targetId);
+      if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function closeLandingBoard({ scrollTop = true } = {}) {
+    const shell = el('landingView');
+    const board = el('landing-board');
+    const connect = el('landing-connect-band');
+    if (!shell) return;
+    shell.classList.remove('board-open');
+    if (board) board.hidden = true;
+    if (connect) connect.hidden = true;
+    if (scrollTop) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (isLandingBoardHash(hash)) {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    }
+  }
+
+  function bindLandingBoardReveal() {
+    const shell = el('landingView');
+    if (!shell || shell.dataset.boardBound === '1') return;
+    shell.dataset.boardBound = '1';
+
+    shell.querySelectorAll('a[href^="#landing"]').forEach((link) => {
+      link.addEventListener('click', (event) => {
+        const target = (link.getAttribute('href') || '').replace(/^#/, '');
+        if (!isLandingBoardHash(target)) return;
+        if (!shell.classList.contains('board-open')) {
+          event.preventDefault();
+          openLandingBoard({ scrollTo: target });
+        }
+      });
+    });
+
+    shell.querySelector('.landing-scroll-hint')?.addEventListener('click', (event) => {
+      if (!shell.classList.contains('board-open')) {
+        event.preventDefault();
+        openLandingBoard({ scrollTo: 'landing-news' });
+      }
+    });
+
+    shell.querySelector('.landing-top-brand')?.addEventListener('click', (event) => {
+      if (shell.classList.contains('board-open')) {
+        event.preventDefault();
+        closeLandingBoard();
+      }
+    });
+  }
+
+  function applyLandingBoardHash() {
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (isLandingBoardHash(hash)) {
+      openLandingBoard({ scrollTo: hash, updateHash: false });
+      return true;
+    }
+    return false;
+  }
+
   function showLanding() {
     document.body.classList.remove('is-members-gate');
     const landing = el('landingView');
@@ -1707,8 +1924,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const hash = (location.hash || '').replace(/^#/, '');
     if (hash === 'members' || hash === 'login') {
       history.replaceState(null, '', `${location.pathname}${location.search}`);
+      closeLandingBoard({ scrollTop: false });
+    } else if (!applyLandingBoardHash()) {
+      closeLandingBoard({ scrollTop: false });
     }
-    loadLanding().catch(() => {});
+    bindLandingBoardReveal();
   }
 
   function showMembersGate({ pushHash = true } = {}) {
@@ -1836,8 +2056,66 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function loadLanding() {
     const updatesEl = el('landingUpdatesList');
+    const adsEl = el('landingAdsList');
+    const bizEl = el('landingBusinessList');
+    const needsEl = el('landingNeedsList');
+    const needsWrap = el('landingNeedsWrap');
     const committeeEl = el('landingCommitteeList');
-    if (!updatesEl && !committeeEl) return;
+    if (!updatesEl && !committeeEl && !bizEl) return;
+
+    function listingImageHtml(item) {
+      if (!item.imageUrl) return '';
+      const v = item.updatedAt || item.publishedAt || '';
+      const src = `${item.imageUrl}${v ? `?v=${encodeURIComponent(v)}` : ''}`;
+      return `<img class="landing-card-photo" src="${escapeHtml(src)}" alt="" loading="lazy">`;
+    }
+
+    function listingContactHtml(item, { phone = true } = {}) {
+      const parts = [];
+      if (phone && item.phone) {
+        parts.push(`<p class="landing-phone"><a href="tel:${escapeHtml(item.phone)}">${escapeHtml(item.phone)}</a></p>`);
+      }
+      if (item.email) {
+        parts.push(`<p class="landing-contact"><a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a></p>`);
+      }
+      if (item.website) {
+        const href = /^https?:\/\//i.test(item.website) ? item.website : `https://${item.website}`;
+        parts.push(`<p class="landing-contact"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Website</a></p>`);
+      }
+      return parts.join('');
+    }
+
+    function landingCard(item, { phone = true, featured = false, interest = false } = {}) {
+      const meta = [item.regNo, item.categoryLabel || item.category, item.area]
+        .filter(Boolean).join(' · ');
+      const when = formatIstDate(item.publishedAt || item.createdAt || '') || '';
+      const id = item.id || '';
+      const interestHtml = interest && id ? `
+          <button type="button" class="btn ghost compact landing-interest-toggle" data-need-id="${escapeHtml(id)}">I'm interested</button>
+          <form class="landing-interest-form stack" data-need-id="${escapeHtml(id)}" hidden>
+            <label>Your name
+              <input name="name" maxlength="80" required autocomplete="name">
+            </label>
+            <label>Mobile <span class="muted">(or email)</span>
+              <input name="phone" maxlength="15" inputmode="tel" autocomplete="tel">
+            </label>
+            <label>Email <span class="muted">(or mobile)</span>
+              <input name="email" type="email" maxlength="120" autocomplete="email">
+            </label>
+            <button type="submit" class="btn secondary compact">Send contact</button>
+            <p class="muted landing-interest-status"></p>
+          </form>` : '';
+      return `
+        <article class="landing-card${featured ? ' is-featured' : ''}">
+          ${listingImageHtml(item)}
+          <strong>${escapeHtml(item.title || 'Listing')}</strong>
+          <span class="landing-meta">${escapeHtml([meta, when].filter(Boolean).join(' · '))}${item.pinned ? ' · Pinned' : ''}</span>
+          ${item.description || item.body ? `<p>${escapeHtml(item.description || item.body)}</p>` : ''}
+          ${listingContactHtml(item, { phone })}
+          ${interestHtml}
+        </article>`;
+    }
+
     try {
       const data = await api('/api/rwa/public/landing');
       landingLoaded = true;
@@ -1847,20 +2125,61 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (el('landingHeroTitle') && data.colonyName) {
         el('landingHeroTitle').textContent = data.colonyName;
       }
-      if (el('landingGreeting') && data.greeting) {
-        el('landingGreeting').textContent = data.greeting;
+      if (el('landingGreeting')) {
+        el('landingGreeting').textContent = data.greeting
+          || 'Unity · Harmony · Progress — the colony’s public face for residents and the city.';
       }
       if (updatesEl) {
-        const updates = data.updates || [];
+        const updates = data.news || data.updates || [];
         updatesEl.innerHTML = updates.length
-          ? updates.map((u) => `
-            <article class="landing-update">
-              <strong>${escapeHtml(u.title || 'Update')}</strong>
-              <span class="landing-meta">${escapeHtml(formatIstDate(u.publishedAt) || '')}${u.pinned ? ' · Pinned' : ''}</span>
-              ${u.body ? `<p>${escapeHtml(u.body)}</p>` : ''}
-            </article>`).join('')
-          : '<p class="muted">No public updates yet.</p>';
+          ? updates.map((u, idx) => {
+            const meta = [formatIstDate(u.publishedAt) || '', u.pinned ? 'Pinned' : '']
+              .filter(Boolean).join(' · ');
+            const body = (u.body || '').trim();
+            const img = u.imageUrl && u.id
+              ? `<img class="landing-card-photo" src="/api/rwa/public/notices/${encodeURIComponent(u.id)}/image?v=${encodeURIComponent(u.publishedAt || '')}" alt="" loading="lazy">`
+              : '';
+            return `
+            <article class="landing-card landing-news-row${idx === 0 ? ' is-featured' : ''}">
+              <div class="landing-news-head">
+                <strong>${escapeHtml(u.title || 'Update')}</strong>
+                ${meta ? `<span class="landing-meta">${escapeHtml(meta)}</span>` : ''}
+              </div>
+              <div class="landing-news-content">
+                ${img}
+                ${body ? `<p>${escapeHtml(body)}</p>` : ''}
+              </div>
+            </article>`;
+          }).join('')
+          : '<p class="muted">No public news yet.</p>';
       }
+      if (adsEl) {
+        const ads = data.ads || [];
+        adsEl.innerHTML = ads.length
+          ? ads.map((a) => landingCard(a, {
+            phone: false,
+            // Marketplace ads only (notice-board ads have no interest inbox).
+            interest: Boolean(a.acceptsInterest) || (String(a.id || '').startsWith('mk_') && a.kind === 'ad'),
+          })).join('')
+          : '<p class="muted">No ads right now.</p>';
+      }
+      if (bizEl) {
+        const businesses = data.businesses || [];
+        bizEl.innerHTML = businesses.length
+          ? businesses.map((b) => landingCard(b)).join('')
+          : '<p class="muted">No published businesses yet. <a href="/gate-pass.html#register">Register one</a>.</p>';
+      }
+      if (needsEl && needsWrap) {
+        const needs = data.serviceNeeds || [];
+        if (needs.length) {
+          needsWrap.hidden = false;
+          needsEl.innerHTML = needs.map((n) => landingCard(n, { phone: false, interest: true })).join('');
+        } else {
+          needsWrap.hidden = true;
+          needsEl.innerHTML = '';
+        }
+      }
+      bindLandingInterestOnce();
       if (committeeEl) {
         const bearers = data.officeBearers || [];
         if (!bearers.length) {
@@ -1875,16 +2194,74 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }
     } catch (err) {
       if (updatesEl && !landingLoaded) {
-        updatesEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load updates.')}</p>`;
+        updatesEl.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load news.')}</p>`;
       }
+      if (adsEl && !landingLoaded) adsEl.innerHTML = '<p class="muted">Ads unavailable right now.</p>';
+      if (bizEl && !landingLoaded) bizEl.innerHTML = '<p class="muted">Businesses unavailable right now.</p>';
       if (committeeEl && !landingLoaded) {
         committeeEl.innerHTML = '<p class="muted">Committee details unavailable right now.</p>';
       }
     }
   }
 
+  function bindLandingInterestOnce() {
+    if (bindLandingInterestOnce.done) return;
+    bindLandingInterestOnce.done = true;
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const btn = target?.closest?.('.landing-interest-toggle');
+      if (!btn) return;
+      event.preventDefault();
+      const card = btn.closest('article') || btn.parentElement;
+      const form = card?.querySelector?.('.landing-interest-form')
+        || document.querySelector(`.landing-interest-form[data-need-id="${btn.getAttribute('data-need-id')}"]`);
+      if (!form) return;
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        form.querySelector('input')?.focus?.();
+      }
+    });
+    document.addEventListener('submit', async (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const form = target?.closest?.('.landing-interest-form')
+        || (target?.classList?.contains('landing-interest-form') ? target : null);
+      if (!form) return;
+      event.preventDefault();
+      const id = form.getAttribute('data-need-id');
+      const status = form.querySelector('.landing-interest-status');
+      const btn = form.querySelector('button[type="submit"]');
+      const name = (form.querySelector('[name="name"]')?.value || '').trim();
+      const phone = (form.querySelector('[name="phone"]')?.value || '').trim();
+      const email = (form.querySelector('[name="email"]')?.value || '').trim();
+      if (!phone && !email) {
+        if (status) status.textContent = 'Provide a mobile number or email.';
+        return;
+      }
+      if (btn) btn.disabled = true;
+      if (status) status.textContent = 'Sending…';
+      try {
+        const res = await fetch(`/api/rwa/public/marketplace/${encodeURIComponent(id)}/interest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactName: name, phone, email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Could not send');
+        if (status) status.textContent = 'Sent. The resident can now connect with you.';
+        form.querySelectorAll('input').forEach((i) => { i.value = ''; });
+      } catch (err) {
+        if (status) status.textContent = err.message || 'Could not send';
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+
   function setAuthed(session) {
     state.session = session;
+    if (session?.token) saveStoredToken(session.token);
+    else if (!session) clearPersistedAuth();
+    if (session?.resident?.houseId) saveLastHouseId(session.resident.houseId);
     const isAuthed = Boolean(session?.resident);
     document.body.classList.toggle('is-authed', isAuthed);
     applyInfoCentreProtectMode();
@@ -2014,6 +2391,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const grievanceForm = el('grievanceForm');
     if (grievanceForm) grievanceForm.hidden = isViewOnly(r);
     loadHouseholdMembers().catch(() => {});
+    loadHouseholdTenants().catch(() => {});
     refreshMsgThreads().catch(() => {});
     refreshProfileAuthbuddyCard().catch(() => {});
   }
@@ -2034,17 +2412,20 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   async function refreshSession() {
     const data = await api('/api/rwa/session');
     if (data.authenticated) {
+      if (data.token) saveStoredToken(data.token);
       const preferred = activePanelName();
       setAuthed(data);
       const hash = (location.hash || '').replace(/^#/, '');
       if (infoDeepLink || hash === 'messages' || hash.startsWith('messages/') || hash === 'dues' || hash === 'concerns'
-        || hash === 'profile' || hash === 'directory' || hash === 'info' || hash.startsWith('info/')
+        || hash === 'profile' || hash === 'directory' || hash === 'parking' || hash.startsWith('parking?')
+        || hash === 'info' || hash.startsWith('info/')
         || hash === 'works' || hash === 'admin') {
         applyRouteHash();
       } else {
         ensurePanelVisibility(preferred);
       }
     } else {
+      clearPersistedAuth();
       setAuthed(null);
     }
   }
@@ -2126,6 +2507,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <span class="mobile-fold-chevron" aria-hidden="true"></span>
         </button>
         <div class="mobile-fold-body">
+          ${n.imageUrl ? `<img class="notice-photo" src="${escapeHtml(n.imageUrl)}?v=${encodeURIComponent(n.publishedAt || '')}" alt="" loading="lazy">` : ''}
           <div class="notice-body">${formatNoticeBody(n.body)}</div>
           ${actions}
         </div>
@@ -2184,6 +2566,229 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (sectionLang.notices === 'hi') renderNoticesOverlay();
   }
 
+  let marketplaceCategories = {
+    business: [
+      { id: 'auto_hire', label: 'Auto for hire' },
+      { id: 'cab_rent', label: 'Car / cab for rent' },
+      { id: 'other', label: 'Other' },
+    ],
+    service_need: [
+      { id: 'auto_hire', label: 'Need auto / taxi' },
+      { id: 'other', label: 'Other need' },
+    ],
+    ad: [],
+  };
+  let adsCache = [];
+  let listingsCache = [];
+
+  function marketplaceStatusLabel(status, kind) {
+    if (status === 'archived') return kind === 'ad' ? 'Disabled' : 'Suspended';
+    return {
+      pending: 'Pending',
+      published: 'Published',
+      rejected: 'Rejected',
+    }[status] || status || '';
+  }
+
+  function marketplaceListingPhotoHtml(item) {
+    if (!item?.imageUrl) return '';
+    const v = item.updatedAt || item.publishedAt || '';
+    const src = `${item.imageUrl}${v ? `?v=${encodeURIComponent(v)}` : ''}`;
+    return `<img class="landing-card-photo" src="${escapeHtml(src)}" alt="" loading="lazy">`;
+  }
+
+  async function loadMarketplaceModeration() {
+    const box = el('marketplacePendingList');
+    if (!box || !hasEntitlement('manage_notices')) return;
+    const filter = el('marketplaceModerateStatusFilter')?.value || 'pending';
+    try {
+      const data = await api(`/api/rwa/marketplace?status=${encodeURIComponent(filter)}&limit=80`);
+      if (data.categories) marketplaceCategories = data.categories;
+      listingsCache = (data.items || []).filter((i) => i.kind !== 'ad');
+      const items = listingsCache;
+      if (!items.length) {
+        const empty = filter === 'pending'
+          ? 'No pending city listings.'
+          : filter === 'archived'
+            ? 'No suspended listings.'
+            : 'No city listings in this view.';
+        box.innerHTML = `<p class="muted">${empty}</p>`;
+        return;
+      }
+      box.innerHTML = items.map((i) => {
+        const actions = [
+          '<button type="button" class="btn secondary compact" data-mk-action="edit">Edit</button>',
+        ];
+        if (i.status === 'archived') {
+          actions.push('<button type="button" class="btn secondary compact" data-mk-action="published">Enable</button>');
+        } else if (i.status !== 'published') {
+          actions.push('<button type="button" class="btn secondary compact" data-mk-action="published">Publish</button>');
+        }
+        if (i.status === 'pending' || i.status === 'published') {
+          actions.push('<button type="button" class="btn ghost compact" data-mk-action="rejected">Reject</button>');
+        }
+        if (i.status !== 'archived') {
+          actions.push('<button type="button" class="btn ghost compact" data-mk-action="archived">Suspend</button>');
+        }
+        actions.push('<button type="button" class="btn ghost compact" data-mk-action="delete">Remove</button>');
+        const reg = i.regNo ? `${escapeHtml(i.regNo)} · ` : '';
+        return `
+        <article class="landing-update" data-mk-id="${escapeHtml(i.id)}">
+          ${marketplaceListingPhotoHtml(i)}
+          <strong>${escapeHtml(i.title)}</strong>
+          <span class="landing-meta">${reg}${escapeHtml(i.kindLabel || i.kind)} · ${escapeHtml(marketplaceStatusLabel(i.status, i.kind))} · ${escapeHtml(i.categoryLabel || '')} · ${escapeHtml(i.contactName || '')} · ${escapeHtml(i.phone || '')}${i.area ? ' · ' + escapeHtml(i.area) : ''}</span>
+          ${i.description ? `<p>${escapeHtml(i.description)}</p>` : ''}
+          <div class="btn-row" style="margin-top:0.45rem">${actions.join('')}</div>
+        </article>`;
+      }).join('');
+    } catch (err) {
+      box.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load pending listings')}</p>`;
+      listingsCache = [];
+    }
+  }
+
+  function fillMarketplaceListingCategories(kind, selected) {
+    const sel = el('marketplaceListingCategory');
+    if (!sel) return;
+    const opts = marketplaceCategories[kind] && marketplaceCategories[kind].length
+      ? marketplaceCategories[kind]
+      : [{ id: 'other', label: 'Other' }];
+    sel.innerHTML = opts.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.label)}</option>`).join('');
+    if (selected) sel.value = selected;
+  }
+
+  function resetMarketplaceListingForm() {
+    const form = el('marketplaceListingForm');
+    if (form) form.reset();
+    if (form) form.hidden = true;
+    if (el('marketplaceListingEditId')) el('marketplaceListingEditId').value = '';
+    if (el('marketplaceListingFormTitle')) el('marketplaceListingFormTitle').textContent = 'Edit listing';
+    if (el('marketplaceListingMeta')) el('marketplaceListingMeta').textContent = '';
+    if (el('marketplaceListingImagePreview')) {
+      el('marketplaceListingImagePreview').hidden = true;
+      el('marketplaceListingImagePreview').removeAttribute('src');
+    }
+    if (el('marketplaceListingStatus')) el('marketplaceListingStatus').textContent = '';
+  }
+
+  function startMarketplaceListingEdit(item) {
+    if (!item) return;
+    const form = el('marketplaceListingForm');
+    if (form) form.hidden = false;
+    if (el('marketplaceListingEditId')) el('marketplaceListingEditId').value = item.id || '';
+    if (el('marketplaceListingTitle')) el('marketplaceListingTitle').value = item.title || '';
+    fillMarketplaceListingCategories(item.kind || 'business', item.category || 'other');
+    if (el('marketplaceListingDesc')) el('marketplaceListingDesc').value = item.description || '';
+    if (el('marketplaceListingName')) el('marketplaceListingName').value = item.contactName || '';
+    if (el('marketplaceListingPhone')) el('marketplaceListingPhone').value = item.phone || '';
+    if (el('marketplaceListingEmail')) el('marketplaceListingEmail').value = item.email || '';
+    if (el('marketplaceListingWebsite')) el('marketplaceListingWebsite').value = item.website || '';
+    if (el('marketplaceListingArea')) el('marketplaceListingArea').value = item.area || '';
+    const webWrap = el('marketplaceListingWebsiteWrap');
+    if (webWrap) webWrap.hidden = item.kind !== 'business';
+    if (el('marketplaceListingImage')) el('marketplaceListingImage').value = '';
+    const preview = el('marketplaceListingImagePreview');
+    if (preview) {
+      if (item.imageUrl) {
+        preview.src = `${item.imageUrl}?v=${encodeURIComponent(item.updatedAt || item.publishedAt || '')}`;
+        preview.hidden = false;
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+    }
+    const bits = [item.regNo, marketplaceStatusLabel(item.status, item.kind), item.kindLabel || item.kind].filter(Boolean);
+    if (el('marketplaceListingMeta')) el('marketplaceListingMeta').textContent = bits.join(' · ');
+    if (el('marketplaceListingFormTitle')) el('marketplaceListingFormTitle').textContent = item.kind === 'business' ? 'Edit business' : 'Edit listing';
+    if (el('marketplaceListingStatus')) el('marketplaceListingStatus').textContent = '';
+    form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function resetMarketplaceAdForm() {
+    const form = el('marketplaceAdForm');
+    if (form) form.reset();
+    if (el('marketplaceAdEditId')) el('marketplaceAdEditId').value = '';
+    if (el('marketplaceAdFormTitle')) el('marketplaceAdFormTitle').textContent = 'New ad';
+    if (el('marketplaceAdSubmitBtn')) el('marketplaceAdSubmitBtn').textContent = 'Publish ad';
+    if (el('marketplaceAdCancelBtn')) el('marketplaceAdCancelBtn').hidden = true;
+    if (el('marketplaceShareCityInput')) el('marketplaceShareCityInput').checked = false;
+    const shareLabel = el('marketplaceShareCityInput')?.closest('label');
+    if (shareLabel) shareLabel.hidden = false;
+    if (el('marketplaceAdImagePreview')) {
+      el('marketplaceAdImagePreview').hidden = true;
+      el('marketplaceAdImagePreview').removeAttribute('src');
+    }
+    if (el('marketplaceAdStatus')) el('marketplaceAdStatus').textContent = '';
+  }
+
+  function startMarketplaceAdEdit(item) {
+    if (!item) return;
+    switchPanel('concerns');
+    if (el('marketplaceAdEditId')) el('marketplaceAdEditId').value = item.id || '';
+    if (el('marketplaceAdTitle')) el('marketplaceAdTitle').value = item.title || '';
+    if (el('marketplaceAdCategory')) el('marketplaceAdCategory').value = item.category || 'colony';
+    if (el('marketplaceAdDesc')) el('marketplaceAdDesc').value = item.description || '';
+    if (el('marketplaceAdName')) el('marketplaceAdName').value = item.contactName || '';
+    if (el('marketplaceAdPhone')) el('marketplaceAdPhone').value = item.phone || '';
+    if (el('marketplaceShareCityInput')) el('marketplaceShareCityInput').checked = false;
+    const shareLabel = el('marketplaceShareCityInput')?.closest('label');
+    if (shareLabel) shareLabel.hidden = true;
+    if (el('marketplaceAdImage')) el('marketplaceAdImage').value = '';
+    const preview = el('marketplaceAdImagePreview');
+    if (preview) {
+      if (item.imageUrl) {
+        preview.src = `${item.imageUrl}?v=${encodeURIComponent(item.updatedAt || item.publishedAt || '')}`;
+        preview.hidden = false;
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+    }
+    if (el('marketplaceAdFormTitle')) el('marketplaceAdFormTitle').textContent = 'Edit ad';
+    if (el('marketplaceAdSubmitBtn')) el('marketplaceAdSubmitBtn').textContent = 'Save ad';
+    if (el('marketplaceAdCancelBtn')) el('marketplaceAdCancelBtn').hidden = false;
+    if (el('marketplaceAdStatus')) el('marketplaceAdStatus').textContent = `Editing ${item.id}`;
+    el('marketplaceAdForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function loadMarketplaceAds() {
+    const box = el('marketplaceAdsList');
+    if (!box || !hasEntitlement('manage_notices')) return;
+    const filter = el('marketplaceAdsStatusFilter')?.value || 'published';
+    try {
+      const data = await api(`/api/rwa/marketplace?kind=ad&status=${encodeURIComponent(filter)}&limit=80`);
+      if (data.categories) marketplaceCategories = data.categories;
+      adsCache = data.items || [];
+      if (!adsCache.length) {
+        const empty = filter === 'archived' ? 'No disabled ads.' : 'No ads in this view.';
+        box.innerHTML = `<p class="muted">${empty}</p>`;
+        return;
+      }
+      box.innerHTML = adsCache.map((i) => {
+        const actions = [
+          `<button type="button" class="btn secondary compact" data-ad-action="edit">Edit</button>`,
+        ];
+        if (i.status === 'published') {
+          actions.push('<button type="button" class="btn ghost compact" data-ad-action="archived">Disable</button>');
+        } else {
+          actions.push('<button type="button" class="btn secondary compact" data-ad-action="published">Enable</button>');
+        }
+        actions.push('<button type="button" class="btn ghost compact" data-ad-action="delete">Remove</button>');
+        return `
+        <article class="landing-update" data-ad-id="${escapeHtml(i.id)}">
+          ${marketplaceListingPhotoHtml(i)}
+          <strong>${escapeHtml(i.title)}</strong>
+          <span class="landing-meta">${escapeHtml(marketplaceStatusLabel(i.status, i.kind))} · ${escapeHtml(i.categoryLabel || '')} · ${escapeHtml(i.contactName || '')} · ${escapeHtml(i.phone || '')}</span>
+          ${i.description ? `<p>${escapeHtml(i.description)}</p>` : ''}
+          <div class="btn-row" style="margin-top:0.45rem">${actions.join('')}</div>
+        </article>`;
+      }).join('');
+    } catch (err) {
+      adsCache = [];
+      box.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load ads')}</p>`;
+    }
+  }
+
   function draftShareSummary(n) {
     const shares = n.sharedWith || [];
     if (n.sharedWithMe) {
@@ -2210,8 +2815,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const stats = el('noticeDraftStats');
     if (!box) return;
     if (!draftsCache.length) {
-      box.innerHTML = '<p class="muted">No drafts yet. Save a draft, or wait for another EC member to share one with you.</p>';
-      if (stats) stats.textContent = 'Your drafts and those shared with you.';
+      box.innerHTML = '<p class="muted">No drafts yet. Write a notice below, or wait for another EC member to share one with you.</p>';
+      if (stats) stats.textContent = 'Write, save drafts, share with EC, and publish to the colony board.';
       return;
     }
     if (stats) {
@@ -2381,7 +2986,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('noticeFormTitle')) {
       el('noticeFormTitle').textContent = editing
         ? (isDraft ? (canEdit ? 'Edit draft' : 'View draft') : 'Update notice')
-        : 'Write notice';
+        : 'New notice';
     }
     if (el('noticeSubmitBtn')) {
       el('noticeSubmitBtn').textContent = isDraft || !editing ? 'Publish notice' : 'Save changes';
@@ -2393,7 +2998,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (el('noticeCancelEditBtn')) el('noticeCancelEditBtn').hidden = !editing;
     if (el('noticeBodyInput')) el('noticeBodyInput').required = !isDraft;
-    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput'].forEach((id) => {
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput', 'noticeShareCityInput'].forEach((id) => {
       const field = el(id);
       if (field) field.disabled = editing && !canEdit;
     });
@@ -2407,10 +3012,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('noticeEditStatus')) el('noticeEditStatus').value = 'published';
     if (el('noticePinnedInput')) el('noticePinnedInput').disabled = false;
     if (el('noticePublicLandingInput')) el('noticePublicLandingInput').checked = false;
+    if (el('noticeShareCityInput')) {
+      el('noticeShareCityInput').checked = false;
+      el('noticeShareCityInput').disabled = false;
+    }
     const pinLabel = el('noticePinnedInput')?.closest('label');
     if (pinLabel) pinLabel.title = '';
     if (el('noticeBodyInput')) el('noticeBodyInput').required = true;
-    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput'].forEach((id) => {
+    ['noticeTitleInput', 'noticeBodyInput', 'noticeCategoryInput', 'noticePinnedInput', 'noticePublicLandingInput', 'noticeShareCityInput'].forEach((id) => {
       const field = el(id);
       if (field) field.disabled = false;
     });
@@ -2418,6 +3027,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     setAuthorFormLang('notice', 'en');
     if (el('noticeTitleHiInput')) el('noticeTitleHiInput').value = '';
     if (el('noticeBodyHiInput')) el('noticeBodyHiInput').value = '';
+    if (el('noticeImageInput')) el('noticeImageInput').value = '';
+    if (el('noticeImagePreview')) {
+      el('noticeImagePreview').hidden = true;
+      el('noticeImagePreview').removeAttribute('src');
+    }
     if (el('noticeFormStatus')) el('noticeFormStatus').textContent = '';
   }
 
@@ -2440,6 +3054,21 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       el('noticePublicLandingInput').checked = (notice.audience || 'members') === 'public';
       el('noticePublicLandingInput').disabled = notice.canEdit === false;
     }
+    if (el('noticeShareCityInput')) {
+      el('noticeShareCityInput').checked = false;
+      el('noticeShareCityInput').disabled = notice.canEdit === false;
+    }
+    const preview = el('noticeImagePreview');
+    if (preview) {
+      if (notice.imageUrl) {
+        preview.src = `${notice.imageUrl}?v=${encodeURIComponent(notice.publishedAt || '')}`;
+        preview.hidden = false;
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+    }
+    if (el('noticeImageInput')) el('noticeImageInput').value = '';
     const pinLabel = el('noticePinnedInput')?.closest('label');
     if (pinLabel) {
       pinLabel.title = isWelcomeNotice(notice)
@@ -2459,6 +3088,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }
     }
     el('noticeForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function shareToCityHub({ type, id } = {}) {
+    if (!type || !id) return { ok: false };
+    return api('/api/rwa/city-hub/share', {
+      method: 'POST',
+      body: JSON.stringify({ type, id }),
+    });
   }
 
   async function saveNotice({ asDraft = false } = {}) {
@@ -2500,25 +3137,49 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         audience: el('noticePublicLandingInput')?.checked ? 'public' : 'members',
         status: asDraft ? 'draft' : 'published',
       };
+      let savedId = noticeId;
       if (noticeId) {
-        await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}`, {
+        const out = await api(`/api/rwa/notices/${encodeURIComponent(noticeId)}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
+        savedId = out.notice?.id || noticeId;
       } else {
-        await api('/api/rwa/notices', {
+        const out = await api('/api/rwa/notices', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
+        savedId = out.notice?.id || '';
       }
+      const imageInput = el('noticeImageInput');
+      const imageFile = imageInput?.files?.[0];
+      if (savedId && imageFile) {
+        const fd = new FormData();
+        fd.append('image', imageFile);
+        await api(`/api/rwa/notices/${encodeURIComponent(savedId)}/image`, {
+          method: 'POST',
+          body: fd,
+        });
+      }
+      const shareCity = !asDraft && el('noticeShareCityInput')?.checked === true;
       resetNoticeForm();
       await loadNoticeDrafts().catch(console.error);
       if (asDraft) {
         if (statusLine) statusLine.textContent = 'Draft saved. Continue anytime from the list above.';
         switchPanel('admin');
       } else {
+        let cityNote = '';
+        if (shareCity && savedId) {
+          try {
+            await shareToCityHub({ type: 'notice', id: savedId });
+            cityNote = 'Shared to City of Mandi for review.';
+          } catch (shareErr) {
+            cityNote = `Colony notice is live. City of Mandi share failed: ${shareErr.message || 'try again later'}.`;
+          }
+        }
         await loadHome();
         switchPanel('home');
+        if (statusLine && cityNote) statusLine.textContent = cityNote;
       }
     } catch (err) {
       if (statusLine) statusLine.textContent = err.message || (asDraft ? 'Draft save failed' : 'Publish failed');
@@ -4363,10 +5024,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const q = (el('ledgerSearch')?.value || '').trim().toLowerCase();
     const rows = ledgerCache.filter((r) => {
       if (!q) return true;
-      return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
+      return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.householdCode || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
     });
     if (!rows.length) {
-      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="9" class="muted">No matching ledger rows.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="10" class="muted">No matching ledger rows.</td></tr>';
       refreshMobileListUi();
       return;
     }
@@ -4382,6 +5043,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
         <td data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
         <td data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
+        <td data-label="HH code"><code class="hh-code">${escapeHtml(r.householdCode || '—')}</code></td>
         <td data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
         <td data-label="Actions" class="row-actions">
           <button type="button" class="btn ghost compact vault-open" data-vault-house="${escapeHtml(r.houseId)}" title="Documents vault">
@@ -4564,25 +5226,26 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const box = el('directoryRows');
     if (!box) return;
     if (!rows.length) {
-      box.innerHTML = '<tr class="is-empty-row"><td colspan="5" class="muted">No active plots in the directory.</td></tr>';
+      box.innerHTML = '<tr class="is-empty-row"><td colspan="6" class="muted">No active plots in the directory.</td></tr>';
       return;
     }
     box.innerHTML = rows.map((r) => {
       const roleLabel = committeeRoleLabel(r);
       const titleBit = r.officialTitle ? ` · ${escapeHtml(r.officialTitle)}` : '';
-      const ownerName = (r.ownerName || '').trim();
+      const ownerName = (r.ownerName || r.name || '').trim();
       const delegateName = (r.primaryDelegateName || '').trim();
       const nameHtml = delegateName
-        ? `<span class="dir-owner">${escapeHtml(ownerName || r.name || '')}</span>`
+        ? `<span class="dir-owner">${escapeHtml(ownerName)}</span>`
           + `<span class="dir-sep muted"> / </span>`
           + `<span class="dir-delegate">${escapeHtml(delegateName)}</span>`
           + `<span class="dir-identity muted"> · Owner / Primary delegate</span>`
-        : `<span>${escapeHtml(r.name || ownerName || '')}</span>`;
+        : `<span>${escapeHtml(ownerName)}</span>`;
       const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
         ? `<div class="muted dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</div>`
         : '';
       const phone = (r.phone || '').trim();
       const email = (r.email || '').trim();
+      const hhCode = (r.householdCode || '').trim();
       const phoneHtml = phone
         ? `<a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
         : '<span class="muted">—</span>';
@@ -4592,6 +5255,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       return `
       <tr>
         <td class="plot-cell" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
+        <td data-label="HH code"><code class="hh-code">${escapeHtml(hhCode || '—')}</code></td>
         <td data-label="Name"><span class="person-inline">${personAvatarHtml(r)}<span>${nameHtml}${seatBit}</span></span></td>
         <td data-label="Role">${escapeHtml(roleLabel)}${titleBit}</td>
         <td data-label="Phone">${phoneHtml}</td>
@@ -7534,8 +8198,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260812mom14">
-      <style>@page { size: ${paperMap[paper]}; margin: 0; }</style>
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260813mom16">
+      <style>@page { size: ${paperMap[paper]}; margin: 10mm; }</style>
       </head><body>${html}
       <script>
         (function(){
@@ -7581,6 +8245,659 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     w.document.close();
   }
 
+  function parkingRouteQuery() {
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (!raw.startsWith('parking')) return {};
+    const q = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+    return Object.fromEntries(new URLSearchParams(q));
+  }
+
+  function parkingCardHtml(item, { ec = false } = {}) {
+    const status = item.status || 'expired';
+    const kind = item.kind || 'visitor';
+    const cls = [
+      'parking-card',
+      kind === 'member' ? 'is-member' : '',
+      kind === 'tenant' ? 'is-tenant' : '',
+      kind === 'visitor' ? 'is-visitor' : '',
+      kind === 'adhoc' ? 'is-adhoc' : '',
+      status === 'expired' ? 'is-expired' : '',
+      status === 'pending_renewal' ? 'is-pending' : '',
+      status === 'revoked' ? 'is-revoked' : '',
+    ].filter(Boolean).join(' ');
+    const who = item.tenantName || item.visitorName || item.memberName || '';
+    const valid = item.permanent ? 'Permanent' : (item.expiresAtLabel || '—');
+    const photo = item.hasPhoto && item.photoUrl
+      ? `<img class="parking-card-face" src="${escapeHtml(item.photoUrl)}" alt="">`
+      : '';
+    const qr = item.qrDataUrl
+      ? `<img class="parking-card-qr" src="${item.qrDataUrl}" alt="Pass QR">`
+      : '';
+    const plateLine = kind === 'adhoc'
+      ? (item.adhocCategoryLabel || 'Ad-hoc')
+      : (item.plateDisplay || item.plate || '');
+    return `
+      <article class="${cls}" data-id="${escapeHtml(item.id || '')}">
+        <div class="parking-card-stripe"></div>
+        <div class="parking-card-top">
+          <div>
+            <div class="parking-card-brand">Himuda Housing Colony Sanyard</div>
+            <p class="parking-card-title">${escapeHtml(item.kindLabel || 'Pass')}</p>
+          </div>
+          <div class="parking-card-chip" aria-hidden="true"></div>
+        </div>
+        <div class="parking-card-badge">${escapeHtml(item.statusLabel || status)}</div>
+        <div class="parking-card-plate">${escapeHtml(plateLine)}</div>
+        <div class="parking-card-meta">
+          <div>
+            <strong>${escapeHtml(who || '—')}</strong>
+            ${kind === 'adhoc' ? 'Main gate' : `Plot ${escapeHtml(item.plotNo || item.houseId || '')}`}
+            ${item.colour || item.vehicleTypeLabel ? ` · ${escapeHtml([item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · '))}` : ''}
+            <span>Valid ${escapeHtml(valid)}</span>
+            <span>${escapeHtml(item.code || '')}</span>
+          </div>
+          ${photo}${qr}
+        </div>
+      </article>
+      <div class="parking-card-actions">
+        ${item.canRenew ? `<button type="button" class="btn secondary compact parking-renew" data-id="${escapeHtml(item.id)}">${item.needsEcApproval ? 'Request EC renewal' : 'Renew pass'}</button>` : ''}
+        ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}">Remove vehicle</button>` : ''}
+        ${ec && status === 'pending_renewal' ? `<button type="button" class="btn primary compact parking-approve" data-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="btn ghost compact parking-reject" data-id="${escapeHtml(item.id)}">Decline</button>` : ''}
+        ${ec && (status === 'active' || status === 'pending_renewal') ? `<button type="button" class="btn ghost compact parking-revoke" data-id="${escapeHtml(item.id)}">Revoke</button>` : ''}
+      </div>`;
+  }
+
+  function parkingDetailHtml(item) {
+    if (!item) return '<p class="muted">No pass found.</p>';
+    if (item.detailLevel === 'general') {
+      const valid = Boolean(item.valid);
+      return `<div class="parking-detail parking-detail-general ${valid ? 'is-valid' : 'is-invalid'}">
+        <p class="parking-validity-flag">${valid ? 'Valid' : 'Not valid'}</p>
+        <dl>
+          <dt>Type</dt><dd>${escapeHtml(item.kindLabel || item.kind || 'Pass')}</dd>
+          <dt>Validity</dt><dd>${escapeHtml(item.statusLabel || (valid ? 'Valid' : 'Not valid'))}${item.expiresAtLabel && item.expiresAtLabel !== '—' ? ` · ${escapeHtml(item.expiresAtLabel)}` : ''}</dd>
+          <dt>Code</dt><dd>${escapeHtml(item.code || item.id || '—')}</dd>
+        </dl>
+      </div>`;
+    }
+    const rows = [
+      ['Kind', item.kindLabel],
+      ['Status', item.statusLabel],
+      item.kind === 'adhoc' ? ['Category', item.adhocCategoryLabel || '—'] : ['Vehicle', item.plateDisplay],
+      item.kind === 'adhoc' ? null : ['Type / colour', [item.vehicleTypeLabel, item.colour].filter(Boolean).join(' · ') || '—'],
+      ['Plot', item.kind === 'adhoc' ? 'Main gate' : (item.plotNo || item.houseId)],
+      item.kind === 'adhoc' ? null : ['Registered by', item.memberName],
+      ['Name', item.tenantName || item.visitorName || '—'],
+      item.kind === 'tenant' ? ['Tenant phone', item.tenantPhone || '—'] : null,
+      item.kind === 'tenant' ? ['Tenant email', item.tenantEmail || '—'] : null,
+      item.kind === 'tenant' ? ['Note', item.tenantNote || '—'] : null,
+      ['Pass code', item.code],
+      ['Issued', item.issuedAtLabel],
+      ['Valid until', item.expiresAtLabel],
+    ].filter(Boolean);
+    const face = item.hasPhoto && item.photoUrl
+      ? `<img class="parking-detail-face" src="${escapeHtml(item.photoUrl)}" alt="">`
+      : '';
+    return `<div class="parking-detail">
+      ${face}
+      <h4>${escapeHtml(item.kind === 'adhoc' ? (item.visitorName || 'Ad-hoc') : (item.plateDisplay || item.plate || 'Pass'))}</h4>
+      <dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd>`).join('')}</dl>
+    </div>`;
+  }
+
+  function fillParkingTenantSelect(tenants) {
+    const sel = el('parkingTenantSelect');
+    if (!sel) return;
+    const current = sel.value;
+    const active = (tenants || []).filter((t) => t.status !== 'ended');
+    sel.innerHTML = '<option value="">Select a registered tenant</option>'
+      + active.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}${t.phone ? ` · ${escapeHtml(t.phone)}` : ''}</option>`).join('');
+    if (current && [...sel.options].some((o) => o.value === current)) sel.value = current;
+    const hint = el('parkingTenantHint');
+    if (hint) {
+      hint.innerHTML = active.length
+        ? '<a href="#profile">Manage tenants in Profile</a> — occupancy records, not household logins.'
+        : 'No current tenants. <a href="#profile">Add them in Profile → Tenants of this plot</a> first.';
+    }
+  }
+
+  async function loadParkingPanel() {
+    const list = el('parkingCardList');
+    const status = el('parkingListStatus');
+    const canManage = hasEntitlement('pass_manage');
+    const hint = el('parkingValidateHint');
+    if (hint) {
+      hint.textContent = canManage
+        ? 'Type a number, or scan the vehicle plate / QR. Pass · manage shows full details for every plot.'
+        : 'Type a number, or scan the vehicle plate / QR. Everyone sees type, validity, and code; full details only for vehicles on your plot.';
+    }
+    if (status) status.textContent = 'Loading…';
+    try {
+      const data = await api('/api/rwa/parking/passes');
+      if (el('parkingHours') && data.defaultHours) el('parkingHours').value = String(data.defaultHours);
+      if (el('parkingDefaultHours') && data.defaultHours) el('parkingDefaultHours').value = String(data.defaultHours);
+      if (el('parkingTenantMonths') && data.defaultMonths) el('parkingTenantMonths').value = String(data.defaultMonths);
+      fillParkingTenantSelect(data.tenants || []);
+      const passes = data.passes || [];
+      if (list) {
+        list.innerHTML = passes.length
+          ? passes.map((p) => parkingCardHtml(p)).join('')
+          : '<p class="muted">No passes yet. Register a member vehicle, a tenant vehicle, or issue a visitor pass.</p>';
+      }
+      if (status) status.textContent = passes.length ? `${passes.length} pass(es)` : '';
+      const pendingWrap = el('parkingPendingList');
+      if (pendingWrap && canManage) {
+        const pending = data.pending || [];
+        pendingWrap.innerHTML = pending.length
+          ? `<h4>Awaiting 2nd renewal</h4>${pending.map((p) => parkingCardHtml(p, { ec: true })).join('')}`
+          : '';
+      } else if (pendingWrap) {
+        pendingWrap.innerHTML = '';
+      }
+      const adhocWrap = el('parkingAdhocList');
+      if (adhocWrap && canManage) {
+        const adhoc = data.adhoc || [];
+        adhocWrap.innerHTML = adhoc.length
+          ? `<h4>Recent ad-hoc gate passes</h4>${adhoc.map((p) => parkingCardHtml(p, { ec: true })).join('')}`
+          : '';
+      } else if (adhocWrap) {
+        adhocWrap.innerHTML = '';
+      }
+      if (canManage) {
+        loadParkingGatePoster().catch(() => {});
+      }
+      const q = parkingRouteQuery();
+      const lookup = q.pass || q.q;
+      if (lookup && hasEntitlement('pass_general')) {
+        if (el('parkingLookupInput')) el('parkingLookupInput').value = lookup;
+        await lookupParkingPass(lookup);
+      }
+    } catch (err) {
+      if (list) list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load passes')}</p>`;
+      if (status) status.textContent = err.message || 'Failed';
+    }
+  }
+
+  let parkingGateMeta = { url: '/gate-pass.html#needs', qrDataUrl: '' };
+
+  async function loadParkingGatePoster() {
+    const img = el('parkingGateQrImg');
+    const urlEl = el('parkingGateUrl');
+    const openLink = el('parkingGateOpenLink');
+    const shareBtn = el('parkingGateShareBtn');
+    try {
+      const data = await api('/api/rwa/parking/gate');
+      const url = data.url || `${window.location.origin}/gate-pass.html#needs`;
+      parkingGateMeta = { url, qrDataUrl: data.qrDataUrl || '' };
+      if (urlEl) urlEl.textContent = url;
+      if (openLink) openLink.href = url;
+      if (img && data.qrDataUrl) {
+        img.src = data.qrDataUrl;
+        img.hidden = false;
+      }
+      if (shareBtn) shareBtn.hidden = !(navigator.share || navigator.clipboard);
+    } catch (_err) {
+      parkingGateMeta = { url: `${window.location.origin}/gate-pass.html#needs`, qrDataUrl: '' };
+      if (urlEl) urlEl.textContent = parkingGateMeta.url;
+      if (openLink) openLink.href = parkingGateMeta.url;
+    }
+  }
+
+  function printParkingGatePoster() {
+    const url = parkingGateMeta.url || `${window.location.origin}/gate-pass.html#needs`;
+    const qr = parkingGateMeta.qrDataUrl || el('parkingGateQrImg')?.src || '';
+    if (!qr) {
+      window.alert('Connect QR is still loading. Try again in a moment.');
+      return;
+    }
+    const win = window.open('', '_blank', 'noopener,noreferrer,width=720,height=960');
+    if (!win) {
+      window.alert('Allow pop-ups to print the connect poster.');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Connect QR — Himuda Housing Colony Sanyard</title>
+<style>
+  @page { margin: 12mm; }
+  body { margin: 0; font-family: Georgia, "Times New Roman", serif; color: #15233f; background: #fff; }
+  .sheet { max-width: 180mm; margin: 0 auto; padding: 10mm 8mm; text-align: center; }
+  h1 { font-size: 26pt; margin: 0 0 4mm; line-height: 1.15; }
+  h2 { font-size: 15pt; font-weight: 600; margin: 0 0 8mm; color: #5c564e; }
+  .hi { font-family: "Noto Sans Devanagari", "Mangal", sans-serif; }
+  img.qr { width: 105mm; height: 105mm; object-fit: contain; border: 1px solid #ddd; padding: 4mm; background: #fff; }
+  .steps { text-align: left; margin: 8mm auto 0; max-width: 145mm; font-size: 11.5pt; line-height: 1.45; }
+  .steps li { margin: 2mm 0; }
+  .url { margin-top: 7mm; font-size: 10pt; word-break: break-all; color: #5c564e; }
+  .foot { margin-top: 6mm; font-size: 9pt; color: #7a7368; }
+</style></head><body>
+  <div class="sheet">
+    <h1>Connect with Housing Colony Sanyard</h1>
+    <h2 class="hi">हाउसिंग कॉलोनी सनयार्ड से जुड़ें</h2>
+    <img class="qr" src="${qr}" alt="Connect QR">
+    <ol class="steps">
+      <li><strong>Service needs</strong> — see what residents need; leave your contact.</li>
+      <li class="hi"><strong>सेवा आवश्यकताएँ</strong> — निवासियों की ज़रूरत देखें; संपर्क छोड़ें।</li>
+      <li><strong>Businesses</strong> — register a service for the colony.</li>
+      <li class="hi"><strong>व्यवसाय</strong> — कॉलोनी के लिए सेवा दर्ज करें।</li>
+      <li><strong>Gate pass</strong> — selfie + name for short visitors (max 9 hours).</li>
+      <li class="hi"><strong>गेट पास</strong> — सेल्फी + नाम (अधिकतम 9 घंटे)।</li>
+    </ol>
+    <p class="url">${url.replace(/</g, '&lt;')}</p>
+    <p class="foot">Himuda Housing Colony Sanyard · Mandi · housingcolonysanyard.in</p>
+  </div>
+  <script>
+    window.onload = function () {
+      setTimeout(function () { window.print(); }, 250);
+    };
+  <\/script>
+</body></html>`);
+    win.document.close();
+  }
+
+  async function shareParkingGateLink() {
+    const url = parkingGateMeta.url || `${window.location.origin}/gate-pass.html#needs`;
+    const title = 'Connect with Housing Colony Sanyard';
+    const text = 'Service needs · register a business · gate pass — Himuda Housing Colony Sanyard';
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        window.alert('Connect page link copied.');
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+    }
+    window.prompt('Copy this connect link:', url);
+  }
+
+  async function issueParkingPass(payload, statusEl) {
+    if (statusEl) statusEl.textContent = 'Issuing…';
+    const data = await api('/api/rwa/parking/passes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const mailed = data.pass?.emailDelivery?.channel === 'email';
+    if (statusEl) {
+      statusEl.textContent = mailed
+        ? 'Pass issued and emailed. It is listed below.'
+        : (data.pass?.emailDelivery?.reason === 'no_email'
+          ? 'Pass issued. Add an email on Profile to receive a copy.'
+          : 'Pass issued and listed below.');
+    }
+    await loadParkingPanel();
+    return data.pass;
+  }
+
+  async function lookupParkingPass(query) {
+    const status = el('parkingLookupStatus');
+    const box = el('parkingLookupResult');
+    if (status) status.textContent = 'Looking up…';
+    try {
+      const data = await api(`/api/rwa/parking/lookup?q=${encodeURIComponent(query)}`);
+      if (status) status.textContent = data.pass ? 'Match found.' : (data.error || 'No pass found.');
+      if (box) {
+        if (!data.pass) {
+          box.innerHTML = `<p class="muted">${escapeHtml(data.error || 'No pass found.')}</p>`;
+        } else if (data.pass.detailLevel === 'general') {
+          box.innerHTML = parkingDetailHtml(data.pass);
+        } else if (data.pass.detailLevel === 'manage') {
+          box.innerHTML = `${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: true })}`;
+        } else {
+          // Own-plot vehicle: full details, no EC revoke/approve controls
+          box.innerHTML = `${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: false })}`;
+        }
+      }
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Lookup failed';
+      if (box) box.innerHTML = `<p class="error">${escapeHtml(err.message || 'Lookup failed')}</p>`;
+    }
+  }
+
+  function extractIndianPlate(text) {
+    const raw = String(text || '').toUpperCase().replace(/[^A-Z0-9\s\-]/g, ' ');
+    const compact = raw.replace(/[\s\-]/g, '');
+    // Prefer fuller RTO forms first: HP33A1234 / HP33AB1234 / BH01AA1234
+    const patterns = [
+      /([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{3,4})/g,
+      /([A-Z]{2})(\d{2})(\d{4})/g,
+    ];
+    const found = [];
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(compact)) !== null) {
+        const plate = m[0];
+        if (plate.length >= 7 && plate.length <= 11) found.push(plate);
+      }
+    }
+    if (found.length) {
+      found.sort((a, b) => b.length - a.length);
+      return found[0];
+    }
+    const spaced = raw.match(/\b([A-Z]{2})\s*(\d{1,2})\s*([A-Z]{1,3})\s*(\d{3,4})\b/);
+    if (spaced) return `${spaced[1]}${spaced[2]}${spaced[3]}${spaced[4]}`;
+    return '';
+  }
+
+  function parseParkingQrPayload(raw) {
+    let q = String(raw || '').trim();
+    if (!q) return '';
+    try {
+      const url = new URL(q, window.location.origin);
+      const hash = (url.hash || '').replace(/^#/, '');
+      if (hash.startsWith('parking')) {
+        const qs = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+        const params = new URLSearchParams(qs);
+        q = params.get('pass') || params.get('q') || q;
+      } else {
+        const params = new URLSearchParams(url.search);
+        q = params.get('pass') || params.get('q') || q;
+      }
+    } catch (_e) {
+      /* plain text QR */
+    }
+    const code = q.match(/(MP|VP|TP|AP)-[A-Z0-9]+/i);
+    if (code) return code[0].toUpperCase();
+    const plate = extractIndianPlate(q);
+    return plate || q;
+  }
+
+  let parkingTesseractPromise = null;
+  let parkingScan = {
+    mode: 'plate',
+    stream: null,
+    timer: 0,
+    busy: false,
+    lastPlate: '',
+    hits: 0,
+  };
+
+  async function loadParkingTesseract() {
+    if (window.Tesseract?.recognize) return window.Tesseract;
+    if (parkingTesseractPromise) return parkingTesseractPromise;
+    parkingTesseractPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-parking-ocr="1"]');
+      if (existing && window.Tesseract?.recognize) {
+        resolve(window.Tesseract);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      script.async = true;
+      script.dataset.parkingOcr = '1';
+      script.onload = () => {
+        if (window.Tesseract?.recognize) resolve(window.Tesseract);
+        else reject(new Error('Plate reader failed to load'));
+      };
+      script.onerror = () => reject(new Error('Could not load plate reader. Check network, or type the number.'));
+      document.head.appendChild(script);
+    });
+    return parkingTesseractPromise;
+  }
+
+  function setParkingScanLive(text) {
+    const live = el('parkingScanLive');
+    if (live) live.textContent = text || '';
+  }
+
+  function stopParkingScanner() {
+    if (parkingScan.timer) {
+      clearInterval(parkingScan.timer);
+      parkingScan.timer = 0;
+    }
+    parkingScan.busy = false;
+    parkingScan.lastPlate = '';
+    parkingScan.hits = 0;
+    const video = el('parkingScanVideo');
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+    if (parkingScan.stream) {
+      parkingScan.stream.getTracks().forEach((t) => t.stop());
+      parkingScan.stream = null;
+    }
+    const dialog = el('parkingScanDialog');
+    if (dialog?.open) dialog.close();
+  }
+
+  function cropParkingGuideFrame(video, canvas, mode) {
+    const vw = video.videoWidth || 0;
+    const vh = video.videoHeight || 0;
+    if (!vw || !vh) return null;
+    let sx; let sy; let sw; let sh;
+    if (mode === 'qr') {
+      sw = Math.floor(vw * 0.55);
+      sh = Math.floor(vh * 0.45);
+      sx = Math.floor((vw - sw) / 2);
+      sy = Math.floor((vh - sh) / 2);
+    } else {
+      // Number-plate aspect ~ 4.7:1, capture a wide band mid-frame
+      sw = Math.floor(vw * 0.82);
+      sh = Math.floor(sw / 4.2);
+      sx = Math.floor((vw - sw) / 2);
+      sy = Math.floor((vh - sh) * 0.55);
+    }
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+    // Boost contrast for plate OCR
+    if (mode === 'plate') {
+      const img = ctx.getImageData(0, 0, sw, sh);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        const v = g > 140 ? 255 : (g < 90 ? 0 : g);
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+    return canvas;
+  }
+
+  async function recognizePlateFromCanvas(canvas) {
+    const Tesseract = await loadParkingTesseract();
+    const result = await Tesseract.recognize(canvas, 'eng', {
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+      tessedit_pageseg_mode: '7',
+    });
+    return extractIndianPlate(result?.data?.text || '');
+  }
+
+  async function finishParkingScan(value) {
+    const q = String(value || '').trim();
+    if (!q) return;
+    stopParkingScanner();
+    if (el('parkingLookupInput')) el('parkingLookupInput').value = q;
+    if (el('parkingLookupStatus')) {
+      el('parkingLookupStatus').textContent = parkingScan.mode === 'qr'
+        ? `QR read: ${q}. Looking up…`
+        : `Plate read: ${q}. Looking up…`;
+    }
+    await lookupParkingPass(q);
+  }
+
+  async function tickParkingScanner() {
+    if (parkingScan.busy) return;
+    const video = el('parkingScanVideo');
+    const canvas = el('parkingScanCanvas');
+    if (!video || !canvas || video.readyState < 2) return;
+    parkingScan.busy = true;
+    try {
+      const frame = cropParkingGuideFrame(video, canvas, parkingScan.mode);
+      if (!frame) return;
+      if (parkingScan.mode === 'qr') {
+        if (!('BarcodeDetector' in window)) {
+          setParkingScanLive('QR not supported here — use photo or type the code.');
+          return;
+        }
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        const codes = await detector.detect(frame);
+        const raw = (codes[0] && (codes[0].rawValue || codes[0].raw_value)) || '';
+        if (raw) {
+          const q = parseParkingQrPayload(raw);
+          if (q) {
+            setParkingScanLive(`Found ${q}`);
+            await finishParkingScan(q);
+          }
+        } else {
+          setParkingScanLive('Point at the QR on the pass card…');
+        }
+        return;
+      }
+      setParkingScanLive('Looking for number plate…');
+      const plate = await recognizePlateFromCanvas(frame);
+      if (!plate) {
+        setParkingScanLive('Align the plate in the frame…');
+        parkingScan.hits = 0;
+        parkingScan.lastPlate = '';
+        return;
+      }
+      if (plate === parkingScan.lastPlate) parkingScan.hits += 1;
+      else {
+        parkingScan.lastPlate = plate;
+        parkingScan.hits = 1;
+      }
+      setParkingScanLive(`Detected ${plate}${parkingScan.hits < 2 ? ' — hold steady…' : ''}`);
+      // Require two consecutive reads to reduce false positives
+      if (parkingScan.hits >= 2) await finishParkingScan(plate);
+    } catch (err) {
+      setParkingScanLive(err.message || 'Scanner busy…');
+    } finally {
+      parkingScan.busy = false;
+    }
+  }
+
+  async function openParkingScanner(mode) {
+    parkingScan.mode = mode === 'qr' ? 'qr' : 'plate';
+    const dialog = el('parkingScanDialog');
+    const title = el('parkingScanTitle');
+    const hint = el('parkingScanHint');
+    const frame = el('parkingScanFrame');
+    const video = el('parkingScanVideo');
+    if (!dialog || !video) {
+      if (mode === 'qr') el('parkingScanQrFile')?.click();
+      else el('parkingScanPlateFile')?.click();
+      return;
+    }
+    if (title) title.textContent = parkingScan.mode === 'qr' ? 'Scan pass QR' : 'Scan vehicle plate';
+    if (hint) {
+      hint.textContent = parkingScan.mode === 'qr'
+        ? 'Centre the QR from the pass card in the square. It will read automatically.'
+        : 'Align the number plate inside the yellow frame. The camera will identify the registration.';
+    }
+    if (frame) frame.dataset.mode = parkingScan.mode;
+    setParkingScanLive('Starting camera…');
+    if (!dialog.open) dialog.showModal();
+    try {
+      if (parkingScan.stream) {
+        parkingScan.stream.getTracks().forEach((t) => t.stop());
+        parkingScan.stream = null;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      });
+      parkingScan.stream = stream;
+      video.srcObject = stream;
+      await video.play();
+      setParkingScanLive(parkingScan.mode === 'qr' ? 'Point at the QR…' : 'Align the number plate…');
+      if (parkingScan.timer) clearInterval(parkingScan.timer);
+      // Plate OCR is heavier; poll less often than QR
+      parkingScan.timer = window.setInterval(
+        () => { tickParkingScanner().catch(() => {}); },
+        parkingScan.mode === 'qr' ? 650 : 1400,
+      );
+      // Warm plate OCR in background
+      if (parkingScan.mode === 'plate') loadParkingTesseract().catch(() => {});
+    } catch (err) {
+      setParkingScanLive(err.message || 'Camera unavailable');
+      if (el('parkingLookupStatus')) {
+        el('parkingLookupStatus').textContent = 'Camera unavailable — use photo instead, or type the number.';
+      }
+    }
+  }
+
+  async function captureParkingScanNow() {
+    const video = el('parkingScanVideo');
+    const canvas = el('parkingScanCanvas');
+    const status = el('parkingLookupStatus');
+    if (!video || !canvas) return;
+    setParkingScanLive(parkingScan.mode === 'qr' ? 'Reading QR…' : 'Reading plate…');
+    const frame = cropParkingGuideFrame(video, canvas, parkingScan.mode);
+    if (!frame) throw new Error('Camera not ready yet');
+    if (parkingScan.mode === 'qr') {
+      if (!('BarcodeDetector' in window)) throw new Error('QR not supported in this browser');
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      const codes = await detector.detect(frame);
+      const raw = (codes[0] && (codes[0].rawValue || codes[0].raw_value)) || '';
+      const q = parseParkingQrPayload(raw);
+      if (!q) throw new Error('No QR found. Hold closer to the code.');
+      await finishParkingScan(q);
+      return;
+    }
+    const plate = await recognizePlateFromCanvas(frame);
+    if (!plate) throw new Error('Could not read the plate. Move closer and tap Read now again.');
+    if (status) status.textContent = `Plate read: ${plate}`;
+    await finishParkingScan(plate);
+  }
+
+  async function scanParkingPlateFile(file) {
+    if (!file) return;
+    const status = el('parkingLookupStatus');
+    if (status) status.textContent = 'Reading plate from photo…';
+    const bmp = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    // Prefer a mid-band crop similar to live guide
+    const sw = bmp.width;
+    const sh = Math.max(40, Math.floor(bmp.height * 0.35));
+    const sy = Math.floor((bmp.height - sh) * 0.55);
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bmp, 0, sy, sw, sh, 0, 0, sw, sh);
+    const plate = await recognizePlateFromCanvas(canvas);
+    if (!plate) {
+      // Fallback: full image
+      const full = document.createElement('canvas');
+      full.width = bmp.width;
+      full.height = bmp.height;
+      full.getContext('2d').drawImage(bmp, 0, 0);
+      const again = await recognizePlateFromCanvas(full);
+      if (!again) throw new Error('Could not read a registration number. Retake closer to the plate, or type it.');
+      if (el('parkingLookupInput')) el('parkingLookupInput').value = again;
+      if (status) status.textContent = `Plate read: ${again}. Looking up…`;
+      await lookupParkingPass(again);
+      return;
+    }
+    if (el('parkingLookupInput')) el('parkingLookupInput').value = plate;
+    if (status) status.textContent = `Plate read: ${plate}. Looking up…`;
+    await lookupParkingPass(plate);
+  }
+
+  async function scanParkingQrFile(file) {
+    if (!file) return;
+    if (!('BarcodeDetector' in window)) {
+      throw new Error('This browser cannot scan QR. Type the pass code or vehicle number instead.');
+    }
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+    const bmp = await createImageBitmap(file);
+    const codes = await detector.detect(bmp);
+    const raw = (codes[0] && (codes[0].rawValue || codes[0].raw_value)) || '';
+    if (!raw) throw new Error('No QR code found in that photo. Try again or type the pass code.');
+    const q = parseParkingQrPayload(raw);
+    if (el('parkingLookupInput')) el('parkingLookupInput').value = q;
+    await lookupParkingPass(q);
+  }
+
   function switchPanel(name) {
     if (name === 'admin' && !canOpenEcDesk()) name = 'home';
     if (name === 'proceedings' && !isEcMember()) name = 'home';
@@ -7620,9 +8937,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (name === 'home') loadHome().catch(console.error);
     if (name === 'dues') loadDues().catch((e) => { el('duesCard').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
-    if (name === 'concerns') loadMailbox().catch((e) => {
-      if (el('mailboxList')) el('mailboxList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
-    });
+    if (name === 'concerns') {
+      loadMailbox().catch((e) => {
+        if (el('mailboxList')) el('mailboxList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+      });
+      if (hasEntitlement('manage_notices')) {
+        loadMarketplaceAds().catch(() => {});
+      }
+    }
     if (name === 'messages') loadMessagesPanel().catch((e) => {
       if (el('msgThreadList')) el('msgThreadList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
@@ -7630,7 +8952,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       refreshPushUi().catch(() => {});
       refreshProfileAuthbuddyCard().catch(() => {});
     }
-    if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr class="is-empty-row"><td colspan="5">${escapeHtml(e.message)}</td></tr>`; });
+    if (name === 'directory') loadDirectory().catch((e) => { el('directoryRows').innerHTML = `<tr class="is-empty-row"><td colspan="6">${escapeHtml(e.message)}</td></tr>`; });
+    if (name === 'parking') loadParkingPanel().catch((e) => {
+      if (el('parkingListStatus')) el('parkingListStatus').textContent = e.message || 'Pass list failed';
+    });
     if (name === 'info') loadInfoCentre().catch((e) => {
       if (el('infoDocList')) el('infoDocList').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
     });
@@ -7655,6 +8980,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         loadNoticeDrafts().catch((e) => {
           if (el('noticeDraftList')) el('noticeDraftList').innerHTML = `<p class="error">${escapeHtml(e.message || 'Drafts failed')}</p>`;
         });
+        loadMarketplaceModeration().catch(() => {});
       }
       if (hasEntitlement('manage_bank')) {
         loadBankDetails().catch((e) => { if (el('ecBankPreview')) el('ecBankPreview').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
@@ -7764,6 +9090,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('otpInput')) el('otpInput').value = '';
     if (el('otpContactEmail')) el('otpContactEmail').value = '';
     if (el('otpContactPhone')) el('otpContactPhone').value = '';
+    if (el('otpHouseholdCode')) el('otpHouseholdCode').value = '';
     if (el('otpMemberList')) el('otpMemberList').innerHTML = '';
     state.pendingHouse = '';
     state.pendingMemberId = '';
@@ -8096,7 +9423,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     hideGateStepsExcept('otpContactForm');
     const name = data.name ? ` for ${data.name}` : '';
     el('otpContactHint').textContent = data.message
-      || `Plot ${state.pendingHouse}${name} is missing contact details. Enter them below. They are saved only after you verify the emailed code.`;
+      || `Plot ${state.pendingHouse}${name} needs first-time registration. Enter the household code from your dues circular, plus email/phone. Contacts are saved only after you verify the emailed code.`;
+    if (el('otpHouseholdCode')) {
+      el('otpHouseholdCode').required = true;
+      el('otpHouseholdCode').disabled = false;
+    }
     if (el('otpContactEmailWrap')) el('otpContactEmailWrap').hidden = !state.missingEmail;
     if (el('otpContactPhoneWrap')) el('otpContactPhoneWrap').hidden = !state.missingPhone;
     if (el('otpContactEmail')) {
@@ -8133,6 +9464,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function handleOtpRequestResult(data, houseId) {
     state.pendingHouse = data.houseId || houseId;
+    if (state.pendingHouse) saveLastHouseId(state.pendingHouse);
     if (data.memberId) state.pendingMemberId = data.memberId;
     if (data.needsMemberPick) {
       showMemberPicker(data);
@@ -8214,6 +9546,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const payload = {
         houseId: state.pendingHouse || el('houseIdInput').value.trim(),
         memberId: state.pendingMemberId || undefined,
+        householdCode: (el('otpHouseholdCode')?.value || '').trim(),
       };
       if (state.missingEmail) payload.email = el('otpContactEmail').value.trim();
       if (state.missingPhone) payload.phone = el('otpContactPhone').value.trim();
@@ -8572,6 +9905,341 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
   el('pushPrefsSaveBtn')?.addEventListener('click', () => savePushPrefs());
+
+  el('parkingMemberForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('parkingMemberStatus');
+    try {
+      await issueParkingPass({
+        kind: 'member',
+        plate: el('parkingMemberPlate').value,
+        colour: el('parkingMemberColour').value,
+        vehicleType: el('parkingMemberType').value,
+        driverName: el('parkingMemberDriver').value,
+      }, status);
+      el('parkingMemberForm').reset();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not register vehicle';
+    }
+  });
+
+  el('parkingTenantForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('parkingTenantStatus');
+    try {
+      await issueParkingPass({
+        kind: 'tenant',
+        tenantId: el('parkingTenantSelect').value,
+        plate: el('parkingTenantPlate').value,
+        colour: el('parkingTenantColour').value,
+        vehicleType: el('parkingTenantType').value,
+        months: el('parkingTenantMonths').value,
+      }, status);
+      el('parkingTenantPlate').value = '';
+      el('parkingTenantColour').value = '';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not issue tenant pass';
+    }
+  });
+
+  el('parkingRequestForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('parkingRequestStatus');
+    try {
+      await issueParkingPass({
+        kind: 'visitor',
+        plate: el('parkingPlate').value,
+        colour: el('parkingColour').value,
+        vehicleType: el('parkingVehicleType').value,
+        hours: el('parkingHours').value,
+        visitorName: el('parkingVisitor').value,
+      }, status);
+      el('parkingRequestForm').reset();
+      if (el('parkingHours') && el('parkingDefaultHours')) {
+        el('parkingHours').value = el('parkingDefaultHours').value || '24';
+      }
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not issue visitor pass';
+    }
+  });
+
+  el('parkingRefreshBtn')?.addEventListener('click', () => loadParkingPanel().catch(() => {}));
+
+  el('parkingGatePrintBtn')?.addEventListener('click', () => printParkingGatePoster());
+  el('parkingGateShareBtn')?.addEventListener('click', () => {
+    shareParkingGateLink().catch(() => {});
+  });
+
+  el('marketplaceRefreshBtn')?.addEventListener('click', () => loadMarketplaceModeration().catch(() => {}));
+  el('marketplaceModerateStatusFilter')?.addEventListener('change', () => loadMarketplaceModeration().catch(() => {}));
+  el('marketplaceAdsRefreshBtn')?.addEventListener('click', () => loadMarketplaceAds().catch(() => {}));
+  el('marketplaceAdsStatusFilter')?.addEventListener('change', () => loadMarketplaceAds().catch(() => {}));
+  el('marketplaceAdCancelBtn')?.addEventListener('click', () => resetMarketplaceAdForm());
+  el('marketplaceListingCancelBtn')?.addEventListener('click', () => resetMarketplaceListingForm());
+  el('marketplaceListingForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('marketplaceListingStatus');
+    const editId = (el('marketplaceListingEditId')?.value || '').trim();
+    if (!editId) return;
+    try {
+      const fd = new FormData();
+      fd.append('title', (el('marketplaceListingTitle')?.value || '').trim());
+      fd.append('category', el('marketplaceListingCategory')?.value || 'other');
+      fd.append('description', (el('marketplaceListingDesc')?.value || '').trim());
+      fd.append('contactName', (el('marketplaceListingName')?.value || '').trim());
+      fd.append('phone', (el('marketplaceListingPhone')?.value || '').trim());
+      fd.append('email', (el('marketplaceListingEmail')?.value || '').trim());
+      fd.append('website', (el('marketplaceListingWebsite')?.value || '').trim());
+      fd.append('area', (el('marketplaceListingArea')?.value || '').trim());
+      const imageFile = el('marketplaceListingImage')?.files?.[0];
+      if (imageFile) fd.append('image', imageFile);
+      await api(`/api/rwa/marketplace/${encodeURIComponent(editId)}`, { method: 'PATCH', body: fd });
+      resetMarketplaceListingForm();
+      if (status) status.textContent = 'Listing saved.';
+      await loadMarketplaceModeration();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save listing';
+    }
+  });
+  el('marketplaceAdForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('marketplaceAdStatus');
+    const editId = (el('marketplaceAdEditId')?.value || '').trim();
+    try {
+      const fd = new FormData();
+      fd.append('kind', 'ad');
+      fd.append('title', (el('marketplaceAdTitle')?.value || '').trim());
+      fd.append('category', el('marketplaceAdCategory')?.value || 'colony');
+      fd.append('description', (el('marketplaceAdDesc')?.value || '').trim());
+      fd.append('contactName', (el('marketplaceAdName')?.value || '').trim());
+      fd.append('phone', (el('marketplaceAdPhone')?.value || '').trim());
+      const imageFile = el('marketplaceAdImage')?.files?.[0];
+      if (imageFile) fd.append('image', imageFile);
+      const shareCity = !editId && el('marketplaceShareCityInput')?.checked === true;
+      const out = editId
+        ? await api(`/api/rwa/marketplace/${encodeURIComponent(editId)}`, { method: 'PATCH', body: fd })
+        : await api('/api/rwa/marketplace', { method: 'POST', body: fd });
+      const itemId = out.item?.id || editId;
+      let cityNote = '';
+      if (shareCity && itemId) {
+        try {
+          await shareToCityHub({ type: 'marketplace', id: itemId });
+          cityNote = ' Shared to City of Mandi for review.';
+        } catch (shareErr) {
+          cityNote = ` City of Mandi share failed: ${shareErr.message || 'try again later'}.`;
+        }
+      }
+      resetMarketplaceAdForm();
+      if (status) status.textContent = editId ? `Ad saved.${cityNote}` : `Ad published on the homepage.${cityNote}`;
+      await loadMarketplaceAds().catch(() => {});
+    } catch (err) {
+      if (status) status.textContent = err.message || (editId ? 'Could not save ad' : 'Could not publish ad');
+    }
+  });
+  el('marketplacePendingList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-mk-action]');
+    const card = event.target.closest('[data-mk-id]');
+    if (!btn || !card) return;
+    const id = card.getAttribute('data-mk-id');
+    const action = btn.getAttribute('data-mk-action');
+    const item = listingsCache.find((n) => n.id === id);
+    if (action === 'edit') {
+      startMarketplaceListingEdit(item);
+      return;
+    }
+    if (action === 'delete') {
+      if (!window.confirm(`Remove “${item?.title || 'this listing'}” permanently?`)) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/rwa/marketplace/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (el('marketplaceListingEditId')?.value === id) resetMarketplaceListingForm();
+        await loadMarketplaceModeration();
+      } catch (err) {
+        alert(err.message || 'Remove failed');
+        btn.disabled = false;
+      }
+      return;
+    }
+    if (action === 'archived' && !window.confirm(`Suspend “${item?.title || 'this listing'}”? It will be hidden from the homepage until it is enabled again.`)) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/rwa/marketplace/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: action }),
+      });
+      if (el('marketplaceListingEditId')?.value === id) resetMarketplaceListingForm();
+      await loadMarketplaceModeration();
+    } catch (err) {
+      alert(err.message || 'Update failed');
+      btn.disabled = false;
+    }
+  });
+  el('marketplaceAdsList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-ad-action]');
+    const card = event.target.closest('[data-ad-id]');
+    if (!btn || !card) return;
+    const id = card.getAttribute('data-ad-id');
+    const action = btn.getAttribute('data-ad-action');
+    const item = adsCache.find((n) => n.id === id);
+    if (action === 'edit') {
+      startMarketplaceAdEdit(item);
+      return;
+    }
+    if (action === 'delete') {
+      if (!window.confirm(`Remove “${item?.title || 'this ad'}” permanently? It will disappear from the homepage.`)) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/rwa/marketplace/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (el('marketplaceAdEditId')?.value === id) resetMarketplaceAdForm();
+        await loadMarketplaceAds();
+      } catch (err) {
+        alert(err.message || 'Remove failed');
+        btn.disabled = false;
+      }
+      return;
+    }
+    const nextStatus = action === 'archived' ? 'archived' : 'published';
+    if (nextStatus === 'archived' && !window.confirm(`Disable “${item?.title || 'this ad'}”? It will be hidden from the homepage until you enable it again.`)) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/rwa/marketplace/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      await loadMarketplaceAds();
+    } catch (err) {
+      alert(err.message || 'Update failed');
+      btn.disabled = false;
+    }
+  });
+
+  el('parkingLookupForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await lookupParkingPass(el('parkingLookupInput')?.value || '');
+  });
+
+  el('parkingScanPlateBtn')?.addEventListener('click', () => {
+    openParkingScanner('plate').catch((err) => {
+      const status = el('parkingLookupStatus');
+      if (status) status.textContent = err.message || 'Could not open plate scanner';
+    });
+  });
+  el('parkingScanQrBtn')?.addEventListener('click', () => {
+    openParkingScanner('qr').catch((err) => {
+      const status = el('parkingLookupStatus');
+      if (status) status.textContent = err.message || 'Could not open QR scanner';
+    });
+  });
+
+  el('parkingScanCloseBtn')?.addEventListener('click', () => stopParkingScanner());
+  el('parkingScanCancelBtn')?.addEventListener('click', () => stopParkingScanner());
+  el('parkingScanDialog')?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    stopParkingScanner();
+  });
+  el('parkingScanFallbackBtn')?.addEventListener('click', () => {
+    const mode = parkingScan.mode;
+    stopParkingScanner();
+    if (mode === 'qr') el('parkingScanQrFile')?.click();
+    else el('parkingScanPlateFile')?.click();
+  });
+  el('parkingScanCaptureBtn')?.addEventListener('click', async () => {
+    const btn = el('parkingScanCaptureBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await captureParkingScanNow();
+    } catch (err) {
+      setParkingScanLive(err.message || 'Could not read');
+      const status = el('parkingLookupStatus');
+      if (status) status.textContent = err.message || 'Scan failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('parkingScanPlateFile')?.addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    const status = el('parkingLookupStatus');
+    const btn = el('parkingScanPlateBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await scanParkingPlateFile(file);
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Plate scan failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('parkingScanQrFile')?.addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    const status = el('parkingLookupStatus');
+    const btn = el('parkingScanQrBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await scanParkingQrFile(file);
+    } catch (err) {
+      if (status) status.textContent = err.message || 'QR scan failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  el('parkingHoursForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('parkingHoursStatus');
+    if (status) status.textContent = 'Saving…';
+    try {
+      await api('/api/rwa/parking/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ defaultHours: Number(el('parkingDefaultHours').value) }),
+      });
+      if (status) status.textContent = 'Default visitor lease saved.';
+      if (el('parkingHours')) el('parkingHours').value = el('parkingDefaultHours').value;
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save';
+    }
+  });
+
+  el('parkingCardList')?.addEventListener('click', onParkingActionClick);
+  el('parkingPendingList')?.addEventListener('click', onParkingActionClick);
+  el('parkingLookupResult')?.addEventListener('click', onParkingActionClick);
+
+  async function onParkingActionClick(event) {
+    const btn = event.target.closest('button[data-id]');
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    if (!id) return;
+    try {
+      if (btn.classList.contains('parking-renew')) {
+        if (!window.confirm(btn.textContent.includes('EC') ? 'Send this 2nd renewal to the EC for approval?' : 'Renew this pass now? EC will be notified.')) return;
+        await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/renew`, { method: 'POST', body: '{}' });
+        await loadParkingPanel();
+      } else if (btn.classList.contains('parking-remove')) {
+        if (!window.confirm('Remove this registered member vehicle?')) return;
+        await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/remove`, { method: 'POST', body: '{}' });
+        await loadParkingPanel();
+      } else if (btn.classList.contains('parking-approve')) {
+        await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/approve`, { method: 'POST', body: '{}' });
+        await loadParkingPanel();
+      } else if (btn.classList.contains('parking-reject')) {
+        const note = window.prompt('Reason (optional)') || '';
+        await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ note }),
+        });
+        await loadParkingPanel();
+      } else if (btn.classList.contains('parking-revoke')) {
+        if (!window.confirm('Revoke this pass?')) return;
+        await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: '{}' });
+        await loadParkingPanel();
+      }
+    } catch (err) {
+      alert(err.message || 'Action failed');
+    }
+  }
   el('duesRemindPendingBtn')?.addEventListener('click', async () => {
     if (!confirm('Send a push dues reminder to all plots with outstanding balance?')) return;
     try {
@@ -8616,22 +10284,50 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       switchPanel('info');
       return;
     }
+    const panelName = hash.split(/[?/]/)[0];
+    if (panelName === 'parking') {
+      switchPanel('parking');
+      return;
+    }
     if (hash === 'dues' || hash === 'concerns' || hash === 'profile' || hash === 'home'
       || hash === 'directory' || hash === 'works' || hash === 'proceedings' || hash === 'admin') {
       switchPanel(hash);
     }
   }
-  window.addEventListener('hashchange', () => applyRouteHash());
+  window.addEventListener('hashchange', () => {
+    if (state.session?.resident) {
+      applyRouteHash();
+      return;
+    }
+    if (isLandingBoardHash(location.hash)) {
+      applyLandingBoardHash();
+      return;
+    }
+    applyPreLoginRoute();
+  });
 
   el('landingMembersBtn')?.addEventListener('click', () => {
     showMembersGate({ pushHash: true });
   });
+  el('landingHeroSignInBtn')?.addEventListener('click', () => {
+    showMembersGate({ pushHash: true });
+  });
+  (() => {
+    const shell = el('landingView');
+    if (!shell) return;
+    const onScroll = () => {
+      shell.classList.toggle('is-scrolled', window.scrollY > 28);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
   el('gateBackToLandingBtn')?.addEventListener('click', () => {
     showLanding();
   });
 
   el('logoutBtn')?.addEventListener('click', async () => {
     try { await api('/api/rwa/logout', { method: 'POST', body: '{}' }); } catch (_e) { /* ignore */ }
+    clearPersistedAuth();
     clearAuthbuddyLinkDismissed();
     document.getElementById('authbuddyLinkModal')?.remove();
     // Colony Sign out must also end AuthBuddy SSO. Otherwise auth.html sees a
@@ -8689,6 +10385,43 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       await hydrateHhAvatars(list);
     } catch (err) {
       list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load household')}</p>`;
+    }
+  }
+
+  async function loadHouseholdTenants() {
+    const block = el('householdTenantBlock');
+    const list = el('householdTenantList');
+    const addForm = el('householdTenantForm');
+    if (!block || !list) return;
+    const r = state.session?.resident;
+    if (!r || r.superAdmin || !r.houseId) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+    try {
+      const data = await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/tenants`);
+      const canManage = Boolean(data.canManage);
+      if (addForm) addForm.hidden = !canManage;
+      const tenants = data.tenants || [];
+      list.innerHTML = tenants.length ? tenants.map((t) => {
+        const ended = t.status === 'ended';
+        const when = [t.occupancyStart, t.occupancyEnd].filter(Boolean).join(' → ') || 'Dates not set';
+        const actions = canManage && !ended
+          ? `<div class="btn-row"><button type="button" class="btn ghost compact ht-end" data-id="${escapeHtml(t.id)}">End occupancy</button></div>`
+          : '';
+        return `
+          <article class="household-member-card${ended ? ' tenant-card-ended' : ''}" data-id="${escapeHtml(t.id)}">
+            <strong>${escapeHtml(t.name)}</strong>
+            <span class="muted">${ended ? 'Occupancy ended' : 'Current tenant'} · not a household login</span>
+            <span class="muted">${escapeHtml(t.phone || '—')} · ${escapeHtml(t.email || '—')}</span>
+            <span class="muted">${escapeHtml(when)}</span>
+            ${t.note ? `<span class="muted">${escapeHtml(t.note)}</span>` : ''}
+            ${actions}
+          </article>`;
+      }).join('') : '<p class="muted">No tenants recorded for this plot. Tenants are occupancy records only — they cannot sign in.</p>';
+    } catch (err) {
+      list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load tenants')}</p>`;
     }
   }
 
@@ -8767,6 +10500,50 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       await loadHouseholdMembers();
     } catch (err) {
       alert(err.message || 'Could not remove member');
+    }
+  });
+
+  el('householdTenantForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const r = state.session?.resident;
+    const status = el('householdTenantStatus');
+    if (!r?.houseId) return;
+    if (status) status.textContent = 'Saving…';
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/tenants`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: el('htName').value.trim(),
+          phone: el('htPhone').value.trim(),
+          email: el('htEmail').value.trim(),
+          note: el('htNote').value.trim(),
+          occupancyStart: el('htFrom').value,
+          occupancyEnd: el('htUntil').value,
+        }),
+      });
+      el('householdTenantForm').reset();
+      if (status) status.textContent = 'Tenant saved. Issue their vehicle pass from Pass.';
+      await loadHouseholdTenants();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save tenant';
+    }
+  });
+
+  el('householdTenantList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.ht-end');
+    if (!btn) return;
+    const r = state.session?.resident;
+    const id = btn.getAttribute('data-id');
+    if (!r?.houseId || !id) return;
+    if (!window.confirm('End this occupancy? The tenant will stay in history but cannot get a new pass until you add them again.')) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(r.houseId)}/tenants/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: '{}',
+      });
+      await loadHouseholdTenants();
+    } catch (err) {
+      alert(err.message || 'Could not end occupancy');
     }
   });
 
@@ -8892,6 +10669,45 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     } finally {
       if (btn) btn.disabled = false;
     }
+  });
+
+  el('noticeImageInput')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    const preview = el('noticeImagePreview');
+    if (!preview) return;
+    if (!file) {
+      preview.hidden = true;
+      preview.removeAttribute('src');
+      return;
+    }
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+  });
+
+  el('marketplaceAdImage')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    const preview = el('marketplaceAdImagePreview');
+    if (!preview) return;
+    if (!file) {
+      preview.hidden = true;
+      preview.removeAttribute('src');
+      return;
+    }
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+  });
+
+  el('marketplaceListingImage')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    const preview = el('marketplaceListingImagePreview');
+    if (!preview) return;
+    if (!file) {
+      preview.hidden = true;
+      preview.removeAttribute('src');
+      return;
+    }
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
   });
 
   el('noticeForm')?.addEventListener('submit', async (event) => {
@@ -9996,18 +11812,34 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('reportSearch') && filters.search != null) el('reportSearch').value = filters.search || '';
     if (el('reportPendingOnly')) el('reportPendingOnly').checked = filters.pendingOnly !== false;
     if (el('reportPlots') && Array.isArray(filters.houseIds)) el('reportPlots').value = filters.houseIds.join(', ');
-    if (el('reportConcernStatus') && filters.status) el('reportConcernStatus').value = filters.status;
-    const duesLike = dataset === 'dues';
-    const concernsLike = dataset === 'concerns';
+    if (el('reportConcernStatus') && filters.status && dataset === 'concerns') el('reportConcernStatus').value = filters.status;
+    if (el('reportPassKind') && filters.kind) el('reportPassKind').value = filters.kind;
+    if (el('reportPassStatus') && filters.status && (dataset === 'passes' || dataset === 'vehicles')) {
+      el('reportPassStatus').value = filters.status;
+    }
+    if (el('reportTenantStatus') && filters.status && dataset === 'tenants') {
+      el('reportTenantStatus').value = filters.status;
+    }
+    const ui = reportMeta.datasets?.[dataset]?.filterUi || {};
+    const duesLike = dataset === 'dues' || ui.pendingOnly;
+    const concernsLike = dataset === 'concerns' || ui.concernStatus;
     if (el('reportPendingOnlyWrap')) el('reportPendingOnlyWrap').hidden = !duesLike;
-    if (el('reportPlotsWrap')) el('reportPlotsWrap').hidden = concernsLike;
+    if (el('reportPlotsWrap')) el('reportPlotsWrap').hidden = ui.plots === false;
     if (el('reportConcernStatusWrap')) el('reportConcernStatusWrap').hidden = !concernsLike;
+    if (el('reportPassKindWrap')) el('reportPassKindWrap').hidden = !ui.passKind;
+    if (el('reportPassStatusWrap')) el('reportPassStatusWrap').hidden = !ui.passStatus;
+    if (el('reportTenantStatusWrap')) el('reportTenantStatusWrap').hidden = !ui.tenantStatus;
+    if (el('reportSection')?.closest('label')) {
+      const sectionLabel = el('reportSection').closest('label');
+      if (sectionLabel) sectionLabel.hidden = ui.section === false;
+    }
   }
 
   let templatesCache = [];
   let templatesCategories = [];
   let templatesOptionDefaults = {
     paperSize: 'A4',
+    orientation: 'portrait',
     background: 'watermark',
     colors: {
       heading: '#0b2a56',
@@ -10028,6 +11860,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     };
     return {
       paperSize: el('templatesPaperSizeInput')?.value || 'A4',
+      orientation: templatesOptionDefaults.orientation || 'portrait',
       background: el('templatesBackgroundInput')?.value || 'watermark',
       colors,
     };
@@ -10056,6 +11889,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       ? cats
       : [
         { id: 'letterhead', label: 'Letterhead' },
+        { id: 'envelope', label: 'Envelope' },
         { id: 'receipt', label: 'Cash receipt' },
         { id: 'form', label: 'Form' },
         { id: 'certificate', label: 'Certificate' },
@@ -10375,6 +12209,22 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         `<option value="${escapeHtml(r.id)}">${escapeHtml(r.title)}</option>`
       ).join('');
     }
+    const dsSelect = el('reportDatasetSelect');
+    if (dsSelect && reportMeta.datasets) {
+      const preferred = ['dues', 'payments', 'cash', 'directory', 'concerns', 'passes', 'tenants', 'vehicles', 'works', 'notices', 'no_dues', 'reimbursements', 'transactions'];
+      const ids = Object.keys(reportMeta.datasets);
+      ids.sort((a, b) => {
+        const ia = preferred.indexOf(a);
+        const ib = preferred.indexOf(b);
+        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b);
+      });
+      const prev = dsSelect.value;
+      dsSelect.innerHTML = ids.map((id) => {
+        const ds = reportMeta.datasets[id];
+        return `<option value="${escapeHtml(id)}">${escapeHtml(ds.title || id)}</option>`;
+      }).join('');
+      if (prev && reportMeta.datasets[prev]) dsSelect.value = prev;
+    }
     syncReportUi();
   }
 
@@ -10394,7 +12244,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       houseIds,
       pendingOnly: Boolean(el('reportPendingOnly')?.checked),
       status: el('reportConcernStatus')?.value || 'open',
+      kind: 'all',
     };
+    if (dataset === 'passes') {
+      filters.kind = el('reportPassKind')?.value || 'all';
+      filters.status = el('reportPassStatus')?.value || 'all';
+    } else if (dataset === 'vehicles') {
+      filters.status = el('reportPassStatus')?.value || 'all';
+    } else if (dataset === 'tenants') {
+      filters.status = el('reportTenantStatus')?.value || 'active';
+    } else if (dataset === 'concerns') {
+      filters.status = el('reportConcernStatus')?.value || 'open';
+    }
     return {
       reportId,
       dataset,
@@ -10881,7 +12742,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function rosterMatches(r, q, missingOnly) {
     if (missingOnly && r.phone) return false;
     if (!q) return true;
-    const hay = `${r.houseId} ${r.plotNo} ${r.title || ''} ${r.name} ${r.profession || ''} ${r.phone || ''} ${r.email || ''} ${r.officialTitle || ''} ${r.role} ${committeeRoleLabel(r)}`.toLowerCase();
+    const hay = `${r.houseId} ${r.plotNo} ${r.householdCode || ''} ${r.title || ''} ${r.name} ${r.profession || ''} ${r.phone || ''} ${r.email || ''} ${r.officialTitle || ''} ${r.role} ${committeeRoleLabel(r)}`.toLowerCase();
     return hay.includes(q);
   }
 
@@ -10893,7 +12754,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const rows = rosterCache.filter((r) => rosterMatches(r, q, missingOnly));
     const superOnly = isSuperAdmin();
     if (!rows.length) {
-      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="12" class="muted">No matching residents.</td></tr>';
+      tbody.innerHTML = '<tr class="is-empty-row"><td colspan="13" class="muted">No matching residents.</td></tr>';
       refreshMobileListUi();
       return;
     }
@@ -10905,11 +12766,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const residentOptionLabel = r.role === 'admin'
         ? 'Resident'
         : (r.isOfficeBearer ? 'Office Bearer' : (r.isEcMember ? 'EC Member' : 'Resident'));
+      const masterName = (r.ownerName || r.name || '').trim();
       return `
       <tr data-house="${escapeHtml(r.houseId)}" class="${r.phone ? '' : 'is-missing-phone'}">
         <td class="plot-cell" data-label="Plot"><span class="person-cell">${personAvatarHtml(r)}<span><code>${escapeHtml(r.houseId)}</code><div class="muted plot-section">${escapeHtml(r.section || '')}</div></span></span></td>
+        <td data-label="HH code"><code class="hh-code">${escapeHtml(r.householdCode || '—')}</code></td>
         <td data-label="Title"><input name="title" value="${escapeHtml(r.title || '')}" placeholder="Mr/Mrs/Dr" aria-label="Title ${escapeHtml(r.houseId)}"></td>
-        <td data-label="Name"><input name="name" value="${escapeHtml(r.name || '')}" aria-label="Name ${escapeHtml(r.houseId)}"></td>
+        <td data-label="Name"><input name="name" value="${escapeHtml(masterName)}" aria-label="Name ${escapeHtml(r.houseId)}"></td>
         <td data-label="Profession"><input name="profession" value="${escapeHtml(r.profession || '')}" placeholder="Profession" aria-label="Profession ${escapeHtml(r.houseId)}"></td>
         <td data-label="Job">
           <select name="employmentStatus" aria-label="Employment ${escapeHtml(r.houseId)}">
@@ -11285,7 +13148,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function fillOpsSettingsForm(ops = {}) {
     if (el('opsAlertTo')) el('opsAlertTo').value = ops.alertTo || '';
     if (el('opsVitalsEnabled')) el('opsVitalsEnabled').checked = ops.vitalsEnabled !== false;
-    if (el('opsBackupRetainDays')) el('opsBackupRetainDays').value = ops.backupRetainDays ?? 14;
+    if (el('opsBackupRetainDays')) el('opsBackupRetainDays').value = ops.backupRetainDays ?? 7;
     if (el('opsBackupDiskMinPct')) el('opsBackupDiskMinPct').value = ops.backupDiskMinPct ?? 15;
     if (el('opsAccessEventsDays')) el('opsAccessEventsDays').value = ops.accessEventsDays ?? 90;
     if (el('opsDiskWarnPct')) el('opsDiskWarnPct').value = ops.diskWarnPct ?? 20;
@@ -11297,13 +13160,21 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('opsBackupMaxAgeHours')) el('opsBackupMaxAgeHours').value = ops.backupMaxAgeHours ?? 28;
     if (el('opsAlertCooldownWarnH')) el('opsAlertCooldownWarnH').value = ops.alertCooldownWarnHours ?? 6;
     if (el('opsAlertCooldownCritH')) el('opsAlertCooldownCritH').value = ops.alertCooldownCritHours ?? 1;
+    if (el('opsDriveEnabled')) el('opsDriveEnabled').checked = Boolean(ops.driveEnabled);
+    if (el('opsDriveFolderId')) el('opsDriveFolderId').value = ops.driveFolderId || '';
+    if (el('opsDriveRetainDays')) el('opsDriveRetainDays').value = ops.driveRetainDays ?? 14;
+    if (el('opsDriveSaHint')) {
+      el('opsDriveSaHint').innerHTML = ops.driveSaConfigured
+        ? 'Service account JSON found at <code>data/drive-sa.json</code>. Share the Drive folder with that SA email (Editor).'
+        : 'Missing <code>data/drive-sa.json</code> on the server — upload the Google service-account key (chmod 600), then enable Drive.';
+    }
   }
 
   function collectOpsSettingsPayload() {
     return {
       alertTo: el('opsAlertTo')?.value.trim() || '',
       vitalsEnabled: Boolean(el('opsVitalsEnabled')?.checked),
-      backupRetainDays: Number(el('opsBackupRetainDays')?.value || 14),
+      backupRetainDays: Number(el('opsBackupRetainDays')?.value || 7),
       backupDiskMinPct: Number(el('opsBackupDiskMinPct')?.value || 15),
       accessEventsDays: Number(el('opsAccessEventsDays')?.value || 90),
       diskWarnPct: Number(el('opsDiskWarnPct')?.value || 20),
@@ -11315,6 +13186,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       backupMaxAgeHours: Number(el('opsBackupMaxAgeHours')?.value || 28),
       alertCooldownWarnHours: Number(el('opsAlertCooldownWarnH')?.value || 6),
       alertCooldownCritHours: Number(el('opsAlertCooldownCritH')?.value || 1),
+      driveEnabled: Boolean(el('opsDriveEnabled')?.checked),
+      driveFolderId: el('opsDriveFolderId')?.value.trim() || '',
+      driveRetainDays: Number(el('opsDriveRetainDays')?.value || 14),
     };
   }
 
@@ -11332,12 +13206,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const live = data.live || {};
       const lastB = data.lastBackup || {};
       const lastV = data.lastVitals || {};
+      const lastD = data.lastDriveSync || {};
       const disk = live.diskFreePct ?? '—';
       const mem = live.memAvailablePct ?? '—';
       const load = live.loadRatio ?? '—';
       const adminOk = live.adminServiceActive;
       const ngxOk = live.nginxActive;
       const svc = (ok) => (ok === true ? 'OK · active' : (ok === false ? 'Down' : '—'));
+      let driveLabel = '—';
+      if (lastD.skipped) driveLabel = 'Skipped (disabled)';
+      else if (lastD.ok === false) driveLabel = `Failed · ${lastD.error || ''}`.trim();
+      else if (lastD.ok) driveLabel = 'OK';
       panel.innerHTML = `
         <div class="ops-status-grid">
           <div><strong>Disk free</strong><span>${escapeHtml(String(disk))}%</span></div>
@@ -11346,6 +13225,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div><strong>Admin service</strong><span>${escapeHtml(svc(adminOk))}</span></div>
           <div><strong>Nginx</strong><span>${escapeHtml(svc(ngxOk))}</span></div>
           <div><strong>Last backup</strong><span>${lastB.ok === false ? 'Failed' : (lastB.ok ? 'OK' : '—')} · ${escapeHtml(fmtOpsWhen(lastB.at))}</span></div>
+          <div><strong>Last Drive sync</strong><span>${escapeHtml(driveLabel)} · ${escapeHtml(fmtOpsWhen(lastD.at))}</span></div>
           <div><strong>Last vitals</strong><span>${escapeHtml(lastV.overall || '—')} · ${escapeHtml(fmtOpsWhen(lastV.at))}</span></div>
         </div>`;
     } catch (err) {
@@ -11663,5 +13543,27 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   prepareMobileSections();
   updateAppTopOffset();
-  refreshSession().catch(() => setAuthed(null));
+
+  // PWA / iOS: cookie jar can drop; restore from localStorage before session check.
+  const bootToken = loadStoredToken();
+  if (bootToken && !state.session) {
+    state.session = { token: bootToken };
+  }
+
+  refreshSession().catch(() => {
+    clearPersistedAuth();
+    setAuthed(null);
+  });
+
+  // Re-validate when returning to a backgrounded PWA / bfcache restore.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted || loadStoredToken()) {
+      refreshSession().catch(() => {});
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!loadStoredToken() && !state.session?.token) return;
+    refreshSession().catch(() => {});
+  });
 })();

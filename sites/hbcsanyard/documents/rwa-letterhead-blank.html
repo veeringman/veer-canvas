@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Source+Sans+3:wght@600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 10mm; }
+    @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -75,6 +75,13 @@
       font-weight: 600;
       color: var(--green);
     }
+    .org .reg-no {
+      margin: 1.2mm 0 0;
+      font-size: 9pt;
+      font-weight: 700;
+      color: var(--muted, #5a6a80);
+      letter-spacing: 0.02em;
+    }
     .wm {
       position: absolute;
       left: 50%;
@@ -107,17 +114,27 @@
     .slogan-bar .sep { color: var(--gold); margin: 0 1.5mm; letter-spacing: 0; }
     @media print {
       html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
         background: #fff !important;
-        -webkit-print-color-adjust: economy;
-        print-color-adjust: economy;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
-      .screen-hint { display: none; }
+      .screen-hint { display: none !important; }
       .sheet {
-        margin: 0;
+        width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        margin: 0 !important;
+        border: 0 !important;
         background: #fff !important;
         box-shadow: none !important;
-        height: auto !important;
-        min-height: 0 !important;
+        overflow: hidden !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
       }
       .wm { opacity: 0.7; }
       .slogan-bar {
@@ -137,6 +154,7 @@
         <h1>Mandi Housing Welfare Society</h1>
         <p class="colony">Himuda Housing Colony Sanyard</p>
         <p class="sub">Housing Colony Sanyard, Mandi HP 175001</p>
+        <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
         <p class="sub">housingcolonysanyard.in</p>
       </div>
     </header>

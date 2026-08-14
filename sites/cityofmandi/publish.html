@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your listings — City of Mandi</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260814paint">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
+  <script src="/publish.js?v=20260814pub2" defer></script>
+</head>
+<body class="desk-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell">
+    <header class="desk-top">
+      <a class="landing-top-brand" href="/">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
+        <span class="landing-top-name">City of Mandi</span>
+      </a>
+      <p class="desk-kicker" id="helloKicker">Your desk</p>
+      <div class="desk-top-actions">
+        <a class="btn ghost compact" href="/">Hub</a>
+        <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
+      </div>
+    </header>
+
+    <section class="desk-card">
+      <p class="landing-section-kicker">New listing</p>
+      <h1>What do you want to publish?</h1>
+      <p class="muted">News, ads, services, businesses, places, events — or another kind the city still needs. Portal operators review each listing before it appears on the public board.</p>
+      <form id="postForm" class="desk-form">
+        <label>Type
+          <select id="kind" name="kind" required></select>
+        </label>
+        <label id="customKindWrap" hidden>Your own type
+          <input id="customKind" name="customKind" placeholder="e.g. lost-found, roomshare">
+        </label>
+        <label>Title <input id="title" name="title" required minlength="3" placeholder="e.g. Evening taxi from Mandi bus stand"></label>
+        <label>Short summary <textarea id="summary" name="summary" rows="3" required></textarea></label>
+        <div class="desk-row-grid">
+          <label>Category <input id="category" name="category" placeholder="optional"></label>
+          <label>Location <input id="location" name="location" placeholder="Mandi"></label>
+          <label>Phone <input id="phone" name="phone" inputmode="tel"></label>
+          <label>Website / link <input id="url" name="url" placeholder="https://"></label>
+        </div>
+        <div class="desk-row-grid" id="bizExtras" hidden>
+          <label>Plan
+            <select id="plan" name="plan">
+              <option value="listed">Listed on the board</option>
+              <option value="featured">Featured</option>
+              <option value="hosted">Hosted page ({slug}.cityofmandi.com)</option>
+            </select>
+          </label>
+          <label>Slug (hosted page) <input id="slug" name="slug" placeholder="veerlabs"></label>
+        </div>
+        <button type="submit" class="btn primary">Submit for review</button>
+        <p class="error" id="postError" hidden></p>
+        <p class="muted" id="postStatus"></p>
+      </form>
+    </section>
+
+    <section class="desk-card">
+      <p class="landing-section-kicker">Yours</p>
+      <h2>Listings</h2>
+      <div id="myPosts" class="desk-stack"></div>
+    </section>
+  </div>
+</body>
+</html>

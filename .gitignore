@@ -17,3 +17,6 @@ imported_projects/
 *.swp
 .idea/
 .vscode/
+
+# Local scratch (renders, OCR, logo experiments)
+tmp/

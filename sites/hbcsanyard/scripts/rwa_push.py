@@ -12,7 +12,7 @@ from typing import Any
 
 from init_rwa_db import SUPERADMIN_HOUSE_ID, ensure_messages_and_push_tables, utc_now
 
-PREF_KEYS = ("messages", "notices", "concerns", "dues", "treasury", "no_dues", "no_objection")
+PREF_KEYS = ("messages", "notices", "concerns", "dues", "treasury", "no_dues", "no_objection", "parking")
 EVENT_PREF = {
     "message": "messages",
     "notice": "notices",
@@ -21,6 +21,7 @@ EVENT_PREF = {
     "treasury": "treasury",
     "no_dues": "no_dues",
     "no_objection": "no_objection",
+    "parking": "parking",
     "test": "messages",
 }
 
@@ -159,8 +160,8 @@ def save_prefs(
     conn.execute(
         """
         INSERT INTO notification_prefs(
-          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, no_objection, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, no_objection, parking, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(member_id) DO UPDATE SET
           house_id = excluded.house_id,
           messages = excluded.messages,
@@ -170,6 +171,7 @@ def save_prefs(
           treasury = excluded.treasury,
           no_dues = excluded.no_dues,
           no_objection = excluded.no_objection,
+          parking = excluded.parking,
           updated_at = excluded.updated_at
         """,
         (
@@ -182,6 +184,7 @@ def save_prefs(
             vals["treasury"],
             vals["no_dues"],
             vals["no_objection"],
+            vals["parking"],
             now,
         ),
     )

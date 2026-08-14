@@ -1,6 +1,6 @@
 # Phase 1 — on-box backup & log rollover
 
-Daily local backups + journal/nginx retention for each VeerCanvas site. No off-box Drive copy yet (Phase 2).
+Daily local backups + journal/nginx retention for each VeerCanvas site. Phase 2 Drive sync runs after each successful backup when `DRIVE_ENABLED=1`.
 
 ## What runs
 
@@ -9,11 +9,12 @@ Daily local backups + journal/nginx retention for each VeerCanvas site. No off-b
 | Backup script | `deploy/backup-site.sh` |
 | Installer | `deploy/install-ops.sh` (called from `site-deploy.sh`) |
 | Cron | `/etc/cron.d/veercanvas-backup-<site-id>` → **02:30** local |
-| Backup store | `/var/backups/veercanvas/<site-id>/` (14-day retention) |
+| Backup store | `/var/backups/veercanvas/<site-id>/` (7-day retention default) |
 | Backup log | `/var/log/veercanvas/backup-<site-id>.log` |
-| Journald | `/etc/systemd/journald.conf.d/veercanvas.conf` (200M / 14d) |
+| Journald | `/etc/systemd/journald.conf.d/veercanvas.conf` (100M / 7d) |
 | Nginx rotate | `/etc/logrotate.d/veercanvas-nginx` (14 days) |
 | Events prune | `access_events` older than **90 days** (with each backup) |
+| **Drive sync** | After backup when `DRIVE_ENABLED=1` → `ops/sync-to-drive.sh` |
 | **Vitals check** | `deploy/ops/check-server-vitals.sh` → **every 15 min** |
 | Vitals log | `/var/log/veercanvas/vitals-<site-id>.log` |
 
@@ -107,11 +108,14 @@ Verify login + a notice/dues read. Prefer copying `latest` aside first so you ca
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RETAIN_DAYS` | 14 | On-disk backup age |
+| `RETAIN_DAYS` | 7 | On-disk backup age |
 | `DISK_MIN_PCT` | 15 | Fail if free % below this |
 | `ACCESS_EVENTS_DAYS` | 90 | Event prune window |
 | `ALERT_ON_SUCCESS` | 0 | Email on success too |
 | `BACKUP_ROOT` | `/var/backups/veercanvas/<id>` | Override store |
+| `DRIVE_ENABLED` | 0 | Set 1 to upload after backup |
+| `DRIVE_FOLDER_ID` | — | Shared Drive folder id |
+| `DRIVE_RETAIN_DAYS` | 14 | Dated tarballs kept on Drive |
 
 ## Not in Phase 1
 
@@ -122,35 +126,43 @@ Verify login + a notice/dues read. Prefer copying `latest` aside first so you ca
 
 Official ops mailbox: **`housingcolonysanyard@gmail.com`** — used for **SMTP (OTP / alerts)** and **Drive backup**.
 
-### Setup checklist
+### Setup checklist (personal Gmail)
 
-1. Gmail App Password for `housingcolonysanyard@gmail.com` → set SMTP in master admin **Platform settings** (`RWA_SMTP_USER` / `RWA_SMTP_FROM` / `BACKUP_ALERT_TO`).
-2. Google Cloud project → enable **Drive API** → create a **service account** → download JSON to `data/drive-sa.json` on the server (`chmod 600`; never commit).
-3. In Drive (signed in as `housingcolonysanyard@gmail.com`), create folder **Housing Colony Sanyard Backups**, share it with the service account email (**Editor**).
-4. In `data/smtp.env` or `data/drive.env`:
+Google **service accounts have no Drive storage**. Sharing a normal Gmail folder with them fails with `storageQuotaExceeded`. Use **OAuth as the Gmail user** instead.
+
+1. Same Cloud project (`housingcolonysanyard`) → **APIs & Services → Credentials → + Create credentials → OAuth client ID**.
+2. If asked, configure the OAuth consent screen (External, test user = `housingcolonysanyard@gmail.com`).
+3. Application type: **Desktop app** → download the JSON.
+4. On your Mac:
 
 ```bash
-DRIVE_ENABLED=1
-DRIVE_FOLDER_ID=the_folder_id_from_drive_url
-GOOGLE_APPLICATION_CREDENTIALS=/var/www/hbcsanyard.veerlabs.solutions/data/drive-sa.json
+python3 -m venv /tmp/drive-oauth && /tmp/drive-oauth/bin/pip install -q google-auth-oauthlib google-api-python-client
+/tmp/drive-oauth/bin/python deploy/ops/authorize-drive.py \
+  --client ~/Downloads/client_secret_….json \
+  --out /tmp/drive-token.json
+# Browser: sign in as housingcolonysanyard@gmail.com → Allow
+
+scp -i ~/VeerSetuHost.pem /tmp/drive-token.json \
+  ubuntu@3.216.30.113:/var/www/hbcsanyard.veerlabs.solutions/data/drive-token.json
 ```
 
-5. On the server venv (or system): `pip install google-api-python-client google-auth`
-6. After nightly backup, `backup-site.sh` calls [`ops/sync-to-drive.sh`](./ops/sync-to-drive.sh) when `DRIVE_ENABLED=1`.
+5. Folder ID is already set (`website` = `1SqOVrU9ozCFoZGWGsKuA-lQLzvua-XI7`). `DRIVE_ENABLED=1` in `data/drive.env`.
+6. Nightly backup then uploads into `website/backups/` and `website/assets/`.
 
-Drive layout:
+Workspace **Shared Drive** + service account remains an alternative if you have Google Workspace.
 
-```
-Housing Colony Sanyard Backups/
-  backups/<site>-latest.tgz
-  assets/<site>/{receipts,profile-photos,info-centre,payments}/*.tgz
-```
-
-Local disk remains the live source of truth; Drive is disaster recovery. Preserve `data/drive-sa.json` and `data/drive.env` on deploy like `smtp.env`.
+Preserve `data/drive-token.json` / `data/drive-sa.json` / `data/drive.env` on deploy like `smtp.env`.
 
 Manual sync:
 
 ```bash
 sudo DRIVE_ENABLED=1 SITE_ID=hbcsanyard WEB_ROOT=/var/www/hbcsanyard.veerlabs.solutions \
-  bash /var/www/.../veercanvas/deploy/ops/sync-to-drive.sh
+  bash /var/www/hbcsanyard.veerlabs.solutions/veercanvas/deploy/ops/sync-to-drive.sh
+```
+
+Or run a full backup (includes Drive when enabled):
+
+```bash
+sudo SITE_ID=hbcsanyard WEB_ROOT=/var/www/hbcsanyard.veerlabs.solutions \
+  /var/www/hbcsanyard.veerlabs.solutions/veercanvas/deploy/backup-site.sh
 ```

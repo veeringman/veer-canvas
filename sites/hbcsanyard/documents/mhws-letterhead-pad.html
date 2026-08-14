@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 6mm; }
+    @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -19,6 +19,7 @@
       --muted: #5a6a80;
       --line: rgba(11, 42, 86, 0.18);
       --paper: #ffffff;
+      --left-rail: 26mm;
     }
     body {
       margin: 0;
@@ -34,6 +35,26 @@
       max-width: 210mm;
       margin: 0 auto;
     }
+    .layout-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      justify-content: center;
+      margin-top: 8px;
+      font: 600 12.5px/1.3 system-ui, sans-serif;
+    }
+    .layout-picker label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid rgba(11, 42, 86, 0.18);
+      cursor: pointer;
+      color: var(--navy);
+    }
+    .layout-picker input { accent-color: var(--navy); }
     .sheet {
       position: relative;
       width: 210mm;
@@ -124,13 +145,20 @@
       color: var(--green);
       letter-spacing: 0.01em;
     }
+    .brand .reg-no {
+      margin: 0.8mm 0 0;
+      font-size: 7.6pt;
+      font-weight: 700;
+      color: var(--muted, #5a6a80);
+      letter-spacing: 0.02em;
+    }
 
     .rule {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
       gap: 3mm;
-      margin: 0 0 3mm;
+      margin: 0 0 2.2mm;
     }
     .rule::before,
     .rule::after {
@@ -146,34 +174,7 @@
       box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
     }
 
-    /* —— Officers: one centered top row, outward 4-across, top-aligned —— */
-    .officers {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      column-gap: 0;
-      align-items: start;
-      justify-items: center;
-      margin: 0 0 2.5mm;
-      width: 100%;
-      padding: 0;
-    }
-    .role {
-      text-align: center;
-      min-width: 0;
-      width: 100%;
-      padding: 0 2.2mm;
-      position: relative;
-      align-self: start;
-    }
-    .role:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      top: 12%;
-      bottom: 12%;
-      right: 0;
-      width: 0;
-      border-right: 0.7pt solid rgba(11, 42, 86, 0.14);
-    }
+    /* —— Officers shared —— */
     .role .title {
       display: block;
       font-size: 5.8pt;
@@ -181,9 +182,7 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--green);
-      margin-bottom: 0.6mm;
-      line-height: 1.15;
-      min-height: 2.4mm;
+      line-height: 1.1;
     }
     .role .name {
       display: block;
@@ -192,34 +191,137 @@
       color: var(--navy);
       text-transform: uppercase;
       letter-spacing: 0.02em;
-      line-height: 1.15;
-      min-height: 8.2mm;
+      line-height: 1.1;
     }
     .role .ph {
       display: block;
-      margin-top: 0.4mm;
-      font-size: 6.6pt;
+      font-size: 6.4pt;
       font-weight: 600;
       color: var(--muted);
       letter-spacing: 0.03em;
       font-variant-numeric: tabular-nums;
+      line-height: 1.1;
     }
     .role .ph .lbl {
       color: var(--green);
       font-weight: 700;
-      margin-right: 1.2mm;
+      margin-right: 1mm;
       letter-spacing: 0.04em;
     }
-    .officers-foot {
+
+    /* —— Variant A: office bearers on top (compact) —— */
+    .sheet[data-layout="top"] .officers {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      column-gap: 0;
+      align-items: start;
+      justify-items: center;
+      margin: 0 0 1.6mm;
+      width: 100%;
+      padding: 0;
+    }
+    .sheet[data-layout="top"] .role {
+      text-align: center;
+      min-width: 0;
+      width: 100%;
+      padding: 0 2mm;
+      position: relative;
+      align-self: start;
+    }
+    .sheet[data-layout="top"] .role:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 10%;
+      bottom: 10%;
+      right: 0;
+      width: 0;
+      border-right: 0.7pt solid rgba(11, 42, 86, 0.14);
+    }
+    .sheet[data-layout="top"] .role .title {
+      margin-bottom: 0.25mm;
+      min-height: 0;
+    }
+    .sheet[data-layout="top"] .role .name {
+      margin: 0;
+      min-height: 0;
+    }
+    .sheet[data-layout="top"] .role .ph {
+      margin-top: 0.15mm;
+    }
+    .sheet[data-layout="top"] .officers-foot {
       width: 36mm;
       height: 0;
       margin: 0 auto 1mm;
       border-top: 0.7pt solid rgba(201, 162, 39, 0.55);
     }
-
-    .body-area {
+    .sheet[data-layout="top"] .body-area {
       flex: 1;
-      min-height: 168mm;
+      min-height: 178mm;
+    }
+
+    /* —— Variant B: office bearers on left margin —— */
+    .sheet[data-layout="left"] .pad {
+      display: grid;
+      grid-template-columns: var(--left-rail) 1fr;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      column-gap: 3.5mm;
+      padding-left: 7mm;
+      padding-right: 11mm;
+    }
+    .sheet[data-layout="left"] .brand,
+    .sheet[data-layout="left"] .rule,
+    .sheet[data-layout="left"] .foot {
+      grid-column: 1 / -1;
+    }
+    .sheet[data-layout="left"] .officers-foot {
+      display: none;
+    }
+    .sheet[data-layout="left"] .officers {
+      grid-column: 1;
+      grid-row: 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 7mm;
+      margin: 0;
+      padding: 2mm 1.6mm 2mm 0;
+      border-right: 0.7pt solid rgba(11, 42, 86, 0.22);
+      align-self: stretch;
+      min-height: 0;
+    }
+    .sheet[data-layout="left"] .role {
+      text-align: left;
+      width: 100%;
+      padding: 0;
+      position: relative;
+    }
+    .sheet[data-layout="left"] .role:not(:last-child)::after {
+      content: none;
+    }
+    .sheet[data-layout="left"] .role .title {
+      margin-bottom: 0.35mm;
+      font-size: 5.4pt;
+      letter-spacing: 0.08em;
+    }
+    .sheet[data-layout="left"] .role .name {
+      margin: 0;
+      font-size: 6.6pt;
+      line-height: 1.15;
+      hyphens: auto;
+      overflow-wrap: anywhere;
+    }
+    .sheet[data-layout="left"] .role .ph {
+      margin-top: 0.2mm;
+      font-size: 5.8pt;
+    }
+    .sheet[data-layout="left"] .body-area {
+      grid-column: 2;
+      grid-row: 3;
+      min-height: 188mm;
+    }
+    .sheet[data-layout="left"] .slogan-bar {
+      margin-left: -7mm;
+      margin-right: -11mm;
     }
 
     .foot {
@@ -265,12 +367,6 @@
       font-weight: 600;
       line-height: 1.25;
     }
-    .contact .blank {
-      display: block;
-      border-bottom: 1px solid rgba(11, 42, 86, 0.28);
-      min-height: 3.4mm;
-      margin-top: 0.4mm;
-    }
     .slogan-bar {
       margin: 0 -12mm;
       background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
@@ -293,18 +389,27 @@
 
     @media print {
       html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
         background: #fff !important;
-        -webkit-print-color-adjust: economy;
-        print-color-adjust: economy;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       .screen-hint { display: none !important; }
       .sheet {
-        margin: 0;
-        border-width: 0.8pt;
+        width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        margin: 0 !important;
+        border: 0 !important;
         background: #fff !important;
         box-shadow: none !important;
-        height: auto !important;
-        min-height: 0 !important;
+        overflow: hidden !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
       }
       .wm { opacity: 0.7; }
       .accent-edge, .foot-bar, .slogan-bar, .banner {
@@ -317,10 +422,21 @@
 <body>
   <p class="screen-hint">
     Official A4 letterhead pad — Himuda Housing Colony Sanyard.<br>
-    Open → Print → A4. Office-bearer names and phones from the EC chart.
+    Choose a layout, then use <strong>Print</strong> / <strong>Download</strong> in the viewer (or Print → A4, margins <strong>None</strong>).<br>
+    Office-bearer names and phones follow the EC chart.
+    <span class="layout-picker" role="group" aria-label="Office bearer layout">
+      <label>
+        <input type="radio" name="obLayout" value="top" checked>
+        Office bearers on top (compact)
+      </label>
+      <label>
+        <input type="radio" name="obLayout" value="left">
+        Office bearers on left margin
+      </label>
+    </span>
   </p>
 
-  <div class="sheet">
+  <div class="sheet" id="letterheadSheet" data-layout="top">
     <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
     <div class="accent-edge-thin" aria-hidden="true"></div>
     <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
@@ -332,28 +448,29 @@
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
           <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+          <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
         </div>
       </header>
 
       <div class="rule" aria-hidden="true"><span class="pip"></span></div>
 
       <section class="officers" aria-label="Office bearers">
-        <div class="role">
+        <div class="role" data-officer-slot="president">
           <span class="title">President</span>
           <span class="name">Anup Vaidya</span>
           <span class="ph"><span class="lbl">Ph</span>94184 95449</span>
         </div>
-        <div class="role">
+        <div class="role" data-officer-slot="general-secretary">
           <span class="title">General Secretary</span>
           <span class="name">Vijay Kumar Sharma</span>
           <span class="ph"><span class="lbl">Ph</span>82197 88139</span>
         </div>
-        <div class="role">
+        <div class="role" data-officer-slot="vice-president">
           <span class="title">Vice President</span>
           <span class="name">Murari Lal Modgil</span>
           <span class="ph"><span class="lbl">Ph</span>94181 68784</span>
         </div>
-        <div class="role">
+        <div class="role" data-officer-slot="treasurer">
           <span class="title">Treasurer</span>
           <span class="name">Parveen Kumar Thakur</span>
           <span class="ph"><span class="lbl">Ph</span>94180 71187</span>
@@ -395,5 +512,22 @@
       </footer>
     </div>
   </div>
+
+  <script>
+    (function () {
+      const sheet = document.getElementById('letterheadSheet');
+      if (!sheet) return;
+      const apply = (value) => {
+        sheet.setAttribute('data-layout', value === 'left' ? 'left' : 'top');
+      };
+      document.querySelectorAll('input[name="obLayout"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) apply(input.value);
+        });
+      });
+      const checked = document.querySelector('input[name="obLayout"]:checked');
+      apply(checked ? checked.value : 'top');
+    })();
+  </script>
 </body>
 </html>

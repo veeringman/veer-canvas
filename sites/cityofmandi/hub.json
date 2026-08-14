@@ -1,0 +1,30 @@
+{
+  "features": {
+    "news": true,
+    "places": true,
+    "services": true,
+    "ads": true,
+    "neighbourhoods": true,
+    "businesses": true
+  },
+  "services": [
+    {
+      "id": "directory",
+      "title": "Business directory",
+      "lede": "A listing on the City of Mandi board.",
+      "enabled": true
+    },
+    {
+      "id": "featured",
+      "title": "Featured placement",
+      "lede": "Highlighted card on the public hub.",
+      "enabled": true
+    },
+    {
+      "id": "hosted-page",
+      "title": "Hosted business page",
+      "lede": "Your own page at {slug}.cityofmandi.com (path /b/{slug} until the domain is attached).",
+      "enabled": true
+    }
+  ]
+}

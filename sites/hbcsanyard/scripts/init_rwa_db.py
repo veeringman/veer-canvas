@@ -13,6 +13,17 @@ from datetime import datetime, timezone
 
 SCHEMA_VERSION = 16
 SUPERADMIN_HOUSE_ID = "__SUPERADMIN__"
+ADHOC_GATE_HOUSE_ID = "__ADHOC_GATE__"
+# Synthetic plots used as FK targets — never show in Directory / roster / DMs.
+SYSTEM_HOUSE_IDS = frozenset({SUPERADMIN_HOUSE_ID, ADHOC_GATE_HOUSE_ID})
+
+
+def system_house_exclude_sql(column: str = "house_id") -> tuple[str, tuple[str, ...]]:
+    """SQL fragment + bind params to skip system plots."""
+    ids = tuple(sorted(SYSTEM_HOUSE_IDS))
+    placeholders = ", ".join("?" for _ in ids)
+    return f"{column} NOT IN ({placeholders})", ids
+
 
 # Residential plots A (rows 1–60) then commercial plots B (61–62) from HIMUDA ledger 15-06-2026.
 LEDGER_ROWS = [
@@ -594,6 +605,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_otp_pending_columns(conn)
     ensure_notice_engagement_tables(conn)
     ensure_household_members_table(conn)
+    ensure_household_tenants_table(conn)
     ensure_grievances_table(conn)
     ensure_info_documents_table(conn)
     ensure_print_templates_table(conn)
@@ -609,6 +621,13 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_treasury_columns(conn)
     ensure_messages_and_push_tables(conn)
     ensure_msg_likes_and_ai(conn)
+    ensure_parking_passes_table(conn)
+    try:
+        import rwa_marketplace as _rwa_marketplace
+
+        _rwa_marketplace.ensure_marketplace_table(conn)
+    except Exception:
+        pass
     try:
         import rwa_vault as _rwa_vault
 
@@ -810,6 +829,13 @@ def ensure_notice_pin_order(conn: sqlite3.Connection) -> None:
         ).fetchall()
         for idx, row in enumerate(pinned):
             conn.execute("UPDATE notices SET pin_order = ? WHERE id = ?", (idx, row[0]))
+        conn.commit()
+
+
+def ensure_notice_image_column(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(notices)").fetchall()}
+    if "image_file" not in cols:
+        conn.execute("ALTER TABLE notices ADD COLUMN image_file TEXT")
         conn.commit()
 
 
@@ -1042,6 +1068,33 @@ def ensure_household_members_table(conn: sqlite3.Connection) -> None:
             """
         )
 
+    conn.commit()
+
+
+def ensure_household_tenants_table(conn: sqlite3.Connection) -> None:
+    """Occupants who rent a plot — occupancy records, not household logins."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS household_tenants (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          name TEXT NOT NULL,
+          phone TEXT,
+          email TEXT,
+          id_note TEXT,
+          occupancy_start TEXT,
+          occupancy_end TEXT,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active','ended')),
+          created_by_member_id TEXT,
+          created_by_name TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_household_tenants_house
+          ON household_tenants(house_id, status, created_at DESC);
+        """
+    )
     conn.commit()
 
 
@@ -1999,6 +2052,101 @@ def ensure_no_objection_requests_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def ensure_parking_passes_table(conn: sqlite3.Connection) -> None:
+    """Member, tenant, visitor, and ad-hoc (gate) parking / entry passes."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS parking_passes (
+          id TEXT PRIMARY KEY,
+          public_code TEXT NOT NULL UNIQUE,
+          house_id TEXT NOT NULL REFERENCES residents(house_id),
+          member_id TEXT,
+          member_name TEXT,
+          kind TEXT NOT NULL DEFAULT 'visitor',
+          plate TEXT NOT NULL,
+          plate_display TEXT NOT NULL,
+          colour TEXT,
+          vehicle_type TEXT NOT NULL DEFAULT 'car',
+          visitor_name TEXT,
+          tenant_id TEXT,
+          tenant_phone TEXT,
+          tenant_email TEXT,
+          tenant_note TEXT,
+          lease_hours INTEGER NOT NULL DEFAULT 24,
+          lease_months INTEGER NOT NULL DEFAULT 0,
+          photo_filename TEXT,
+          status TEXT NOT NULL DEFAULT 'active'
+            CHECK(status IN ('active','expired','pending_renewal','revoked')),
+          issued_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          renew_count INTEGER NOT NULL DEFAULT 0,
+          last_renewed_at TEXT,
+          pending_renew_hours INTEGER NOT NULL DEFAULT 0,
+          pending_renew_at TEXT,
+          approved_by_house_id TEXT,
+          approved_by_name TEXT,
+          revoked_reason TEXT,
+          email_sent INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_parking_passes_house
+          ON parking_passes(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_parking_passes_plate
+          ON parking_passes(plate, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_parking_passes_status
+          ON parking_passes(status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_parking_passes_code
+          ON parking_passes(public_code);
+        CREATE INDEX IF NOT EXISTS idx_parking_passes_kind
+          ON parking_passes(kind, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS parking_pass_events (
+          id TEXT PRIMARY KEY,
+          pass_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          actor_house_id TEXT,
+          actor_member_id TEXT,
+          actor_name TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY(pass_id) REFERENCES parking_passes(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_parking_pass_events_pass
+          ON parking_pass_events(pass_id, created_at DESC);
+        """
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(parking_passes)").fetchall()}
+    if cols and "kind" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN kind TEXT NOT NULL DEFAULT 'visitor'")
+    if cols and "tenant_phone" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN tenant_phone TEXT")
+    if cols and "tenant_email" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN tenant_email TEXT")
+    if cols and "tenant_note" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN tenant_note TEXT")
+    if cols and "lease_months" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN lease_months INTEGER NOT NULL DEFAULT 0")
+    if cols and "tenant_id" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN tenant_id TEXT")
+    if cols and "photo_filename" not in cols:
+        conn.execute("ALTER TABLE parking_passes ADD COLUMN photo_filename TEXT")
+    # System plot for gate ad-hoc visitors (FK target).
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO residents(
+          house_id, plot_no, section, name, employment_status, role, status, notes, created_at, updated_at
+        ) VALUES (
+          ?, 'GATE', 'GATE', 'Main gate ad-hoc visitors', 'unknown', 'resident', 'active',
+          'System plot for gate ad-hoc passes — do not delete', ?, ?
+        )
+        """,
+        (ADHOC_GATE_HOUSE_ID, now, now),
+    )
+    conn.commit()
+
+
 TREASURY_STATUS_DEFAULT = "pending"
 TREASURY_COLUMN_DEFS: list[tuple[str, str]] = [
     ("treasury_status", "TEXT NOT NULL DEFAULT 'pending'"),
@@ -2195,6 +2343,7 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
           treasury INTEGER NOT NULL DEFAULT 1,
           no_dues INTEGER NOT NULL DEFAULT 1,
           no_objection INTEGER NOT NULL DEFAULT 1,
+          parking INTEGER NOT NULL DEFAULT 1,
           updated_at TEXT NOT NULL
         );
 
@@ -2235,7 +2384,7 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
         (COLONY_THREAD_ID, now, now),
     )
     pref_cols = {row[1] for row in conn.execute("PRAGMA table_info(notification_prefs)").fetchall()}
-    for col in ("treasury", "no_dues", "no_objection"):
+    for col in ("treasury", "no_dues", "no_objection", "parking"):
         if pref_cols and col not in pref_cols:
             conn.execute(
                 f"ALTER TABLE notification_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT 1"

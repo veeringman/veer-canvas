@@ -103,6 +103,8 @@ Examples live in [`deploy/nginx/examples/`](../deploy/nginx/examples/):
 - `ops.veerlabs.solutions.conf`
 - `hbcsanyard.veerlabs.solutions.conf` — legacy alias vhost (same web root as primary)
 - `housingcolonysanyard.in.conf` (+ `.http.conf` bootstrap until TLS exists)
+- `cityofmandi.veerlabs.solutions.conf` — civic hub virtual host
+- `cityofmandi.com.conf` (+ `.http.conf` bootstrap until TLS exists; same web root)
 
 Pattern:
 

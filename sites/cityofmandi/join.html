@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join City of Mandi — publish</title>
+  <meta name="description" content="Register or sign in to publish news, ads, services, and businesses on City of Mandi — the civic home of Mandi.">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260814paint">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
+  <script src="/join.js?v=20260814pub2" defer></script>
+</head>
+<body class="desk-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell">
+    <header class="desk-top">
+      <a class="landing-top-brand" href="/">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
+        <span class="landing-top-name">City of Mandi</span>
+      </a>
+      <p class="desk-kicker">Publish</p>
+    </header>
+
+    <section class="desk-card">
+      <p class="landing-section-kicker">For Mandi</p>
+      <h1>Publish on the hub</h1>
+      <p class="muted">News, ads, services, businesses, places, events — and whatever the city still needs a board for. Listings are reviewed before they go public. This is not a government site.</p>
+      <div class="desk-tabs" role="tablist">
+        <button type="button" class="btn ghost compact is-tab" id="tabRegister" aria-selected="true">Register</button>
+        <button type="button" class="btn ghost compact is-tab" id="tabLogin" aria-selected="false">Sign in</button>
+      </div>
+
+      <form id="registerForm" class="desk-form">
+        <label>Your name <input id="regName" name="name" autocomplete="name" required></label>
+        <label>Email <input id="regEmail" name="email" type="email" autocomplete="email" required></label>
+        <label>Password (8+ characters) <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button type="submit" class="btn primary">Create account</button>
+      </form>
+
+      <form id="loginForm" class="desk-form" hidden>
+        <label>Email <input id="loginEmail" name="email" type="email" autocomplete="username" required></label>
+        <label>Password <input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="btn primary">Sign in</button>
+      </form>
+      <p class="error" id="authError" hidden></p>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "id": "cityofmandi",
+  "name": "City of Mandi",
+  "description": "Independent civic hub for Mandi, Himachal Pradesh — news, places, services, and neighbourhoods. Not a government or municipal website.",
+  "domain": "cityofmandi.veerlabs.solutions",
+  "aliases": [
+    "www.cityofmandi.veerlabs.solutions",
+    "cityofmandi.com",
+    "www.cityofmandi.com"
+  ],
+  "webRoot": "/var/www/cityofmandi.veerlabs.solutions",
+  "githubOwner": "veeringman",
+  "githubRepo": "cityofmandi",
+  "admin": {
+    "serviceName": "veercanvas-admin-cityofmandi",
+    "port": 8085,
+    "cmsPrefix": "/cms"
+  },
+  "platform": false,
+  "ops": false,
+  "status": "authoring",
+  "siteType": "responsive",
+  "templateId": "civic-hub",
+  "templateVersion": "0.1.0",
+  "locales": ["en"],
+  "defaultLocale": "en",
+  "repos": [],
+  "integrations": [],
+  "createdAt": "2026-08-14T07:30:00Z",
+  "updatedAt": "2026-08-14T07:30:00Z",
+  "statusHistory": [
+    {
+      "status": "authoring",
+      "at": "2026-08-14T07:30:00Z",
+      "note": "Scaffolded civic hub homepage from housingcolonysanyard landing, teal-slate / copper theme"
+    }
+  ]
+}

@@ -187,6 +187,13 @@
       font-weight: 600;
       color: var(--green);
     }
+    .r-org .reg-no {
+      margin: 0.25mm 0 0;
+      font-size: 5.6pt;
+      font-weight: 700;
+      color: var(--muted, #5a6a80);
+      letter-spacing: 0.01em;
+    }
     .r-meta {
       text-align: right;
       font-size: 7.2pt;
@@ -511,6 +518,87 @@
       color: #445;
       text-align: center;
     }
+
+    /* In-app PDF viewer — keeps user inside the page (esp. mobile / PWA) */
+    .pdf-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      background: #0b2a56;
+      color: #fff;
+    }
+    .pdf-overlay.is-open {
+      display: flex;
+    }
+    .pdf-overlay-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      padding-top: max(10px, env(safe-area-inset-top));
+      background: #0b2a56;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .pdf-overlay-bar h2 {
+      margin: 0;
+      flex: 1 1 auto;
+      font: 700 14px/1.3 system-ui, sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .pdf-overlay-bar button,
+    .pdf-overlay-bar a.btn {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font: 700 13px/1.2 system-ui, sans-serif;
+      cursor: pointer;
+      text-decoration: none;
+      color: #0b2a56;
+      background: #fff;
+      white-space: nowrap;
+    }
+    .pdf-overlay-bar button.secondary,
+    .pdf-overlay-bar a.btn.secondary {
+      background: #e8eef6;
+    }
+    .pdf-overlay-bar button.close-btn {
+      background: #c62828;
+      color: #fff;
+    }
+    .pdf-overlay-frame-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      background: #1a2740;
+    }
+    .pdf-overlay-frame-wrap iframe,
+    .pdf-overlay-frame-wrap embed,
+    .pdf-overlay-frame-wrap object {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+    }
+    .pdf-overlay-hint {
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 8px 12px;
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
+      font: 500 12px/1.35 system-ui, sans-serif;
+      color: rgba(255, 255, 255, 0.78);
+      text-align: center;
+      background: #12233f;
+    }
+    body.pdf-viewer-open {
+      overflow: hidden;
+    }
+
+    @media print {
+      .pdf-overlay { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -555,7 +643,7 @@
     </label>
     <div class="actions">
       <button type="button" id="applyReceiptOpts">Preview</button>
-      <button type="button" class="secondary" id="printReceipts">Print series</button>
+      <button type="button" class="secondary" id="printReceipts">View / Print PDF</button>
       <button type="button" class="secondary" id="downloadReceiptPdf">Download PDF</button>
     </div>
   </div>
@@ -563,6 +651,19 @@
 
   <div class="sheet-viewport" id="receiptViewport">
     <div class="sheet layout-a4-3 orient-portrait" id="receiptSheet" aria-label="Cash receipt booklet page"></div>
+  </div>
+
+  <div class="pdf-overlay" id="pdfOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pdfOverlayTitle">
+    <div class="pdf-overlay-bar">
+      <button type="button" class="close-btn" id="pdfOverlayClose" aria-label="Close PDF and return">← Back</button>
+      <h2 id="pdfOverlayTitle">Cash receipt PDF</h2>
+      <button type="button" class="secondary" id="pdfOverlayPrint">Print</button>
+      <a class="btn secondary" id="pdfOverlayDownload" download>Save</a>
+    </div>
+    <div class="pdf-overlay-frame-wrap">
+      <iframe id="pdfOverlayFrame" title="Cash receipt PDF preview"></iframe>
+    </div>
+    <p class="pdf-overlay-hint">Tap <strong>← Back</strong> to return to the receipt booklet. Print or Save without leaving the app.</p>
   </div>
 
   <template id="receiptTpl">
@@ -576,6 +677,7 @@
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
           <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+          <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
         </div>
         <div class="r-meta">
           <strong>Cash Receipt</strong>
@@ -808,56 +910,162 @@
     el.textContent = msg;
   }
 
+  let pdfObjectUrl = '';
+
+  function closePdfOverlay() {
+    const overlay = document.getElementById('pdfOverlay');
+    const frame = document.getElementById('pdfOverlayFrame');
+    if (overlay) {
+      overlay.classList.remove('is-open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    document.body.classList.remove('pdf-viewer-open');
+    if (frame) frame.removeAttribute('src');
+    if (pdfObjectUrl) {
+      URL.revokeObjectURL(pdfObjectUrl);
+      pdfObjectUrl = '';
+    }
+    const dl = document.getElementById('pdfOverlayDownload');
+    if (dl) {
+      dl.removeAttribute('href');
+      dl.removeAttribute('download');
+    }
+  }
+
+  function openPdfOverlay({ viewUrl, blob, filename }) {
+    closePdfOverlay();
+    const overlay = document.getElementById('pdfOverlay');
+    const frame = document.getElementById('pdfOverlayFrame');
+    const dl = document.getElementById('pdfOverlayDownload');
+    if (!overlay || !frame) return;
+    // Prefer same-origin inline URL in the iframe (blob PDFs often fail on iOS Safari).
+    if (viewUrl) {
+      frame.src = viewUrl;
+    } else if (blob) {
+      pdfObjectUrl = URL.createObjectURL(blob);
+      frame.src = pdfObjectUrl;
+    }
+    if (dl) {
+      if (blob) {
+        if (!pdfObjectUrl) pdfObjectUrl = URL.createObjectURL(blob);
+        dl.href = pdfObjectUrl;
+        dl.download = filename || 'mhws-cash-receipts.pdf';
+      } else if (viewUrl) {
+        dl.href = viewUrl.replace('disposition=inline', 'disposition=attachment');
+        dl.removeAttribute('download');
+      }
+    }
+    overlay.classList.add('is-open');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('pdf-viewer-open');
+    document.getElementById('pdfOverlayClose')?.focus();
+  }
+
+  async function fetchPdfBlob(o) {
+    const res = await fetch(bookletUrl(o));
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    const blob = await res.blob();
+    if (!blob || (blob.type.indexOf('pdf') === -1 && blob.size < 100)) {
+      throw new Error('Invalid PDF response');
+    }
+    return blob;
+  }
+
   async function downloadPdf() {
     applyOpts();
     const o = opts();
     const btn = document.getElementById('downloadReceiptPdf');
     if (btn) btn.disabled = true;
+    const filename = `mhws-cash-receipts-${o.layout}-${o.orientation}-${pad7(o.start)}-${pad7(o.end)}.pdf`;
     setStatus(`Preparing PDF — ${o.pages} page${o.pages > 1 ? 's' : ''} (${pad7(o.start)} – ${pad7(o.end)})…`);
     try {
-      const res = await fetch(bookletUrl(o));
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const blob = await res.blob();
-      if (!blob || blob.type.indexOf('pdf') === -1 && blob.size < 100) {
-        throw new Error('Invalid PDF response');
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mhws-cash-receipts-${o.layout}-${o.orientation}-${pad7(o.start)}-${pad7(o.end)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      setStatus(`Downloaded ${o.pages} page${o.pages > 1 ? 's' : ''}: ${pad7(o.start)} – ${pad7(o.end)}`);
-      setTimeout(applyOpts, 2500);
+      const blob = await fetchPdfBlob(o);
+      openPdfOverlay({
+        viewUrl: bookletUrl(o, 'inline'),
+        blob,
+        filename,
+      });
+      setStatus(`PDF ready — use Save in the viewer, or ← Back to return (${pad7(o.start)} – ${pad7(o.end)})`);
     } catch (err) {
       console.error(err);
-      setStatus('Download failed. Opening PDF in a new tab — use Save / Print from there.');
-      window.open(bookletUrl(o), '_blank', 'noopener');
-      setTimeout(applyOpts, 3000);
+      setStatus('Could not load PDF. Check your connection and try again.');
     } finally {
       if (btn) btn.disabled = false;
     }
   }
 
-  function printSeries() {
+  async function printSeries() {
     applyOpts();
     const o = opts();
-    setStatus(`Opening ${o.pages}-page PDF for printing (${pad7(o.start)} – ${pad7(o.end)})…`);
-    const w = window.open(bookletUrl(o, 'inline'), '_blank', 'noopener');
-    if (!w) {
-      setStatus('Popup blocked — allow popups, or use Download PDF then print the file.');
-      return;
+    const btn = document.getElementById('printReceipts');
+    if (btn) btn.disabled = true;
+    const filename = `mhws-cash-receipts-${o.layout}-${o.orientation}-${pad7(o.start)}-${pad7(o.end)}.pdf`;
+    setStatus(`Preparing PDF for view / print (${pad7(o.start)} – ${pad7(o.end)})…`);
+    try {
+      // Fetch once so Save works offline of a second request; view uses inline URL for mobile.
+      const blob = await fetchPdfBlob(o);
+      openPdfOverlay({
+        viewUrl: bookletUrl(o, 'inline'),
+        blob,
+        filename,
+      });
+      setStatus('PDF open in viewer — Print, Save, or ← Back to return');
+    } catch (err) {
+      console.error(err);
+      setStatus('Could not load PDF. Check your connection and try again.');
+    } finally {
+      if (btn) btn.disabled = false;
     }
-    // PDF viewer: print all pages from there.
-    setTimeout(applyOpts, 2000);
+  }
+
+  function printFromOverlay() {
+    const frame = document.getElementById('pdfOverlayFrame');
+    try {
+      if (frame?.contentWindow) {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        return;
+      }
+    } catch (_err) {
+      /* some mobile browsers block iframe print */
+    }
+    // Prefer asking the parent portal (keeps Back-to-app chrome) over a raw tab.
+    const src = frame?.getAttribute('src') || pdfObjectUrl;
+    if (src && window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({
+          type: 'rwa-open-pdf',
+          url: src.startsWith('blob:') ? bookletUrl(opts(), 'inline') : src,
+          title: 'Cash receipt PDF',
+          filename: 'mhws-cash-receipts.pdf',
+          downloadUrl: bookletUrl(opts(), 'attachment'),
+        }, window.location.origin);
+        return;
+      } catch (_err) {
+        /* fall through */
+      }
+    }
+    if (src) {
+      const w = window.open(src, '_blank');
+      if (!w) {
+        setStatus('Allow popups to print, or use Save and print the file.');
+      }
+    }
   }
 
   document.getElementById('applyReceiptOpts')?.addEventListener('click', applyOpts);
-  document.getElementById('printReceipts')?.addEventListener('click', printSeries);
+  document.getElementById('printReceipts')?.addEventListener('click', () => {
+    printSeries().catch(console.error);
+  });
   document.getElementById('downloadReceiptPdf')?.addEventListener('click', () => {
     downloadPdf().catch(console.error);
+  });
+  document.getElementById('pdfOverlayClose')?.addEventListener('click', closePdfOverlay);
+  document.getElementById('pdfOverlayPrint')?.addEventListener('click', printFromOverlay);
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && document.getElementById('pdfOverlay')?.classList.contains('is-open')) {
+      closePdfOverlay();
+    }
   });
   ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', () => {

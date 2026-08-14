@@ -1,0 +1,83 @@
+.desk-body { min-height: 100vh; }
+.desk-shell {
+  position: relative;
+  z-index: 1;
+  width: min(820px, calc(100% - 1.5rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 3rem;
+  display: grid;
+  gap: 1.1rem;
+}
+.desk-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.15rem;
+}
+.desk-kicker {
+  margin: 0;
+  flex: 1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--copper-deep);
+}
+.desk-top-actions { display: flex; gap: 0.4rem; }
+.desk-card {
+  padding: 1.35rem 1.25rem 1.45rem;
+  border-radius: 22px;
+  background: rgba(255, 252, 246, 0.92);
+  border: 1px solid rgba(22, 60, 68, 0.09);
+  box-shadow: 0 16px 36px rgba(12, 39, 45, 0.06);
+}
+.desk-card h1, .desk-card h2 {
+  margin: 0.15rem 0 0.45rem;
+  font-family: var(--display);
+  color: var(--ink);
+}
+.desk-card h1 { font-size: 1.8rem; }
+.desk-card h2 { font-size: 1.35rem; }
+.desk-form, .desk-stack { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.desk-toggles {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+.desk-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+}
+.desk-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border-radius: 14px;
+  background: #fffdf8;
+  border: 1px solid rgba(22, 60, 68, 0.08);
+}
+.desk-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+@media (max-width: 640px) {
+  .desk-row-grid { grid-template-columns: 1fr; }
+}
+.desk-card code {
+  font-size: 0.82em;
+  color: var(--copper-deep);
+}
+.desk-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.35rem; }
+.desk-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+}
+.desk-tabs .is-tab[aria-selected="true"] {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}

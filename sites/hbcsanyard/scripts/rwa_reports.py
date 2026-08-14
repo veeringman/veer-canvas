@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from init_rwa_db import SUPERADMIN_HOUSE_ID, section_plot_sort_key
+from init_rwa_db import SUPERADMIN_HOUSE_ID, ADHOC_GATE_HOUSE_ID, section_plot_sort_key
 
 IST = ZoneInfo("Asia/Kolkata")
 _RL = None  # lazy reportlab bundle
@@ -22,6 +22,7 @@ ORG_NAME = ORG_COLONY
 ORG_NAME_HTML = ORG_COLONY
 ORG_NAME_MULTILINE = ORG_COLONY
 ORG_SUBTITLE = "Housing Colony Sanyard, Mandi HP 175001"
+ORG_REGISTRATION = "Registration No. 467 dated 21/07/2012"
 ORG_SLOGAN = "Unity · Harmony · Progress"
 ORG_SHORT = ORG_COLONY
 ORG_AUTHOR = ORG_SOCIETY
@@ -202,18 +203,19 @@ TITLE_RANK = {
 # Field catalog for Pending Dues report (id → label, default selected)
 PENDING_DUES_FIELDS: list[dict[str, Any]] = [
     {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
-    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 48},
-    {"id": "section", "label": "Sec.", "default": True, "align": "center", "width": 32},
-    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 110},
-    {"id": "phone", "label": "Phone", "default": False, "align": "left", "width": 72},
-    {"id": "previousTotal", "label": "Prev total", "default": True, "align": "right", "width": 58},
-    {"id": "previousPending", "label": "Prev pending", "default": False, "align": "right", "width": 58},
-    {"id": "currentYearTotal", "label": "Year total", "default": True, "align": "right", "width": 58},
-    {"id": "currentYearPending", "label": "Year pending", "default": False, "align": "right", "width": 58},
-    {"id": "amountReceived", "label": "Received", "default": True, "align": "right", "width": 58},
-    {"id": "totalDue", "label": "Total due", "default": True, "align": "right", "width": 58},
-    {"id": "pendingDues", "label": "Pending", "default": True, "align": "right", "width": 58},
-    {"id": "remarks", "label": "Remarks", "default": False, "align": "left", "width": 90},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 42},
+    {"id": "householdCode", "label": "HH code", "default": True, "align": "left", "width": 58},
+    {"id": "section", "label": "Sec.", "default": True, "align": "center", "width": 28},
+    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 100},
+    {"id": "phone", "label": "Phone", "default": False, "align": "left", "width": 68},
+    {"id": "previousTotal", "label": "Prev total", "default": True, "align": "right", "width": 54},
+    {"id": "previousPending", "label": "Prev pending", "default": False, "align": "right", "width": 54},
+    {"id": "currentYearTotal", "label": "Year total", "default": True, "align": "right", "width": 54},
+    {"id": "currentYearPending", "label": "Year pending", "default": False, "align": "right", "width": 54},
+    {"id": "amountReceived", "label": "Received", "default": True, "align": "right", "width": 54},
+    {"id": "totalDue", "label": "Total due", "default": True, "align": "right", "width": 54},
+    {"id": "pendingDues", "label": "Pending", "default": True, "align": "right", "width": 54},
+    {"id": "remarks", "label": "Remarks", "default": False, "align": "left", "width": 80},
 ]
 
 MONEY_FIELDS = {
@@ -231,13 +233,14 @@ MONEY_FIELDS = {
 
 DIRECTORY_FIELDS: list[dict[str, Any]] = [
     {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
-    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 48},
-    {"id": "section", "label": "Sec.", "default": False, "align": "center", "width": 32},
-    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 110},
-    {"id": "officialTitle", "label": "Office", "default": True, "align": "left", "width": 90},
-    {"id": "phone", "label": "Phone", "default": True, "align": "left", "width": 78},
-    {"id": "email", "label": "Email", "default": True, "align": "left", "width": 120},
-    {"id": "profession", "label": "Profession", "default": False, "align": "left", "width": 90},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 42},
+    {"id": "householdCode", "label": "HH code", "default": True, "align": "left", "width": 58},
+    {"id": "section", "label": "Sec.", "default": False, "align": "center", "width": 28},
+    {"id": "name", "label": "Name", "default": True, "align": "left", "width": 100},
+    {"id": "officialTitle", "label": "Office", "default": True, "align": "left", "width": 80},
+    {"id": "phone", "label": "Phone", "default": True, "align": "left", "width": 72},
+    {"id": "email", "label": "Email", "default": True, "align": "left", "width": 110},
+    {"id": "profession", "label": "Profession", "default": False, "align": "left", "width": 80},
 ]
 
 CONCERNS_FIELDS: list[dict[str, Any]] = [
@@ -295,6 +298,50 @@ NOTICES_FIELDS: list[dict[str, Any]] = [
     {"id": "title", "label": "Title", "default": True, "align": "left", "width": 160},
     {"id": "status", "label": "Status", "default": True, "align": "center", "width": 55},
     {"id": "pinned", "label": "Pinned", "default": False, "align": "center", "width": 40},
+]
+
+PASSES_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 26},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 40},
+    {"id": "kindLabel", "label": "Kind", "default": True, "align": "left", "width": 48},
+    {"id": "code", "label": "Code", "default": True, "align": "left", "width": 62},
+    {"id": "plateDisplay", "label": "Plate", "default": True, "align": "left", "width": 70},
+    {"id": "vehicleTypeLabel", "label": "Vehicle", "default": True, "align": "left", "width": 48},
+    {"id": "visitorName", "label": "Name", "default": True, "align": "left", "width": 80},
+    {"id": "statusLabel", "label": "Status", "default": True, "align": "left", "width": 70},
+    {"id": "issuedAtLabel", "label": "Issued", "default": True, "align": "left", "width": 70},
+    {"id": "expiresAtLabel", "label": "Expires", "default": True, "align": "left", "width": 70},
+    {"id": "memberName", "label": "Requested by", "default": False, "align": "left", "width": 80},
+    {"id": "colour", "label": "Colour", "default": False, "align": "left", "width": 45},
+    {"id": "adhocCategoryLabel", "label": "Ad-hoc type", "default": False, "align": "left", "width": 55},
+]
+
+TENANTS_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 28},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 42},
+    {"id": "name", "label": "Tenant", "default": True, "align": "left", "width": 100},
+    {"id": "phone", "label": "Phone", "default": True, "align": "left", "width": 72},
+    {"id": "email", "label": "Email", "default": True, "align": "left", "width": 110},
+    {"id": "status", "label": "Status", "default": True, "align": "center", "width": 50},
+    {"id": "occupancyStart", "label": "From", "default": True, "align": "left", "width": 55},
+    {"id": "occupancyEnd", "label": "Until", "default": True, "align": "left", "width": 55},
+    {"id": "note", "label": "Note", "default": False, "align": "left", "width": 90},
+    {"id": "createdByName", "label": "Added by", "default": False, "align": "left", "width": 70},
+]
+
+VEHICLES_FIELDS: list[dict[str, Any]] = [
+    {"id": "sno", "label": "S.No.", "default": True, "align": "center", "width": 26},
+    {"id": "plotNo", "label": "Plot", "default": True, "align": "left", "width": 40},
+    {"id": "kindLabel", "label": "Kind", "default": True, "align": "left", "width": 48},
+    {"id": "plateDisplay", "label": "Plate", "default": True, "align": "left", "width": 75},
+    {"id": "vehicleTypeLabel", "label": "Type", "default": True, "align": "left", "width": 48},
+    {"id": "colour", "label": "Colour", "default": True, "align": "left", "width": 45},
+    {"id": "visitorName", "label": "Holder", "default": True, "align": "left", "width": 90},
+    {"id": "statusLabel", "label": "Status", "default": True, "align": "left", "width": 70},
+    {"id": "code", "label": "Pass code", "default": True, "align": "left", "width": 62},
+    {"id": "issuedAtLabel", "label": "Issued", "default": False, "align": "left", "width": 70},
+    {"id": "expiresAtLabel", "label": "Expires", "default": True, "align": "left", "width": 70},
+    {"id": "memberName", "label": "Owner contact", "default": False, "align": "left", "width": 80},
 ]
 
 DATASETS_META = {
@@ -371,6 +418,30 @@ DATASETS_META = {
         "fields": NOTICES_FIELDS,
         "defaultFilters": {"status": "published", "search": ""},
         "filterUi": {"section": False, "search": True, "plots": False, "noticeStatus": True},
+    },
+    "passes": {
+        "id": "passes",
+        "title": "Passes",
+        "description": "Member, visitor, tenant, and ad-hoc gate passes",
+        "fields": PASSES_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": [], "kind": "all"},
+        "filterUi": {"section": False, "search": True, "plots": True, "passStatus": True, "passKind": True},
+    },
+    "tenants": {
+        "id": "tenants",
+        "title": "Tenants",
+        "description": "Household occupancy records (tenants)",
+        "fields": TENANTS_FIELDS,
+        "defaultFilters": {"status": "active", "search": "", "houseIds": []},
+        "filterUi": {"section": False, "search": True, "plots": True, "tenantStatus": True},
+    },
+    "vehicles": {
+        "id": "vehicles",
+        "title": "Vehicles",
+        "description": "Registered member and tenant vehicles (excludes visitors / on-foot)",
+        "fields": VEHICLES_FIELDS,
+        "defaultFilters": {"status": "all", "search": "", "houseIds": []},
+        "filterUi": {"section": False, "search": True, "plots": True, "passStatus": True},
     },
 }
 
@@ -501,28 +572,48 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
     search = str(filters.get("search") or "").strip().lower()
     house_ids = {h.upper() for h in _normalize_house_list(filters.get("houseIds"))}
 
+    try:
+        import rwa_household as _hh
+
+        _hh.ensure_household_codes(conn)
+    except Exception:
+        _hh = None
+
     rows = conn.execute(
         """
-        SELECT pr.*, r.name, r.section, r.plot_no, r.phone, r.status AS resident_status
+        SELECT pr.*, r.name, r.section, r.plot_no, r.phone, r.household_code,
+               r.status AS resident_status
         FROM payment_rows pr
         JOIN residents r ON r.house_id = pr.house_id
         WHERE pr.ledger_id = (
           SELECT id FROM payment_ledgers ORDER BY as_of DESC, id DESC LIMIT 1
         )
           AND r.house_id != ?
+          AND r.house_id != ?
           AND r.status = 'active'
         """,
-        (SUPERADMIN_HOUSE_ID,),
+        (SUPERADMIN_HOUSE_ID, ADHOC_GATE_HOUSE_ID),
     ).fetchall()
 
     out: list[dict] = []
     for r in rows:
+        owner_name = r["name"] or r["house_id"]
+        phone = r["phone"] or ""
+        if _hh is not None:
+            try:
+                owner = _hh.primary_member(conn, r["house_id"])
+                if owner:
+                    owner_name = (owner.get("name") or owner_name).strip() or owner_name
+                    phone = (owner.get("phone") or phone or "").strip()
+            except Exception:
+                pass
         item = {
             **enrich_payment_row(r),
             "plotNo": r["plot_no"] or r["house_id"],
             "section": r["section"] or "",
-            "name": r["name"] or r["house_id"],
-            "phone": r["phone"] or "",
+            "name": owner_name,
+            "phone": phone,
+            "householdCode": (r["household_code"] or "").strip(),
             "houseId": r["house_id"],
         }
         hid = str(item["houseId"] or "").upper()
@@ -532,7 +623,10 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
             if str(item["section"] or "").upper() != section.upper():
                 continue
         if search:
-            blob = f"{item['plotNo']} {item['name']} {item['houseId']} {item.get('phone') or ''}".lower()
+            blob = (
+                f"{item['plotNo']} {item['name']} {item['houseId']} "
+                f"{item.get('phone') or ''} {item.get('householdCode') or ''}"
+            ).lower()
             if search not in blob:
                 continue
         if pending_only and int(item.get("pendingDues") or 0) <= 0:
@@ -873,12 +967,15 @@ def _draw_mhws_letterhead_chrome(
     text_x = pad_x + logo_w + 5 * mm
     canvas.setFillColor(colors.HexColor(BRAND_NAVY))
     canvas.setFont("Times-Bold", 13)
-    canvas.drawString(text_x, brand_top - 8 * mm, ORG_SOCIETY.upper())
+    canvas.drawString(text_x, brand_top - 7 * mm, ORG_SOCIETY.upper())
     canvas.setFont("Times-Bold", 11)
-    canvas.drawString(text_x, brand_top - 13 * mm, ORG_COLONY.upper())
+    canvas.drawString(text_x, brand_top - 11.5 * mm, ORG_COLONY.upper())
     canvas.setFillColor(colors.HexColor(BRAND_GREEN))
-    canvas.setFont("Helvetica-Bold", 8.5)
-    canvas.drawString(text_x, brand_top - 17 * mm, ORG_SUBTITLE)
+    canvas.setFont("Helvetica-Bold", 8)
+    canvas.drawString(text_x, brand_top - 15.5 * mm, ORG_SUBTITLE)
+    canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+    canvas.setFont("Helvetica-Bold", 7.2)
+    canvas.drawString(text_x, brand_top - 19.2 * mm, ORG_REGISTRATION)
 
     # Gold pip rule
     rule_y = brand_top - logo_w - 3 * mm
@@ -913,20 +1010,20 @@ def _draw_mhws_letterhead_chrome(
         # Keep long names on one visual line (slightly smaller if needed).
         if len(name) > 18:
             canvas.setFont("Helvetica-Bold", 6.2)
-        canvas.drawCentredString(cx, cy - 3.6 * mm, _pdf_safe(name))
+        canvas.drawCentredString(cx, cy - 3.2 * mm, _pdf_safe(name))
         phone = (slot.get("phone") or "").strip()
         canvas.setFillColor(colors.HexColor(BRAND_MUTED))
-        canvas.setFont("Helvetica", 6.4)
+        canvas.setFont("Helvetica", 6.2)
         ph = f"Ph {phone}" if phone else "Ph -"
-        canvas.drawCentredString(cx, cy - 6.8 * mm, _pdf_safe(ph))
+        canvas.drawCentredString(cx, cy - 5.6 * mm, _pdf_safe(ph))
         if i < 3:
             canvas.setStrokeColor(colors.Color(11 / 255, 42 / 255, 86 / 255, alpha=0.14))
             canvas.setLineWidth(0.55)
             xdiv = pad_x + col_w * (i + 1)
-            canvas.line(xdiv, cy - 7.2 * mm, xdiv, cy + 1 * mm)
+            canvas.line(xdiv, cy - 6.0 * mm, xdiv, cy + 1 * mm)
 
     # Officers foot gold rule
-    foot_rule_y = grid_top - 12 * mm
+    foot_rule_y = grid_top - 9.5 * mm
     canvas.setStrokeColor(colors.Color(201 / 255, 162 / 255, 39 / 255, alpha=0.55))
     canvas.setLineWidth(0.7)
     canvas.line(mid - 18 * mm, foot_rule_y, mid + 18 * mm, foot_rule_y)
@@ -1110,12 +1207,15 @@ def _draw_cash_receipt_leaf_chrome(
     tx = inner_x + logo_w + 3 * mm
     canvas.setFillColor(colors.HexColor(BRAND_NAVY))
     canvas.setFont("Times-Bold", 10)
-    canvas.drawString(tx, top - 6 * mm, ORG_SOCIETY.upper())
-    canvas.setFont("Times-Bold", 9)
-    canvas.drawString(tx, top - 10 * mm, ORG_COLONY.upper())
+    canvas.drawString(tx, top - 5 * mm, ORG_SOCIETY.upper())
+    canvas.setFont("Times-Bold", 8.5)
+    canvas.drawString(tx, top - 8.8 * mm, ORG_COLONY.upper())
     canvas.setFillColor(colors.HexColor(BRAND_GREEN))
-    canvas.setFont("Helvetica-Bold", 7.5)
-    canvas.drawString(tx, top - 13.5 * mm, ORG_SUBTITLE)
+    canvas.setFont("Helvetica-Bold", 7)
+    canvas.drawString(tx, top - 12 * mm, ORG_SUBTITLE)
+    canvas.setFillColor(colors.HexColor(BRAND_MUTED))
+    canvas.setFont("Helvetica-Bold", 6.2)
+    canvas.drawString(tx, top - 15 * mm, ORG_REGISTRATION)
 
     meta_x = box_x + box_w - pad
     canvas.setFillColor(colors.HexColor(BRAND_NAVY))
@@ -1380,12 +1480,15 @@ def build_cash_receipt_booklet_pdf(
         tx = inner_x + logo_w + 2.5 * mm
         c.setFillColor(colors.HexColor(BRAND_NAVY))
         c.setFont("Times-Bold", max(8, 10 * scale))
-        c.drawString(tx, top - 4.0 * mm * scale, ORG_SOCIETY.upper())
-        c.setFont("Times-Bold", max(7, 8.5 * scale))
-        c.drawString(tx, top - 7.8 * mm * scale, ORG_COLONY.upper())
+        c.drawString(tx, top - 3.6 * mm * scale, ORG_SOCIETY.upper())
+        c.setFont("Times-Bold", max(7, 8.2 * scale))
+        c.drawString(tx, top - 7.0 * mm * scale, ORG_COLONY.upper())
         c.setFillColor(colors.HexColor(BRAND_GREEN))
-        c.setFont("Helvetica-Bold", max(6, 7 * scale))
-        c.drawString(tx, top - 11.0 * mm * scale, ORG_SUBTITLE)
+        c.setFont("Helvetica-Bold", max(5.8, 6.6 * scale))
+        c.drawString(tx, top - 9.8 * mm * scale, ORG_SUBTITLE)
+        c.setFillColor(colors.HexColor(BRAND_MUTED))
+        c.setFont("Helvetica-Bold", max(5.4, 6.0 * scale))
+        c.drawString(tx, top - 12.4 * mm * scale, ORG_REGISTRATION)
 
         c.setFillColor(colors.HexColor(BRAND_NAVY))
         c.setFont("Helvetica-Bold", max(7.5, 9 * scale))
@@ -1875,7 +1978,7 @@ def query_directory_rows(directory_fn, conn, *, filters: dict | None = None) -> 
             if str(r.get("section") or "").upper() != section.upper():
                 continue
         if search:
-            blob = f"{r.get('plotNo')} {r.get('name')} {r.get('phone')} {r.get('email')} {r.get('officialTitle')}".lower()
+            blob = f"{r.get('plotNo')} {r.get('name')} {r.get('phone')} {r.get('email')} {r.get('officialTitle')} {r.get('householdCode')}".lower()
             if search not in blob:
                 continue
         out.append(r)
@@ -2059,6 +2162,119 @@ def query_notices_rows(list_notices, conn, *, filters: dict | None = None) -> li
             "title": n.get("title") or "",
             "status": n.get("status") or "",
             "pinned": "Yes" if n.get("pinned") else "",
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    return out
+
+
+def query_passes_rows(conn, *, filters: dict | None = None) -> list[dict]:
+    import rwa_parking
+
+    filters = filters or {}
+    status = str(filters.get("status") or "all").strip() or "all"
+    kind = str(filters.get("kind") or "all").strip().lower() or "all"
+    search = str(filters.get("search") or "").strip().lower()
+    house_ids = _normalize_house_list(filters.get("houseIds"))
+    kinds = None if kind in ("", "all") else [kind]
+    items = rwa_parking.list_passes_for_report(
+        conn,
+        kinds=kinds,
+        status=None if status == "all" else status,
+        house_ids=house_ids or None,
+    )
+    out = []
+    for item in items:
+        row = {
+            "plotNo": item.get("plotNo") or item.get("houseId") or "",
+            "houseId": item.get("houseId") or "",
+            "kindLabel": item.get("kindLabel") or item.get("kind") or "",
+            "code": item.get("code") or "",
+            "plateDisplay": item.get("plateDisplay") or item.get("plate") or "",
+            "vehicleTypeLabel": item.get("vehicleTypeLabel") or item.get("vehicleType") or "",
+            "visitorName": item.get("visitorName") or item.get("tenantName") or "",
+            "statusLabel": item.get("statusLabel") or item.get("status") or "",
+            "issuedAtLabel": item.get("issuedAtLabel") or (item.get("issuedAt") or "")[:16],
+            "expiresAtLabel": item.get("expiresAtLabel") or (item.get("expiresAt") or "")[:16],
+            "memberName": item.get("memberName") or "",
+            "colour": item.get("colour") or "",
+            "adhocCategoryLabel": item.get("adhocCategoryLabel") or "",
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    return out
+
+
+def query_tenants_rows(conn, *, filters: dict | None = None) -> list[dict]:
+    import rwa_tenants
+
+    filters = filters or {}
+    status = str(filters.get("status") or "active").strip() or "active"
+    search = str(filters.get("search") or "").strip().lower()
+    house_ids = _normalize_house_list(filters.get("houseIds"))
+    items = rwa_tenants.list_tenants_for_report(
+        conn,
+        status=None if status == "all" else status,
+        house_ids=house_ids or None,
+    )
+    out = []
+    for item in items:
+        row = {
+            "plotNo": item.get("plotNo") or item.get("houseId") or "",
+            "houseId": item.get("houseId") or "",
+            "name": item.get("name") or "",
+            "phone": item.get("phone") or "",
+            "email": item.get("email") or "",
+            "status": item.get("status") or "",
+            "occupancyStart": (item.get("occupancyStart") or "")[:10],
+            "occupancyEnd": (item.get("occupancyEnd") or "")[:10],
+            "note": (item.get("note") or "")[:120],
+            "createdByName": item.get("createdByName") or "",
+        }
+        if search:
+            blob = " ".join(str(row.get(k) or "") for k in row).lower()
+            if search not in blob:
+                continue
+        out.append(row)
+    return out
+
+
+def query_vehicles_rows(conn, *, filters: dict | None = None) -> list[dict]:
+    """Registered member + tenant vehicles (excludes visitors, ad-hoc, on-foot)."""
+    import rwa_parking
+
+    filters = filters or {}
+    status = str(filters.get("status") or "all").strip() or "all"
+    search = str(filters.get("search") or "").strip().lower()
+    house_ids = _normalize_house_list(filters.get("houseIds"))
+    items = rwa_parking.list_passes_for_report(
+        conn,
+        kinds=[rwa_parking.KIND_MEMBER, rwa_parking.KIND_TENANT],
+        status=None if status == "all" else status,
+        house_ids=house_ids or None,
+        exclude_foot=True,
+    )
+    out = []
+    for item in items:
+        row = {
+            "plotNo": item.get("plotNo") or item.get("houseId") or "",
+            "houseId": item.get("houseId") or "",
+            "kindLabel": item.get("kindLabel") or item.get("kind") or "",
+            "plateDisplay": item.get("plateDisplay") or item.get("plate") or "",
+            "vehicleTypeLabel": item.get("vehicleTypeLabel") or item.get("vehicleType") or "",
+            "colour": item.get("colour") or "",
+            "visitorName": item.get("visitorName") or item.get("tenantName") or "",
+            "statusLabel": item.get("statusLabel") or item.get("status") or "",
+            "code": item.get("code") or "",
+            "issuedAtLabel": item.get("issuedAtLabel") or (item.get("issuedAt") or "")[:16],
+            "expiresAtLabel": item.get("expiresAtLabel") or (item.get("expiresAt") or "")[:16],
+            "memberName": item.get("memberName") or "",
         }
         if search:
             blob = " ".join(str(row.get(k) or "") for k in row).lower()
@@ -2887,7 +3103,7 @@ def generate_report_pdf(
     filters = payload.get("filters") if isinstance(payload.get("filters"), dict) else {}
     for key in (
         "pendingOnly", "section", "search", "houseIds", "status", "category",
-        "officeBearersOnly", "method", "dataset",
+        "officeBearersOnly", "method", "dataset", "kind",
     ):
         if key in payload and key not in filters:
             filters[key] = payload[key]
@@ -3025,6 +3241,33 @@ def generate_report_pdf(
                 filter_summary="custom · notices",
             )
             return pdf, f"custom-notices-{stamp}.pdf"
+
+        if dataset == "passes":
+            rows = query_passes_rows(conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Passes Report",
+                field_defs=field_defs, rows=rows,
+                filter_summary="custom · passes",
+            )
+            return pdf, f"custom-passes-{stamp}.pdf"
+
+        if dataset == "tenants":
+            rows = query_tenants_rows(conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Tenants Report",
+                field_defs=field_defs, rows=rows,
+                filter_summary="custom · tenants",
+            )
+            return pdf, f"custom-tenants-{stamp}.pdf"
+
+        if dataset == "vehicles":
+            rows = query_vehicles_rows(conn, filters=filters)
+            pdf = build_tabular_pdf(
+                conn, site_root=site_root, title=title or "Vehicles Report",
+                field_defs=field_defs, rows=rows,
+                filter_summary="custom · vehicles",
+            )
+            return pdf, f"custom-vehicles-{stamp}.pdf"
 
         raise ValueError("Unsupported dataset")
 

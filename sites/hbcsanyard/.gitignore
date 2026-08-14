@@ -9,6 +9,10 @@ data/vapid.env
 vapid.env
 data/ai.env
 ai.env
+data/drive.env
+data/city-hub.env
+data/drive-sa.json
+data/drive-token.json
 data/imports/*.pdf
 data/imports/*.xlsx
 data/imports/*.xls

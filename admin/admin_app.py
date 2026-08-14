@@ -2,6 +2,7 @@
 """VeerCanvas admin — content authoring and publishing CMS."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -27,20 +28,49 @@ APP_DIR = pathlib.Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 from logo_optimize import optimize_logo_file  # noqa: E402
-import rwa_portal  # noqa: E402
-import rwa_household  # noqa: E402
-import rwa_entitlements  # noqa: E402
-import rwa_reports  # noqa: E402
-import rwa_translate  # noqa: E402
-import rwa_payments  # noqa: E402
-import rwa_no_dues  # noqa: E402
-import rwa_no_objection  # noqa: E402
-import rwa_treasury  # noqa: E402
-import rwa_messages  # noqa: E402
-import rwa_push  # noqa: E402
-import rwa_templates  # noqa: E402
-import rwa_proceedings  # noqa: E402
-import rwa_campaigns  # noqa: E402
+try:
+    import rwa_portal  # noqa: E402
+    import rwa_household  # noqa: E402
+    import rwa_entitlements  # noqa: E402
+    import rwa_reports  # noqa: E402
+    import rwa_translate  # noqa: E402
+    import rwa_payments  # noqa: E402
+    import rwa_no_dues  # noqa: E402
+    import rwa_no_objection  # noqa: E402
+    import rwa_treasury  # noqa: E402
+    import rwa_messages  # noqa: E402
+    import rwa_push  # noqa: E402
+    import rwa_templates  # noqa: E402
+    import rwa_proceedings  # noqa: E402
+    import rwa_campaigns  # noqa: E402
+    import rwa_parking  # noqa: E402
+    import rwa_tenants  # noqa: E402
+    import rwa_marketplace  # noqa: E402
+except ImportError as exc:
+    # Civic / catalog sites have no RWA scripts; CMS must still boot.
+    print(f"warning: RWA modules not loaded ({exc}); CMS-only mode", file=sys.stderr)
+    rwa_portal = None  # type: ignore[assignment]
+    rwa_household = None  # type: ignore[assignment]
+    rwa_entitlements = None  # type: ignore[assignment]
+    rwa_reports = None  # type: ignore[assignment]
+    rwa_translate = None  # type: ignore[assignment]
+    rwa_payments = None  # type: ignore[assignment]
+    rwa_no_dues = None  # type: ignore[assignment]
+    rwa_no_objection = None  # type: ignore[assignment]
+    rwa_treasury = None  # type: ignore[assignment]
+    rwa_messages = None  # type: ignore[assignment]
+    rwa_push = None  # type: ignore[assignment]
+    rwa_templates = None  # type: ignore[assignment]
+    rwa_proceedings = None  # type: ignore[assignment]
+    rwa_campaigns = None  # type: ignore[assignment]
+    rwa_parking = None  # type: ignore[assignment]
+    rwa_tenants = None  # type: ignore[assignment]
+    rwa_marketplace = None  # type: ignore[assignment]
+
+try:
+    import rwa_city_hub  # noqa: E402
+except ImportError:
+    rwa_city_hub = None  # type: ignore[assignment]
 
 VEERCANVAS_ROOT = pathlib.Path(
     os.environ.get("VEERCANVAS_ROOT", str(APP_DIR.parent))
@@ -171,7 +201,7 @@ def safe_next_url(candidate: str | None) -> str | None:
     value = candidate.strip()
     if not value.startswith("/") or value.startswith("//") or "://" in value:
         return None
-    if value.startswith("/admin"):
+    if value.startswith(ADMIN_PREFIX):
         return value
     # Ops observability + platform create-site consoles live at site root (outside /admin).
     if (IS_OPS or IS_PLATFORM) and value == "/":
@@ -2764,21 +2794,28 @@ def _rwa_token() -> str:
 
 def _rwa_session_cookie_max_age() -> int:
     """Keep cookie until Sign out (matches portal session TTL, default ~10 years)."""
-    return int(os.environ.get("RWA_SESSION_TTL", str(rwa_portal.SESSION_TTL_SECONDS)))
+    default = getattr(rwa_portal, "SESSION_TTL_SECONDS", 315360000) if rwa_portal else 315360000
+    return int(os.environ.get("RWA_SESSION_TTL", str(default)))
 
 
 def _rwa_set_session_cookie(resp, token: str):
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "").split(",")[0].strip().lower()
+    secure = proto == "https"
     resp.set_cookie(
         "rwa_session",
         token,
         httponly=True,
         samesite="Lax",
+        secure=secure,
         max_age=_rwa_session_cookie_max_age(),
+        path="/",
     )
     return resp
 
 
 def _rwa_conn():
+    if rwa_portal is None:
+        raise RuntimeError("RWA portal is not enabled on this site")
     return rwa_portal.open_rwa(SITE_ROOT)
 
 
@@ -2919,6 +2956,8 @@ def _public_base_url() -> str:
 def _rwa_log_access(response):
     """Record RWA API usage for the master-admin observability dashboard."""
     try:
+        if rwa_portal is None:
+            return response
         path = request.path or ""
         method = request.method or "GET"
         if not rwa_portal.should_log_rwa_request(method, path):
@@ -3020,8 +3059,9 @@ def api_rwa_session():
             **_rwa_auth_payload(sess),
         }
         resp = jsonify(payload)
-        # Refresh cookie so existing short-lived cookies pick up persistent login.
-        if sess.get("token") and request.cookies.get("rwa_session"):
+        # Always (re)set cookie when authenticated — restores HttpOnly cookie after
+        # PWA reloads that still have a valid token via X-RWA-Token / localStorage.
+        if sess.get("token"):
             _rwa_set_session_cookie(resp, sess["token"])
         return resp
     finally:
@@ -3100,6 +3140,7 @@ def api_rwa_login_resolve():
             return jsonify({
                 "ok": True,
                 "needsContact": True,
+                "needsHouseholdCode": True,
                 "houseId": resident["house_id"],
                 "memberId": member["id"],
                 "name": member.get("name") or "",
@@ -3111,8 +3152,9 @@ def api_rwa_login_resolve():
                 "preferAuthbuddy": False,
                 "message": (
                     f"Contact details are missing for {member.get('name') or 'this person'}. "
-                    "Enter them below — we email a one-time code, and only after you verify "
-                    "that code will email/phone be saved."
+                    "Enter your household code (printed on dues reports / circulars) plus "
+                    "email and phone. We email a one-time code; contacts are saved only after "
+                    "you verify that code."
                 ),
             })
 
@@ -3189,11 +3231,18 @@ def api_rwa_otp_request():
         provided_email = str(payload.get("email") or "").strip()
         provided_phone = str(payload.get("phone") or "").strip()
         contact_supplied = bool(provided_email or provided_phone)
+        household_code = str(
+            payload.get("householdCode")
+            or payload.get("household_code")
+            or payload.get("accessCode")
+            or ""
+        ).strip()
 
         if gaps["needsContact"] and not contact_supplied:
             return jsonify({
                 "ok": True,
                 "needsContact": True,
+                "needsHouseholdCode": True,
                 "houseId": resident["house_id"],
                 "memberId": member["id"],
                 "name": member.get("name") or "",
@@ -3201,10 +3250,35 @@ def api_rwa_otp_request():
                 "missingPhone": gaps["missingPhone"],
                 "message": (
                     f"Contact details are missing for {member.get('name') or 'this person'}. "
-                    "Enter them below — we email a one-time code, and only after you verify "
-                    "that code will email/phone be saved."
+                    "Enter your household code (from the dues circular) plus email/phone. "
+                    "We email a one-time code, and only after you verify that code will "
+                    "email/phone be saved."
                 ),
             })
+
+        if gaps["needsContact"]:
+            if not household_code:
+                return jsonify({
+                    "ok": False,
+                    "error": "Household code required for first-time registration",
+                    "needsContact": True,
+                    "needsHouseholdCode": True,
+                    "missingEmail": gaps["missingEmail"],
+                    "missingPhone": gaps["missingPhone"],
+                    "houseId": resident["house_id"],
+                    "memberId": member["id"],
+                }), 400
+            if not rwa_household.verify_household_code(conn, resident["house_id"], household_code):
+                return jsonify({
+                    "ok": False,
+                    "error": "Household code does not match this plot",
+                    "needsContact": True,
+                    "needsHouseholdCode": True,
+                    "missingEmail": gaps["missingEmail"],
+                    "missingPhone": gaps["missingPhone"],
+                    "houseId": resident["house_id"],
+                    "memberId": member["id"],
+                }), 400
 
         pending_email = None
         pending_phone = None
@@ -3222,6 +3296,7 @@ def api_rwa_otp_request():
                     "ok": False,
                     "error": str(exc),
                     "needsContact": True,
+                    "needsHouseholdCode": True,
                     "missingEmail": gaps["missingEmail"],
                     "missingPhone": gaps["missingPhone"],
                     "houseId": resident["house_id"],
@@ -3235,6 +3310,7 @@ def api_rwa_otp_request():
                 "ok": False,
                 "error": "Email is required to receive a login code",
                 "needsContact": True,
+                "needsHouseholdCode": True,
                 "missingEmail": True,
                 "missingPhone": gaps["missingPhone"],
                 "houseId": resident["house_id"],
@@ -3312,7 +3388,16 @@ def api_rwa_logout():
     try:
         rwa_portal.destroy_session(conn, _rwa_token())
         resp = jsonify({"ok": True})
-        resp.set_cookie("rwa_session", "", expires=0)
+        proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "").split(",")[0].strip().lower()
+        resp.set_cookie(
+            "rwa_session",
+            "",
+            expires=0,
+            httponly=True,
+            samesite="Lax",
+            secure=(proto == "https"),
+            path="/",
+        )
         return resp
     finally:
         conn.close()
@@ -3577,6 +3662,69 @@ def api_rwa_household_member_item(house_id: str, member_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/household/<path:house_id>/tenants", methods=["GET", "POST"])
+def api_rwa_household_tenants(house_id: str):
+    """List or add plot tenants (occupancy records — not household logins)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        resident = rwa_portal.find_resident(conn, house_id, include_inactive=True)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        same_house = actor.get("houseId") == hid
+        if not same_house and not rwa_household.actor_can_use_ec_desk(actor) and not actor.get("superAdmin"):
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        can_manage = rwa_household.can_actor_manage_household(actor, hid)
+        if request.method == "GET":
+            include_ended = can_manage or same_house
+            tenants = rwa_tenants.list_tenants(conn, hid, include_ended=include_ended)
+            return jsonify({
+                "ok": True,
+                "houseId": hid,
+                "canManage": can_manage,
+                "tenants": tenants,
+            })
+        tenant = rwa_tenants.add_tenant(conn, hid, request.get_json(force=True, silent=True) or {}, actor=actor)
+        return jsonify({"ok": True, "tenant": tenant})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/household/<path:house_id>/tenants/<tenant_id>", methods=["PATCH", "DELETE"])
+def api_rwa_household_tenant_item(house_id: str, tenant_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        resident = rwa_portal.find_resident(conn, house_id, include_inactive=True)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        if request.method == "DELETE":
+            item = rwa_tenants.end_tenant(conn, hid, tenant_id, actor=actor)
+            return jsonify({"ok": True, "tenant": item})
+        item = rwa_tenants.update_tenant(
+            conn, hid, tenant_id, request.get_json(force=True, silent=True) or {}, actor=actor
+        )
+        return jsonify({"ok": True, "tenant": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/public/cash-receipt-booklet.pdf", methods=["GET"])
 def api_rwa_public_cash_receipt_booklet_pdf():
     """Blank cash-receipt booklet PDF (layout: a4-3, a5-2, a4-4; orientation: portrait, landscape)."""
@@ -3722,6 +3870,67 @@ def api_rwa_notice_item(notice_id: str):
         return jsonify({"ok": True, "notice": notice})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notices/<notice_id>/image", methods=["POST"])
+def api_rwa_notice_image_upload(notice_id: str):
+    """EC: attach a photo to a notice (news / ad)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_notices"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        image_file = request.files.get("image")
+        if not image_file or not image_file.filename:
+            return jsonify({"ok": False, "error": "Image file required"}), 400
+        raw = image_file.read()
+        rwa_portal.save_notice_image(
+            conn,
+            SITE_ROOT,
+            notice_id=notice_id,
+            data=raw,
+            filename=image_file.filename or "photo.jpg",
+            mime=image_file.mimetype or "",
+        )
+        notice = rwa_portal.get_notice(conn, notice_id, viewer=sess["resident"])
+        return jsonify({"ok": True, "notice": notice})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/notices/<notice_id>/image", methods=["GET"])
+def api_rwa_public_notice_image(notice_id: str):
+    conn = _rwa_conn()
+    try:
+        cover = rwa_portal.get_notice_image(conn, SITE_ROOT, notice_id, public_only=True)
+        if not cover:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        path, mime = cover
+        return send_file(path, mimetype=mime, max_age=300)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notices/<notice_id>/image", methods=["GET"])
+def api_rwa_notice_image_get(notice_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        cover = rwa_portal.get_notice_image(
+            conn,
+            SITE_ROOT,
+            notice_id,
+            public_only=False,
+            signed_in=bool(sess),
+        )
+        if not cover:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        path, mime = cover
+        return send_file(path, mimetype=mime, max_age=300)
     finally:
         conn.close()
 
@@ -4455,6 +4664,7 @@ def api_rwa_directory():
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
+        rwa_portal.ensure_household_ready(conn)
         return jsonify({"ok": True, "residents": rwa_portal.directory(conn, include_contacts=False)})
     finally:
         conn.close()
@@ -4471,6 +4681,7 @@ def api_rwa_residents_roster():
             or rwa_entitlements.actor_has(sess["resident"], "sensitive_ops")
         ):
             return jsonify({"ok": False, "error": "Admin access required"}), 403
+        rwa_portal.ensure_household_ready(conn)
         return jsonify({
             "ok": True,
             "stats": rwa_portal.roster_stats(conn),
@@ -5909,9 +6120,10 @@ def api_rwa_payments_all():
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_dues"):
             return jsonify({"ok": False, "error": "Admin access required"}), 403
+        rwa_portal.ensure_household_ready(conn)
         rows = conn.execute(
             """
-            SELECT pr.*, r.name, r.section, r.plot_no
+            SELECT pr.*, r.name, r.section, r.plot_no, r.household_code, r.phone, r.email
             FROM payment_rows pr
             JOIN residents r ON r.house_id = pr.house_id
             WHERE pr.ledger_id = (SELECT id FROM payment_ledgers ORDER BY as_of DESC, id DESC LIMIT 1)
@@ -5919,15 +6131,19 @@ def api_rwa_payments_all():
         ).fetchall()
         from init_rwa_db import section_plot_sort_key
 
-        enriched = [
-            {
+        enriched = []
+        for r in rows:
+            owner = rwa_household.primary_member(conn, r["house_id"])
+            owner_name = ((owner or {}).get("name") or r["name"] or "").strip()
+            enriched.append({
                 **rwa_portal.enrich_payment_row(r),
                 "plotNo": r["plot_no"],
                 "section": r["section"],
-                "name": r["name"],
-            }
-            for r in rows
-        ]
+                "name": owner_name,
+                "householdCode": (r["household_code"] or "").strip(),
+                "phone": ((owner or {}).get("phone") or r["phone"] or "").strip(),
+                "email": ((owner or {}).get("email") or r["email"] or "").strip(),
+            })
         enriched.sort(
             key=lambda row: section_plot_sort_key(
                 row.get("section"),
@@ -7509,6 +7725,760 @@ def api_rwa_campaign_contribution_review(campaign_id: str, contribution_id: str)
         conn.close()
 
 
+def _notify_parking(conn, *, event_type: str, item: dict, extra_body: str = ""):
+    plate = item.get("plateDisplay") or item.get("plate") or "vehicle"
+    plot = item.get("plotNo") or item.get("houseId") or ""
+    house_id = item.get("houseId") or ""
+    title_map = {
+        "issued": "Parking pass issued",
+        "renewed": "Visitor parking pass renewed",
+        "pending": "Parking pass needs EC approval",
+        "approved": "Parking pass approved",
+        "rejected": "Parking pass renewal declined",
+        "revoked": "Parking pass revoked",
+        "first_renew_ec": "Visitor pass renewed (1st)",
+        "member": "Member vehicle registered",
+        "adhoc": "Ad-hoc gate pass issued",
+    }
+    body = extra_body or f"{plate} · plot {plot}"
+    if house_id and house_id != getattr(rwa_parking, "ADHOC_HOUSE_ID", "") and event_type in ("issued", "renewed", "approved", "rejected", "revoked", "member"):
+        _rwa_notify(
+            conn,
+            event_type="parking",
+            audience={"type": "houses", "houseIds": [house_id]},
+            title=title_map.get(event_type, "Parking pass"),
+            body=body,
+            url="/#parking",
+        )
+    if event_type in ("pending", "first_renew_ec", "adhoc"):
+        _rwa_notify(
+            conn,
+            event_type="parking",
+            audience={"type": "entitlement", "key": "pass_manage"},
+            title=title_map.get(event_type, "Visitor parking pass"),
+            body=body,
+            url="/#parking",
+        )
+
+
+@app.route("/api/rwa/parking/gate", methods=["GET"])
+def api_rwa_parking_gate():
+    """Public gate meta + QR for the main-gate ad-hoc pass poster."""
+    conn = _rwa_conn()
+    try:
+        meta = rwa_parking.settings(conn)
+        png = rwa_parking.gate_qr_png(SITE_ROOT)
+        return jsonify({
+            "ok": True,
+            "url": meta.get("gatePassUrl"),
+            "maxHours": 9,
+            "defaultHours": meta.get("defaultAdhocHours"),
+            "allowedHours": meta.get("adhocHours"),
+            "categories": meta.get("adhocCategories"),
+            "qrDataUrl": (
+                "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+            ) if png else "",
+        })
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/adhoc", methods=["POST"])
+def api_rwa_parking_adhoc_issue():
+    """Public: issue an ad-hoc gate pass from selfie + name (no login)."""
+    conn = _rwa_conn()
+    try:
+        name = (request.form.get("name") or request.form.get("visitorName") or "").strip()
+        hours_raw = request.form.get("hours") or request.form.get("leaseHours")
+        category = request.form.get("category") or request.form.get("adhocCategory") or "other"
+        upload = request.files.get("photo") or request.files.get("selfie") or request.files.get("image")
+        if not upload:
+            return jsonify({"ok": False, "error": "Selfie is required"}), 400
+        raw = upload.read()
+        item = rwa_parking.issue_adhoc_pass(
+            conn,
+            name=name,
+            photo_bytes=raw,
+            hours=int(hours_raw) if hours_raw not in (None, "") else None,
+            category=category,
+            site_root=SITE_ROOT,
+        )
+        _notify_parking(
+            conn,
+            event_type="adhoc",
+            item=item,
+            extra_body=f"{item.get('visitorName')} · {item.get('adhocCategoryLabel') or 'Ad-hoc'} · {item.get('leaseHours')}h · {item.get('code')}",
+        )
+        return jsonify({"ok": True, "pass": item})
+    except (ValueError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+def _marketplace_payload_from_request():
+    image_file = None
+    if request.content_type and "multipart/form-data" in request.content_type:
+        payload = dict(request.form)
+        image_file = request.files.get("image")
+    else:
+        payload = request.get_json(silent=True) or {}
+    return payload, image_file
+
+
+@app.route("/api/rwa/public/marketplace", methods=["GET"])
+def api_rwa_public_marketplace_list():
+    """Public: published businesses, service needs, and ads."""
+    conn = _rwa_conn()
+    try:
+        kind = (request.args.get("kind") or "").strip() or None
+        items = rwa_marketplace.list_items(
+            conn,
+            kind=kind,
+            status="published",
+            limit=int(request.args.get("limit") or 80),
+            reveal_contact=False,
+        )
+        return jsonify({
+            "ok": True,
+            "items": items,
+            "categories": rwa_marketplace.categories_meta(),
+            "connectUrl": "/gate-pass.html#needs",
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/marketplace", methods=["POST"])
+def api_rwa_public_marketplace_create():
+    """Public: register a business (pending) or post a service need (pending)."""
+    conn = _rwa_conn()
+    try:
+        payload, image_file = _marketplace_payload_from_request()
+        kind = rwa_marketplace.normalize_kind(payload.get("kind") or "business")
+        if kind == "ad":
+            return jsonify({"ok": False, "error": "Ads can only be posted by the society desk"}), 403
+        item = rwa_marketplace.create_listing(conn, payload, actor=None, source="city_qr")
+        if image_file and image_file.filename:
+            raw = image_file.read()
+            rwa_marketplace.save_listing_image(
+                conn,
+                SITE_ROOT,
+                item_id=item["id"],
+                data=raw,
+                filename=image_file.filename or "photo.jpg",
+                mime=image_file.mimetype or "",
+            )
+            saved = rwa_marketplace.get_item(conn, item["id"]) or item
+            if item.get("managePin"):
+                saved["managePin"] = item["managePin"]
+            item = saved
+        return jsonify({
+            "ok": True,
+            "item": item,
+            "pending": item.get("status") == "pending",
+            "regNo": item.get("regNo") or "",
+            "managePin": item.get("managePin") or "",
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/marketplace/lookup", methods=["POST"])
+def api_rwa_public_marketplace_lookup():
+    """Publisher: unlock a business listing with registration number + PIN."""
+    conn = _rwa_conn()
+    try:
+        payload = request.get_json(silent=True) or {}
+        item = rwa_marketplace.get_item_by_reg_no(conn, payload.get("regNo") or payload.get("reg_no") or "")
+        if not item or item.get("kind") != "business":
+            return jsonify({"ok": False, "error": "Listing not found"}), 404
+        rwa_marketplace.require_listing_access(conn, item, pin=payload.get("pin") or payload.get("managePin"))
+        return jsonify({"ok": True, "item": item, "categories": rwa_marketplace.categories_meta()})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/marketplace/<item_id>", methods=["PATCH", "DELETE"])
+def api_rwa_public_marketplace_manage(item_id):
+    """Publisher: edit, suspend, or remove a listing with the manage PIN."""
+    conn = _rwa_conn()
+    try:
+        payload, image_file = _marketplace_payload_from_request()
+        pin = payload.get("pin") or payload.get("managePin")
+        current = rwa_marketplace.get_item(conn, item_id)
+        if not current or current.get("kind") != "business":
+            return jsonify({"ok": False, "error": "Listing not found"}), 404
+        rwa_marketplace.require_listing_access(conn, current, pin=pin)
+        if request.method == "DELETE":
+            item = rwa_marketplace.delete_listing(conn, SITE_ROOT, item_id, pin=pin)
+            return jsonify({"ok": True, "item": item})
+        status = (payload.get("status") or "").strip()
+        field_keys = (
+            "title", "category", "description", "contactName", "name",
+            "phone", "email", "website", "area",
+        )
+        has_fields = any(k in payload for k in field_keys)
+        has_image = bool(image_file and image_file.filename)
+        if not status and not has_fields and not has_image:
+            return jsonify({"ok": False, "error": "status or listing fields are required"}), 400
+        item = None
+        if has_fields:
+            item = rwa_marketplace.update_listing(conn, item_id, payload, pin=pin)
+        if has_image:
+            raw = image_file.read()
+            rwa_marketplace.save_listing_image(
+                conn,
+                SITE_ROOT,
+                item_id=item_id,
+                data=raw,
+                filename=image_file.filename or "photo.jpg",
+                mime=image_file.mimetype or "",
+            )
+            item = rwa_marketplace.get_item(conn, item_id) or item
+        if status:
+            item = rwa_marketplace.update_status(
+                conn,
+                item_id,
+                status=status,
+                pin=pin,
+                note=payload.get("note") or "",
+            )
+        if not item:
+            item = rwa_marketplace.get_item(conn, item_id)
+        return jsonify({"ok": True, "item": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/marketplace/<item_id>/interest", methods=["POST"])
+def api_rwa_public_marketplace_interest(item_id):
+    """Public: respond to a service need or ad with contact details."""
+    conn = _rwa_conn()
+    try:
+        payload = request.get_json(silent=True) or {}
+        interest = rwa_marketplace.add_interest(conn, item_id, payload)
+        try:
+            rwa_marketplace.notify_interest(conn, SITE_ROOT, interest, notify_fn=_rwa_notify)
+        except Exception:
+            pass
+        return jsonify({
+            "ok": True,
+            "interest": {
+                "id": interest.get("id"),
+                "createdAt": interest.get("createdAt"),
+            },
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/marketplace", methods=["GET"])
+def api_rwa_marketplace_list():
+    """Signed-in: list listings (EC can filter pending)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        status = (request.args.get("status") or "published").strip()
+        kind = (request.args.get("kind") or "").strip() or None
+        if status != "published" and not rwa_entitlements.actor_has(actor, "manage_notices"):
+            return jsonify({"ok": False, "error": "Notices entitlement required"}), 403
+        items = rwa_marketplace.list_items(
+            conn,
+            kind=kind,
+            status=status,
+            limit=int(request.args.get("limit") or 120),
+        )
+        return jsonify({"ok": True, "items": items, "categories": rwa_marketplace.categories_meta()})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/marketplace", methods=["POST"])
+def api_rwa_marketplace_create():
+    """Signed-in: post a service need, or EC create business/ad."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        payload, image_file = _marketplace_payload_from_request()
+        item = rwa_marketplace.create_listing(conn, payload, actor=actor, source="portal")
+        if image_file and image_file.filename:
+            raw = image_file.read()
+            rwa_marketplace.save_listing_image(
+                conn,
+                SITE_ROOT,
+                item_id=item["id"],
+                data=raw,
+                filename=image_file.filename or "photo.jpg",
+                mime=image_file.mimetype or "",
+            )
+            item = rwa_marketplace.get_item(conn, item["id"]) or item
+        return jsonify({"ok": True, "item": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/city-hub/share", methods=["POST"])
+def api_rwa_city_hub_share():
+    """EC: copy a published notice or listing onto the City of Mandi hub."""
+    if rwa_city_hub is None:
+        return jsonify({"ok": False, "error": "City hub sharing is not available on this site"}), 404
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess or not rwa_entitlements.actor_has(sess["resident"], "manage_notices"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        kind = str(payload.get("type") or "").strip().lower()
+        item_id = str(payload.get("id") or "").strip()
+        origin = _rwa_public_origin() or "https://housingcolonysanyard.in"
+        if kind == "notice":
+            result = rwa_city_hub.share_notice(conn, SITE_ROOT, item_id, origin=origin)
+        elif kind in {"marketplace", "ad", "market"}:
+            result = rwa_city_hub.share_marketplace(conn, SITE_ROOT, item_id, origin=origin)
+        else:
+            return jsonify({"ok": False, "error": "type must be notice or marketplace"}), 400
+        return jsonify({"ok": True, "shared": result.get("post")})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/marketplace/interests", methods=["GET"])
+def api_rwa_marketplace_interests():
+    """Resident: interest received on own service-need listings."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        listing_id = (request.args.get("listingId") or "").strip()
+        if listing_id:
+            items = rwa_marketplace.list_interests(conn, listing_id, actor=actor)
+            return jsonify({"ok": True, "interests": items})
+        grouped = rwa_marketplace.list_interests_for_house(conn, actor.get("houseId") or "")
+        return jsonify({"ok": True, "byListing": grouped})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/marketplace/<item_id>/image", methods=["GET"])
+def api_rwa_public_marketplace_image(item_id):
+    conn = _rwa_conn()
+    try:
+        cover = rwa_marketplace.get_listing_image(conn, SITE_ROOT, item_id, status=None)
+        if not cover:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        path, mime = cover
+        return send_file(path, mimetype=mime, max_age=300)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/marketplace/<item_id>", methods=["PATCH", "DELETE"])
+def api_rwa_marketplace_patch(item_id):
+    """EC: edit, publish / reject / archive, or delete a listing."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        current = rwa_marketplace.get_item(conn, item_id)
+        if not current:
+            return jsonify({"ok": False, "error": "Listing not found"}), 404
+        if request.method == "DELETE":
+            payload = request.get_json(silent=True) or {}
+            item = rwa_marketplace.delete_listing(
+                conn, SITE_ROOT, item_id, actor=actor, pin=payload.get("pin"),
+            )
+            return jsonify({"ok": True, "item": item})
+        payload, image_file = _marketplace_payload_from_request()
+        pin = payload.get("pin") or payload.get("managePin")
+        rwa_marketplace.require_listing_access(conn, current, actor=actor, pin=pin)
+        status = (payload.get("status") or "").strip()
+        field_keys = (
+            "title", "category", "description", "contactName", "name",
+            "phone", "email", "website", "area",
+        )
+        has_fields = any(k in payload for k in field_keys)
+        has_image = bool(image_file and image_file.filename)
+        if not status and not has_fields and not has_image:
+            return jsonify({"ok": False, "error": "status or listing fields are required"}), 400
+        item = None
+        if has_fields:
+            item = rwa_marketplace.update_listing(conn, item_id, payload, actor=actor, pin=pin)
+        if has_image:
+            raw = image_file.read()
+            rwa_marketplace.save_listing_image(
+                conn,
+                SITE_ROOT,
+                item_id=item_id,
+                data=raw,
+                filename=image_file.filename or "photo.jpg",
+                mime=image_file.mimetype or "",
+            )
+            item = rwa_marketplace.get_item(conn, item_id) or item
+        if status:
+            item = rwa_marketplace.update_status(
+                conn,
+                item_id,
+                status=status,
+                actor=actor,
+                pin=pin,
+                note=payload.get("note") or payload.get("reviewNote") or "",
+            )
+        if not item:
+            item = rwa_marketplace.get_item(conn, item_id)
+        return jsonify({"ok": True, "item": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/photo", methods=["GET"])
+def api_rwa_parking_pass_photo(pass_id):
+    """Serve ad-hoc selfie (signed-in residents with Pass · general or manage)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if not (
+            rwa_entitlements.actor_has(actor, "pass_manage")
+            or rwa_entitlements.actor_has(actor, "pass_general")
+        ):
+            return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
+        item = rwa_parking.get_pass(conn, pass_id)
+        if not item or not item.get("photoFilename"):
+            return jsonify({"ok": False, "error": "Photo not found"}), 404
+        # Own-plot or manage: always; for others only manage sees photo of foreign plots —
+        # ad-hoc is GATE house so general may still need photo when validating at gate.
+        path = rwa_parking.adhoc_photo_path(SITE_ROOT, item.get("photoFilename"))
+        if not path:
+            return jsonify({"ok": False, "error": "Photo not found"}), 404
+        return send_file(path, mimetype="image/webp", max_age=3600, conditional=True)
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/settings", methods=["GET", "PATCH"])
+def api_rwa_parking_settings():
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            return jsonify({"ok": True, **rwa_parking.settings(conn)})
+        if not rwa_entitlements.actor_has(sess["resident"], "pass_manage"):
+            return jsonify({"ok": False, "error": "Pass · manage entitlement required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        hours = rwa_parking.set_default_hours(
+            conn,
+            payload.get("defaultHours") or payload.get("hours"),
+            actor=sess["resident"],
+        )
+        return jsonify({"ok": True, **rwa_parking.settings(conn), "defaultHours": hours})
+    except (ValueError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes", methods=["GET", "POST"])
+def api_rwa_parking_passes():
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if request.method == "GET":
+            house_id = (actor.get("houseId") or "").strip()
+            passes = []
+            if house_id and not actor.get("superAdmin"):
+                passes = rwa_parking.list_passes(conn, house_id=house_id, site_root=SITE_ROOT)
+            pending = []
+            adhoc = []
+            if rwa_entitlements.actor_has(actor, "pass_manage"):
+                pending = rwa_parking.list_pending_renewals(conn, site_root=SITE_ROOT)
+                adhoc = rwa_parking.list_adhoc_passes(conn, site_root=SITE_ROOT, limit=30)
+            tenants = []
+            if house_id and not actor.get("superAdmin"):
+                tenants = rwa_tenants.list_tenants(conn, house_id, include_ended=False)
+            return jsonify({
+                "ok": True,
+                "passes": passes,
+                "pending": pending,
+                "adhoc": adhoc,
+                "tenants": tenants,
+                "canManagePass": rwa_entitlements.actor_has(actor, "pass_manage"),
+                **rwa_parking.settings(conn),
+            })
+        item = rwa_parking.issue_pass(
+            conn,
+            actor=actor,
+            payload=request.get_json(force=True, silent=True) or {},
+            site_root=SITE_ROOT,
+        )
+        if item.get("renewKind") == "auto_notify_ec":
+            _notify_parking(conn, event_type="renewed", item=item)
+            _notify_parking(
+                conn,
+                event_type="first_renew_ec",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} on plot {item.get('plotNo')} auto-renewed (1st). Valid until {item.get('expiresAtLabel')}.",
+            )
+        elif item.get("renewKind") == "pending_ec":
+            _notify_parking(
+                conn,
+                event_type="pending",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} on plot {item.get('plotNo')} needs 2nd-renewal approval.",
+            )
+        elif item.get("kind") == "member" or item.get("permanent"):
+            _notify_parking(
+                conn,
+                event_type="member",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} registered as a permanent member vehicle for plot {item.get('plotNo')}.",
+            )
+        elif item.get("kind") == "tenant":
+            _notify_parking(
+                conn,
+                event_type="issued",
+                item=item,
+                extra_body=f"Tenant vehicle {item.get('plateDisplay')} ({item.get('tenantName') or 'tenant'}) on plot {item.get('plotNo')}. Valid until {item.get('expiresAtLabel')}.",
+            )
+        else:
+            _notify_parking(
+                conn,
+                event_type="issued",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} issued. Valid until {item.get('expiresAtLabel')}.",
+            )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/lookup", methods=["GET"])
+def api_rwa_parking_lookup():
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        can_manage = rwa_entitlements.actor_has(actor, "pass_manage")
+        can_general = rwa_entitlements.actor_has(actor, "pass_general")
+        if not can_manage and not can_general:
+            return jsonify({"ok": False, "error": "Pass entitlement required"}), 403
+        q = (request.args.get("q") or request.args.get("plate") or request.args.get("pass") or "").strip()
+        item = rwa_parking.lookup_pass(conn, q, site_root=SITE_ROOT)
+        if not item:
+            return jsonify({"ok": True, "pass": None, "error": "No pass found for that vehicle or code"})
+        return jsonify({
+            "ok": True,
+            "pass": rwa_parking.lookup_view_for_actor(item, actor, can_manage=can_manage),
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/renew", methods=["POST"])
+def api_rwa_parking_renew(pass_id):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        item = rwa_parking.renew_pass(
+            conn,
+            pass_id=pass_id,
+            actor=sess["resident"],
+            payload=request.get_json(force=True, silent=True) or {},
+            site_root=SITE_ROOT,
+        )
+        if item.get("renewKind") == "auto_notify_ec":
+            _notify_parking(conn, event_type="renewed", item=item)
+            _notify_parking(
+                conn,
+                event_type="first_renew_ec",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} on plot {item.get('plotNo')} auto-renewed (1st). Valid until {item.get('expiresAtLabel')}.",
+            )
+        elif item.get("renewKind") == "pending_ec":
+            _notify_parking(
+                conn,
+                event_type="pending",
+                item=item,
+                extra_body=f"{item.get('plateDisplay')} on plot {item.get('plotNo')} needs 2nd-renewal approval.",
+            )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/approve", methods=["POST"])
+def api_rwa_parking_approve(pass_id):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "pass_manage"):
+            return jsonify({"ok": False, "error": "Pass · manage entitlement required"}), 403
+        item = rwa_parking.approve_renewal(
+            conn, pass_id=pass_id, actor=sess["resident"], site_root=SITE_ROOT
+        )
+        _notify_parking(
+            conn,
+            event_type="approved",
+            item=item,
+            extra_body=f"{item.get('plateDisplay')} approved. Valid until {item.get('expiresAtLabel')}.",
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/reject", methods=["POST"])
+def api_rwa_parking_reject(pass_id):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "pass_manage"):
+            return jsonify({"ok": False, "error": "Pass · manage entitlement required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        item = rwa_parking.reject_renewal(
+            conn,
+            pass_id=pass_id,
+            actor=sess["resident"],
+            note=payload.get("note") or payload.get("reason") or "",
+        )
+        _notify_parking(
+            conn,
+            event_type="rejected",
+            item=item,
+            extra_body=f"{item.get('plateDisplay')} 2nd renewal was declined.",
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/revoke", methods=["POST"])
+def api_rwa_parking_revoke(pass_id):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "pass_manage"):
+            return jsonify({"ok": False, "error": "Pass · manage entitlement required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        item = rwa_parking.revoke_pass(
+            conn,
+            pass_id=pass_id,
+            actor=sess["resident"],
+            note=payload.get("note") or payload.get("reason") or "",
+        )
+        _notify_parking(
+            conn,
+            event_type="revoked",
+            item=item,
+            extra_body=f"{item.get('plateDisplay')} was revoked.",
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/remove", methods=["POST"])
+def api_rwa_parking_remove(pass_id):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        item = rwa_parking.remove_own_pass(conn, pass_id=pass_id, actor=sess["resident"])
+        _notify_parking(
+            conn,
+            event_type="revoked",
+            item=item,
+            extra_body=f"{item.get('plateDisplay')} was removed from registered vehicles.",
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/proceedings/meta", methods=["GET"])
 def api_rwa_proceedings_meta():
     conn = _rwa_conn()
@@ -8696,6 +9666,12 @@ DASHBOARD_HTML = """
 <script src="/static/admin.js?v=20260725access1"></script>
 </body></html>
 """
+
+
+if SITE_ID == "cityofmandi":
+    import civic_hub
+
+    civic_hub.register(app, check_login=check_login, site_root=SITE_ROOT)
 
 
 if __name__ == "__main__":

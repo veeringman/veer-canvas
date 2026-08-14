@@ -1,0 +1,15 @@
+{
+  "businesses": [
+    {
+      "slug": "veerlabs",
+      "name": "VeerLabs Solutions",
+      "tagline": "Software from Mandi for the hills and the wire.",
+      "summary": "VeerLabs builds civic and product software — including this unofficial City of Mandi hub and Housing Colony Sanyard. A hosted page here is the pattern other Mandi businesses will use.",
+      "category": "Software",
+      "website": "https://veerlabs.solutions",
+      "location": "Mandi, Himachal Pradesh",
+      "plan": "hosted",
+      "status": "published"
+    }
+  ]
+}

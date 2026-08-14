@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>City of Mandi — portal desk</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260814paint">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
+  <script src="/admin/admin.js?v=20260814pub2" defer></script>
+</head>
+<body class="desk-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell">
+    <header class="desk-top">
+      <a class="landing-top-brand" href="/">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
+        <span class="landing-top-name">City of Mandi</span>
+      </a>
+      <p class="desk-kicker">Portal desk</p>
+      <div class="desk-top-actions">
+        <a class="btn ghost compact" href="/cms/">CMS</a>
+        <button type="button" class="btn ghost compact" id="logoutBtn" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <section class="desk-card" id="loginCard">
+      <p class="landing-section-kicker">Operators</p>
+      <h1>Manage the hub</h1>
+      <p class="muted">Features, services, and monetized business pages. This is not the Municipal Corporation.</p>
+      <form id="loginForm" class="desk-form">
+        <label>Username <input id="username" name="username" autocomplete="username" required></label>
+        <label>Password <input id="password" name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="btn primary">Sign in</button>
+        <p class="error" id="loginError" hidden></p>
+      </form>
+    </section>
+
+    <div id="deskApp" hidden>
+      <section class="desk-card">
+        <p class="landing-section-kicker">Review</p>
+        <h2>Pending listings</h2>
+        <p class="muted">People register at <code>/join</code> and submit from <code>/publish</code>. Approve to put a listing on the public board.</p>
+        <div id="moderationList" class="desk-stack"></div>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Accounts</p>
+        <h2>Publishers</h2>
+        <div id="publisherList" class="desk-stack"></div>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Public board</p>
+        <h2>Features</h2>
+        <p class="muted">Choose what the city homepage offers.</p>
+        <form id="featuresForm" class="desk-toggles">
+          <label class="desk-check"><input type="checkbox" name="news"> News</label>
+          <label class="desk-check"><input type="checkbox" name="places"> Places</label>
+          <label class="desk-check"><input type="checkbox" name="services"> Services</label>
+          <label class="desk-check"><input type="checkbox" name="ads"> Ads</label>
+          <label class="desk-check"><input type="checkbox" name="neighbourhoods"> Neighbourhoods</label>
+          <label class="desk-check"><input type="checkbox" name="businesses"> Business pages</label>
+          <button type="submit" class="btn primary compact">Save features</button>
+        </form>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Offerings</p>
+        <h2>Services this portal sells</h2>
+        <p class="muted">Directory, featured placement, and a hosted page such as <code>veerlabs.cityofmandi.com</code>.</p>
+        <div id="servicesList" class="desk-stack"></div>
+        <button type="button" class="btn ghost compact" id="addServiceBtn">Add service</button>
+        <button type="button" class="btn primary compact" id="saveServicesBtn">Save services</button>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Monetize</p>
+        <h2>Business pages</h2>
+        <p class="muted">Hosted plan publishes <code>/b/{slug}</code> now, and <code>{slug}.cityofmandi.com</code> after the domain is attached.</p>
+        <div id="bizList" class="desk-stack"></div>
+        <button type="button" class="btn ghost compact" id="addBizBtn">Add business</button>
+        <button type="button" class="btn primary compact" id="saveBizBtn">Save businesses</button>
+        <p class="muted" id="saveStatus"></p>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

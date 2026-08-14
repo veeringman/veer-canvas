@@ -1,0 +1,23 @@
+{
+  "siteName": "City of Mandi",
+  "brandName": "City of Mandi",
+  "brandTag": "Civic home",
+  "eyebrow": "Mandi, Himachal Pradesh",
+  "title": "City of Mandi",
+  "subtitle": "The independent go-to place for everything Mandi \u2014 news, places, services, and neighbourhoods.",
+  "chipPrimary": "Civic hub",
+  "chipSecondary": "Not a government website",
+  "platform": "VeerCanvas",
+  "favicon": "assets/favicon-64.png",
+  "brandMark": "assets/cityofmandi-mark.webp",
+  "version": "v0.1.0",
+  "lastUpdated": "2026-08-14T07:30:00Z",
+  "platformSiteId": "cityofmandi",
+  "platformMark": "assets/veer-canvas-icon.svg",
+  "auth": {
+    "agentBaseUrl": "",
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "veerlabs-web",
+    "gateAllLearnMore": true
+  }
+}

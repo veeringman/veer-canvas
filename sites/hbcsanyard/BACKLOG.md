@@ -77,10 +77,10 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 
 ## Ops / reliability
 
-- [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (14-day retention). See `deploy/OPS-BACKUP.md`
-- [ ] **Google Drive upload** — Phase 2 scripts ready (`deploy/ops/sync-to-drive.*`); SMTP/alerts use `housingcolonysanyard@gmail.com`; enable Drive when service account + folder share are configured (see OPS-BACKUP.md)
+- [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (7-day retention default). See `deploy/OPS-BACKUP.md`
+- [x] **Google Drive upload** — Phase 2 wired (`deploy/ops/sync-to-drive.*` + Super admin settings); enable with `data/drive-sa.json` + folder share (see OPS-BACKUP.md)
 - [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging *(on-box restore steps in OPS-BACKUP.md)*
-- [x] **Log / event stream rollover** — journald 200M/14d + nginx logrotate 14d + backup log rotate
+- [x] **Log / event stream rollover** — journald 100M/7d + nginx logrotate 14d + backup log rotate
 - [x] **Observability event pruning** — purge `access_events` older than 90 days with each backup run
 - [x] **Backup & rollover alerts** — email via `smtp.env` (`BACKUP_ALERT_TO`) on backup failure or disk pressure
 

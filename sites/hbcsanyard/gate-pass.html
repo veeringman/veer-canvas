@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#15233f">
+  <title>Connect — Himuda Housing Colony Sanyard</title>
+  <meta name="connect-default" content="needs">
+  <link rel="icon" href="assets/favicon-192.png?v=20260812pwa4" type="image/png">
+  <style>
+    :root {
+      --navy: #15233f;
+      --ink: #1a1a1a;
+      --muted: #5c564e;
+      --line: #e2d5c4;
+      --paper: #f7f1e8;
+      --ok: #1b6b3a;
+      --bad: #8b1e2d;
+      --accent: #c4a15a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: "Segoe UI", "Noto Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 520px at 8% -8%, #fff8ee 0%, transparent 55%),
+        linear-gradient(180deg, #efe6d8 0%, var(--paper) 42%, #f3ebe0 100%);
+    }
+    main {
+      width: min(28rem, calc(100% - 1.25rem));
+      margin: 1.1rem auto 2.5rem;
+    }
+    header { text-align: center; margin-bottom: 0.75rem; }
+    header img { width: 64px; height: 64px; object-fit: contain; }
+    h1 {
+      font-size: 1.22rem;
+      color: var(--navy);
+      margin: 0.5rem 0 0.2rem;
+      line-height: 1.3;
+    }
+    .muted { color: var(--muted); font-size: 0.9rem; line-height: 1.4; margin: 0; }
+    .lang-bar, .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      justify-content: center;
+      margin: 0.7rem 0 0.35rem;
+    }
+    .lang-bar button, .tabs button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+      color: var(--navy);
+      border-radius: 999px;
+      padding: 0.4rem 0.75rem;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .lang-bar button.is-active, .tabs button.is-active {
+      background: var(--navy);
+      border-color: var(--navy);
+      color: #f7f3eb;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0.95rem;
+      box-shadow: 0 10px 28px rgba(21, 35, 63, 0.07);
+      margin-bottom: 0.75rem;
+    }
+    .cam-stage {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #0b1220;
+      margin-bottom: 0.75rem;
+    }
+    .cam-stage video,
+    .cam-stage canvas,
+    .cam-stage img.snap {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1);
+    }
+    .cam-stage canvas,
+    .cam-stage img.snap { display: none; }
+    .cam-stage.is-captured video { display: none; }
+    .cam-stage.is-captured canvas,
+    .cam-stage.is-captured img.snap { display: block; }
+    label {
+      display: grid;
+      gap: 0.28rem;
+      font-size: 0.86rem;
+      color: var(--muted);
+      margin-bottom: 0.65rem;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+    }
+    textarea { min-height: 4.5rem; resize: vertical; }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+    }
+    button.btn {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 0.65rem 1rem;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.btn.primary { background: var(--navy); color: #f7f3eb; flex: 1 1 8rem; }
+    button.btn.secondary { background: var(--accent); color: #15233f; flex: 1 1 8rem; }
+    button.btn.ghost {
+      background: transparent;
+      color: var(--navy);
+      border: 1px solid var(--line);
+    }
+    button.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .status { margin: 0.55rem 0 0; font-size: 0.88rem; color: var(--muted); }
+    .status.error { color: var(--bad); }
+    .status.ok { color: var(--ok); font-weight: 650; }
+    .issued { text-align: center; }
+    .issued .flag {
+      font-size: 1.25rem;
+      font-weight: 750;
+      color: var(--ok);
+      margin: 0 0 0.55rem;
+    }
+    .issued img.face {
+      width: 7.5rem;
+      height: 7.5rem;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #fff;
+      box-shadow: 0 6px 18px rgba(21,35,63,0.18);
+      margin: 0.2rem auto 0.7rem;
+      display: block;
+    }
+    .issued dl {
+      display: grid;
+      grid-template-columns: 7.5rem 1fr;
+      gap: 0.3rem 0.55rem;
+      text-align: start;
+      margin: 0.75rem 0 0;
+      font-size: 0.92rem;
+    }
+    .issued dt { color: var(--muted); }
+    .issued dd { margin: 0; font-weight: 650; word-break: break-word; }
+    .issued dd.code-val { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.06em; font-size: 1.05rem; }
+    .issued .pass-qr {
+      width: 8.5rem;
+      height: 8.5rem;
+      margin: 0.85rem auto 0;
+      display: block;
+      background: #fff;
+      border-radius: 10px;
+      padding: 0.35rem;
+    }
+    .disclaimer {
+      margin-top: 0.85rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .subtabs {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin: 0 0 0.75rem;
+    }
+    .subtabs button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 0.4rem 0.65rem;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 650;
+      color: var(--navy);
+      cursor: pointer;
+    }
+    .subtabs button.is-active {
+      background: rgba(21, 35, 63, 0.08);
+      border-color: var(--navy);
+    }
+    .list { display: grid; gap: 0.65rem; }
+    .list article {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.7rem 0.8rem;
+      background: #fff;
+    }
+    .list strong { display: block; color: var(--navy); margin-bottom: 0.15rem; }
+    .list .meta { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .list p { margin: 0; font-size: 0.88rem; line-height: 1.4; white-space: pre-wrap; }
+    .list a.phone {
+      display: inline-block;
+      margin-top: 0.4rem;
+      color: var(--navy);
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .list a.contact-link {
+      display: inline-block;
+      margin-top: 0.35rem;
+      margin-right: 0.65rem;
+      color: var(--navy);
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 0.86rem;
+    }
+    .listing-photo-preview,
+    .list .card-photo {
+      display: block;
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin: 0.45rem 0;
+    }
+    .home-link {
+      display: block;
+      text-align: center;
+      margin-top: 1rem;
+      color: var(--navy);
+      font-weight: 650;
+      font-size: 0.9rem;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="assets/mhws-logo/mhws-logo-web-256.png" alt="" width="64" height="64"
+           onerror="this.style.display='none'">
+      <h1 data-i18n="title">Connect with Housing Colony Sanyard</h1>
+      <p class="muted" data-i18n="subtitle">Gate pass · local businesses · service needs — Himuda Housing Colony Sanyard, Mandi</p>
+      <div class="lang-bar" role="group" aria-label="Language">
+        <button type="button" class="is-active" data-lang="en">English</button>
+        <button type="button" data-lang="hi">हिन्दी</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Connect sections">
+        <button type="button" data-tab="pass" id="tabPass" data-i18n="tabPass">Gate pass</button>
+        <button type="button" class="is-active" data-tab="biz" id="tabBiz" data-i18n="tabBiz">Businesses &amp; services</button>
+      </div>
+    </header>
+
+    <div id="panelPass" hidden>
+      <section class="card" id="formCard">
+        <div class="cam-stage" id="camStage">
+          <video id="camVideo" playsinline muted autoplay></video>
+          <canvas id="camCanvas" hidden></canvas>
+          <img class="snap" id="camSnap" alt="">
+        </div>
+        <label>
+          <span data-i18n="nameLabel">Your name</span>
+          <input id="nameInput" maxlength="80" autocomplete="name" required>
+        </label>
+        <label>
+          <span data-i18n="categoryLabel">Visit type</span>
+          <select id="categorySelect">
+            <option value="hawker" data-i18n-opt="catHawker">Hawker</option>
+            <option value="scrap" data-i18n-opt="catScrap">Scrap collector</option>
+            <option value="labour" data-i18n-opt="catLabour">Labourer</option>
+            <option value="delivery" data-i18n-opt="catDelivery">Delivery</option>
+            <option value="other" data-i18n-opt="catOther">Other</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="hoursLabel">Duration (max 9 hours)</span>
+          <select id="hoursSelect">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+          </select>
+        </label>
+        <div class="btn-row">
+          <button type="button" class="btn secondary" id="captureBtn" data-i18n="capture">Take selfie</button>
+          <button type="button" class="btn ghost" id="retakeBtn" hidden data-i18n="retake">Retake</button>
+          <button type="button" class="btn primary" id="submitBtn" disabled data-i18n="submit">Get pass</button>
+        </div>
+        <p class="status" id="statusLine" data-i18n="camHint">Allow camera access, face the phone, then take a selfie.</p>
+      </section>
+
+      <section class="card issued" id="issuedCard" hidden>
+        <p class="flag" data-i18n="issuedTitle">Pass issued</p>
+        <img class="face" id="issuedFace" alt="">
+        <dl>
+          <dt data-i18n="fName">Name</dt><dd id="issuedName">—</dd>
+          <dt data-i18n="fType">Type</dt><dd id="issuedType">—</dd>
+          <dt data-i18n="fCode">Code</dt><dd id="issuedCode">—</dd>
+          <dt data-i18n="fValid">Valid until</dt><dd id="issuedValid">—</dd>
+        </dl>
+        <img class="pass-qr" id="issuedQr" alt="Pass QR">
+        <p class="disclaimer" data-i18n="issuedHint">Show this screen at the gate if asked. The pass expires automatically.</p>
+        <div class="btn-row" style="justify-content:center;margin-top:0.85rem">
+          <button type="button" class="btn ghost" id="anotherBtn" data-i18n="another">Issue another</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="panelBiz">
+      <div class="subtabs" role="tablist" aria-label="Business sections">
+        <button type="button" data-sub="browse" data-i18n="subBrowse">Browse</button>
+        <button type="button" class="is-active" data-sub="needs" data-i18n="subNeeds">Service needs</button>
+        <button type="button" data-sub="register" data-i18n="subRegister">Register business</button>
+        <button type="button" data-sub="manage" data-i18n="subManage">Manage listing</button>
+      </div>
+
+      <section class="card" id="bizBrowseCard" hidden>
+        <p class="muted" data-i18n="browseHint">Local services connected with the colony — autos, cabs, repairs, and more.</p>
+        <div class="list" id="bizList" style="margin-top:0.75rem">
+          <p class="muted" data-i18n="loading">Loading…</p>
+        </div>
+      </section>
+
+      <section class="card" id="bizNeedsCard">
+        <p class="muted" data-i18n="needsHint">What residents need — tap I’m interested and leave your number or email.</p>
+        <div class="list" id="needsList" style="margin-top:0.75rem">
+          <p class="muted" data-i18n="loading">Loading…</p>
+        </div>
+      </section>
+
+      <section class="card" id="bizRegisterCard" hidden>
+        <p class="muted" data-i18n="registerHint">Offer a service to the colony (auto hire, cab rent, electrician…). EC reviews city registrations before they appear on the homepage.</p>
+        <form id="bizForm" class="stack">
+          <label>
+            <span data-i18n="bizTitle">Business / service title</span>
+            <input id="bizTitle" maxlength="120" required placeholder="e.g. Auto for hire — Sector 3">
+          </label>
+          <label>
+            <span data-i18n="bizCategory">Category</span>
+            <select id="bizCategory"></select>
+          </label>
+          <label>
+            <span data-i18n="bizDesc">Short description</span>
+            <textarea id="bizDesc" maxlength="800" placeholder="Routes, rates, timings…"></textarea>
+          </label>
+          <label>
+            <span data-i18n="bizName">Your name</span>
+            <input id="bizName" maxlength="80" required autocomplete="name">
+          </label>
+          <label>
+            <span data-i18n="bizPhone">Mobile</span>
+            <input id="bizPhone" maxlength="15" required inputmode="tel" autocomplete="tel">
+          </label>
+          <label>
+            <span data-i18n="bizEmail">Email (optional)</span>
+            <input id="bizEmail" type="email" maxlength="120" autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label>
+            <span data-i18n="bizWebsite">Website (optional)</span>
+            <input id="bizWebsite" maxlength="200" inputmode="url" placeholder="https://yourbusiness.in">
+          </label>
+          <label>
+            <span data-i18n="bizArea">Area (optional)</span>
+            <input id="bizArea" maxlength="80" placeholder="Mandi / nearby">
+          </label>
+          <label>
+            <span data-i18n="bizPhoto">Photo (optional, up to 5 MB)</span>
+            <input id="bizPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+          </label>
+          <img id="bizPhotoPreview" class="listing-photo-preview" alt="" hidden>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="bizSubmit" data-i18n="bizSubmit">Submit for review</button>
+          </div>
+          <p class="status" id="bizStatus"></p>
+        </form>
+        <section class="issued" id="bizIssuedCard" hidden>
+          <p class="flag" data-i18n="bizIssuedTitle">Registration issued</p>
+          <dl>
+            <dt data-i18n="bizRegNo">Registration no.</dt><dd class="code-val" id="bizIssuedReg">—</dd>
+            <dt data-i18n="bizPin">Manage PIN</dt><dd class="code-val" id="bizIssuedPin">—</dd>
+            <dt data-i18n="bizIssuedStatus">Status</dt><dd id="bizIssuedStatus">—</dd>
+          </dl>
+          <p class="disclaimer" data-i18n="bizIssuedHint">Save the registration number and PIN. You need both to edit, suspend, or remove this listing. EC still reviews city registrations before they appear on the homepage.</p>
+          <div class="btn-row" style="justify-content:center;margin-top:0.85rem">
+            <button type="button" class="btn secondary" id="bizManageNowBtn" data-i18n="bizManageNow">Manage this listing</button>
+            <button type="button" class="btn ghost" id="bizAnotherBtn" data-i18n="bizAnother">Register another</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="card" id="bizManageCard" hidden>
+        <p class="muted" data-i18n="manageHint">Enter your registration number and PIN to edit, suspend, or remove a listing.</p>
+        <form id="bizUnlockForm" class="stack">
+          <label>
+            <span data-i18n="bizRegNo">Registration no.</span>
+            <input id="bizUnlockReg" maxlength="32" required placeholder="MHWS-B-2026-0001" autocomplete="off">
+          </label>
+          <label>
+            <span data-i18n="bizPin">Manage PIN</span>
+            <input id="bizUnlockPin" maxlength="8" required inputmode="numeric" autocomplete="off">
+          </label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="bizUnlockBtn" data-i18n="bizUnlock">Open listing</button>
+          </div>
+          <p class="status" id="bizUnlockStatus"></p>
+        </form>
+        <form id="bizEditForm" class="stack" hidden>
+          <input type="hidden" id="bizEditId" value="">
+          <p class="muted" id="bizEditMeta"></p>
+          <label>
+            <span data-i18n="bizTitle">Business / service title</span>
+            <input id="bizEditTitle" maxlength="120" required>
+          </label>
+          <label>
+            <span data-i18n="bizCategory">Category</span>
+            <select id="bizEditCategory"></select>
+          </label>
+          <label>
+            <span data-i18n="bizDesc">Short description</span>
+            <textarea id="bizEditDesc" maxlength="800"></textarea>
+          </label>
+          <label>
+            <span data-i18n="bizName">Your name</span>
+            <input id="bizEditName" maxlength="80" required>
+          </label>
+          <label>
+            <span data-i18n="bizPhone">Mobile</span>
+            <input id="bizEditPhone" maxlength="15" required inputmode="tel">
+          </label>
+          <label>
+            <span data-i18n="bizEmail">Email (optional)</span>
+            <input id="bizEditEmail" type="email" maxlength="120">
+          </label>
+          <label>
+            <span data-i18n="bizWebsite">Website (optional)</span>
+            <input id="bizEditWebsite" maxlength="200" inputmode="url">
+          </label>
+          <label>
+            <span data-i18n="bizArea">Area (optional)</span>
+            <input id="bizEditArea" maxlength="80">
+          </label>
+          <label>
+            <span data-i18n="bizPhoto">Photo (optional, up to 5 MB)</span>
+            <input id="bizEditPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+          </label>
+          <img id="bizEditPhotoPreview" class="listing-photo-preview" alt="" hidden>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" data-i18n="bizSave">Save changes</button>
+            <button type="button" class="btn ghost" id="bizSuspendBtn" data-i18n="bizSuspend">Suspend</button>
+            <button type="button" class="btn ghost" id="bizEnableBtn" data-i18n="bizEnable">Enable</button>
+            <button type="button" class="btn ghost" id="bizRemoveBtn" data-i18n="bizRemove">Remove</button>
+          </div>
+          <p class="status" id="bizEditStatus"></p>
+        </form>
+      </section>
+    </div>
+
+    <a class="home-link" href="/" data-i18n="homeLink">Open colony homepage</a>
+  </main>
+
+  <script>
+    const I18N = {
+      en: {
+        title: 'Connect with Housing Colony Sanyard',
+        subtitle: 'Gate pass · local businesses · service needs — Himuda Housing Colony Sanyard, Mandi',
+        tabPass: 'Gate pass',
+        tabBiz: 'Businesses & services',
+        nameLabel: 'Your name',
+        categoryLabel: 'Visit type',
+        hoursLabel: 'Duration (max 9 hours)',
+        capture: 'Take selfie',
+        retake: 'Retake',
+        submit: 'Get pass',
+        camHint: 'Allow camera access, face the phone, then take a selfie.',
+        camReady: 'Camera ready. Centre your face and tap Take selfie.',
+        camDenied: 'Camera unavailable. Allow camera permission and reload.',
+        needSelfie: 'Take a selfie first.',
+        needName: 'Enter your name.',
+        issuing: 'Issuing pass…',
+        issuedTitle: 'Pass issued',
+        fName: 'Name',
+        fType: 'Type',
+        fCode: 'Code',
+        fValid: 'Valid until',
+        issuedHint: 'Show this screen at the gate if asked. The pass expires automatically.',
+        another: 'Issue another',
+        hourUnit: 'hours',
+        catHawker: 'Hawker',
+        catScrap: 'Scrap collector',
+        catLabour: 'Labourer',
+        catDelivery: 'Delivery',
+        catOther: 'Other',
+        subBrowse: 'Browse',
+        subNeeds: 'Service needs',
+        subRegister: 'Register business',
+        subManage: 'Manage listing',
+        browseHint: 'Local services connected with the colony — autos, cabs, repairs, and more.',
+        needsHint: 'What residents need — tap I’m interested and leave your number or email.',
+        registerHint: 'Offer a service to the colony. City registrations are reviewed by EC before they appear on the homepage.',
+        bizTitle: 'Business / service title',
+        bizCategory: 'Category',
+        bizDesc: 'Short description',
+        bizName: 'Your name',
+        bizPhone: 'Mobile',
+        bizEmail: 'Email (optional)',
+        bizWebsite: 'Website (optional)',
+        bizArea: 'Area (optional)',
+        bizPhoto: 'Photo (optional, up to 5 MB)',
+        bizSubmit: 'Submit for review',
+        bizOk: 'Submitted. EC will review and publish it on the homepage.',
+        bizIssuedTitle: 'Registration issued',
+        bizRegNo: 'Registration no.',
+        bizPin: 'Manage PIN',
+        bizIssuedStatus: 'Status',
+        bizIssuedHint: 'Save the registration number and PIN. You need both to edit, suspend, or remove this listing. EC still reviews city registrations before they appear on the homepage.',
+        bizManageNow: 'Manage this listing',
+        bizAnother: 'Register another',
+        manageHint: 'Enter your registration number and PIN to edit, suspend, or remove a listing.',
+        bizUnlock: 'Open listing',
+        bizSave: 'Save changes',
+        bizSuspend: 'Suspend',
+        bizEnable: 'Enable',
+        bizRemove: 'Remove',
+        bizPending: 'Pending EC review',
+        bizLive: 'Published',
+        bizSuspended: 'Suspended',
+        bizRejected: 'Rejected',
+        bizSaved: 'Listing saved.',
+        bizSuspendedOk: 'Listing suspended. It is hidden from the homepage.',
+        bizEnabledOk: 'Listing enabled again.',
+        bizRemovedOk: 'Listing removed.',
+        bizConfirmSuspend: 'Suspend this listing? It will be hidden until you enable it.',
+        bizConfirmRemove: 'Permanently remove this listing?',
+        bizUnlockFail: 'Could not open listing. Check the number and PIN.',
+        loading: 'Loading…',
+        emptyBiz: 'No published businesses yet.',
+        emptyNeeds: 'No open service needs right now.',
+        homeLink: 'Open colony homepage',
+        interestBtn: "I'm interested",
+        interestName: 'Your name',
+        interestPhone: 'Mobile (or email)',
+        interestEmail: 'Email (or mobile)',
+        interestSend: 'Send to resident',
+        interestOk: 'Sent. The resident can connect with you.',
+        interestNeedContact: 'Provide a mobile number or email.',
+      },
+      hi: {
+        title: 'हाउसिंग कॉलोनी सनयार्ड से जुड़ें',
+        subtitle: 'गेट पास · स्थानीय व्यवसाय · सेवा आवश्यकताएँ — हिमुडा हाउसिंग कॉलोनी सनयार्ड, मंडी',
+        tabPass: 'गेट पास',
+        tabBiz: 'व्यवसाय और सेवाएँ',
+        nameLabel: 'आपका नाम',
+        categoryLabel: 'भेंट का प्रकार',
+        hoursLabel: 'अवधि (अधिकतम 9 घंटे)',
+        capture: 'सेल्फी लें',
+        retake: 'फिर से लें',
+        submit: 'पास लें',
+        camHint: 'कैमरा अनुमति दें, फ़ोन की ओर मुँह करें, फिर सेल्फी लें।',
+        camReady: 'कैमरा तैयार है। चेहरा बीच में रखें और सेल्फी लें दबाएँ।',
+        camDenied: 'कैमरा उपलब्ध नहीं। अनुमति दें और पेज फिर लोड करें।',
+        needSelfie: 'पहले सेल्फी लें।',
+        needName: 'अपना नाम लिखें।',
+        issuing: 'पास जारी हो रहा है…',
+        issuedTitle: 'पास जारी हो गया',
+        fName: 'नाम',
+        fType: 'प्रकार',
+        fCode: 'कोड',
+        fValid: 'मान्य तक',
+        issuedHint: 'माँगने पर यह स्क्रीन गेट पर दिखाएँ। पास अपने आप समाप्त हो जाएगा।',
+        another: 'एक और पास',
+        hourUnit: 'घंटे',
+        catHawker: 'फेरीवाला',
+        catScrap: 'कबाड़ी',
+        catLabour: 'मजदूर',
+        catDelivery: 'डिलीवरी',
+        catOther: 'अन्य',
+        subBrowse: 'देखें',
+        subNeeds: 'सेवा आवश्यकताएँ',
+        subRegister: 'व्यवसाय दर्ज करें',
+        subManage: 'लिस्टिंग प्रबंधित करें',
+        browseHint: 'कॉलोनी से जुड़े स्थानीय सेवाएँ — ऑटो, कैब, मरम्मत आदि।',
+        needsHint: 'निवासी क्या खोज रहे हैं — रुचि दिखाएँ और मोबाइल/ईमेल दें।',
+        registerHint: 'कॉलोनी को सेवा दें। शहर से पंजीकरण EC जाँच के बाद होमपेज पर दिखेगा।',
+        bizTitle: 'व्यवसाय / सेवा का शीर्षक',
+        bizCategory: 'श्रेणी',
+        bizDesc: 'संक्षिप्त विवरण',
+        bizName: 'आपका नाम',
+        bizPhone: 'मोबाइल',
+        bizEmail: 'ईमेल (वैकल्पिक)',
+        bizWebsite: 'वेबसाइट (वैकल्पिक)',
+        bizArea: 'क्षेत्र (वैकल्पिक)',
+        bizPhoto: 'फोटो (वैकल्पिक, अधिकतम 5 MB)',
+        bizSubmit: 'समीक्षा के लिए भेजें',
+        bizOk: 'भेज दिया गया। EC जाँच कर होमपेज पर प्रकाशित करेगा।',
+        bizIssuedTitle: 'पंजीकरण जारी',
+        bizRegNo: 'पंजीकरण संख्या',
+        bizPin: 'प्रबंध PIN',
+        bizIssuedStatus: 'स्थिति',
+        bizIssuedHint: 'पंजीकरण संख्या और PIN संभाल कर रखें। लिस्टिंग बदलने, निलंबित करने या हटाने के लिए दोनों चाहिए। शहर से पंजीकरण EC जाँच के बाद होमपेज पर दिखेगा।',
+        bizManageNow: 'यह लिस्टिंग प्रबंधित करें',
+        bizAnother: 'एक और दर्ज करें',
+        manageHint: 'लिस्टिंग बदलने, निलंबित करने या हटाने के लिए पंजीकरण संख्या और PIN लिखें।',
+        bizUnlock: 'लिस्टिंग खोलें',
+        bizSave: 'सहेजें',
+        bizSuspend: 'निलंबित करें',
+        bizEnable: 'सक्रिय करें',
+        bizRemove: 'हटाएँ',
+        bizPending: 'EC समीक्षा लंबित',
+        bizLive: 'प्रकाशित',
+        bizSuspended: 'निलंबित',
+        bizRejected: 'अस्वीकृत',
+        bizSaved: 'लिस्टिंग सहेजी गई।',
+        bizSuspendedOk: 'लिस्टिंग निलंबित। होमपेज से छिपा दी गई।',
+        bizEnabledOk: 'लिस्टिंग फिर सक्रिय।',
+        bizRemovedOk: 'लिस्टिंग हटाई गई।',
+        bizConfirmSuspend: 'इस लिस्टिंग को निलंबित करें? सक्षम करने तक यह छिपी रहेगी।',
+        bizConfirmRemove: 'यह लिस्टिंग स्थायी रूप से हटाएँ?',
+        bizUnlockFail: 'लिस्टिंग नहीं खुली। संख्या और PIN जाँचें।',
+        loading: 'लोड हो रहा है…',
+        emptyBiz: 'अभी कोई प्रकाशित व्यवसाय नहीं।',
+        emptyNeeds: 'अभी कोई खुली सेवा आवश्यकता नहीं।',
+        homeLink: 'कॉलोनी होमपेज खोलें',
+        interestBtn: 'मुझे रुचि है',
+        interestName: 'आपका नाम',
+        interestPhone: 'मोबाइल (या ईमेल)',
+        interestEmail: 'ईमेल (या मोबाइल)',
+        interestSend: 'निवासी को भेजें',
+        interestOk: 'भेजा गया। निवासी आपसे संपर्क कर सकेंगे।',
+        interestNeedContact: 'मोबाइल या ईमेल दें।',
+      },
+    };
+
+    const CAT_KEYS = {
+      hawker: 'catHawker', scrap: 'catScrap', labour: 'catLabour',
+      delivery: 'catDelivery', other: 'catOther',
+    };
+
+    let lang = 'en';
+    let selfieBlob = null;
+    let stream = null;
+    let categories = { business: [] };
+
+    function t(key) {
+      return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach((node) => {
+        node.textContent = t(node.getAttribute('data-i18n'));
+      });
+      document.querySelectorAll('[data-i18n-opt]').forEach((node) => {
+        node.textContent = t(node.getAttribute('data-i18n-opt'));
+      });
+      document.querySelectorAll('.lang-bar button').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-lang') === lang);
+      });
+    }
+
+    function setTab(tab) {
+      const pass = tab === 'pass';
+      document.getElementById('panelPass').hidden = !pass;
+      document.getElementById('panelBiz').hidden = pass;
+      document.getElementById('tabPass').classList.toggle('is-active', pass);
+      document.getElementById('tabBiz').classList.toggle('is-active', !pass);
+      if (pass) {
+        startCam().catch(() => {});
+      } else {
+        stopCam();
+        loadMarket();
+      }
+      try {
+        const u = new URL(window.location.href);
+        if (pass) u.hash = 'pass';
+        else if (!u.hash || u.hash === '#pass') u.hash = 'needs';
+        history.replaceState(null, '', u);
+      } catch (_e) { /* ignore */ }
+    }
+
+    function setSub(sub) {
+      document.querySelectorAll('.subtabs button').forEach((b) => {
+        b.classList.toggle('is-active', b.getAttribute('data-sub') === sub);
+      });
+      document.getElementById('bizBrowseCard').hidden = sub !== 'browse';
+      document.getElementById('bizNeedsCard').hidden = sub !== 'needs';
+      document.getElementById('bizRegisterCard').hidden = sub !== 'register';
+      document.getElementById('bizManageCard').hidden = sub !== 'manage';
+      try {
+        const u = new URL(window.location.href);
+        if (sub === 'needs') u.hash = 'needs';
+        else if (sub === 'register') u.hash = 'register';
+        else if (sub === 'manage') u.hash = 'manage';
+        else u.hash = 'business';
+        history.replaceState(null, '', u);
+      } catch (_e) { /* ignore */ }
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    function renderList(el, items, emptyKey, { interest = false } = {}) {
+      if (!items.length) {
+        el.innerHTML = `<p class="muted">${esc(t(emptyKey))}</p>`;
+        return;
+      }
+      el.innerHTML = items.map((it) => {
+        const id = it.id || '';
+        const showInterest = interest && id && it.acceptsInterest !== false;
+        const interestHtml = showInterest ? `
+          <button type="button" class="btn ghost interest-toggle" data-need-id="${esc(id)}" style="margin-top:0.45rem">${esc(t('interestBtn'))}</button>
+          <form class="interest-form" data-need-id="${esc(id)}" hidden style="margin-top:0.55rem">
+            <label><span>${esc(t('interestName'))}</span><input name="name" maxlength="80" required autocomplete="name"></label>
+            <label><span>${esc(t('interestPhone'))}</span><input name="phone" maxlength="15" inputmode="tel" autocomplete="tel"></label>
+            <label><span>${esc(t('interestEmail'))}</span><input name="email" type="email" maxlength="120" autocomplete="email"></label>
+            <div class="btn-row"><button type="submit" class="btn secondary">${esc(t('interestSend'))}</button></div>
+            <p class="status interest-status"></p>
+          </form>` : '';
+        const img = it.imageUrl
+          ? `<img class="card-photo" src="${esc(it.imageUrl)}?v=${encodeURIComponent(it.updatedAt || it.publishedAt || '')}" alt="" loading="lazy">`
+          : '';
+        const contacts = [];
+        if (!interest && it.phone) contacts.push(`<a class="phone" href="tel:${esc(it.phone)}">${esc(it.phone)}</a>`);
+        if (!interest && it.email) contacts.push(`<a class="contact-link" href="mailto:${esc(it.email)}">${esc(it.email)}</a>`);
+        if (!interest && it.website) {
+          const href = /^https?:\/\//i.test(it.website) ? it.website : `https://${it.website}`;
+          contacts.push(`<a class="contact-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">Website</a>`);
+        }
+        return `
+        <article>
+          ${img}
+          <strong>${esc(it.title)}</strong>
+          <div class="meta">${esc(it.regNo ? it.regNo + ' · ' : '')}${esc(it.categoryLabel || it.category || '')}${it.area ? ' · ' + esc(it.area) : ''}</div>
+          ${it.description ? `<p>${esc(it.description)}</p>` : ''}
+          ${contacts.join('')}
+          ${interestHtml}
+        </article>`;
+      }).join('');
+    }
+
+    async function loadMarket() {
+      const bizEl = document.getElementById('bizList');
+      const needEl = document.getElementById('needsList');
+      bizEl.innerHTML = `<p class="muted">${esc(t('loading'))}</p>`;
+      needEl.innerHTML = `<p class="muted">${esc(t('loading'))}</p>`;
+      try {
+        const res = await fetch('/api/rwa/public/marketplace?limit=80');
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+        categories = data.categories || categories;
+        fillBizCategories();
+        const items = data.items || [];
+        renderList(bizEl, items.filter((i) => i.kind === 'business'), 'emptyBiz');
+        renderList(needEl, items.filter((i) => i.kind === 'service_need'), 'emptyNeeds', { interest: true });
+      } catch (err) {
+        bizEl.innerHTML = `<p class="muted">${esc(err.message || 'Error')}</p>`;
+        needEl.innerHTML = `<p class="muted">${esc(err.message || 'Error')}</p>`;
+      }
+    }
+
+    function fillBizCategories() {
+      const opts = (categories.business || []).length
+        ? categories.business
+        : [
+            { id: 'auto_hire', label: 'Auto for hire' },
+            { id: 'cab_rent', label: 'Car / cab for rent' },
+            { id: 'other', label: 'Other' },
+          ];
+      ['bizCategory', 'bizEditCategory'].forEach((id) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = opts.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
+        if (prev) sel.value = prev;
+      });
+    }
+
+    async function startCam() {
+      const status = document.getElementById('statusLine');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        const video = document.getElementById('camVideo');
+        video.srcObject = stream;
+        await video.play();
+        status.textContent = t('camReady');
+        status.className = 'status';
+      } catch (_e) {
+        status.textContent = t('camDenied');
+        status.className = 'status error';
+      }
+    }
+
+    function stopCam() {
+      if (stream) {
+        stream.getTracks().forEach((tr) => tr.stop());
+        stream = null;
+      }
+    }
+
+    function captureSelfie() {
+      const video = document.getElementById('camVideo');
+      const canvas = document.getElementById('camCanvas');
+      const snap = document.getElementById('camSnap');
+      const stage = document.getElementById('camStage');
+      if (!video.videoWidth) return;
+      const size = Math.min(video.videoWidth, video.videoHeight);
+      const sx = (video.videoWidth - size) / 2;
+      const sy = (video.videoHeight - size) / 2;
+      canvas.width = 480;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      ctx.translate(480, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, size, size, 0, 0, 480, 480);
+      ctx.restore();
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        selfieBlob = blob;
+        snap.src = URL.createObjectURL(blob);
+        stage.classList.add('is-captured');
+        document.getElementById('retakeBtn').hidden = false;
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('statusLine').textContent = '';
+      }, 'image/jpeg', 0.85);
+    }
+
+    function resetPassForm() {
+      selfieBlob = null;
+      document.getElementById('camStage').classList.remove('is-captured');
+      document.getElementById('retakeBtn').hidden = true;
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('formCard').hidden = false;
+      document.getElementById('issuedCard').hidden = true;
+      document.getElementById('nameInput').value = '';
+      startCam().catch(() => {});
+    }
+
+    document.querySelectorAll('.lang-bar button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        lang = btn.getAttribute('data-lang') || 'en';
+        applyI18n();
+      });
+    });
+    document.getElementById('tabPass').addEventListener('click', () => setTab('pass'));
+    document.getElementById('tabBiz').addEventListener('click', () => setTab('biz'));
+    document.querySelectorAll('.subtabs button').forEach((btn) => {
+      btn.addEventListener('click', () => setSub(btn.getAttribute('data-sub')));
+    });
+    document.getElementById('panelBiz').addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const btn = target?.closest?.('.interest-toggle');
+      if (!btn) return;
+      event.preventDefault();
+      const card = btn.closest('article') || btn.parentElement;
+      const form = card?.querySelector?.('.interest-form')
+        || document.querySelector(`.interest-form[data-need-id="${btn.getAttribute('data-need-id')}"]`);
+      if (!form) return;
+      form.hidden = !form.hidden;
+      if (!form.hidden) form.querySelector('input')?.focus?.();
+    });
+    document.getElementById('panelBiz').addEventListener('submit', async (event) => {
+      const form = event.target.closest?.('.interest-form');
+      if (!form) return;
+      event.preventDefault();
+      const id = form.getAttribute('data-need-id');
+      const status = form.querySelector('.interest-status');
+      const btn = form.querySelector('button[type="submit"]');
+      const name = (form.querySelector('[name="name"]')?.value || '').trim();
+      const phone = (form.querySelector('[name="phone"]')?.value || '').trim();
+      const email = (form.querySelector('[name="email"]')?.value || '').trim();
+      if (!phone && !email) {
+        if (status) {
+          status.textContent = t('interestNeedContact');
+          status.className = 'status error';
+        }
+        return;
+      }
+      if (btn) btn.disabled = true;
+      if (status) {
+        status.textContent = '…';
+        status.className = 'status';
+      }
+      try {
+        const res = await fetch(`/api/rwa/public/marketplace/${encodeURIComponent(id)}/interest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactName: name, phone, email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+        if (status) {
+          status.textContent = t('interestOk');
+          status.className = 'status ok';
+        }
+        form.querySelectorAll('input').forEach((i) => { i.value = ''; });
+      } catch (err) {
+        if (status) {
+          status.textContent = err.message || 'Error';
+          status.className = 'status error';
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+    document.getElementById('captureBtn').addEventListener('click', captureSelfie);
+    document.getElementById('retakeBtn').addEventListener('click', () => {
+      selfieBlob = null;
+      document.getElementById('camStage').classList.remove('is-captured');
+      document.getElementById('retakeBtn').hidden = true;
+      document.getElementById('submitBtn').disabled = true;
+    });
+    document.getElementById('anotherBtn').addEventListener('click', resetPassForm);
+
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      const status = document.getElementById('statusLine');
+      const name = (document.getElementById('nameInput').value || '').trim();
+      if (!selfieBlob) {
+        status.textContent = t('needSelfie');
+        status.className = 'status error';
+        return;
+      }
+      if (!name) {
+        status.textContent = t('needName');
+        status.className = 'status error';
+        return;
+      }
+      status.textContent = t('issuing');
+      status.className = 'status';
+      document.getElementById('submitBtn').disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append('name', name);
+        fd.append('category', document.getElementById('categorySelect').value);
+        fd.append('hours', document.getElementById('hoursSelect').value);
+        fd.append('photo', selfieBlob, 'selfie.jpg');
+        const res = await fetch('/api/rwa/parking/adhoc', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || res.statusText || 'Failed');
+        const item = data.pass || {};
+        document.getElementById('formCard').hidden = true;
+        document.getElementById('issuedCard').hidden = false;
+        document.getElementById('issuedFace').src = document.getElementById('camSnap').src;
+        document.getElementById('issuedName').textContent = item.visitorName || name;
+        const catKey = CAT_KEYS[item.adhocCategory] || 'catOther';
+        document.getElementById('issuedType').textContent = t(catKey);
+        document.getElementById('issuedCode').textContent = item.code || '—';
+        document.getElementById('issuedValid').textContent = item.expiresAtLabel || '—';
+        document.getElementById('issuedQr').src = item.qrDataUrl || '';
+        stopCam();
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+        document.getElementById('submitBtn').disabled = false;
+      }
+    });
+
+    document.getElementById('bizForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const status = document.getElementById('bizStatus');
+      const btn = document.getElementById('bizSubmit');
+      btn.disabled = true;
+      status.textContent = '';
+      status.className = 'status';
+      try {
+        const fd = new FormData();
+        fd.append('kind', 'business');
+        fd.append('title', document.getElementById('bizTitle').value.trim());
+        fd.append('category', document.getElementById('bizCategory').value);
+        fd.append('description', document.getElementById('bizDesc').value.trim());
+        fd.append('contactName', document.getElementById('bizName').value.trim());
+        fd.append('phone', document.getElementById('bizPhone').value.trim());
+        fd.append('email', document.getElementById('bizEmail').value.trim());
+        fd.append('website', document.getElementById('bizWebsite').value.trim());
+        fd.append('area', document.getElementById('bizArea').value.trim());
+        const photo = document.getElementById('bizPhoto').files?.[0];
+        if (photo) fd.append('image', photo);
+        const res = await fetch('/api/rwa/public/marketplace', {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+        document.getElementById('bizForm').hidden = true;
+        document.getElementById('bizIssuedCard').hidden = false;
+        document.getElementById('bizIssuedReg').textContent = data.regNo || data.item?.regNo || '—';
+        document.getElementById('bizIssuedPin').textContent = data.managePin || data.item?.managePin || '—';
+        const st = data.item?.status || 'pending';
+        document.getElementById('bizIssuedStatus').textContent = t({
+          pending: 'bizPending', published: 'bizLive', rejected: 'bizRejected', archived: 'bizSuspended',
+        }[st] || 'bizPending');
+        try {
+          sessionStorage.setItem('mhwsBizReg', data.regNo || data.item?.regNo || '');
+          sessionStorage.setItem('mhwsBizPin', data.managePin || data.item?.managePin || '');
+        } catch (_e) { /* ignore */ }
+        document.getElementById('bizForm').reset();
+        const preview = document.getElementById('bizPhotoPreview');
+        if (preview) {
+          preview.hidden = true;
+          preview.removeAttribute('src');
+        }
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('bizPhoto')?.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      const preview = document.getElementById('bizPhotoPreview');
+      if (!preview) return;
+      if (!file) {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+        return;
+      }
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    });
+
+    let managedPin = '';
+    let managedListing = null;
+
+    function listingStatusLabel(status) {
+      return t({
+        pending: 'bizPending',
+        published: 'bizLive',
+        rejected: 'bizRejected',
+        archived: 'bizSuspended',
+      }[status] || 'bizPending');
+    }
+
+    function fillManagedForm(item) {
+      managedListing = item || null;
+      const form = document.getElementById('bizEditForm');
+      if (!item || !form) return;
+      form.hidden = false;
+      document.getElementById('bizEditId').value = item.id || '';
+      document.getElementById('bizEditTitle').value = item.title || '';
+      fillBizCategories();
+      document.getElementById('bizEditCategory').value = item.category || 'other';
+      document.getElementById('bizEditDesc').value = item.description || '';
+      document.getElementById('bizEditName').value = item.contactName || '';
+      document.getElementById('bizEditPhone').value = item.phone || '';
+      document.getElementById('bizEditEmail').value = item.email || '';
+      document.getElementById('bizEditWebsite').value = item.website || '';
+      document.getElementById('bizEditArea').value = item.area || '';
+      document.getElementById('bizEditPhoto').value = '';
+      const preview = document.getElementById('bizEditPhotoPreview');
+      if (item.imageUrl) {
+        preview.src = `${item.imageUrl}?v=${encodeURIComponent(item.updatedAt || item.publishedAt || '')}`;
+        preview.hidden = false;
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+      const bits = [item.regNo, listingStatusLabel(item.status)].filter(Boolean);
+      document.getElementById('bizEditMeta').textContent = bits.join(' · ');
+      document.getElementById('bizSuspendBtn').hidden = item.status === 'archived';
+      document.getElementById('bizEnableBtn').hidden = item.status !== 'archived';
+      document.getElementById('bizEditStatus').textContent = '';
+      document.getElementById('bizEditStatus').className = 'status';
+    }
+
+    async function marketplaceManage(id, { method = 'PATCH', payload = null, formData = null } = {}) {
+      const opts = { method };
+      if (formData) {
+        formData.append('pin', managedPin);
+        opts.body = formData;
+      } else {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify({ pin: managedPin, ...(payload || {}) });
+      }
+      const res = await fetch(`/api/rwa/public/marketplace/${encodeURIComponent(id)}`, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+      return data;
+    }
+
+    document.getElementById('bizAnotherBtn')?.addEventListener('click', () => {
+      document.getElementById('bizIssuedCard').hidden = true;
+      document.getElementById('bizForm').hidden = false;
+      document.getElementById('bizStatus').textContent = '';
+    });
+
+    document.getElementById('bizManageNowBtn')?.addEventListener('click', () => {
+      const reg = document.getElementById('bizIssuedReg').textContent.trim();
+      const pin = document.getElementById('bizIssuedPin').textContent.trim();
+      document.getElementById('bizUnlockReg').value = reg === '—' ? '' : reg;
+      document.getElementById('bizUnlockPin').value = pin === '—' ? '' : pin;
+      setSub('manage');
+    });
+
+    document.getElementById('bizUnlockForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const status = document.getElementById('bizUnlockStatus');
+      const btn = document.getElementById('bizUnlockBtn');
+      btn.disabled = true;
+      status.textContent = '';
+      status.className = 'status';
+      try {
+        const res = await fetch('/api/rwa/public/marketplace/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            regNo: document.getElementById('bizUnlockReg').value.trim(),
+            pin: document.getElementById('bizUnlockPin').value.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || t('bizUnlockFail'));
+        if (data.categories) categories = data.categories;
+        managedPin = document.getElementById('bizUnlockPin').value.trim();
+        fillManagedForm(data.item);
+      } catch (err) {
+        managedPin = '';
+        managedListing = null;
+        document.getElementById('bizEditForm').hidden = true;
+        status.textContent = err.message || t('bizUnlockFail');
+        status.className = 'status error';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('bizEditForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const status = document.getElementById('bizEditStatus');
+      const id = document.getElementById('bizEditId').value.trim();
+      if (!id || !managedPin) return;
+      status.textContent = '';
+      status.className = 'status';
+      try {
+        const fd = new FormData();
+        fd.append('title', document.getElementById('bizEditTitle').value.trim());
+        fd.append('category', document.getElementById('bizEditCategory').value);
+        fd.append('description', document.getElementById('bizEditDesc').value.trim());
+        fd.append('contactName', document.getElementById('bizEditName').value.trim());
+        fd.append('phone', document.getElementById('bizEditPhone').value.trim());
+        fd.append('email', document.getElementById('bizEditEmail').value.trim());
+        fd.append('website', document.getElementById('bizEditWebsite').value.trim());
+        fd.append('area', document.getElementById('bizEditArea').value.trim());
+        const photo = document.getElementById('bizEditPhoto').files?.[0];
+        if (photo) fd.append('image', photo);
+        const data = await marketplaceManage(id, { formData: fd });
+        fillManagedForm(data.item);
+        status.textContent = t('bizSaved');
+        status.className = 'status ok';
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+      }
+    });
+
+    document.getElementById('bizSuspendBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('bizEditId').value.trim();
+      if (!id || !window.confirm(t('bizConfirmSuspend'))) return;
+      const status = document.getElementById('bizEditStatus');
+      try {
+        const data = await marketplaceManage(id, { payload: { status: 'suspended' } });
+        fillManagedForm(data.item);
+        status.textContent = t('bizSuspendedOk');
+        status.className = 'status ok';
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+      }
+    });
+
+    document.getElementById('bizEnableBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('bizEditId').value.trim();
+      if (!id) return;
+      const status = document.getElementById('bizEditStatus');
+      try {
+        const data = await marketplaceManage(id, { payload: { status: 'enable' } });
+        fillManagedForm(data.item);
+        status.textContent = t('bizEnabledOk');
+        status.className = 'status ok';
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+      }
+    });
+
+    document.getElementById('bizRemoveBtn')?.addEventListener('click', async () => {
+      const id = document.getElementById('bizEditId').value.trim();
+      if (!id || !window.confirm(t('bizConfirmRemove'))) return;
+      const status = document.getElementById('bizEditStatus');
+      try {
+        await marketplaceManage(id, { method: 'DELETE' });
+        managedListing = null;
+        managedPin = '';
+        document.getElementById('bizEditForm').hidden = true;
+        document.getElementById('bizUnlockForm').reset();
+        status.textContent = t('bizRemovedOk');
+        status.className = 'status ok';
+        document.getElementById('bizUnlockStatus').textContent = t('bizRemovedOk');
+        document.getElementById('bizUnlockStatus').className = 'status ok';
+      } catch (err) {
+        status.textContent = err.message || 'Error';
+        status.className = 'status error';
+      }
+    });
+
+    document.getElementById('bizEditPhoto')?.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      const preview = document.getElementById('bizEditPhotoPreview');
+      if (!preview) return;
+      if (!file) {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+        return;
+      }
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    });
+
+    applyI18n();
+    fillBizCategories();
+    const hash = (location.hash || '').replace(/^#/, '').toLowerCase();
+    if (hash === 'pass' || hash === 'gate') {
+      setTab('pass');
+    } else {
+      stopCam();
+      setTab('biz');
+      if (hash === 'register') setSub('register');
+      else if (hash === 'manage') {
+        setSub('manage');
+        try {
+          const reg = sessionStorage.getItem('mhwsBizReg') || '';
+          const pin = sessionStorage.getItem('mhwsBizPin') || '';
+          if (reg) document.getElementById('bizUnlockReg').value = reg;
+          if (pin) document.getElementById('bizUnlockPin').value = pin;
+        } catch (_e) { /* ignore */ }
+      }
+      else if (hash === 'business' || hash === 'biz' || hash === 'browse' || hash === 'services') setSub('browse');
+      else setSub('needs'); // default: service needs (city QR / Connect)
+    }
+  </script>
+</body>
+</html>

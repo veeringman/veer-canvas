@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="City of Mandi">
+  <title>City of Mandi</title>
+  <defs>
+    <clipPath id="com-disc">
+      <circle cx="256" cy="256" r="226"/>
+    </clipPath>
+    <radialGradient id="com-sky" cx="50%" cy="18%" r="80%">
+      <stop offset="0%" stop-color="#7eb8bd"/>
+      <stop offset="22%" stop-color="#3a7a84"/>
+      <stop offset="58%" stop-color="#163c44"/>
+      <stop offset="100%" stop-color="#0c272d"/>
+    </radialGradient>
+    <linearGradient id="com-far" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#4a7d84"/>
+      <stop offset="100%" stop-color="#163c44"/>
+    </linearGradient>
+    <linearGradient id="com-mid" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#cfe3df"/>
+      <stop offset="38%" stop-color="#6a9aa0"/>
+      <stop offset="100%" stop-color="#1e525c"/>
+    </linearGradient>
+    <linearGradient id="com-near" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#f3efe6"/>
+      <stop offset="18%" stop-color="#b7d0d2"/>
+      <stop offset="100%" stop-color="#163c44"/>
+    </linearGradient>
+    <linearGradient id="com-shade" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0c272d" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0c272d" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="com-river" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8f4f4"/>
+      <stop offset="36%" stop-color="#7ec4c8"/>
+      <stop offset="72%" stop-color="#c4844a"/>
+      <stop offset="100%" stop-color="#2a6b6e"/>
+    </linearGradient>
+    <linearGradient id="com-copper" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#e8c48a"/>
+      <stop offset="48%" stop-color="#c4844a"/>
+      <stop offset="100%" stop-color="#9a6430"/>
+    </linearGradient>
+    <linearGradient id="com-stone" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#f6efe3"/>
+      <stop offset="100%" stop-color="#c9b08a"/>
+    </linearGradient>
+    <linearGradient id="com-ring" x1="18%" y1="0%" x2="82%" y2="100%">
+      <stop offset="0%" stop-color="#edd4a8"/>
+      <stop offset="46%" stop-color="#c4844a"/>
+      <stop offset="100%" stop-color="#7a4e24"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="256" cy="256" r="256" fill="#081618"/>
+  <circle cx="256" cy="256" r="249" fill="none" stroke="#5c3a18" stroke-width="2.5"/>
+  <circle cx="256" cy="256" r="243" fill="none" stroke="url(#com-ring)" stroke-width="9"/>
+  <circle cx="256" cy="256" r="233" fill="none" stroke="#f3efe6" stroke-opacity="0.32" stroke-width="1.6"/>
+
+  <g clip-path="url(#com-disc)">
+    <circle cx="256" cy="256" r="226" fill="url(#com-sky)"/>
+
+    <circle cx="256" cy="92" r="44" fill="#f3efe6" fill-opacity="0.14"/>
+    <circle cx="256" cy="92" r="16" fill="#f7f3eb"/>
+    <circle cx="256" cy="92" r="16" fill="#e8c48a" fill-opacity="0.28"/>
+
+    <!-- far range -->
+    <path fill="url(#com-far)" d="M30 278 L78 232 L112 258 L152 214 L198 252 L256 188 L318 250 L362 216 L408 256 L456 228 L482 252 V340 H30 Z"/>
+
+    <!-- M: left · centre · right -->
+    <path fill="url(#com-mid)" d="M30 318 L96 248 L138 286 L176 168 L228 268 L256 128 L284 268 L336 168 L374 286 L416 248 L482 318 Z"/>
+    <path fill="url(#com-shade)" d="M176 168 L228 268 L176 286 Z"/>
+    <path fill="url(#com-shade)" d="M256 128 L336 168 L284 268 Z"/>
+    <path fill="url(#com-shade)" d="M336 168 L416 248 L374 286 Z"/>
+
+    <!-- near shoulders -->
+    <path fill="url(#com-near)" d="M30 352 L86 300 L128 332 L176 292 L256 248 L336 292 L384 332 L426 300 L482 352 V400 H30 Z"/>
+
+    <!-- snow -->
+    <path fill="#f7f3eb" d="M176 168 L194 198 L160 204 Z"/>
+    <path fill="#f7f3eb" d="M256 128 L274 162 L238 162 Z"/>
+    <path fill="#f7f3eb" d="M336 168 L352 204 L318 198 Z"/>
+
+    <!-- Beas -->
+    <path fill="url(#com-river)" d="M30 368 C104 336 158 392 256 358 C354 324 408 386 482 360 V438 C398 412 344 368 256 396 C168 424 98 380 30 404 Z"/>
+    <path fill="#f7f3eb" fill-opacity="0.28" d="M64 372 C124 350 176 380 256 362 C336 344 392 376 452 364 C392 372 336 348 256 366 C176 384 118 360 64 372 Z"/>
+
+    <!-- Bhutnath-inspired shikhara on the bank -->
+    <g transform="translate(256 318)">
+      <rect x="-38" y="28" width="76" height="9" rx="1" fill="#9a6430"/>
+      <rect x="-32" y="8" width="64" height="22" rx="2" fill="url(#com-stone)"/>
+      <rect x="-22" y="-4" width="44" height="14" fill="#efe4d0"/>
+      <path fill="url(#com-copper)" d="M0 -40 L28 0 H-28 Z"/>
+      <path fill="#f6efe3" d="M0 -32 L15 -4 H-15 Z"/>
+      <rect x="-2.6" y="-52" width="5.2" height="14" rx="1.4" fill="#c4844a"/>
+      <circle cx="0" cy="-54" r="4.6" fill="#e8c48a"/>
+      <rect x="-8" y="12" width="16" height="18" rx="1.5" fill="#0c272d"/>
+    </g>
+  </g>
+
+  <circle cx="256" cy="256" r="226" fill="none" stroke="#0c272d" stroke-width="2"/>
+  <circle cx="256" cy="256" r="253" fill="none" stroke="#c4844a" stroke-opacity="0.38" stroke-width="3"/>
+</svg>

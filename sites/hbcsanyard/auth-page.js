@@ -282,7 +282,10 @@
     }
 
     qs('loginSubmitBtn').disabled = false;
-    if (choosable.includes('password')) activeLoginMethod = 'password';
+    // Mobile / installed PWA: default to QR / Approve so match-number + QR show immediately.
+    const preferQr = isMobileAuthUi();
+    if (preferQr && choosable.includes('qr')) activeLoginMethod = 'qr';
+    else if (choosable.includes('password')) activeLoginMethod = 'password';
     else if (choosable.includes('passkey')) activeLoginMethod = 'passkey';
     else if (choosable.includes('qr')) activeLoginMethod = 'qr';
     else activeLoginMethod = choosable[0];
@@ -512,6 +515,46 @@
     }
   }
 
+  function isMobileAuthUi() {
+    try {
+      return window.matchMedia('(max-width: 820px)').matches
+        || window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: fullscreen)').matches
+        || Boolean(window.navigator.standalone);
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function wireDeviceApproveActions(isLoginQr, begin) {
+    const openBtn = isLoginQr ? qs('loginOpenBuddyBtn') : qs('mfaOpenBuddyBtn');
+    const copyBtn = isLoginQr ? qs('loginCopyMatchBtn') : qs('mfaCopyMatchBtn');
+    const matchText = String(begin.number != null ? begin.number : '').padStart(2, '0');
+    const qrUri = String(begin.qr_uri || '').trim();
+
+    if (openBtn) {
+      if (qrUri) {
+        openBtn.hidden = false;
+        openBtn.href = qrUri;
+        openBtn.setAttribute('rel', 'noopener');
+      } else {
+        openBtn.hidden = true;
+        openBtn.removeAttribute('href');
+      }
+    }
+    if (copyBtn) {
+      copyBtn.hidden = begin.number == null || begin.number === '';
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(matchText);
+          setStatus(`Copied match number ${matchText}`);
+        } catch (_e) {
+          setStatus(`Match number: ${matchText}`);
+        }
+      };
+    }
+  }
+
   async function startDeviceChallenge(purpose) {
     stopDevicePoll();
     setError('');
@@ -529,16 +572,24 @@
       client_id: clientId(),
     });
     deviceChallengeId = begin.challenge_id;
-    if (matchEl) matchEl.textContent = String(begin.number).padStart(2, '0');
+    const matchText = String(begin.number).padStart(2, '0');
+    if (matchEl) matchEl.textContent = matchText;
+    wireDeviceApproveActions(isLoginQr, begin);
     if (img) {
       if (begin.qr_data_uri) {
         img.src = begin.qr_data_uri;
+        // On phone/PWA you usually approve in BuddyAuthenticator (number or deep link),
+        // not by scanning your own screen — still show QR for cross-device use.
         img.hidden = false;
       } else {
         img.hidden = true;
       }
     }
-    if (statusEl) statusEl.textContent = 'Waiting for BuddyAuthenticator approval…';
+    if (statusEl) {
+      statusEl.textContent = isMobileAuthUi()
+        ? `Number ${matchText} — open BuddyAuthenticator (must be signed in) → Approvals, or tap Approve below.`
+        : 'Waiting for BuddyAuthenticator approval…';
+    }
     devicePollTimer = setInterval(() => {
       pollDeviceChallenge(isLoginQr).catch(() => {});
     }, 2000);
@@ -963,10 +1014,27 @@
       || params().get('authbuddyUsername')
       || ''
     ).trim();
-    // Colony gate login/bridge must always challenge. A leftover AuthBuddy
-    // session (e.g. after portal-only Sign out) must not auto-enter.
+    // Colony gate login/bridge: if AuthBuddy is already signed in on this device
+    // (PWA localStorage + agent cookie) for the linked username, continue without
+    // forcing another password/QR challenge. Otherwise challenge as usual.
     const forceCredentialChallenge = purpose === 'login' || purpose === 'bridge';
     if (forceCredentialChallenge) {
+      const prior = linkedUsername
+        || (existing && existing.session
+          ? (existing.session.username || existing.session.email || '')
+          : '');
+      const existingUser = (existing && existing.session
+        ? (existing.session.username || existing.session.email || '')
+        : '').trim();
+      const sameUser = !linkedUsername
+        || !existingUser
+        || existingUser.toLowerCase() === String(linkedUsername).toLowerCase();
+      if (window.VeerAuth.isAuthenticated(existing) && sameUser) {
+        if (prior && qs('loginUsername')) qs('loginUsername').value = prior;
+        setStatus('Already signed in on this device. Continuing…');
+        continueToReturn();
+        return;
+      }
       // Drop SSO so password / passkey / TOTP / QR is required again.
       try { window.VeerAuth.saveSessionId(''); } catch (_e) { /* ignore */ }
       try {
@@ -985,10 +1053,6 @@
         });
       } catch (_e) { /* ignore */ }
       showTab('login');
-      const prior = linkedUsername
-        || (existing && existing.session
-          ? (existing.session.username || existing.session.email || '')
-          : '');
       if (prior && qs('loginUsername')) {
         qs('loginUsername').value = prior;
       }

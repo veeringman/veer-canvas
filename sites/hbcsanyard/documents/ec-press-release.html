@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Press Release — New Executive Committee · Himuda Housing Colony Sanyard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; }
+    :root {
+      --navy: #0b2a56;
+      --navy-2: #143a6e;
+      --green: #1a6b3a;
+      --gold: #c9a227;
+      --ink: #12233f;
+      --muted: #5a6a80;
+      --paper: #ffffff;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #cfd8e6;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }
+    .screen-hint {
+      text-align: center;
+      padding: 10px 14px;
+      font: 500 13px/1.45 system-ui, sans-serif;
+      color: #445;
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+    .sheet {
+      position: relative;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto 18px;
+      padding: 0;
+      background: var(--paper);
+      border: 1pt solid rgba(11, 42, 86, 0.55);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .accent-edge {
+      display: grid;
+      grid-template-columns: 1fr 7mm 1fr;
+      height: 2.6mm;
+      flex: 0 0 auto;
+    }
+    .accent-edge .n { background: var(--navy); }
+    .accent-edge .g { background: var(--gold); }
+    .accent-edge .e { background: var(--green); }
+    .accent-edge-thin {
+      height: 0.4mm;
+      background: rgba(11, 42, 86, 0.12);
+      flex: 0 0 auto;
+    }
+    .wm {
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      transform: translate(-50%, -50%);
+      width: min(112mm, 70%);
+      max-height: 46%;
+      height: auto;
+      object-fit: contain;
+      opacity: 0.55;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .pad {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 5mm 12mm 0;
+      min-height: 0;
+    }
+    .brand {
+      display: grid;
+      grid-template-columns: 24mm 1fr;
+      gap: 5mm;
+      align-items: center;
+      padding: 0 0 3mm;
+    }
+    .brand .logo { width: 24mm; height: auto; display: block; }
+    .brand h1 {
+      margin: 0;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 16pt;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      color: var(--navy);
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+    .brand .colony {
+      margin: 0.8mm 0 0;
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--navy-2);
+    }
+    .brand .addr {
+      margin: 1.2mm 0 0;
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--green);
+    }
+    .brand .reg-no {
+      margin: 0.8mm 0 0;
+      font-size: 7.6pt;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .rule {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 3mm;
+      margin: 0 0 3.5mm;
+    }
+    .rule::before,
+    .rule::after {
+      content: "";
+      height: 0;
+      border-top: 1pt solid var(--navy);
+    }
+    .rule .pip {
+      width: 2.2mm;
+      height: 2.2mm;
+      background: var(--gold);
+      transform: rotate(45deg);
+      box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
+    }
+    .kicker {
+      margin: 0 0 2mm;
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    .headline {
+      margin: 0 0 2.5mm;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 18pt;
+      font-weight: 700;
+      line-height: 1.15;
+      color: var(--navy);
+    }
+    .dateline {
+      margin: 0 0 4mm;
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .dateline strong { color: var(--navy); }
+    .body-copy {
+      font-size: 10pt;
+      line-height: 1.45;
+      text-align: justify;
+    }
+    .body-copy p { margin: 0 0 3.2mm; }
+    .section-title {
+      margin: 3mm 0 2mm;
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+      margin: 0 0 3mm;
+    }
+    th, td {
+      border: 1px solid rgba(11, 42, 86, 0.28);
+      padding: 1.8mm 2.2mm;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      background: rgba(11, 42, 86, 0.92);
+      color: #f7f3ea;
+      font-weight: 700;
+      text-align: center;
+      font-size: 7.6pt;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    td:first-child {
+      text-align: center;
+      width: 11mm;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .office-table td:nth-child(2) {
+      width: 32%;
+      color: var(--green);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 8pt;
+      letter-spacing: 0.04em;
+    }
+    .office-table td:nth-child(3) {
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .note {
+      margin: 2mm 0 0;
+      font-size: 8.5pt;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .ends {
+      margin: 4mm 0 2mm;
+      text-align: center;
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+    }
+    .body-spacer { flex: 1; min-height: 6mm; }
+    .foot { margin-top: auto; padding: 0; }
+    .contacts {
+      display: grid;
+      grid-template-columns: 1.35fr 1.25fr 1fr;
+      gap: 3mm;
+      padding: 2.8mm 0 2.6mm;
+      border-top: 1pt solid rgba(11, 42, 86, 0.45);
+      font-size: 7.4pt;
+      align-items: start;
+    }
+    .contact {
+      display: grid;
+      grid-template-columns: 4.2mm 1fr;
+      gap: 1.6mm;
+      align-items: start;
+    }
+    .contact svg {
+      width: 3.6mm;
+      height: 3.6mm;
+      margin-top: 0.4mm;
+      stroke: var(--green);
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .contact .k {
+      display: block;
+      font-size: 6.2pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.5mm;
+    }
+    .contact .v {
+      color: var(--navy);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .slogan-bar {
+      margin: 0 -12mm;
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
+      color: #f7f3ea;
+      text-align: center;
+      padding: 2.3mm 10mm;
+      font-size: 8.2pt;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+    .slogan-bar .sep { color: var(--gold); margin: 0 1.6mm; letter-spacing: 0; }
+    .slogan-bar .u { color: #dbe7ff; }
+    .slogan-bar .h { color: #b8e6c6; }
+    .slogan-bar .p { color: #f0d48a; }
+    .meta {
+      text-align: right;
+      font-size: 7pt;
+      color: var(--muted);
+      margin: 2mm 0 3mm;
+    }
+    @media print {
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .screen-hint { display: none !important; }
+      .sheet {
+        width: 210mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        margin: 0 !important;
+        border: 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }
+      .wm { opacity: 0.5; }
+      .accent-edge, .slogan-bar, th {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="screen-hint">
+    Press Release — New Executive Committee.<br>
+    Open → Print / Download → A4 (margins <strong>None</strong>).
+  </p>
+
+  <div class="sheet">
+    <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
+    <div class="accent-edge-thin" aria-hidden="true"></div>
+    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
+
+    <div class="pad">
+      <header class="brand">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
+        <div>
+          <h1>Mandi Housing Welfare Society</h1>
+          <p class="colony">Himuda Housing Colony Sanyard</p>
+          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+          <p class="reg-no">Registration No. 467 dated 21/07/2012</p>
+        </div>
+      </header>
+
+      <div class="rule" aria-hidden="true"><span class="pip"></span></div>
+
+      <p class="kicker">Press Release · For immediate release</p>
+      <h2 class="headline">New Executive Committee Assumes Charge at Himuda Housing Colony Sanyard</h2>
+      <p class="dateline"><strong>Mandi (HP)</strong> — 13 August 2026</p>
+
+      <div class="body-copy">
+        <p>
+          Mandi Housing Welfare Society (MHWS), the Residents’ Welfare Association of
+          <strong>Himuda Housing Colony Sanyard</strong>, informs all residents, plot owners,
+          and stakeholders that the newly constituted <strong>Executive Committee</strong>
+          has assumed charge of colony affairs. The Committee will steward common amenities,
+          dues and accounts, correspondence with authorities, and day-to-day welfare of the colony
+          under the Society’s registered framework.
+        </p>
+        <p>
+          The Society is registered under Registration No. <strong>467 dated 21/07/2012</strong>
+          and operates from Housing Colony Sanyard, Mandi, Himachal Pradesh 175001.
+          Residents may reach the Committee through the official portal
+          <strong>housingcolonysanyard.in</strong> and the Society email
+          <strong>housingcolonysanyard@gmail.com</strong>.
+        </p>
+      </div>
+
+      <div class="section-title">Office Bearers</div>
+      <table class="office-table">
+        <thead>
+          <tr><th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>President</td><td>Anup Vaidya</td><td>94184 95449</td></tr>
+          <tr><td>2</td><td>Vice President</td><td>Murari Lal Modgil</td><td>94181 68784</td></tr>
+          <tr><td>3</td><td>General Secretary</td><td>Vijay Kumar Sharma</td><td>82197 88139</td></tr>
+          <tr><td>4</td><td>Treasurer</td><td>Parveen Kumar Thakur</td><td>94180 71187</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">Executive Committee Members</div>
+      <table class="office-table">
+        <thead>
+          <tr><th>S.No.</th><th>Designation</th><th>Name</th><th>Mobile</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>5</td><td>Member</td><td>Hari Singh Dogra</td><td>94184 65098</td></tr>
+          <tr><td>6</td><td>Member</td><td>Jitesh Kumar Sharma</td><td>94184 50854</td></tr>
+          <tr><td>7</td><td>Member</td><td>Rajesh Kumar Saini</td><td>90187 00541</td></tr>
+          <tr><td>8</td><td>Member</td><td>Roop Lal Sharma</td><td>94184 90722</td></tr>
+        </tbody>
+      </table>
+
+      <div class="body-copy">
+        <p>
+          The Committee appeals to all residents to cooperate in maintaining transparency,
+          timely payment of dues, and orderly use of common facilities, in keeping with the
+          Society’s motto of <strong>Unity · Harmony · Progress</strong>.
+        </p>
+        <p class="note">
+          For media or resident queries, contact the General Secretary / President on the
+          mobiles listed above, or write to housingcolonysanyard@gmail.com.
+          Official notices will continue to be published on housingcolonysanyard.in.
+        </p>
+      </div>
+
+      <p class="ends">— END —</p>
+
+      <div class="body-spacer" aria-hidden="true"></div>
+
+      <footer class="foot">
+        <div class="contacts">
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            <div>
+              <span class="k">Address</span>
+              <span class="v">Housing Colony Sanyard, Mandi HP 175001</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1.5"/><path d="M4 7l8 6 8-6"/></svg>
+            <div>
+              <span class="k">Email</span>
+              <span class="v">housingcolonysanyard@gmail.com</span>
+            </div>
+          </div>
+          <div class="contact">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16"/></svg>
+            <div>
+              <span class="k">Website</span>
+              <span class="v">housingcolonysanyard.in</span>
+            </div>
+          </div>
+        </div>
+        <div class="slogan-bar" aria-label="Society slogan">
+          <span class="u">Unity</span><span class="sep">·</span>
+          <span class="h">Harmony</span><span class="sep">·</span>
+          <span class="p">Progress</span>
+        </div>
+        <p class="meta">Press Release · New Executive Committee · Himuda Housing Colony Sanyard</p>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

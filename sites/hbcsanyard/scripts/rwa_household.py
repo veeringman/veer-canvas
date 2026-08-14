@@ -407,6 +407,123 @@ def sync_primary_to_resident(conn: sqlite3.Connection, house_id: str) -> None:
     )
 
 
+def sync_resident_to_primary(conn: sqlite3.Connection, house_id: str) -> None:
+    """Push residents contact fields onto the primary household member (roster master)."""
+    ensure_household_members_table(conn)
+    row = conn.execute(
+        """
+        SELECT name, title, email, phone FROM residents WHERE house_id = ? COLLATE NOCASE
+        """,
+        (house_id,),
+    ).fetchone()
+    if not row:
+        return
+    primary = primary_member(conn, house_id)
+    if not primary:
+        return
+    name = (row["name"] or "").strip() or primary.get("name") or house_id
+    conn.execute(
+        """
+        UPDATE household_members
+        SET name = ?, title = ?, email = ?, phone = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            name,
+            row["title"],
+            row["email"] or None,
+            row["phone"] or None,
+            utc_now(),
+            primary["id"],
+        ),
+    )
+
+
+_HOUSEHOLD_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def normalize_household_code(raw: str | None) -> str:
+    text = str(raw or "").strip().upper()
+    return re.sub(r"[^A-Z0-9]+", "", text)
+
+
+def generate_household_code(house_id: str) -> str:
+    """Plot-scoped code residents receive via dues circulars, e.g. 30-R7KQ."""
+    plot = re.sub(r"[^A-Za-z0-9]+", "", str(house_id or "")).upper()[:8] or "H"
+    suffix = "".join(secrets.choice(_HOUSEHOLD_CODE_ALPHABET) for _ in range(4))
+    return f"{plot}-{suffix}"
+
+
+def verify_household_code(conn: sqlite3.Connection, house_id: str, code: str | None) -> bool:
+    ensure_household_codes(conn)
+    row = conn.execute(
+        "SELECT household_code FROM residents WHERE house_id = ? COLLATE NOCASE",
+        (house_id,),
+    ).fetchone()
+    if not row:
+        return False
+    expected = normalize_household_code(row["household_code"] if hasattr(row, "keys") else row[0])
+    got = normalize_household_code(code)
+    return bool(expected) and expected == got
+
+
+def ensure_household_codes(conn: sqlite3.Connection) -> None:
+    """Add unique household_code on residents and backfill missing values."""
+    ensure_household_members_table(conn)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(residents)").fetchall()}
+    if "household_code" not in cols:
+        conn.execute("ALTER TABLE residents ADD COLUMN household_code TEXT")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_residents_household_code
+          ON residents(household_code)
+          WHERE household_code IS NOT NULL AND TRIM(household_code) != ''
+        """
+    )
+    existing = {
+        normalize_household_code(r["household_code"])
+        for r in conn.execute(
+            """
+            SELECT household_code FROM residents
+            WHERE household_code IS NOT NULL AND TRIM(household_code) != ''
+            """
+        ).fetchall()
+    }
+    rows = conn.execute(
+        """
+        SELECT house_id FROM residents
+        WHERE house_id != ?
+          AND (household_code IS NULL OR TRIM(household_code) = '')
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    for r in rows:
+        hid = r["house_id"]
+        for _ in range(40):
+            code = generate_household_code(hid)
+            key = normalize_household_code(code)
+            if key and key not in existing:
+                existing.add(key)
+                conn.execute(
+                    "UPDATE residents SET household_code = ? WHERE house_id = ?",
+                    (code, hid),
+                )
+                break
+    conn.commit()
+
+
+def backfill_primary_from_residents(conn: sqlite3.Connection) -> None:
+    """One-way repair: EC roster / dues names live on residents — push onto primary members."""
+    ensure_household_members_table(conn)
+    houses = conn.execute(
+        "SELECT house_id FROM residents WHERE house_id != ?",
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    for r in houses:
+        sync_resident_to_primary(conn, r["house_id"])
+    conn.commit()
+
+
 def member_contact_gaps(member: dict | None) -> dict:
     m = member or {}
     missing_email = not str(m.get("email") or "").strip()

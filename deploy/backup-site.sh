@@ -46,7 +46,7 @@ SITE_ID="${SITE_ID:-$(basename "$WEB_ROOT" | cut -d. -f1)}"
 # shellcheck source=ops/load-site-env.sh
 source "${SCRIPT_DIR}/ops/load-site-env.sh"
 load_site_env "$WEB_ROOT"
-RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-${RETAIN_DAYS:-14}}"
+RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-${RETAIN_DAYS:-7}}"
 DISK_MIN_PCT="${DISK_MIN_PCT:-15}"
 ACCESS_EVENTS_DAYS="${ACCESS_EVENTS_DAYS:-90}"
 ALERT_ON_SUCCESS="${ALERT_ON_SUCCESS:-0}"
@@ -113,22 +113,30 @@ sqlite_backup() {
     return 1
   fi
   mkdir -p "$(dirname "$dest")"
-  # Consistent hot backup without stopping the app.
-  if ! sqlite3 "$src" <<SQL
+  # Consistent hot backup without stopping the app (retry on lock).
+  local attempt=1
+  while [[ $attempt -le 5 ]]; do
+    if sqlite3 "$src" <<SQL
+PRAGMA busy_timeout=30000;
 .backup '${dest}'
 SQL
-  then
-    fail "sqlite backup failed for $src"
-    return 1
-  fi
-  # Verify readable (SQLite returns lowercase "ok").
-  local check
-  check="$(sqlite3 "$dest" "PRAGMA integrity_check;" 2>/dev/null | head -n1 | tr '[:upper:]' '[:lower:]')"
-  if [[ "$check" != "ok" ]]; then
-    fail "integrity check failed for $dest (${check:-empty})"
-    return 1
-  fi
-  log "sqlite ok: $(basename "$src") -> $(basename "$dest")"
+    then
+      local check
+      check="$(sqlite3 "$dest" "PRAGMA integrity_check;" 2>/dev/null | head -n1 | tr '[:upper:]' '[:lower:]')"
+      if [[ "$check" == "ok" ]]; then
+        chmod 600 "$dest" 2>/dev/null || true
+        log "sqlite ok: $(basename "$src") -> $(basename "$dest")"
+        return 0
+      fi
+      log "sqlite integrity not ok ($attempt/5): ${check:-empty}"
+    else
+      log "sqlite busy/fail ($attempt/5): $(basename "$src")"
+    fi
+    sleep $((attempt * 2))
+    attempt=$((attempt + 1))
+  done
+  fail "sqlite backup failed for $src"
+  return 1
 }
 
 check_disk() {
@@ -256,6 +264,21 @@ python3 "${SCRIPT_DIR}/ops/write-ops-status.py" \
   --json "{\"ok\":true,\"path\":\"${RUN_DIR}\",\"stamp\":\"${STAMP}\"}" 2>/dev/null || true
 
 # Optional Phase-2 Drive upload
+if [[ "${DRIVE_ENABLED:-0}" != "1" && -f "${WEB_ROOT}/data/drive.env" ]]; then
+  # shellcheck disable=SC1091
+  set -a
+  # Prefer dedicated drive.env for the gate flag
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [[ -z "$line" || "$line" != *=* ]] && continue
+    key="${line%%=*}"; val="${line#*=}"
+    key="$(echo "$key" | sed 's/[[:space:]]*$//')"
+    val="$(echo "$val" | sed 's/^[[:space:]]*//;s/^["'\'']//;s/["'\'']$//')"
+    export "$key=$val"
+  done < "${WEB_ROOT}/data/drive.env"
+  set +a
+fi
 if [[ "${DRIVE_ENABLED:-0}" == "1" ]]; then
   log "Drive sync starting…"
   SITE_ID="$SITE_ID" WEB_ROOT="$WEB_ROOT" \

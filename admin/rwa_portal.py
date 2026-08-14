@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import mimetypes
 import os
 import pathlib
 import re
@@ -42,12 +43,16 @@ else:
 
 from init_rwa_db import (  # noqa: E402
     SUPERADMIN_HOUSE_ID,
+    ADHOC_GATE_HOUSE_ID,
+    SYSTEM_HOUSE_IDS,
+    system_house_exclude_sql,
     connect,
     ensure_bank_account_columns,
     ensure_db,
     ensure_grievances_table,
     ensure_notice_pin_order,
     ensure_notice_audience,
+    ensure_notice_image_column,
     ensure_notice_shares_table,
     ensure_notice_engagement_tables,
     ensure_household_members_table,
@@ -79,6 +84,7 @@ from init_rwa_db import (  # noqa: E402
 
 import rwa_household as household  # noqa: E402
 import rwa_entitlements as entitlements  # noqa: E402
+import rwa_media  # noqa: E402
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
 # Persist until Sign out (default ~10 years). Override with RWA_SESSION_TTL seconds.
@@ -193,12 +199,15 @@ _OPS_ENV_KEYS = (
     "BACKUP_MAX_AGE_H",
     "ALERT_COOLDOWN_WARN",
     "ALERT_COOLDOWN_CRIT",
+    "DRIVE_ENABLED",
+    "DRIVE_FOLDER_ID",
+    "DRIVE_RETAIN_DAYS",
 )
 
 _OPS_DEFAULTS: dict[str, object] = {
     "alertTo": "",
     "vitalsEnabled": True,
-    "backupRetainDays": 14,
+    "backupRetainDays": 7,
     "backupDiskMinPct": 15,
     "accessEventsDays": 90,
     "diskWarnPct": 20,
@@ -210,6 +219,10 @@ _OPS_DEFAULTS: dict[str, object] = {
     "backupMaxAgeHours": 28,
     "alertCooldownWarnHours": 6,
     "alertCooldownCritHours": 1,
+    "driveEnabled": False,
+    "driveFolderId": "",
+    "driveRetainDays": 14,
+    "driveSaConfigured": False,
 }
 
 
@@ -232,8 +245,11 @@ def _env_truthy(val: str | None) -> bool:
 
 def read_ops_settings(site_root: pathlib.Path) -> dict:
     env = _read_env_map(_smtp_env_path(site_root))
+    drive_env = _read_env_map(site_root / "data" / "drive.env")
+    env = {**env, **drive_env}
     smtp_from = env.get("RWA_SMTP_FROM") or env.get("RWA_SMTP_USER") or ""
     alert_to = env.get("BACKUP_ALERT_TO") or env.get("RWA_OPS_ALERT_TO") or smtp_from
+    sa_path = site_root / "data" / "drive-sa.json"
     return {
         "alertTo": alert_to,
         "vitalsEnabled": _env_truthy(env.get("OPS_VITALS_ENABLED", "1")),
@@ -253,6 +269,10 @@ def read_ops_settings(site_root: pathlib.Path) -> dict:
         "alertCooldownCritHours": int(
             (int(env.get("ALERT_COOLDOWN_CRIT") or 3600)) / 3600
         ),
+        "driveEnabled": _env_truthy(env.get("DRIVE_ENABLED", "0")),
+        "driveFolderId": (env.get("DRIVE_FOLDER_ID") or "").strip(),
+        "driveRetainDays": int(env.get("DRIVE_RETAIN_DAYS") or _OPS_DEFAULTS["driveRetainDays"]),
+        "driveSaConfigured": sa_path.is_file(),
     }
 
 
@@ -275,7 +295,7 @@ def _ops_settings_to_env(ops: dict) -> dict[str, str]:
     return {
         "BACKUP_ALERT_TO": str(ops.get("alertTo") or "").strip(),
         "OPS_VITALS_ENABLED": "1" if enabled else "0",
-        "BACKUP_RETAIN_DAYS": _int("backupRetainDays", 14),
+        "BACKUP_RETAIN_DAYS": _int("backupRetainDays", 7),
         "DISK_MIN_PCT": _int("backupDiskMinPct", 15),
         "ACCESS_EVENTS_DAYS": _int("accessEventsDays", 90),
         "DISK_WARN_PCT": _int("diskWarnPct", 20),
@@ -287,6 +307,9 @@ def _ops_settings_to_env(ops: dict) -> dict[str, str]:
         "BACKUP_MAX_AGE_H": _int("backupMaxAgeHours", 28),
         "ALERT_COOLDOWN_WARN": str(max(1, warn_h) * 3600),
         "ALERT_COOLDOWN_CRIT": str(max(1, crit_h) * 3600),
+        "DRIVE_ENABLED": "1" if ops.get("driveEnabled") else "0",
+        "DRIVE_FOLDER_ID": str(ops.get("driveFolderId") or "").strip(),
+        "DRIVE_RETAIN_DAYS": _int("driveRetainDays", 14),
     }
 
 
@@ -385,6 +408,7 @@ def read_ops_status(site_root: pathlib.Path, *, site_id: str | None = None) -> d
         },
         "lastBackup": stored.get("lastBackup"),
         "lastVitals": stored.get("lastVitals"),
+        "lastDriveSync": stored.get("lastDriveSync"),
         "statusFile": str(status_path),
     }
 
@@ -471,6 +495,30 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
         if key not in mapping and (key.startswith("RWA_") or key in _OPS_ENV_KEYS):
             mapping[key] = value
 
+    # Drive keys live in data/drive.env (keeps SA path out of smtp noise).
+    _DRIVE_KEYS = ("DRIVE_ENABLED", "DRIVE_FOLDER_ID", "DRIVE_RETAIN_DAYS", "GOOGLE_APPLICATION_CREDENTIALS")
+    drive_path = data_dir / "drive.env"
+    drive_existing = _read_env_map(drive_path)
+    drive_map = {
+        "DRIVE_ENABLED": mapping.pop("DRIVE_ENABLED", drive_existing.get("DRIVE_ENABLED", "0")),
+        "DRIVE_FOLDER_ID": mapping.pop("DRIVE_FOLDER_ID", drive_existing.get("DRIVE_FOLDER_ID", "")),
+        "DRIVE_RETAIN_DAYS": mapping.pop("DRIVE_RETAIN_DAYS", drive_existing.get("DRIVE_RETAIN_DAYS", "14")),
+        "GOOGLE_APPLICATION_CREDENTIALS": drive_existing.get(
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            str(data_dir / "drive-sa.json"),
+        ),
+    }
+    if ops_payload:
+        if "driveEnabled" in ops_payload:
+            drive_map["DRIVE_ENABLED"] = "1" if ops_payload.get("driveEnabled") else "0"
+        if "driveFolderId" in ops_payload:
+            drive_map["DRIVE_FOLDER_ID"] = str(ops_payload.get("driveFolderId") or "").strip()
+        if "driveRetainDays" in ops_payload:
+            try:
+                drive_map["DRIVE_RETAIN_DAYS"] = str(int(ops_payload.get("driveRetainDays") or 14))
+            except (TypeError, ValueError):
+                drive_map["DRIVE_RETAIN_DAYS"] = "14"
+
     lines = [
         "# HBC Sanyard portal settings (managed via Super admin → Settings).",
         "# Do not commit this file with real secrets.",
@@ -484,10 +532,12 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
     lines.append("")
     lines.append("# Ops: backups, vitals alerts (managed via Super admin → Settings)")
     for key in _OPS_ENV_KEYS:
+        if key in _DRIVE_KEYS:
+            continue
         if key in mapping:
             lines.append(f"{key}={mapping[key]}")
     for key, value in sorted(mapping.items()):
-        if key in _SETTINGS_KEYS or key in _OPS_ENV_KEYS or key == "RWA_SMTP_PASS":
+        if key in _SETTINGS_KEYS or key in _OPS_ENV_KEYS or key == "RWA_SMTP_PASS" or key in _DRIVE_KEYS:
             continue
         lines.append(f"{key}={value}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -496,7 +546,22 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
     except OSError:
         pass
 
+    drive_lines = [
+        "# Google Drive off-box backup (managed via Super admin → Settings).",
+        "# Place service account JSON at data/drive-sa.json (chmod 600).",
+        "",
+    ]
+    for key in _DRIVE_KEYS:
+        drive_lines.append(f"{key}={drive_map.get(key, '')}")
+    drive_path.write_text("\n".join(drive_lines) + "\n", encoding="utf-8")
+    try:
+        drive_path.chmod(0o600)
+    except OSError:
+        pass
+
     for key, value in mapping.items():
+        os.environ[key] = value
+    for key, value in drive_map.items():
         os.environ[key] = value
 
     # Optional super-admin password rotate
@@ -651,6 +716,25 @@ def ensure_persistent_sessions_once(conn: sqlite3.Connection) -> None:
 
 def ensure_household_ready(conn: sqlite3.Connection) -> None:
     ensure_household_members_table(conn)
+    household.ensure_household_codes(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rwa_schema_flags (
+          key TEXT PRIMARY KEY,
+          applied_at TEXT NOT NULL
+        )
+        """
+    )
+    flag = conn.execute(
+        "SELECT 1 FROM rwa_schema_flags WHERE key = 'sync_primary_from_residents_v1'"
+    ).fetchone()
+    if not flag:
+        household.backfill_primary_from_residents(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO rwa_schema_flags(key, applied_at) VALUES (?, ?)",
+            ("sync_primary_from_residents_v1", utc_now()),
+        )
+        conn.commit()
 
 
 def is_superadmin_resident(r: dict | None) -> bool:
@@ -1324,51 +1408,60 @@ def mask_phone(phone: str | None) -> str:
 
 def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> list[dict]:
     entitlements.ensure_ready(conn)
+    household.ensure_household_codes(conn)
+    exclude_sql, exclude_ids = system_house_exclude_sql("house_id")
     if include_contacts:
         rows = conn.execute(
-            """
+            f"""
             SELECT house_id, plot_no, section, name, title, profession, employment_status,
                    official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status,
-                   ec_member_id
+                   ec_member_id, household_code
             FROM residents
-            WHERE house_id != ?
+            WHERE {exclude_sql}
             """,
-            (SUPERADMIN_HOUSE_ID,),
+            exclude_ids,
         ).fetchall()
     else:
         rows = conn.execute(
-            """
+            f"""
             SELECT house_id, plot_no, section, name, title, profession, employment_status,
                    official_title, is_ec_member, is_office_bearer, role, email, phone, notes, status,
-                   ec_member_id
+                   ec_member_id, household_code
             FROM residents
-            WHERE status = 'active' AND house_id != ?
+            WHERE status = 'active' AND {exclude_sql}
             """,
-            (SUPERADMIN_HOUSE_ID,),
+            exclude_ids,
         ).fetchall()
     photos = primary_member_photo_map(conn)
     out = []
     for r in rows:
+        if (r["house_id"] or "") in SYSTEM_HOUSE_IDS:
+            continue
         is_ec = (r["role"] or "") == "admin"
         is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(r["official_title"] or "") or is_ec
         is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_ec
         photo = photos.get(r["house_id"]) or photo_fields_for_member(None, None)
         owner = household.primary_member(conn, r["house_id"])
         delegate = household.primary_delegate_member(conn, r["house_id"])
+        # Master personal name: primary member, falling back to residents (dues/roster).
         owner_name = (owner or {}).get("name") or r["name"] or ""
         delegate_name = ((delegate or {}).get("name") or "").strip()
         display_name = f"{owner_name} / {delegate_name}" if delegate_name else owner_name
         seat_id = (r["ec_member_id"] or "").strip() or ((owner or {}).get("id") or "")
         seat = household.get_member(conn, seat_id) if seat_id else None
         seat_name = (seat or {}).get("name") or ""
+        # Prefer primary member contacts when present; else residents (shared master).
+        email = ((owner or {}).get("email") or r["email"] or "").strip()
+        phone = ((owner or {}).get("phone") or r["phone"] or "").strip()
         item = {
             "houseId": r["house_id"],
             "plotNo": r["plot_no"],
             "section": r["section"],
-            "name": display_name,
+            "name": owner_name,
             "ownerName": owner_name,
             "primaryDelegateName": delegate_name,
             "displayName": display_name,
+            "householdCode": (r["household_code"] or "").strip(),
             "role": r["role"],
             "officialTitle": r["official_title"] or "",
             "isEcMember": is_mem,
@@ -1376,16 +1469,16 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
             "isEcAdmin": is_ec,
             "ecMemberId": seat_id or None,
             "ecSeatHolderName": seat_name if is_mem else "",
-            "email": r["email"] or "",
-            "phone": r["phone"] or "",
-            "hasPhone": bool(r["phone"]),
-            "hasEmail": bool(r["email"]),
+            "email": email,
+            "phone": phone,
+            "hasPhone": bool(phone),
+            "hasEmail": bool(email),
             "hasPhoto": photo["hasPhoto"],
             "photoUrl": photo["photoUrl"],
             "primaryMemberId": photo.get("memberId"),
         }
         if include_contacts:
-            item["title"] = r["title"] or ""
+            item["title"] = (owner or {}).get("title") or r["title"] or ""
             item["profession"] = r["profession"] or ""
             item["employmentStatus"] = r["employment_status"] or "unknown"
             item["notes"] = r["notes"] or ""
@@ -1407,15 +1500,16 @@ def directory(conn: sqlite3.Connection, *, include_contacts: bool = False) -> li
 
 
 def roster_stats(conn: sqlite3.Connection) -> dict:
+    exclude_sql, exclude_ids = system_house_exclude_sql("house_id")
     row = conn.execute(
-        """
+        f"""
         SELECT
           COUNT(*) AS total,
           SUM(CASE WHEN phone IS NOT NULL AND TRIM(phone) != '' THEN 1 ELSE 0 END) AS with_phone,
           SUM(CASE WHEN email IS NOT NULL AND TRIM(email) != '' THEN 1 ELSE 0 END) AS with_email
-        FROM residents WHERE status = 'active' AND house_id != ?
+        FROM residents WHERE status = 'active' AND {exclude_sql}
         """,
-        (SUPERADMIN_HOUSE_ID,),
+        exclude_ids,
     ).fetchone()
     total = int(row["total"] or 0) if row else 0
     with_phone = int(row["with_phone"] or 0) if row else 0
@@ -1758,6 +1852,94 @@ def clear_member_photo(
     )
     conn.commit()
     return household.public_member(household.get_member(conn, mid), include_contacts=True)
+
+
+NOTICE_ALLOWED_IMAGE_TYPES = rwa_media.ALLOWED_IMAGE_TYPES
+
+
+def notice_images_root(site_root: pathlib.Path) -> pathlib.Path:
+    return pathlib.Path(site_root) / "data" / "notice-images"
+
+
+def notice_image_url(notice_id: str | None, image_file: str | None) -> str | None:
+    if not notice_id or not image_file:
+        return None
+    return f"/api/rwa/notices/{notice_id}/image"
+
+
+def notice_image_path(
+    site_root: pathlib.Path,
+    notice_id: str,
+    image_file: str | None,
+) -> pathlib.Path | None:
+    if not notice_id or not image_file:
+        return None
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", str(notice_id))
+    name = pathlib.Path(str(image_file)).name
+    if name != str(image_file) or ".." in name:
+        return None
+    path = notice_images_root(site_root) / safe_id / name
+    return path if path.is_file() else None
+
+
+def _optimize_notice_image(raw: bytes) -> tuple[bytes, str]:
+    return rwa_media.optimize_portal_card_image(raw)
+
+
+def save_notice_image(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    notice_id: str,
+    data: bytes,
+    filename: str,
+    mime: str,
+) -> str:
+    ensure_notice_image_column(conn)
+    if len(data) > rwa_media.UPLOAD_MAX_BYTES:
+        raise ValueError("Image exceeds size limit (5 MB)")
+    mime = mime or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    if mime not in rwa_media.ALLOWED_IMAGE_TYPES:
+        raise ValueError("Image must be JPEG, PNG, or WebP")
+    data, _out_mime = _optimize_notice_image(data)
+    safe_name = "photo.webp"
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", str(notice_id))
+    dest_dir = notice_images_root(site_root) / safe_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for old in dest_dir.glob("photo.*"):
+        old.unlink(missing_ok=True)
+    (dest_dir / safe_name).write_bytes(data)
+    conn.execute("UPDATE notices SET image_file = ? WHERE id = ?", (safe_name, notice_id))
+    conn.commit()
+    return safe_name
+
+
+def get_notice_image(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    notice_id: str,
+    *,
+    public_only: bool = False,
+    signed_in: bool = False,
+) -> tuple[pathlib.Path, str] | None:
+    ensure_notice_image_column(conn)
+    row = conn.execute(
+        "SELECT image_file, status, audience FROM notices WHERE id = ?",
+        (notice_id,),
+    ).fetchone()
+    if not row or not row["image_file"]:
+        return None
+    if (row["status"] or "") != "published":
+        return None
+    if public_only and _notice_audience(row["audience"]) != "public":
+        return None
+    if not public_only and not signed_in and _notice_audience(row["audience"]) != "public":
+        return None
+    path = notice_image_path(site_root, notice_id, row["image_file"])
+    if not path:
+        return None
+    mime = mimetypes.guess_type(path.name)[0] or "image/webp"
+    return path, mime
 
 
 def bank_qr_path(site_root: pathlib.Path, filename: str | None) -> pathlib.Path | None:
@@ -4953,6 +5135,7 @@ def list_notices(
     """List notices. status: published (default), draft, archived, or all."""
     ensure_notice_pin_order(conn)
     ensure_notice_audience(conn)
+    ensure_notice_image_column(conn)
     ensure_notice_shares_table(conn)
     ensure_notice_engagement_tables(conn)
     # Welcome notice is always first among published; drafts sort by updated/published date.
@@ -5000,9 +5183,20 @@ def _office_bearer_sort_key(item: dict) -> tuple:
     return (rank, title, (item.get("name") or "").lower())
 
 
+def _landing_published_ts(item: dict) -> str:
+    return str(
+        item.get("publishedAt")
+        or item.get("published_at")
+        or item.get("createdAt")
+        or item.get("created_at")
+        or ""
+    )
+
+
 def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -> dict:
     """Unauthenticated colony home: greeting, public updates, office bearers."""
     ensure_notice_audience(conn)
+    ensure_notice_image_column(conn)
     meta = site_meta or {}
     society = (meta.get("societyName") or "Mandi Housing Welfare Society").strip()
     colony = (
@@ -5011,27 +5205,44 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
         or meta.get("title")
         or "Himuda Housing Colony Sanyard"
     ).strip()
-    greeting = f"Welcome to {society}."
+    greeting = (
+        f"Unity · Harmony · Progress — {colony}'s public face for residents and the city of Mandi."
+    )
 
     notices = list_notices(conn, status="published", viewer=None)
     updates = []
+    notice_ads = []
+    seen_news_titles: set[str] = set()
     for n in notices:
         if _notice_audience(n.get("audience")) != "public":
             continue
         body = (n.get("body") or "").strip()
-        if len(body) > 280:
-            body = body[:277].rstrip() + "…"
-        updates.append(
-            {
-                "id": n.get("id"),
-                "title": n.get("title") or "",
-                "body": body,
-                "publishedAt": n.get("publishedAt"),
-                "pinned": bool(n.get("pinned")),
-            }
-        )
-        if len(updates) >= 8:
-            break
+        item = {
+            "id": n.get("id"),
+            "title": n.get("title") or "",
+            "body": body,
+            "publishedAt": n.get("publishedAt"),
+            "pinned": bool(n.get("pinned")),
+            "category": n.get("category") or "general",
+            "imageUrl": n.get("imageUrl"),
+        }
+        cat = (n.get("category") or "").strip().lower()
+        if cat in ("ad", "ads", "classified", "advert"):
+            # Ads stay short on the landing cards.
+            if len(body) > 280:
+                item["body"] = body[:277].rstrip() + "…"
+            notice_ads.append(item)
+        else:
+            title_key = " ".join((item["title"] or "").lower().split())
+            if title_key and title_key in seen_news_titles:
+                continue
+            if title_key:
+                seen_news_titles.add(title_key)
+            updates.append(item)
+    updates.sort(key=_landing_published_ts, reverse=True)
+    notice_ads.sort(key=_landing_published_ts, reverse=True)
+    updates = updates[:8]
+    notice_ads = notice_ads[:6]
 
     office_bearers = []
     for m in entitlements.list_office_and_ec(conn):
@@ -5048,6 +5259,36 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
     office_bearers.sort(key=_office_bearer_sort_key)
 
     public_campaigns = []
+    market = {"businesses": [], "ads": [], "serviceNeeds": []}
+    try:
+        import rwa_marketplace
+
+        market = rwa_marketplace.landing_slices(conn, limit_each=8)
+    except Exception:
+        pass
+
+    # Merge notice-based ads with marketplace ads, newest first.
+    ads = list(market.get("ads") or [])
+    for na in notice_ads:
+        ads.append(
+            {
+                "id": na["id"],
+                "kind": "ad",
+                "kindLabel": "Ad",
+                "category": na.get("category") or "ad",
+                "categoryLabel": "Colony ad",
+                "title": na.get("title") or "",
+                "description": na.get("body") or "",
+                "contactName": "",
+                "phone": "",
+                "publishedAt": na.get("publishedAt") or "",
+                "imageUrl": na.get("imageUrl"),
+                "source": "notice",
+                "acceptsInterest": False,
+            }
+        )
+    ads.sort(key=_landing_published_ts, reverse=True)
+    ads = ads[:8]
 
     return {
         "ok": True,
@@ -5056,8 +5297,13 @@ def public_landing(conn: sqlite3.Connection, *, site_meta: dict | None = None) -
         "greeting": greeting,
         "eyebrow": (meta.get("eyebrow") or f"{society} · RWA · Mandi").strip(),
         "updates": updates,
+        "news": updates,
+        "ads": ads,
+        "businesses": market.get("businesses") or [],
+        "serviceNeeds": market.get("serviceNeeds") or [],
         "campaigns": public_campaigns,
         "officeBearers": office_bearers,
+        "connectUrl": "/gate-pass.html#needs",
     }
 
 
@@ -5151,6 +5397,7 @@ def _notice_public(
         "likeCount": engagement["likeCount"],
         "commentCount": engagement["commentCount"],
         "likedByMe": engagement["likedByMe"],
+        "imageUrl": notice_image_url(notice_id, data.get("image_file")),
     }
 
 
@@ -5503,6 +5750,7 @@ def upsert_notice(
 ) -> dict:
     ensure_notice_pin_order(conn)
     ensure_notice_audience(conn)
+    ensure_notice_image_column(conn)
     ensure_notice_shares_table(conn)
     ensure_bilingual_content_columns(conn)
     notice_id = (payload.get("id") or f"n_{secrets.token_hex(6)}").strip()
@@ -5662,6 +5910,11 @@ def delete_notice(
         raise ValueError("Notice not found")
     if was_pinned:
         _reindex_pinned(conn)
+    import shutil
+
+    img_dir = notice_images_root(_SITE_ROOT) / re.sub(r"[^A-Za-z0-9_-]", "", nid)
+    if img_dir.is_dir():
+        shutil.rmtree(img_dir, ignore_errors=True)
     conn.commit()
 
 
@@ -6144,6 +6397,11 @@ def update_profile(
             status = new_status
 
     entitlements.ensure_ready(conn)
+    was_ec_member = bool(int(resident.get("is_ec_member") or 0)) or bool(
+        int(resident.get("is_office_bearer") or 0)
+    ) or bool(str(resident.get("official_title") or "").strip()) or (
+        (resident.get("role") or "") == "admin"
+    )
     conn.execute(
         """
         UPDATE residents SET
@@ -6192,6 +6450,14 @@ def update_profile(
             granted_by=actor.get("houseId"),
             commit=False,
         )
+    elif is_ec_member and not was_ec_member and role != "admin":
+        # New EC members get Pass · manage by default (EC Admin can revoke later).
+        entitlements.grant_pass_manage_if_needed(
+            conn,
+            resident["house_id"],
+            granted_by=actor.get("houseId") or "system:ec_join",
+            commit=False,
+        )
 
     after = {
         "houseId": resident["house_id"],
@@ -6218,6 +6484,8 @@ def update_profile(
         actor=actor,
         change_source=change_source,
     )
+    # Keep Directory + Dues on the same master: roster/profile writes flow both ways.
+    household.sync_resident_to_primary(conn, resident["house_id"])
     conn.commit()
 
     refreshed = find_resident(conn, house_id, include_inactive=True) or {**resident, **{
