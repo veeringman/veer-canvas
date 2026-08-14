@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-07
+Last updated: 2026-08-14
 
 ---
 
@@ -75,6 +75,18 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 - [ ] **Proxy / mandate letter** — owner grants timed “act for dues/concerns” (beyond view-only)
 - [ ] **AGM mode** — attendance QR, agenda, live votes, minutes → Info Centre
 
+## Vehicle passes → phone wallets (plumbing shipped; credentials pending)
+
+Code is in the repo and **off by default**. Buttons appear only after credentials are on the server. Do not enable in production until the issuer accounts below exist.
+
+- [x] **Apple Wallet plumbing** — signed `.pkpass` at `GET /api/rwa/parking/passes/<id>/wallet.pkpass`; “Add to iPhone Wallet” on Pass panel + gate-pass. Template: `data/apple-wallet.env.example`. WWDR: `assets/wallet/AppleWWDRCAG4.cer`.
+- [ ] **Apple Pass Type ID certificate** — Apple Developer Program (~$99/yr) → Pass Type ID (e.g. `pass.in.housingcolonysanyard.vehicle`) → export `Certificates.p12` to `data/apple-wallet/` → set `APPLE_WALLET_ENABLED=1` + Team ID in `data/apple-wallet.env` → restart admin.
+- [x] **Google Wallet plumbing** — JWT save-link at `GET /api/rwa/parking/passes/<id>/wallet.google`; “Add to Google Wallet” on Android. Template: `data/google-wallet.env.example`.
+- [ ] **Google Wallet issuer** — free: enable Wallet API in Google Cloud, service account JSON as `data/google-wallet-sa.json`, Issuer ID from [pay.google.com/business/console](https://pay.google.com/business/console), add the SA as Developer, set `GOOGLE_WALLET_ENABLED=1` in `data/google-wallet.env` → restart admin.
+- [ ] **Live check** — iPhone Safari adds member/visitor/adhoc pass; Android Chrome adds the same; gate QR still verifies; revoked/expired passes are not offered.
+
+Secrets stay off git (`data/apple-wallet.env`, `data/google-wallet.env`, `.p12`, `google-wallet-sa.json`).
+
 ## Ops / reliability
 
 - [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (7-day retention default). See `deploy/OPS-BACKUP.md`
@@ -120,9 +132,10 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 1. More PDF reports (plot statement, colony summary, concerns)
 2. Security hardening (rate limits, headers, DoS shields) + Phase 2 Drive backups + restore drill
 3. Platformization spike — extract tenant config + `rwa-portal` site template (white-label path)
-4. Maintenance consent votes
-5. Dues receipt vault
-6. EC decision + spend snapshot
+4. Phone wallets — finish Apple Pass Type cert and/or Google Wallet issuer when accounts exist
+5. Maintenance consent votes
+6. Dues receipt vault
+7. EC decision + spend snapshot
 
 ## Already shipped (context)
 
@@ -133,5 +146,6 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Info Centre, Works & Events
 - EC desk, observability (super admin)
 - Print letterhead / EC committee pads (`documents/`)
+- Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes
