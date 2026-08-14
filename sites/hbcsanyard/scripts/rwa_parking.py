@@ -192,6 +192,7 @@ def settings(conn: sqlite3.Connection) -> dict[str, Any]:
         "gatePassUrl": gate_pass_public_url(),
         "vehicleTypes": [{"id": k, "label": VEHICLE_LABELS[k]} for k in VEHICLE_TYPES if k != "foot"],
         "walletEnabled": _wallet_configured(),
+        "googleWalletEnabled": _google_wallet_configured(),
     }
 
 
@@ -199,6 +200,14 @@ def _wallet_configured() -> bool:
     try:
         import rwa_wallet
         return rwa_wallet.is_configured()
+    except ImportError:
+        return False
+
+
+def _google_wallet_configured() -> bool:
+    try:
+        import rwa_wallet
+        return rwa_wallet.is_google_configured()
     except ImportError:
         return False
 
@@ -430,7 +439,7 @@ def _wallet_public_fields(item: dict[str, Any]) -> dict[str, Any]:
     try:
         import rwa_wallet
     except ImportError:
-        return {"walletEnabled": False, "walletUrl": ""}
+        return {"walletEnabled": False, "walletUrl": "", "googleWalletEnabled": False, "googleWalletUrl": ""}
     return rwa_wallet.public_fields(item)
 
 

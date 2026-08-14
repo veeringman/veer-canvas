@@ -6627,6 +6627,16 @@ a.parking-wallet:hover {
   background: #000;
   color: #fff;
 }
+a.parking-wallet-google {
+  background: #1a73e8;
+  color: #fff;
+  border: 0;
+  text-decoration: none;
+}
+a.parking-wallet-google:hover {
+  background: #1557b0;
+  color: #fff;
+}
 .parking-validate-actions {
   flex-wrap: wrap;
   gap: 0.45rem;

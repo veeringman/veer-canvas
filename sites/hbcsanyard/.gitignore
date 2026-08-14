@@ -11,6 +11,9 @@ data/ai.env
 ai.env
 data/apple-wallet.env
 data/apple-wallet/
+data/google-wallet.env
+data/google-wallet-sa.json
+data/google-wallet/
 data/drive.env
 data/city-hub.env
 data/drive-sa.json

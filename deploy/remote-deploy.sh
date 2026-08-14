@@ -259,6 +259,11 @@ if [[ -f "$SITE_DIR/data/apple-wallet.env.example" ]]; then
     "$SITE_DIR/data/apple-wallet.env.example" \
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/apple-wallet.env.example"
 fi
+if [[ -f "$SITE_DIR/data/google-wallet.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/google-wallet.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/google-wallet.env.example"
+fi
 if [[ -f "$SITE_DIR/data/syndicate.env.example" ]]; then
   rsync -az --ignore-existing -e "$RSYNC_SSH" \
     "$SITE_DIR/data/syndicate.env.example" \
@@ -311,6 +316,13 @@ if [[ ! -f "$WEB_ROOT/data/apple-wallet.env" && -f "$WEB_ROOT/data/apple-wallet.
   echo "Created data/apple-wallet.env from example (needs Pass Type ID certificate)."
 else
   echo "Preserved existing data/apple-wallet.env (or no example present)."
+fi
+if [[ ! -f "$WEB_ROOT/data/google-wallet.env" && -f "$WEB_ROOT/data/google-wallet.env.example" ]]; then
+  cp "$WEB_ROOT/data/google-wallet.env.example" "$WEB_ROOT/data/google-wallet.env"
+  chmod 600 "$WEB_ROOT/data/google-wallet.env" || true
+  echo "Created data/google-wallet.env from example (needs Google Wallet issuer ID)."
+else
+  echo "Preserved existing data/google-wallet.env (or no example present)."
 fi
 # Do not create syndicate.env from the example — civic_hub writes a live token on first boot.
 if [[ -f "$WEB_ROOT/data/drive-sa.json" ]]; then

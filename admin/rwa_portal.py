@@ -604,6 +604,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         _load_env_file(pathlib.Path(site_root) / "data" / "vapid.env")
         _load_env_file(pathlib.Path(site_root) / "data" / "ai.env")
         _load_env_file(pathlib.Path(site_root) / "data" / "apple-wallet.env")
+        _load_env_file(pathlib.Path(site_root) / "data" / "google-wallet.env")
     except Exception:
         pass
     try:

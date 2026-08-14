@@ -7796,6 +7796,7 @@ def api_rwa_parking_gate():
                 "data:image/png;base64," + base64.b64encode(png).decode("ascii")
             ) if png else "",
             "walletEnabled": bool(meta.get("walletEnabled")),
+            "googleWalletEnabled": bool(meta.get("googleWalletEnabled")),
         })
     finally:
         conn.close()
@@ -8249,6 +8250,35 @@ def api_rwa_parking_wallet_pass(pass_id):
         )
         resp.headers["Cache-Control"] = "no-store"
         return resp
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/parking/passes/<pass_id>/wallet.google", methods=["GET"])
+def api_rwa_parking_google_wallet(pass_id):
+    """Redirect to a signed Google Wallet save link for an active pass."""
+    if not rwa_wallet or not rwa_wallet.is_google_configured(SITE_ROOT):
+        return jsonify({"ok": False, "error": "Google Wallet is not set up on this site yet"}), 503
+    conn = _rwa_conn()
+    try:
+        item = rwa_parking.get_pass(conn, pass_id, site_root=SITE_ROOT, with_qr=True)
+        if not item:
+            return jsonify({"ok": False, "error": "Pass not found"}), 404
+        code = (request.args.get("code") or "").strip()
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        actor = sess["resident"] if sess else None
+        can_manage = bool(actor and rwa_entitlements.actor_has(actor, "pass_manage"))
+        can_general = bool(actor and rwa_entitlements.actor_has(actor, "pass_general"))
+        if not rwa_parking.can_download_wallet(
+            item, actor, code=code, can_manage=can_manage, can_general=can_general
+        ):
+            if not sess and not code:
+                return jsonify({"ok": False, "error": "Sign in required"}), 401
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        url = rwa_wallet.google_save_url(item, SITE_ROOT)
+        return redirect(url, code=302)
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

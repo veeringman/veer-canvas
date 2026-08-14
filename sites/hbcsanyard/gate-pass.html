@@ -140,6 +140,11 @@
       color: #fff;
       flex: 1 1 8rem;
     }
+    a.btn.wallet-google {
+      background: #1a73e8;
+      color: #fff;
+      flex: 1 1 8rem;
+    }
     button.btn.primary { background: var(--navy); color: #f7f3eb; flex: 1 1 8rem; }
     button.btn.secondary { background: var(--accent); color: #15233f; flex: 1 1 8rem; }
     button.btn.ghost {
@@ -335,6 +340,7 @@
         <p class="disclaimer" data-i18n="issuedHint">Show this screen at the gate if asked. The pass expires automatically.</p>
         <div class="btn-row" style="justify-content:center;margin-top:0.85rem">
           <a class="btn wallet" id="issuedWallet" hidden href="#" data-i18n="walletAdd">Add to iPhone Wallet</a>
+          <a class="btn wallet-google" id="issuedGoogleWallet" hidden href="#" data-i18n="walletGoogle">Add to Google Wallet</a>
           <button type="button" class="btn ghost" id="anotherBtn" data-i18n="another">Issue another</button>
         </div>
       </section>
@@ -518,6 +524,7 @@
         fValid: 'Valid until',
         issuedHint: 'Show this screen at the gate if asked. The pass expires automatically.',
         walletAdd: 'Add to iPhone Wallet',
+        walletGoogle: 'Add to Google Wallet',
         another: 'Issue another',
         hourUnit: 'hours',
         catHawker: 'Hawker',
@@ -603,6 +610,7 @@
         fValid: 'मान्य तक',
         issuedHint: 'माँगने पर यह स्क्रीन गेट पर दिखाएँ। पास अपने आप समाप्त हो जाएगा।',
         walletAdd: 'iPhone Wallet में जोड़ें',
+        walletGoogle: 'Google Wallet में जोड़ें',
         another: 'एक और पास',
         hourUnit: 'घंटे',
         catHawker: 'फेरीवाला',
@@ -873,9 +881,14 @@
       document.getElementById('formCard').hidden = false;
       document.getElementById('issuedCard').hidden = true;
       const wallet = document.getElementById('issuedWallet');
+      const googleWallet = document.getElementById('issuedGoogleWallet');
       if (wallet) {
         wallet.hidden = true;
         wallet.removeAttribute('href');
+      }
+      if (googleWallet) {
+        googleWallet.hidden = true;
+        googleWallet.removeAttribute('href');
       }
       document.getElementById('nameInput').value = '';
       startCam().catch(() => {});
@@ -993,7 +1006,9 @@
         document.getElementById('issuedValid').textContent = item.expiresAtLabel || '—';
         document.getElementById('issuedQr').src = item.qrDataUrl || '';
         const wallet = document.getElementById('issuedWallet');
+        const googleWallet = document.getElementById('issuedGoogleWallet');
         const android = /Android/i.test(navigator.userAgent || '');
+        const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
         if (wallet) {
           if (item.walletEnabled && item.walletUrl && !android) {
             wallet.href = item.walletUrl;
@@ -1001,6 +1016,15 @@
           } else {
             wallet.hidden = true;
             wallet.removeAttribute('href');
+          }
+        }
+        if (googleWallet) {
+          if (item.googleWalletEnabled && item.googleWalletUrl && !ios) {
+            googleWallet.href = item.googleWalletUrl;
+            googleWallet.hidden = false;
+          } else {
+            googleWallet.hidden = true;
+            googleWallet.removeAttribute('href');
           }
         }
         stopCam();

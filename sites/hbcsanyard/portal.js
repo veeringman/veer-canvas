@@ -8380,7 +8380,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       </article>
       <div class="parking-card-actions">
         ${item.canRenew ? `<button type="button" class="btn secondary compact parking-renew" data-id="${escapeHtml(item.id)}">${item.needsEcApproval ? 'Request EC renewal' : 'Renew pass'}</button>` : ''}
-        ${parkingWalletLink(item)}
+        ${parkingWalletLinks(item)}
         ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}">Remove vehicle</button>` : ''}
         ${ec && status === 'pending_renewal' ? `<button type="button" class="btn primary compact parking-approve" data-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="btn ghost compact parking-reject" data-id="${escapeHtml(item.id)}">Decline</button>` : ''}
         ${ec && (status === 'active' || status === 'pending_renewal') ? `<button type="button" class="btn ghost compact parking-revoke" data-id="${escapeHtml(item.id)}">Revoke</button>` : ''}
@@ -8422,17 +8422,21 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       ${face}
       <h4>${escapeHtml(item.kind === 'adhoc' ? (item.visitorName || 'Ad-hoc') : (item.plateDisplay || item.plate || 'Pass'))}</h4>
       <dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '—')}</dd>`).join('')}</dl>
-      ${parkingWalletLink(item) ? `<div class="parking-card-actions">${parkingWalletLink(item)}</div>` : ''}
+      ${parkingWalletLinks(item) ? `<div class="parking-card-actions">${parkingWalletLinks(item)}</div>` : ''}
     </div>`;
   }
 
-  function appleWalletLikely() {
-    const ua = navigator.userAgent || '';
-    return !/Android/i.test(ua);
+  function isAndroidDevice() {
+    return /Android/i.test(navigator.userAgent || '');
   }
 
-  function parkingWalletHref(item) {
-    const path = item.walletUrl || '';
+  function isAppleMobileDevice() {
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/i.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function parkingWalletHref(path) {
     if (!path) return '';
     const url = new URL(path, window.location.origin);
     const standalone = Boolean(window.navigator.standalone)
@@ -8444,11 +8448,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return url.pathname + url.search;
   }
 
-  function parkingWalletLink(item) {
-    if (!item?.walletEnabled || !item.walletUrl || !appleWalletLikely()) return '';
-    const href = parkingWalletHref(item);
-    if (!href) return '';
-    return `<a class="btn compact parking-wallet" href="${escapeHtml(href)}">Add to iPhone Wallet</a>`;
+  function parkingWalletLinks(item) {
+    const bits = [];
+    if (item?.walletEnabled && item.walletUrl && !isAndroidDevice()) {
+      const href = parkingWalletHref(item.walletUrl);
+      if (href) bits.push(`<a class="btn compact parking-wallet" href="${escapeHtml(href)}">Add to iPhone Wallet</a>`);
+    }
+    if (item?.googleWalletEnabled && item.googleWalletUrl && !isAppleMobileDevice()) {
+      const href = parkingWalletHref(item.googleWalletUrl);
+      if (href) bits.push(`<a class="btn compact parking-wallet-google" href="${escapeHtml(href)}">Add to Google Wallet</a>`);
+    }
+    return bits.join('');
   }
 
   function fillParkingTenantSelect(tenants) {
