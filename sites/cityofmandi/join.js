@@ -1,6 +1,8 @@
 (() => {
   const params = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
+  const nextRaw = (params.get("next") || "").trim();
+  const nextPath = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/publish";
 
   async function api(path, options = {}) {
     const res = await fetch(path, {
@@ -41,7 +43,7 @@
           password: $("regPassword").value,
         }),
       });
-      location.href = "/publish";
+      location.href = nextPath;
     } catch (err) { fail(err); }
   });
 
@@ -56,11 +58,11 @@
           password: $("loginPassword").value,
         }),
       });
-      location.href = "/publish";
+      location.href = nextPath;
     } catch (err) { fail(err); }
   });
 
   api("/api/hub/publisher/session").then((sess) => {
-    if (sess.authenticated) location.replace("/publish");
+    if (sess.authenticated) location.replace(nextPath);
   }).catch(() => {});
 })();

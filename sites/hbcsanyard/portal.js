@@ -14,13 +14,19 @@
     pendingEmailMasked: '',
     msgThreads: [],
     msgActiveThreadId: null,
+    msgActiveThread: null,
     msgCanModerate: false,
     msgCanCleanup: false,
+    msgCanManage: false,
+    msgCanLeave: false,
+    msgCanEscalate: false,
     msgPollTimer: null,
     msgAttachFiles: [],
     msgLastId: null,
     msgIsAiThread: false,
     msgSending: false,
+    msgCreateSelected: [],
+    msgManageThreadId: null,
     parkingOcr: null,
   };
   let rosterCache = [];
@@ -6726,19 +6732,37 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     box.innerHTML = state.msgThreads.map((t) => {
       const active = t.id === state.msgActiveThreadId ? ' is-active' : '';
       const unread = t.unread ? `<span class="msg-unread">${t.unread} new</span>` : '';
-      const preview = t.lastMessage
-        ? `${escapeHtml(t.lastMessage.authorName || '')}: ${escapeHtml(t.lastMessage.body || '')}`
-        : (t.kind === 'colony' ? 'Colony channel' : (t.kind === 'ai' ? 'Private assistant' : 'No messages yet'));
+      let preview = 'No messages yet';
+      if (t.lastMessage) {
+        preview = `${escapeHtml(t.lastMessage.authorName || '')}: ${escapeHtml(t.lastMessage.body || '')}`;
+      } else if (t.kind === 'colony') {
+        preview = 'Colony channel';
+      } else if (t.kind === 'ai') {
+        preview = 'Private assistant';
+      } else if (t.kind === 'group') {
+        const n = Number(t.memberCount || 0);
+        preview = `Private channel · ${n} ${n === 1 ? 'person' : 'people'}`;
+      }
+      const official = t.kind === 'group' && t.isOfficial
+        ? '<span class="msg-official-badge">Official</span>'
+        : '';
       let avatarPerson = { photoUrl: '' };
       if (t.kind === 'dm' && t.peerPhotoUrl) avatarPerson = { photoUrl: t.peerPhotoUrl };
       else if (t.lastMessage?.photoUrl) avatarPerson = { photoUrl: t.lastMessage.photoUrl };
-      const avatar = t.kind === 'ai'
-        ? aiAvatarHtml({ size: 'sm', className: 'msg-thread-avatar' })
-        : personAvatarHtml(avatarPerson, { size: 'sm', className: 'msg-thread-avatar' });
-      return `<button type="button" class="msg-thread-item${active}${t.kind === 'ai' ? ' is-ai-thread' : ''}" data-thread-id="${escapeHtml(t.id)}">
+      let avatar;
+      if (t.kind === 'ai') {
+        avatar = aiAvatarHtml({ size: 'sm', className: 'msg-thread-avatar' });
+      } else if (t.kind === 'group' && t.iconUrl) {
+        avatar = `<img class="msg-thread-avatar msg-group-icon" src="${escapeHtml(t.iconUrl)}" alt="">`;
+      } else if (t.kind === 'group') {
+        avatar = `<span class="msg-thread-avatar msg-group-avatar" aria-hidden="true">${escapeHtml((t.title || 'C').slice(0, 1).toUpperCase())}</span>`;
+      } else {
+        avatar = personAvatarHtml(avatarPerson, { size: 'sm', className: 'msg-thread-avatar' });
+      }
+      return `<button type="button" class="msg-thread-item${active}${t.kind === 'ai' ? ' is-ai-thread' : ''}${t.kind === 'group' ? ' is-group-thread' : ''}" data-thread-id="${escapeHtml(t.id)}">
         ${avatar}
         <span class="msg-thread-copy">
-          <strong>${escapeHtml(t.title || t.id)}</strong>
+          <strong>${official}${escapeHtml(t.title || t.id)}</strong>
           <span class="msg-preview">${preview}</span>
           ${unread}
         </span>
@@ -6809,9 +6833,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const who = isAi
         ? 'RWA Assistant · only you see this'
         : `${escapeHtml(m.houseId || '')} · ${escapeHtml(m.authorName || '')}`;
+      const theme = (m.cardTheme || '').trim();
+      const themeClass = theme ? ` theme-${escapeHtml(theme)}` : '';
+      const themeBadge = theme
+        ? `<span class="msg-card-theme-badge">${escapeHtml(m.cardThemeLabel || theme)}</span>`
+        : '';
       return `<article class="msg-row${mine ? ' is-mine' : ''}${isAi ? ' is-ai' : ''}" data-msg-id="${escapeHtml(m.id)}">
         ${avatar}
-        <div class="msg-bubble${mine ? ' is-mine' : ''}${m.hidden ? ' is-hidden' : ''}${isAi ? ' is-ai' : ''}">
+        <div class="msg-bubble${mine ? ' is-mine' : ''}${m.hidden ? ' is-hidden' : ''}${isAi ? ' is-ai' : ''}${themeClass}">
+          ${themeBadge}
           <div class="msg-meta">${who} · ${escapeHtml(formatIstDateTime(m.createdAt))}${editedBit}</div>
           <div class="msg-body">${escapeHtml(m.body || '')}</div>
           ${atts ? `<div class="msg-attachments">${atts}</div>` : ''}
@@ -6836,26 +6866,62 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(threadId)}?limit=80`);
     state.msgCanModerate = Boolean(data.canModerate);
     state.msgCanCleanup = Boolean(data.canCleanup);
+    state.msgCanManage = Boolean(data.canManage);
+    state.msgCanLeave = Boolean(data.canLeave);
+    state.msgCanEscalate = Boolean(data.canEscalate);
     state.msgIsAiThread = Boolean(data.isAi || (data.thread && data.thread.kind === 'ai'));
     const thread = data.thread || {};
-    if (el('msgConversationTitle')) el('msgConversationTitle').textContent = thread.title || 'Conversation';
+    state.msgActiveThread = thread;
+    if (el('msgConversationTitle')) {
+      const badge = thread.kind === 'group' && thread.isOfficial
+        ? 'Official · '
+        : '';
+      el('msgConversationTitle').textContent = `${badge}${thread.title || 'Conversation'}`;
+    }
     if (el('msgConversationMeta')) {
       if (thread.kind === 'ai') {
         el('msgConversationMeta').textContent = 'Private to you — answers are not shared with the colony';
       } else if (thread.kind === 'colony') {
         el('msgConversationMeta').textContent = 'Visible to all residents';
+      } else if (thread.kind === 'group') {
+        const n = Number(thread.memberCount || 0);
+        const arch = thread.archivedAt ? ' · Archived' : '';
+        el('msgConversationMeta').textContent = `Private channel · ${n} ${n === 1 ? 'person' : 'people'}${arch}`;
       } else {
         el('msgConversationMeta').textContent = `Private person-to-person · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
       }
     }
     const tools = el('msgChannelTools');
     if (tools) {
-      tools.hidden = !state.msgCanCleanup;
-      const menu = tools.querySelector('.msg-cleanup-menu');
-      if (menu) menu.open = false;
+      const showTools = state.msgCanCleanup || state.msgCanManage || state.msgCanLeave || state.msgCanEscalate;
+      tools.hidden = !showTools;
+      const manageMenu = el('msgManageMenu');
+      if (manageMenu) manageMenu.hidden = !state.msgCanManage;
+      if (el('msgLeaveChannelBtn')) el('msgLeaveChannelBtn').hidden = !state.msgCanLeave;
+      if (el('msgEscalateBtn')) el('msgEscalateBtn').hidden = !state.msgCanEscalate || state.msgIsAiThread;
+      if (el('msgManageOfficialBtn')) {
+        el('msgManageOfficialBtn').textContent = thread.isOfficial ? 'Remove Official' : 'Mark Official';
+      }
+      if (el('msgManageArchiveBtn')) {
+        el('msgManageArchiveBtn').textContent = thread.archivedAt ? 'Unarchive channel' : 'Archive channel';
+      }
+      const cleanupMenu = tools.querySelector('.msg-cleanup-menu');
+      if (cleanupMenu) {
+        cleanupMenu.hidden = !state.msgCanCleanup;
+        cleanupMenu.open = false;
+      }
       const clearHiddenBtn = tools.querySelector('[data-cleanup="clear_hidden"]');
       if (clearHiddenBtn) clearHiddenBtn.hidden = thread.kind !== 'colony';
     }
+    if (el('msgComposeForm')) {
+      el('msgComposeForm').hidden = isViewOnly() || Boolean(thread.archivedAt && thread.kind === 'group');
+    }
+    const themeWrap = el('msgCardThemeWrap');
+    if (themeWrap) {
+      themeWrap.hidden = Boolean(state.msgIsAiThread) || thread.kind === 'dm';
+      if (el('msgCardTheme') && !themeWrap.hidden) el('msgCardTheme').value = 'plain';
+    }
+    applyMsgFeedBackground(thread);
     const attachLabel = document.querySelector('.msg-attach-label');
     if (attachLabel) attachLabel.hidden = Boolean(state.msgIsAiThread);
     if (el('msgAttachHint')) {
@@ -6910,6 +6976,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   async function loadMessagesPanel() {
+    if (el('msgNewChannelBtn')) el('msgNewChannelBtn').hidden = isViewOnly();
     await refreshMsgThreads();
     const hash = (location.hash || '').replace(/^#/, '');
     const m = hash.match(/^messages\/(.+)$/);
@@ -6949,6 +7016,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (status) status.textContent = state.msgIsAiThread ? 'Thinking…' : 'Sending…';
       const fd = new FormData();
       fd.append('body', body);
+      const theme = (el('msgCardTheme')?.value || 'plain').trim();
+      if (!state.msgIsAiThread && theme && theme !== 'plain') {
+        fd.append('cardTheme', theme);
+      }
       if (!state.msgIsAiThread) {
         for (const f of state.msgAttachFiles) fd.append('files', f);
       }
@@ -10285,6 +10356,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function leaveMsgThread() {
     el('msgLayout')?.classList.remove('is-thread-open');
     state.msgActiveThreadId = null;
+    state.msgActiveThread = null;
     stopMsgPolling();
     if (el('msgBackBtn')) el('msgBackBtn').hidden = true;
     if (el('msgLeaveBar')) el('msgLeaveBar').hidden = true;
@@ -10535,6 +10607,513 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (wrap.contains(event.target)) return;
     clearMsgPeerSearch();
   });
+
+  function applyMsgFeedBackground(thread) {
+    const feed = el('msgFeed');
+    if (!feed) return;
+    feed.className = 'msg-feed';
+    feed.style.backgroundImage = '';
+    if (!thread || thread.kind !== 'group') return;
+    const style = (thread.bgStyle || 'none').trim() || 'none';
+    if (style && style !== 'none') feed.classList.add(`msg-bg-${style}`);
+    if (style === 'custom' && thread.bgUrl) {
+      feed.style.backgroundImage = `url("${String(thread.bgUrl).replace(/"/g, '')}")`;
+    }
+  }
+
+  function peopleInviteKey(p) {
+    if (p.kind === 'tenant' || p.tenantId) return `tenant:${p.tenantId}`;
+    return `member:${p.memberId}`;
+  }
+
+  function renderSelectedPeople(boxId, selected) {
+    const box = el(boxId);
+    if (!box) return;
+    if (!selected.length) {
+      box.innerHTML = '<p class="muted">No one selected yet.</p>';
+      return;
+    }
+    box.innerHTML = selected.map((p) => (
+      `<button type="button" class="msg-chip" data-remove-invite="${escapeHtml(peopleInviteKey(p))}">${escapeHtml(p.label)} ✕</button>`
+    )).join('');
+  }
+
+  function renderPeopleSearchResults(boxId, people, selectedKeys) {
+    const box = el(boxId);
+    if (!box) return;
+    const filtered = (people || []).filter((p) => !selectedKeys.has(peopleInviteKey(p)));
+    if (!filtered.length) {
+      box.innerHTML = '<p class="muted msg-peer-empty">No people found</p>';
+      box.hidden = false;
+      return;
+    }
+    box.innerHTML = filtered.map((p) => {
+      const key = peopleInviteKey(p);
+      const note = p.kind === 'tenant' ? ' <span class="muted">(tenant listing)</span>' : '';
+      return `<button type="button" data-invite-key="${escapeHtml(key)}" data-kind="${escapeHtml(p.kind || 'member')}" data-member-id="${escapeHtml(p.memberId || '')}" data-tenant-id="${escapeHtml(p.tenantId || '')}" data-label="${escapeHtml(p.label)}">${escapeHtml(p.label)}${note}</button>`;
+    }).join('');
+    box.hidden = false;
+  }
+
+  function invitePayloadFromSelected(selected) {
+    return {
+      memberIds: selected.filter((p) => p.kind !== 'tenant' && p.memberId).map((p) => p.memberId),
+      tenantIds: selected.filter((p) => p.kind === 'tenant' || p.tenantId).map((p) => p.tenantId),
+    };
+  }
+
+  function openChannelLookDialog() {
+    const thread = state.msgActiveThread;
+    if (!thread || thread.kind !== 'group') return;
+    const preview = el('msgChannelIconPreview');
+    const fallback = el('msgChannelIconFallback');
+    if (preview && fallback) {
+      if (thread.iconUrl) {
+        preview.src = thread.iconUrl;
+        preview.hidden = false;
+        fallback.hidden = true;
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+        fallback.hidden = false;
+        fallback.textContent = (thread.title || 'C').slice(0, 1).toUpperCase();
+      }
+    }
+    const presets = el('msgChannelBgPresets');
+    if (presets) {
+      const styles = thread.bgStyles || [
+        { id: 'none', label: 'None' },
+        { id: 'soft', label: 'Soft wash' },
+        { id: 'dots', label: 'Dots' },
+        { id: 'grid', label: 'Grid' },
+        { id: 'tiles', label: 'Tiles' },
+        { id: 'diagonal', label: 'Diagonal' },
+        { id: 'leaves', label: 'Leaves' },
+        { id: 'custom', label: 'Custom image' },
+      ];
+      presets.innerHTML = styles.map((s) => (
+        `<button type="button" class="msg-bg-preset${thread.bgStyle === s.id ? ' is-active' : ''}" data-bg-style="${escapeHtml(s.id)}">
+          <span class="msg-bg-swatch msg-bg-${escapeHtml(s.id)}"></span>
+          <span>${escapeHtml(s.label)}</span>
+        </button>`
+      )).join('');
+    }
+    if (el('msgChannelLookStatus')) el('msgChannelLookStatus').textContent = '';
+    el('msgChannelLookDialog')?.showModal();
+  }
+
+  let createPeopleTimer = null;
+  function openCreateChannelDialog() {
+    if (isViewOnly()) {
+      window.alert('View-only access cannot create channels');
+      return;
+    }
+    state.msgCreateSelected = [];
+    if (el('msgCreateChannelTitleInput')) el('msgCreateChannelTitleInput').value = '';
+    if (el('msgCreateChannelOfficial')) el('msgCreateChannelOfficial').checked = false;
+    if (el('msgCreateChannelPeopleSearch')) el('msgCreateChannelPeopleSearch').value = '';
+    if (el('msgCreateChannelPeopleResults')) {
+      el('msgCreateChannelPeopleResults').hidden = true;
+      el('msgCreateChannelPeopleResults').innerHTML = '';
+    }
+    if (el('msgCreateChannelStatus')) el('msgCreateChannelStatus').textContent = '';
+    renderSelectedPeople('msgCreateChannelSelected', state.msgCreateSelected);
+    el('msgCreateChannelDialog')?.showModal();
+  }
+
+  el('msgNewChannelBtn')?.addEventListener('click', () => openCreateChannelDialog());
+  el('msgCreateChannelCancel')?.addEventListener('click', () => el('msgCreateChannelDialog')?.close());
+  el('msgCreateChannelSelected')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-remove-invite]');
+    if (!btn) return;
+    const key = btn.getAttribute('data-remove-invite');
+    state.msgCreateSelected = state.msgCreateSelected.filter((p) => peopleInviteKey(p) !== key);
+    renderSelectedPeople('msgCreateChannelSelected', state.msgCreateSelected);
+  });
+  el('msgCreateChannelPeopleSearch')?.addEventListener('input', () => {
+    clearTimeout(createPeopleTimer);
+    const q = (el('msgCreateChannelPeopleSearch')?.value || '').trim();
+    createPeopleTimer = setTimeout(async () => {
+      const box = el('msgCreateChannelPeopleResults');
+      if (!box) return;
+      if (q.length < 1) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      try {
+        const data = await api(`/api/rwa/messages/people?q=${encodeURIComponent(q)}`);
+        const selectedKeys = new Set(state.msgCreateSelected.map(peopleInviteKey));
+        renderPeopleSearchResults('msgCreateChannelPeopleResults', data.people || [], selectedKeys);
+      } catch (e) {
+        box.innerHTML = `<p class="error">${escapeHtml(e.message || 'Search failed')}</p>`;
+        box.hidden = false;
+      }
+    }, 200);
+  });
+  el('msgCreateChannelPeopleResults')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-invite-key]');
+    if (!btn) return;
+    const kind = btn.getAttribute('data-kind') || 'member';
+    const memberId = btn.getAttribute('data-member-id') || '';
+    const tenantId = btn.getAttribute('data-tenant-id') || '';
+    const label = btn.getAttribute('data-label') || '';
+    const person = { kind, memberId, tenantId, label };
+    if (state.msgCreateSelected.some((p) => peopleInviteKey(p) === peopleInviteKey(person))) return;
+    state.msgCreateSelected.push(person);
+    renderSelectedPeople('msgCreateChannelSelected', state.msgCreateSelected);
+    if (el('msgCreateChannelPeopleSearch')) el('msgCreateChannelPeopleSearch').value = '';
+    if (el('msgCreateChannelPeopleResults')) {
+      el('msgCreateChannelPeopleResults').hidden = true;
+      el('msgCreateChannelPeopleResults').innerHTML = '';
+    }
+  });
+  el('msgCreateChannelForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const status = el('msgCreateChannelStatus');
+    const title = (el('msgCreateChannelTitleInput')?.value || '').trim();
+    try {
+      if (status) status.textContent = 'Creating…';
+      const invites = invitePayloadFromSelected(state.msgCreateSelected);
+      const data = await api('/api/rwa/messages/groups', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          memberIds: invites.memberIds,
+          tenantIds: invites.tenantIds,
+          isOfficial: Boolean(el('msgCreateChannelOfficial')?.checked),
+        }),
+      });
+      el('msgCreateChannelDialog')?.close();
+      await refreshMsgThreads();
+      await openMsgThread(data.thread.id);
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Could not create channel';
+    }
+  });
+
+  async function patchActiveGroup(payload) {
+    if (!state.msgActiveThreadId) return;
+    const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+    await refreshMsgThreads().catch(() => {});
+    return data;
+  }
+
+  el('msgManageRenameBtn')?.addEventListener('click', async () => {
+    const current = state.msgActiveThread?.title || '';
+    const next = window.prompt('Channel name', current);
+    if (next == null) return;
+    try {
+      await patchActiveGroup({ title: next.trim() });
+    } catch (e) {
+      window.alert(e.message || 'Rename failed');
+    }
+  });
+  el('msgManageOfficialBtn')?.addEventListener('click', async () => {
+    try {
+      await patchActiveGroup({ isOfficial: !state.msgActiveThread?.isOfficial });
+    } catch (e) {
+      window.alert(e.message || 'Could not update Official');
+    }
+  });
+  el('msgManageArchiveBtn')?.addEventListener('click', async () => {
+    const archived = Boolean(state.msgActiveThread?.archivedAt);
+    const ok = window.confirm(archived ? 'Unarchive this channel?' : 'Archive this channel? Members keep history but cannot post.');
+    if (!ok) return;
+    try {
+      await patchActiveGroup({ archive: !archived });
+    } catch (e) {
+      window.alert(e.message || 'Archive failed');
+    }
+  });
+
+  async function refreshManageMembersList() {
+    const tid = state.msgManageThreadId || state.msgActiveThreadId;
+    if (!tid) return;
+    const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(tid)}/members`);
+    const box = el('msgManageMembersList');
+    if (!box) return;
+    const members = data.members || [];
+    if (!members.length) {
+      box.innerHTML = '<p class="muted">No members.</p>';
+      return;
+    }
+    box.innerHTML = members.map((m) => {
+      const role = m.role === 'owner' ? ' · Owner' : (m.roleLabel ? ` · ${m.roleLabel}` : '');
+      const canRemove = state.msgCanManage && m.role !== 'owner';
+      const removeBtn = canRemove
+        ? `<button type="button" class="btn ghost compact" data-remove-member-id="${escapeHtml(m.memberId)}">Remove</button>`
+        : '';
+      return `<div class="msg-member-row">
+        <span>${escapeHtml(m.label || m.name)}${escapeHtml(role)}</span>
+        ${removeBtn}
+      </div>`;
+    }).join('');
+  }
+
+  el('msgManageMembersBtn')?.addEventListener('click', async () => {
+    state.msgManageThreadId = state.msgActiveThreadId;
+    if (el('msgManageMembersSearch')) el('msgManageMembersSearch').value = '';
+    if (el('msgManageMembersResults')) {
+      el('msgManageMembersResults').hidden = true;
+      el('msgManageMembersResults').innerHTML = '';
+    }
+    if (el('msgManageMembersStatus')) el('msgManageMembersStatus').textContent = '';
+    try {
+      await refreshManageMembersList();
+      el('msgManageMembersDialog')?.showModal();
+    } catch (e) {
+      window.alert(e.message || 'Could not load members');
+    }
+  });
+  el('msgManageMembersClose')?.addEventListener('click', () => el('msgManageMembersDialog')?.close());
+  el('msgManageMembersList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-remove-member-id]');
+    if (!btn || !state.msgManageThreadId) return;
+    if (!window.confirm('Remove this person from the channel?')) return;
+    try {
+      await api(
+        `/api/rwa/messages/threads/${encodeURIComponent(state.msgManageThreadId)}/members/${encodeURIComponent(btn.getAttribute('data-remove-member-id'))}`,
+        { method: 'DELETE' },
+      );
+      await refreshManageMembersList();
+      await openMsgThread(state.msgManageThreadId, { skipHash: true });
+    } catch (e) {
+      if (el('msgManageMembersStatus')) el('msgManageMembersStatus').textContent = e.message || 'Remove failed';
+    }
+  });
+  let managePeopleTimer = null;
+  el('msgManageMembersSearch')?.addEventListener('input', () => {
+    clearTimeout(managePeopleTimer);
+    const q = (el('msgManageMembersSearch')?.value || '').trim();
+    managePeopleTimer = setTimeout(async () => {
+      const box = el('msgManageMembersResults');
+      if (!box) return;
+      if (q.length < 1) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+      }
+      try {
+        const data = await api(`/api/rwa/messages/people?q=${encodeURIComponent(q)}`);
+        renderPeopleSearchResults('msgManageMembersResults', data.people || [], new Set());
+      } catch (e) {
+        box.innerHTML = `<p class="error">${escapeHtml(e.message || 'Search failed')}</p>`;
+        box.hidden = false;
+      }
+    }, 200);
+  });
+  el('msgManageMembersResults')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-invite-key]');
+    if (!btn || !state.msgManageThreadId) return;
+    const kind = btn.getAttribute('data-kind') || 'member';
+    const memberId = btn.getAttribute('data-member-id') || '';
+    const tenantId = btn.getAttribute('data-tenant-id') || '';
+    try {
+      const body = kind === 'tenant'
+        ? { tenantIds: [tenantId] }
+        : { memberIds: [memberId] };
+      await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgManageThreadId)}/members`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      if (el('msgManageMembersSearch')) el('msgManageMembersSearch').value = '';
+      if (el('msgManageMembersResults')) {
+        el('msgManageMembersResults').hidden = true;
+        el('msgManageMembersResults').innerHTML = '';
+      }
+      await refreshManageMembersList();
+      await openMsgThread(state.msgManageThreadId, { skipHash: true });
+    } catch (e) {
+      if (el('msgManageMembersStatus')) el('msgManageMembersStatus').textContent = e.message || 'Add failed';
+    }
+  });
+
+  el('msgManageIconBtn')?.addEventListener('click', () => openChannelLookDialog());
+  el('msgManageBgBtn')?.addEventListener('click', () => openChannelLookDialog());
+  el('msgChannelLookClose')?.addEventListener('click', () => el('msgChannelLookDialog')?.close());
+  el('msgChannelIconFile')?.addEventListener('change', async () => {
+    const file = el('msgChannelIconFile')?.files?.[0];
+    if (!file || !state.msgActiveThreadId) return;
+    const status = el('msgChannelLookStatus');
+    try {
+      if (status) status.textContent = 'Uploading icon…';
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = state.session?.token;
+      const res = await fetch(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/icon`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: token ? { 'X-RWA-Token': token } : {},
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Icon upload failed');
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      openChannelLookDialog();
+      if (status) status.textContent = 'Icon updated.';
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Icon upload failed';
+    } finally {
+      if (el('msgChannelIconFile')) el('msgChannelIconFile').value = '';
+    }
+  });
+  el('msgChannelIconClear')?.addEventListener('click', async () => {
+    if (!state.msgActiveThreadId) return;
+    try {
+      await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/icon`, { method: 'DELETE' });
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      openChannelLookDialog();
+    } catch (e) {
+      if (el('msgChannelLookStatus')) el('msgChannelLookStatus').textContent = e.message || 'Could not remove icon';
+    }
+  });
+  el('msgChannelBgPresets')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-bg-style]');
+    if (!btn || !state.msgActiveThreadId) return;
+    const style = btn.getAttribute('data-bg-style');
+    const status = el('msgChannelLookStatus');
+    try {
+      if (style === 'custom' && !state.msgActiveThread?.hasCustomBg) {
+        el('msgChannelBgFile')?.click();
+        return;
+      }
+      if (status) status.textContent = 'Updating background…';
+      const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/background`, {
+        method: 'POST',
+        body: JSON.stringify({ bgStyle: style }),
+      });
+      state.msgActiveThread = data.thread || state.msgActiveThread;
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      openChannelLookDialog();
+      if (status) status.textContent = 'Background updated.';
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Background update failed';
+    }
+  });
+  el('msgChannelBgFile')?.addEventListener('change', async () => {
+    const file = el('msgChannelBgFile')?.files?.[0];
+    if (!file || !state.msgActiveThreadId) return;
+    const status = el('msgChannelLookStatus');
+    try {
+      if (status) status.textContent = 'Uploading background…';
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = state.session?.token;
+      const res = await fetch(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/background`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: token ? { 'X-RWA-Token': token } : {},
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Background upload failed');
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      openChannelLookDialog();
+      if (status) status.textContent = 'Custom background set.';
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Background upload failed';
+    } finally {
+      if (el('msgChannelBgFile')) el('msgChannelBgFile').value = '';
+    }
+  });
+  el('msgChannelBgClear')?.addEventListener('click', async () => {
+    if (!state.msgActiveThreadId) return;
+    try {
+      await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/background`, { method: 'DELETE' });
+      await openMsgThread(state.msgActiveThreadId, { skipHash: true });
+      openChannelLookDialog();
+    } catch (e) {
+      if (el('msgChannelLookStatus')) el('msgChannelLookStatus').textContent = e.message || 'Could not clear background';
+    }
+  });
+
+  el('msgLeaveChannelBtn')?.addEventListener('click', async () => {
+    if (!state.msgActiveThreadId) return;
+    const isOwner = state.msgActiveThread?.myRole === 'owner'
+      || state.msgActiveThread?.ownerMemberId === state.session?.resident?.memberId;
+    let transferOwnerTo = null;
+    if (isOwner && Number(state.msgActiveThread?.memberCount || 0) > 1) {
+      try {
+        const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/members`);
+        const others = (data.members || []).filter((m) => (
+          m.memberId !== state.session?.resident?.memberId && m.kind !== 'tenant' && m.role !== 'tenant'
+        ));
+        if (!others.length) {
+          if (!window.confirm('You are the only other member left. Leaving will archive the channel. Continue?')) return;
+        } else {
+          const choice = window.prompt(
+            `Transfer ownership before leaving. Enter 1–${others.length}:\n${others.map((m, i) => `${i + 1}. ${m.label}`).join('\n')}`,
+          );
+          if (choice == null) return;
+          const idx = Number(choice) - 1;
+          if (!Number.isInteger(idx) || idx < 0 || idx >= others.length) {
+            window.alert('Invalid choice');
+            return;
+          }
+          transferOwnerTo = others[idx].memberId;
+        }
+      } catch (e) {
+        window.alert(e.message || 'Could not load members');
+        return;
+      }
+    } else if (!window.confirm('Leave this private channel?')) {
+      return;
+    }
+    try {
+      await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/leave`, {
+        method: 'POST',
+        body: JSON.stringify({ transferOwnerTo }),
+      });
+      leaveMsgThread();
+      await refreshMsgThreads();
+    } catch (e) {
+      window.alert(e.message || 'Could not leave channel');
+    }
+  });
+
+  el('msgEscalateBtn')?.addEventListener('click', () => {
+    if (!state.msgActiveThreadId || state.msgIsAiThread) return;
+    const title = state.msgActiveThread?.title || 'Chat';
+    if (el('msgEscalateSubject')) el('msgEscalateSubject').value = `From Chat: ${title}`.slice(0, 160);
+    if (el('msgEscalateNote')) el('msgEscalateNote').value = '';
+    if (el('msgEscalateCategory')) el('msgEscalateCategory').value = 'other';
+    if (el('msgEscalateStatus')) el('msgEscalateStatus').textContent = '';
+    if (el('msgEscalatePreview')) {
+      el('msgEscalatePreview').textContent = 'Recent messages in this conversation will be quoted on the concern.';
+    }
+    el('msgEscalateDialog')?.showModal();
+  });
+  el('msgEscalateCancel')?.addEventListener('click', () => el('msgEscalateDialog')?.close());
+  el('msgEscalateForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.msgActiveThreadId) return;
+    const status = el('msgEscalateStatus');
+    try {
+      if (status) status.textContent = 'Creating concern…';
+      const data = await api(`/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/escalate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: (el('msgEscalateSubject')?.value || '').trim(),
+          category: el('msgEscalateCategory')?.value || 'other',
+          body: (el('msgEscalateNote')?.value || '').trim(),
+        }),
+      });
+      el('msgEscalateDialog')?.close();
+      if (window.confirm('Concern created. Open Concerns mailbox now?')) {
+        switchPanel('concerns');
+      } else if (el('msgComposeStatus')) {
+        el('msgComposeStatus').textContent = `Escalated — concern ${data.concernId || ''} created.`;
+      }
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Escalate failed';
+    }
+  });
+
   el('pushEnableBtn')?.addEventListener('click', () => enablePush());
   el('pushDisableBtn')?.addEventListener('click', () => disablePush());
   el('pushTestBtn')?.addEventListener('click', async () => {

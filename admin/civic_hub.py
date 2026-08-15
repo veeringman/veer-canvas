@@ -11,7 +11,8 @@ import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
 
-from flask import g, jsonify, request, session
+from flask import g, jsonify, request, session, send_file
+from io import BytesIO
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -25,6 +26,9 @@ DEFAULT_KINDS = [
     {"id": "service", "title": "Service", "lede": "Trade, repair, transport, household help."},
     {"id": "business", "title": "Business", "lede": "Directory listing or hosted page."},
     {"id": "place", "title": "Place", "lede": "Somewhere in or near Mandi."},
+    {"id": "scitech", "title": "SciTech", "lede": "Science, campus, makers, and tech around Mandi."},
+    {"id": "culture", "title": "Culture", "lede": "Festivals, heritage, food, and arts."},
+    {"id": "channel", "title": "Channel", "lede": "Announce a topic board or Mandi Adda room."},
     {"id": "event", "title": "Event", "lede": "A gathering, fair, or date."},
 ]
 PBKDF2_ROUNDS = 120_000
@@ -35,6 +39,34 @@ SYNDICATE_NAMES = {
 }
 SYNDICATE_ORIGINS = {
     "hbcsanyard": "https://housingcolonysanyard.in",
+}
+
+SPONSORED_ANIMATIONS = [
+    {"id": "independence", "label": "Independence Day", "hint": "Tricolour wave + festive salute"},
+    {"id": "marquee", "label": "Marquee", "hint": "Scrolling headline"},
+    {"id": "pulse", "label": "Pulse", "hint": "Soft glowing pulse"},
+    {"id": "confetti", "label": "Confetti", "hint": "Celebration burst"},
+    {"id": "fade_slide", "label": "Fade & slide", "hint": "Image + text crossfade"},
+    {"id": "sparkle", "label": "Sparkle", "hint": "Shimmer title"},
+    {"id": "banner", "label": "Image banner", "hint": "Image-forward strip"},
+]
+
+DEFAULT_SPONSORED = {
+    "ads": [
+        {
+            "id": "happy-independence-day",
+            "title": "Happy Independence Day!",
+            "subtitle": "City of Mandi · Jai Hind",
+            "animation": "independence",
+            "imageUrl": "",
+            "linkUrl": "",
+            "sponsor": "City of Mandi",
+            "active": True,
+            "weight": 20,
+            "startsAt": "",
+            "endsAt": "",
+        }
+    ]
 }
 
 
@@ -65,6 +97,9 @@ def register(app, *, check_login, site_root: pathlib.Path):
     data_dir = site_root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     db_path = data_dir / "hub.db"
+    sponsored_path = data_dir / "sponsored_ads.json"
+    sponsored_dir = data_dir / "sponsored"
+    sponsored_dir.mkdir(parents=True, exist_ok=True)
 
     def db():
         conn = sqlite3.connect(db_path)
@@ -385,11 +420,28 @@ def register(app, *, check_login, site_root: pathlib.Path):
             )
             conn.commit()
             pub_id = int(cur.lastrowid)
+            row = _publisher(conn, pub_id)
         finally:
             conn.close()
         session["publisher_id"] = pub_id
         session["publisher_name"] = name[:80]
+        _link_adda_identity(row)
         return jsonify({"ok": True, "publisher": {"id": pub_id, "name": name[:80], "email": email}})
+
+    def _link_adda_identity(publisher_row):
+        """Provision/link Mandi Adda identity when a publisher signs in."""
+        linker = getattr(app, "adda_ensure_user_for_publisher", None)
+        if not linker or not publisher_row:
+            return
+        conn = db()
+        try:
+            uid = linker(conn, publisher_row)
+            session["adda_user_id"] = uid
+            session["adda_display_name"] = publisher_row["name"]
+        except Exception:
+            pass
+        finally:
+            conn.close()
 
     @app.post("/api/hub/publisher/login")
     def publisher_login():
@@ -407,6 +459,7 @@ def register(app, *, check_login, site_root: pathlib.Path):
             return jsonify({"ok": False, "error": "This account is paused. Write to the portal desk."}), 403
         session["publisher_id"] = row["id"]
         session["publisher_name"] = row["name"]
+        _link_adda_identity(row)
         return jsonify({"ok": True, "publisher": _pub_dict(row)})
 
     @app.post("/api/hub/publisher/logout")
@@ -630,6 +683,18 @@ def register(app, *, check_login, site_root: pathlib.Path):
             ).fetchone()
         finally:
             conn.close()
+        appender = getattr(app, "adda_append_bridge_message", None)
+        if appender:
+            try:
+                appender(
+                    title=data["title"],
+                    summary=data.get("summary") or "",
+                    url=data.get("url") or "",
+                    source_site=site_id,
+                    source_id=source_id,
+                )
+            except Exception:
+                pass
         return jsonify({"ok": True, "post": _post_dict(row), "sourceSite": site_id})
 
     @app.get("/api/hub/state")
@@ -667,7 +732,10 @@ def register(app, *, check_login, site_root: pathlib.Path):
             "features": {
                 "news": bool(features.get("news", True)),
                 "places": bool(features.get("places", True)),
+                "scitech": bool(features.get("scitech", True)),
+                "culture": bool(features.get("culture", True)),
                 "services": bool(features.get("services", True)),
+                "channels": bool(features.get("channels", True)),
                 "ads": bool(features.get("ads", True)),
                 "neighbourhoods": bool(features.get("neighbourhoods", True)),
                 "businesses": bool(features.get("businesses", True)),
@@ -798,3 +866,155 @@ def register(app, *, check_login, site_root: pathlib.Path):
         finally:
             conn.close()
         return jsonify({"ok": True})
+
+    def _ensure_sponsored():
+        if sponsored_path.is_file():
+            return
+        _write(sponsored_path, DEFAULT_SPONSORED)
+
+    def _optimize_sponsored_image(raw: bytes) -> bytes:
+        if len(raw) > 2_500_000:
+            raise ValueError("Image must be under 2.5 MB")
+        try:
+            from PIL import Image
+        except ImportError as exc:
+            raise ValueError("Image processing unavailable") from exc
+        try:
+            img = Image.open(BytesIO(raw))
+            img.load()
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError("Could not read image") from exc
+        if img.mode not in ("RGB", "L"):
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                rgba = img.convert("RGBA")
+                bg = Image.new("RGB", rgba.size, (255, 255, 255))
+                bg.paste(rgba, mask=rgba.split()[-1])
+                img = bg
+            else:
+                img = img.convert("RGB")
+        elif img.mode == "L":
+            img = img.convert("RGB")
+        w, h = img.size
+        edge = max(w, h)
+        if edge > 1200:
+            scale = 1200 / edge
+            resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+            img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), resample)
+        buf = BytesIO()
+        img.save(buf, format="WEBP", quality=80, method=4)
+        return buf.getvalue()
+
+    def _clean_sponsored_ads(rows) -> list:
+        out = []
+        seen = set()
+        anim_ids = {a["id"] for a in SPONSORED_ANIMATIONS}
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            aid = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(item.get("id") or "").strip())[:64].strip("-")
+            if not aid:
+                aid = f"ad_{secrets.token_hex(4)}"
+            if aid in seen:
+                continue
+            seen.add(aid)
+            anim = str(item.get("animation") or "marquee").strip().lower()
+            if anim not in anim_ids:
+                anim = "marquee"
+            title = str(item.get("title") or "").strip()[:120]
+            if not title:
+                continue
+            image = str(item.get("imageUrl") or item.get("image") or "").strip()
+            if image.startswith("/api/hub/sponsored-ads/images/"):
+                pass
+            elif image.startswith("sponsored/") or re.fullmatch(r"[a-zA-Z0-9._-]+\.webp", image or ""):
+                name = image.split("/")[-1]
+                image = f"/api/hub/sponsored-ads/images/{name}"
+            elif image and not (
+                image.startswith("http://") or image.startswith("https://") or image.startswith("/")
+            ):
+                image = ""
+            out.append({
+                "id": aid,
+                "title": title,
+                "subtitle": str(item.get("subtitle") or "").strip()[:160],
+                "animation": anim,
+                "imageUrl": image[:400],
+                "linkUrl": str(item.get("linkUrl") or item.get("url") or "").strip()[:400],
+                "sponsor": str(item.get("sponsor") or "").strip()[:80],
+                "active": bool(item.get("active", True)),
+                "weight": max(1, min(int(item.get("weight") or 1), 100)),
+                "startsAt": str(item.get("startsAt") or "").strip()[:32],
+                "endsAt": str(item.get("endsAt") or "").strip()[:32],
+            })
+        return out
+
+    def _sponsored_active(ads: list) -> list:
+        now = _now()
+        active = []
+        for ad in ads:
+            if not ad.get("active"):
+                continue
+            start = ad.get("startsAt") or ""
+            end = ad.get("endsAt") or ""
+            if start and now < start:
+                continue
+            if end and now > end:
+                continue
+            active.append(ad)
+        active.sort(key=lambda a: (-int(a.get("weight") or 1), a.get("title") or ""))
+        return active
+
+    _ensure_sponsored()
+
+    @app.get("/api/hub/sponsored-ads")
+    def hub_sponsored_public():
+        _ensure_sponsored()
+        data = _read(sponsored_path, DEFAULT_SPONSORED)
+        ads = _clean_sponsored_ads(data.get("ads") if isinstance(data.get("ads"), list) else [])
+        return jsonify({
+            "ok": True,
+            "ads": _sponsored_active(ads),
+            "animations": SPONSORED_ANIMATIONS,
+        })
+
+    @app.get("/api/hub/sponsored-ads/manage")
+    @require_operator
+    def hub_sponsored_manage():
+        _ensure_sponsored()
+        data = _read(sponsored_path, DEFAULT_SPONSORED)
+        ads = _clean_sponsored_ads(data.get("ads") if isinstance(data.get("ads"), list) else [])
+        return jsonify({"ok": True, "ads": ads, "animations": SPONSORED_ANIMATIONS})
+
+    @app.put("/api/hub/sponsored-ads")
+    @require_operator
+    def hub_sponsored_save():
+        body = request.get_json(force=True, silent=True) or {}
+        ads = _clean_sponsored_ads(body.get("ads") if isinstance(body.get("ads"), list) else [])
+        payload = {"ads": ads}
+        _write(sponsored_path, payload)
+        return jsonify({"ok": True, "ads": ads, "animations": SPONSORED_ANIMATIONS})
+
+    @app.post("/api/hub/sponsored-ads/upload")
+    @require_operator
+    def hub_sponsored_upload():
+        upload = request.files.get("file") or request.files.get("image")
+        if not upload or not upload.filename:
+            return jsonify({"ok": False, "error": "Choose an image"}), 400
+        try:
+            data = _optimize_sponsored_image(upload.read())
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        name = f"sp_{secrets.token_hex(8)}.webp"
+        (sponsored_dir / name).write_bytes(data)
+        url = f"/api/hub/sponsored-ads/images/{name}"
+        return jsonify({"ok": True, "imageUrl": url, "filename": name})
+
+    @app.get("/api/hub/sponsored-ads/images/<filename>")
+    def hub_sponsored_image(filename: str):
+        safe = re.sub(r"[^a-zA-Z0-9._-]+", "", filename or "")
+        if not safe or ".." in safe:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        path = sponsored_dir / safe
+        if not path.is_file():
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        return send_file(path, mimetype="image/webp", conditional=True)

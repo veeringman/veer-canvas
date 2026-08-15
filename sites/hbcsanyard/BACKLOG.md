@@ -72,6 +72,13 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 
 - [x] **Web Push notifications** — VAPID subscribe + prefs; notices, concerns, messages, dues remind, Treasury, No Dues
 - [x] **Message center** — colony channel + plot-to-plot DMs; text, images/PDF, emoji; EC moderate/pin; likes; profile photos
+- [x] **Private channels** — resident-owned groups (directory people); rename / members / Official seal / archive / leave; escalate to Concerns
+- [x] **Private channel look** — channel icon, background presets (dots/grid/tiles/…) + custom image, post card themes (notice/urgent/…)
+- [x] **Channel invite lookup** — members, delegates, and registered tenants (tenants listed on roster; no portal login yet)
+- [ ] **Chat: ack-required posts** — EC/owner can require plot acknowledgment on safety notices
+- [ ] **Chat: event-tied channels** — auto-archive when linked Works & Events item ends
+- [ ] **Chat: visitor / gate ping** — optional drop into a plot’s private room (not colony)
+- [ ] **Chat: quiet colony hours** — soft mute overnight for non-Official channels
 - [x] **Private RAG AI Assistant** — per-member Messages thread; answers from notices/Info Centre/FAQ; optional LLM via `data/ai.env`
 - [ ] **Offline-first PWA polish** — cached notices + dues snapshot for weak network
 - [ ] **Proxy / mandate letter** — owner grants timed “act for dues/concerns” (beyond view-only)

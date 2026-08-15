@@ -4400,7 +4400,14 @@ def api_rwa_message_threads():
         sess = rwa_portal.session_from_token(conn, _rwa_token())
         if not sess:
             return jsonify({"ok": False, "error": "Sign in required"}), 401
-        threads = rwa_messages.list_threads(conn, sess["resident"])
+        include_archived = (request.args.get("archived") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        threads = rwa_messages.list_threads(
+            conn, sess["resident"], include_archived=include_archived
+        )
         return jsonify({
             "ok": True,
             "threads": threads,
@@ -4423,6 +4430,20 @@ def api_rwa_message_peers():
         conn.close()
 
 
+@app.route("/api/rwa/messages/people", methods=["GET"])
+def api_rwa_message_people():
+    """Directory people for private-channel invites (by household member)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        q = (request.args.get("q") or "").strip()
+        return jsonify({"ok": True, "people": rwa_messages.directory_people(conn, sess["resident"], q)})
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/messages/dm", methods=["POST"])
 def api_rwa_message_open_dm():
     conn = _rwa_conn()
@@ -4436,6 +4457,274 @@ def api_rwa_message_open_dm():
         peer = payload.get("houseId") or payload.get("peerHouseId") or ""
         thread = rwa_messages.open_dm(conn, sess["resident"], peer)
         return jsonify({"ok": True, "thread": thread})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/groups", methods=["POST"])
+def api_rwa_message_create_group():
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if rwa_household.actor_is_view_only(sess["resident"]):
+            return jsonify({"ok": False, "error": "View-only access cannot create channels"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        member_ids = payload.get("memberIds") or payload.get("member_ids") or []
+        tenant_ids = payload.get("tenantIds") or payload.get("tenant_ids") or []
+        if not isinstance(member_ids, list):
+            member_ids = []
+        if not isinstance(tenant_ids, list):
+            tenant_ids = []
+        thread = rwa_messages.create_group(
+            conn,
+            sess["resident"],
+            title=payload.get("title") or "",
+            member_ids=member_ids,
+            tenant_ids=tenant_ids,
+            is_official=bool(payload.get("isOfficial") or payload.get("is_official")),
+        )
+        return jsonify({"ok": True, "thread": thread}), 201
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>", methods=["PATCH"])
+def api_rwa_message_patch_thread(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        archive = payload.get("archive")
+        if archive is None and "archived" in payload:
+            archive = bool(payload.get("archived"))
+        bg_style = None
+        if "bgStyle" in payload or "bg_style" in payload:
+            bg_style = payload.get("bgStyle") if "bgStyle" in payload else payload.get("bg_style")
+        thread = rwa_messages.update_group(
+            conn,
+            sess["resident"],
+            thread_id,
+            title=payload.get("title") if "title" in payload else None,
+            is_official=payload.get("isOfficial") if "isOfficial" in payload else (
+                payload.get("is_official") if "is_official" in payload else None
+            ),
+            archive=archive if isinstance(archive, bool) else None,
+            transfer_owner_to=(
+                payload.get("transferOwnerTo")
+                or payload.get("transfer_owner_to")
+                or None
+            ),
+            bg_style=bg_style,
+        )
+        return jsonify({"ok": True, "thread": thread})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/icon", methods=["GET", "POST", "DELETE"])
+def api_rwa_message_thread_icon(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if request.method == "GET":
+            path, mime = rwa_messages.get_group_icon_file(conn, SITE_ROOT, actor, thread_id)
+            return send_file(path, mimetype=mime, conditional=True)
+        if rwa_household.actor_is_view_only(actor):
+            return jsonify({"ok": False, "error": "View-only access cannot change icons"}), 403
+        if request.method == "DELETE":
+            thread = rwa_messages.clear_group_icon(conn, SITE_ROOT, actor, thread_id)
+            return jsonify({"ok": True, "thread": thread})
+        upload = request.files.get("file") or request.files.get("icon")
+        if not upload or not upload.filename:
+            return jsonify({"ok": False, "error": "Choose an image file"}), 400
+        thread = rwa_messages.set_group_icon(
+            conn,
+            SITE_ROOT,
+            actor,
+            thread_id,
+            raw=upload.read(),
+            content_type=upload.mimetype or "",
+            original_name=upload.filename,
+        )
+        return jsonify({"ok": True, "thread": thread})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/background", methods=["GET", "POST", "DELETE"])
+def api_rwa_message_thread_background(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if request.method == "GET":
+            path, mime = rwa_messages.get_group_background_file(conn, SITE_ROOT, actor, thread_id)
+            return send_file(path, mimetype=mime, conditional=True)
+        if rwa_household.actor_is_view_only(actor):
+            return jsonify({"ok": False, "error": "View-only access cannot change backgrounds"}), 403
+        if request.method == "DELETE":
+            thread = rwa_messages.set_group_background(
+                conn, SITE_ROOT, actor, thread_id, clear_image=True, style="none"
+            )
+            return jsonify({"ok": True, "thread": thread})
+        upload = request.files.get("file") or request.files.get("background")
+        style = (request.form.get("bgStyle") or request.form.get("style") or "").strip() or None
+        if upload and upload.filename:
+            thread = rwa_messages.set_group_background(
+                conn, SITE_ROOT, actor, thread_id, raw=upload.read()
+            )
+            return jsonify({"ok": True, "thread": thread})
+        payload = request.get_json(force=True, silent=True) or {}
+        style = style or payload.get("bgStyle") or payload.get("style")
+        if not style:
+            return jsonify({"ok": False, "error": "Choose a background style or upload an image"}), 400
+        thread = rwa_messages.set_group_background(
+            conn, SITE_ROOT, actor, thread_id, style=style
+        )
+        return jsonify({"ok": True, "thread": thread})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/members", methods=["GET", "POST"])
+def api_rwa_message_thread_members(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            members = rwa_messages.list_group_members(conn, sess["resident"], thread_id)
+            return jsonify({"ok": True, "members": members})
+        if rwa_household.actor_is_view_only(sess["resident"]):
+            return jsonify({"ok": False, "error": "View-only access cannot manage members"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        member_ids = payload.get("memberIds") or payload.get("member_ids") or []
+        tenant_ids = payload.get("tenantIds") or payload.get("tenant_ids") or []
+        if not isinstance(member_ids, list):
+            member_ids = []
+        if not isinstance(tenant_ids, list):
+            tenant_ids = []
+        data = rwa_messages.add_group_members(
+            conn, sess["resident"], thread_id, member_ids=member_ids, tenant_ids=tenant_ids
+        )
+        return jsonify(data)
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/members/<member_id>", methods=["DELETE"])
+def api_rwa_message_thread_remove_member(thread_id: str, member_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if rwa_household.actor_is_view_only(sess["resident"]):
+            return jsonify({"ok": False, "error": "View-only access cannot manage members"}), 403
+        data = rwa_messages.remove_group_member(conn, sess["resident"], thread_id, member_id)
+        return jsonify(data)
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/leave", methods=["POST"])
+def api_rwa_message_thread_leave(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        data = rwa_messages.leave_group(
+            conn,
+            sess["resident"],
+            thread_id,
+            transfer_owner_to=payload.get("transferOwnerTo") or payload.get("transfer_owner_to"),
+        )
+        return jsonify(data)
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/messages/threads/<thread_id>/escalate", methods=["POST"])
+def api_rwa_message_thread_escalate(thread_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if rwa_household.actor_is_view_only(sess["resident"]):
+            return jsonify({"ok": False, "error": "View-only access cannot escalate"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        message_ids = payload.get("messageIds") or payload.get("message_ids") or []
+        if not isinstance(message_ids, list):
+            message_ids = []
+        data = rwa_messages.escalate_to_concern(
+            conn,
+            sess["resident"],
+            thread_id,
+            message_ids=message_ids,
+            body=payload.get("body") or payload.get("note"),
+            subject=payload.get("subject"),
+            category=payload.get("category"),
+        )
+        created = data.get("grievance") or {}
+        _rwa_notify(
+            conn,
+            event_type="concern",
+            audience={"type": "entitlement", "key": "manage_concerns"},
+            title="New concern",
+            body=(created.get("subject") or "Escalated from Chat")[:120],
+            url="/#concerns",
+            exclude_member_id=sess["resident"].get("memberId"),
+        )
+        return jsonify(data), 201
     except PermissionError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 403
     except ValueError as exc:
@@ -4476,9 +4765,11 @@ def api_rwa_message_post(thread_id: str):
         if rwa_household.actor_is_view_only(actor):
             return jsonify({"ok": False, "error": "View-only access cannot post"}), 403
         file_tuples = []
+        card_theme = None
         if request.content_type and "multipart/form-data" in request.content_type:
             body = (request.form.get("body") or "").strip()
             reply_to = (request.form.get("replyToId") or request.form.get("reply_to_id") or "").strip() or None
+            card_theme = (request.form.get("cardTheme") or request.form.get("card_theme") or "").strip() or None
             uploads = request.files.getlist("files") or request.files.getlist("file")
             for f in uploads:
                 if not f or not f.filename:
@@ -4489,6 +4780,7 @@ def api_rwa_message_post(thread_id: str):
             payload = request.get_json(force=True, silent=True) or {}
             body = (payload.get("body") or "").strip()
             reply_to = (payload.get("replyToId") or payload.get("reply_to_id") or "").strip() or None
+            card_theme = (payload.get("cardTheme") or payload.get("card_theme") or "").strip() or None
         message = rwa_messages.post_message(
             conn,
             SITE_ROOT,
@@ -4497,6 +4789,7 @@ def api_rwa_message_post(thread_id: str):
             body=body,
             reply_to_id=reply_to,
             files=file_tuples,
+            card_theme=card_theme,
         )
         assistant = None
         if isinstance(message, dict) and message.get("_assistant"):
@@ -10002,8 +10295,10 @@ DASHBOARD_HTML = """
 
 if SITE_ID == "cityofmandi":
     import civic_hub
+    import adda_live
 
     civic_hub.register(app, check_login=check_login, site_root=SITE_ROOT)
+    adda_live.register(app, check_login=check_login, site_root=SITE_ROOT)
 
 
 if __name__ == "__main__":

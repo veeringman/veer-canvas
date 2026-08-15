@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mandi Adda — City of Mandi</title>
+  <meta name="description" content="Mandi Adda — the city’s live chat. Public rooms, DMs, private channels. Browse as a guest; sign in to talk.">
+  <link rel="canonical" href="https://cityofmandi.com/adda">
+  <meta name="theme-color" content="#163c44">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=20260814paint">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260815hl2">
+  <script src="/sponsored.js?v=20260815sp1" defer></script>
+  <script src="/adda.js?v=20260815hl3" defer></script>
+</head>
+<body class="adda-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <div class="adda-shell">
+    <header class="adda-top">
+      <div class="landing-top-left">
+        <a class="landing-top-brand" href="/" aria-label="City of Mandi home">
+          <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="36" height="36" decoding="async">
+        </a>
+        <div class="landing-brand-adda is-static" aria-label="Mandi Adda — Live">
+          <span class="nav-live-mark" aria-hidden="true">Live</span>
+          <span class="landing-brand-adda-label">Mandi Adda</span>
+        </div>
+      </div>
+      <div class="landing-sponsored" data-sponsored-slot aria-label="Sponsored"></div>
+      <div class="adda-top-actions">
+        <button type="button" class="btn ghost compact adda-back-btn" id="addaBackBtn" hidden aria-label="Back to rooms">← Rooms</button>
+        <span class="adda-user-chip" id="addaUserChip" hidden></span>
+        <button type="button" class="btn ghost compact" id="addaAuthBtn">Sign in</button>
+        <button type="button" class="btn ghost compact" id="addaLogoutBtn" hidden>Sign out</button>
+        <button type="button" class="btn ghost compact adda-mobile-rooms" id="addaToggleRooms" aria-label="Open rooms" hidden>Rooms</button>
+      </div>
+    </header>
+
+    <p class="adda-guest-banner" id="addaGuestBanner">
+      Browse Mandi’s adda — <button type="button" class="adda-text-link" id="addaGuestSignIn">sign in</button> to talk, DM, or open a private channel.
+    </p>
+
+    <div class="adda-scrim" id="addaScrim" hidden aria-hidden="true"></div>
+
+    <div class="adda-layout" id="addaLayout">
+      <aside class="adda-sidebar" id="addaSidebar" aria-label="Rooms">
+        <div class="adda-sidebar-head">
+          <h2>Rooms</h2>
+          <div class="adda-sidebar-actions" id="addaSidebarActions" hidden>
+            <button type="button" class="btn ghost compact" id="addaNewDmBtn">DM</button>
+            <button type="button" class="btn primary compact" id="addaNewChannelBtn">New channel</button>
+          </div>
+        </div>
+        <div class="adda-thread-list" id="addaThreadList"></div>
+      </aside>
+
+      <main class="adda-main" id="addaMain">
+        <div class="adda-empty" id="addaEmpty">
+          <p class="landing-section-kicker">Mandi Adda · Live</p>
+          <h1>Pick a room</h1>
+          <p class="muted">Public topics are open to everyone. Sign in to join the conversation.</p>
+        </div>
+
+        <section class="adda-room" id="addaRoom" hidden>
+          <header class="adda-room-head">
+            <div class="adda-room-title-wrap">
+              <img class="adda-room-icon" id="addaRoomIcon" alt="" hidden>
+              <div>
+                <h2 id="addaRoomTitle">Room</h2>
+                <p class="muted" id="addaRoomSub"></p>
+              </div>
+            </div>
+            <div class="adda-room-actions">
+              <span class="adda-official-badge" id="addaOfficialBadge" hidden>Official</span>
+              <details class="adda-manage" id="addaManage" hidden>
+                <summary class="btn ghost compact">Manage</summary>
+                <div class="adda-manage-panel">
+                  <label>Name <input id="addaManageTitle" maxlength="80"></label>
+                  <label class="adda-check"><input type="checkbox" id="addaManageOfficial"> Official channel</label>
+                  <label>Background
+                    <select id="addaManageBg"></select>
+                  </label>
+                  <label>Channel icon <input type="file" id="addaManageIcon" accept="image/*"></label>
+                  <label>Custom background <input type="file" id="addaManageBgFile" accept="image/*"></label>
+                  <div class="adda-manage-row">
+                    <button type="button" class="btn ghost compact" id="addaSaveManage">Save</button>
+                    <button type="button" class="btn ghost compact" id="addaArchiveBtn">Archive</button>
+                    <button type="button" class="btn ghost compact" id="addaLeaveBtn">Leave</button>
+                  </div>
+                  <div class="adda-members" id="addaMembersBox"></div>
+                </div>
+              </details>
+              <button type="button" class="btn ghost compact" id="addaEscalateBtn" hidden>Escalate to board</button>
+            </div>
+          </header>
+
+          <div class="adda-pinned" id="addaPinned" hidden></div>
+          <div class="adda-messages" id="addaMessages" data-bg="none"></div>
+
+          <form class="adda-compose" id="addaCompose" hidden>
+            <div class="adda-compose-tools">
+              <label class="adda-theme-label">Theme
+                <select id="addaCardTheme"></select>
+              </label>
+              <label class="btn ghost compact adda-attach-btn">Attach
+                <input type="file" id="addaAttach" accept="image/*,.pdf,application/pdf" multiple hidden>
+              </label>
+              <span class="adda-attach-names muted" id="addaAttachNames"></span>
+            </div>
+            <div class="adda-compose-row">
+              <textarea id="addaBody" rows="2" maxlength="4000" placeholder="Write a message…"></textarea>
+              <button type="submit" class="btn primary">Send</button>
+            </div>
+            <p class="error" id="addaComposeError" hidden></p>
+          </form>
+          <p class="adda-readonly muted" id="addaReadOnly" hidden>This room is read-only.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="adda-dialog" id="addaAuthDialog">
+    <form method="dialog" class="adda-dialog-form" id="addaAuthForm">
+      <h3>Mandi Adda account</h3>
+      <p class="muted">Create an Adda account, or use your publisher login from <a href="/join?next=/adda">/join</a>.</p>
+      <div class="desk-tabs" role="tablist">
+        <button type="button" class="btn ghost compact is-tab" id="addaTabRegister" aria-selected="true">Register</button>
+        <button type="button" class="btn ghost compact is-tab" id="addaTabLogin" aria-selected="false">Sign in</button>
+      </div>
+      <div id="addaRegFields">
+        <label>Display name <input id="addaRegName" autocomplete="nickname" required></label>
+        <label>Email <input id="addaRegEmail" type="email" autocomplete="email" required></label>
+        <label>Password (8+) <input id="addaRegPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+      </div>
+      <div id="addaLoginFields" hidden>
+        <label>Email <input id="addaLoginEmail" type="email" autocomplete="username"></label>
+        <label>Password <input id="addaLoginPassword" type="password" autocomplete="current-password"></label>
+      </div>
+      <p class="error" id="addaAuthError" hidden></p>
+      <div class="adda-dialog-actions">
+        <button type="submit" class="btn primary" id="addaAuthSubmit" value="ok">Continue</button>
+        <button type="button" class="btn ghost" id="addaAuthPublisher">Publisher login</button>
+        <button type="submit" class="btn ghost" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="adda-dialog" id="addaPeopleDialog">
+    <form method="dialog" class="adda-dialog-form" id="addaPeopleForm">
+      <h3 id="addaPeopleTitle">People</h3>
+      <label>Search <input id="addaPeopleQ" autocomplete="off"></label>
+      <div class="adda-people-results" id="addaPeopleResults"></div>
+      <div class="adda-people-selected" id="addaPeopleSelected"></div>
+      <label id="addaChannelNameLabel" hidden>Channel name <input id="addaChannelName" maxlength="80"></label>
+      <p class="error" id="addaPeopleError" hidden></p>
+      <div class="adda-dialog-actions">
+        <button type="submit" class="btn primary" id="addaPeopleOk" value="ok">Open</button>
+        <button type="submit" class="btn ghost" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="adda-dialog" id="addaEscalateDialog">
+    <form method="dialog" class="adda-dialog-form" id="addaEscalateForm">
+      <h3>Escalate to city board</h3>
+      <p class="muted">Creates a pending listing for hub operators. Needs a linked publisher account.</p>
+      <label>Subject <input id="addaEscSubject" maxlength="120"></label>
+      <label>Kind
+        <select id="addaEscKind">
+          <option value="news">News</option>
+          <option value="ad">Ad</option>
+          <option value="event">Event</option>
+          <option value="place">Place</option>
+          <option value="service">Service</option>
+        </select>
+      </label>
+      <label>Note <textarea id="addaEscNote" rows="3" maxlength="800"></textarea></label>
+      <p class="error" id="addaEscError" hidden></p>
+      <div class="adda-dialog-actions">
+        <button type="submit" class="btn primary" value="ok">Submit</button>
+        <button type="submit" class="btn ghost" value="cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

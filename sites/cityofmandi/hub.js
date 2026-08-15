@@ -3,7 +3,10 @@
     "landing-board",
     "landing-news",
     "landing-places",
+    "landing-scitech",
+    "landing-culture",
     "landing-services",
+    "landing-channels",
     "landing-ads",
     "landing-businesses",
     "landing-neighbourhoods",
@@ -148,7 +151,10 @@
     const map = {
       news: "landing-news",
       places: "landing-places",
+      scitech: "landing-scitech",
+      culture: "landing-culture",
       services: "landing-services",
+      channels: "landing-channels",
       ads: "landing-ads",
       neighbourhoods: "landing-neighbourhoods",
       businesses: "landing-businesses",
@@ -160,8 +166,11 @@
     const byKind = feed.byKind || {};
     prependPosts("landingNewsList", byKind.news || []);
     prependPosts("landingPlacesList", byKind.place || []);
+    prependPosts("landingSciTechList", byKind.scitech || []);
+    prependPosts("landingCultureList", byKind.culture || []);
     prependPosts("landingServicesList", byKind.service || []);
-    const known = new Set(["news", "place", "service", "ad", "event", "business"]);
+    prependPosts("landingChannelsList", byKind.channel || []);
+    const known = new Set(["news", "place", "scitech", "culture", "service", "channel", "ad", "event", "business"]);
     const extras = Object.entries(byKind)
       .filter(([kind]) => !known.has(kind))
       .flatMap(([, rows]) => rows);

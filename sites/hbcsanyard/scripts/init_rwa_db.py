@@ -621,6 +621,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_treasury_columns(conn)
     ensure_messages_and_push_tables(conn)
     ensure_msg_likes_and_ai(conn)
+    ensure_msg_private_channels(conn)
     ensure_parking_passes_table(conn)
     try:
         import rwa_marketplace as _rwa_marketplace
@@ -2257,12 +2258,14 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS msg_threads (
           id TEXT PRIMARY KEY,
-          kind TEXT NOT NULL CHECK(kind IN ('colony', 'dm', 'ai')),
+          kind TEXT NOT NULL CHECK(kind IN ('colony', 'dm', 'ai', 'group')),
           house_a TEXT,
           house_b TEXT,
           title TEXT,
           pinned_message_id TEXT,
           owner_member_id TEXT,
+          is_official INTEGER NOT NULL DEFAULT 0,
+          archived_at TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -2391,6 +2394,7 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
             )
     conn.commit()
     ensure_msg_likes_and_ai(conn)
+    ensure_msg_private_channels(conn)
 
 
 def ensure_msg_likes_and_ai(conn: sqlite3.Connection) -> None:
@@ -2465,6 +2469,91 @@ def ensure_msg_likes_and_ai(conn: sqlite3.Connection) -> None:
               ON msg_threads(owner_member_id) WHERE kind = 'ai'
             """
         )
+    conn.commit()
+
+
+def ensure_msg_private_channels(conn: sqlite3.Connection) -> None:
+    """Private group channels: membership table + official/archived flags + kind=group."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS msg_thread_members (
+          thread_id TEXT NOT NULL,
+          member_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+            CHECK(role IN ('owner', 'admin', 'member')),
+          joined_at TEXT NOT NULL,
+          left_at TEXT,
+          PRIMARY KEY (thread_id, member_id),
+          FOREIGN KEY(thread_id) REFERENCES msg_threads(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_thread_members_member
+          ON msg_thread_members(member_id, left_at);
+        CREATE INDEX IF NOT EXISTS idx_msg_thread_members_active
+          ON msg_thread_members(thread_id) WHERE left_at IS NULL;
+        """
+    )
+
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_threads)").fetchall()}
+    if thread_cols and "is_official" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN is_official INTEGER NOT NULL DEFAULT 0")
+    if thread_cols and "archived_at" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN archived_at TEXT")
+
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='msg_threads'"
+    ).fetchone()
+    ddl = (row[0] if row else "") or ""
+    needs_rebuild = bool(ddl) and ("'group'" not in ddl and '"group"' not in ddl)
+    if needs_rebuild:
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS msg_threads_v3 (
+              id TEXT PRIMARY KEY,
+              kind TEXT NOT NULL CHECK(kind IN ('colony', 'dm', 'ai', 'group')),
+              house_a TEXT,
+              house_b TEXT,
+              title TEXT,
+              pinned_message_id TEXT,
+              owner_member_id TEXT,
+              is_official INTEGER NOT NULL DEFAULT 0,
+              archived_at TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO msg_threads_v3(
+              id, kind, house_a, house_b, title, pinned_message_id, owner_member_id,
+              is_official, archived_at, created_at, updated_at
+            )
+            SELECT id, kind, house_a, house_b, title, pinned_message_id, owner_member_id,
+                   COALESCE(is_official, 0), archived_at, created_at, updated_at
+            FROM msg_threads;
+            DROP TABLE msg_threads;
+            ALTER TABLE msg_threads_v3 RENAME TO msg_threads;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_dm_pair
+              ON msg_threads(house_a, house_b) WHERE kind = 'dm';
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_threads_ai_owner
+              ON msg_threads(owner_member_id) WHERE kind = 'ai';
+            CREATE INDEX IF NOT EXISTS idx_msg_threads_updated
+              ON msg_threads(updated_at DESC);
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
+    # Channel icon / background + tenant invite + card themes (additive).
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_threads)").fetchall()}
+    if thread_cols and "icon_filename" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN icon_filename TEXT")
+    if thread_cols and "bg_style" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN bg_style TEXT NOT NULL DEFAULT 'none'")
+    if thread_cols and "bg_filename" not in thread_cols:
+        conn.execute("ALTER TABLE msg_threads ADD COLUMN bg_filename TEXT")
+    member_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_thread_members)").fetchall()}
+    if member_cols and "tenant_id" not in member_cols:
+        conn.execute("ALTER TABLE msg_thread_members ADD COLUMN tenant_id TEXT")
+    msg_cols = {row[1] for row in conn.execute("PRAGMA table_info(msg_messages)").fetchall()}
+    if msg_cols and "card_theme" not in msg_cols:
+        conn.execute("ALTER TABLE msg_messages ADD COLUMN card_theme TEXT")
     conn.commit()
 
 

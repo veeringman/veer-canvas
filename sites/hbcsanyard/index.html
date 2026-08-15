@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260814staff4">
+  <link rel="stylesheet" href="portal.css?v=20260815chat2">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260814staff4" defer></script>
+  <script src="portal.js?v=20260815chat2" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -357,10 +357,10 @@
       <div class="app-top-nav">
         <nav class="tabs" role="tablist" aria-label="Portal sections">
           <button type="button" class="tab is-active" data-panel="home" aria-selected="true">Home</button>
-          <button type="button" class="tab" data-panel="dues" id="duesTab" aria-selected="false">Dues</button>
+          <button type="button" class="tab" data-panel="dues" id="duesTab" aria-selected="false">Accounts</button>
           <button type="button" class="tab" data-panel="concerns" aria-selected="false">Concerns</button>
-          <button type="button" class="tab" data-panel="messages" aria-selected="false" aria-label="Messages">
-            Messages<span class="tab-badge" id="messagesTabBadge" hidden></span>
+          <button type="button" class="tab" data-panel="messages" aria-selected="false" aria-label="Chat">
+            Chat<span class="tab-badge" id="messagesTabBadge" hidden></span>
           </button>
           <button type="button" class="tab" data-panel="info" aria-selected="false" aria-label="Information Centre">
             <span class="tab-long">Information Centre</span><span class="tab-short" aria-hidden="true">Info</span>
@@ -413,8 +413,8 @@
 
       <section class="panel" id="panel-dues" hidden>
         <header class="panel-head">
-          <h2>Your dues</h2>
-          <p class="muted">From the RWA subscription ledger (keyed by plot number).</p>
+          <h2>Your account</h2>
+          <p class="muted">Ledger, payments, vault, and certificates for this plot.</p>
         </header>
         <div class="roster-block" id="societyBankBlock">
           <header class="panel-head">
@@ -761,15 +761,18 @@
       <section class="panel" id="panel-messages" hidden>
         <header class="panel-head">
           <div class="panel-head-copy">
-            <h2>Messages</h2>
-            <p class="muted">Colony channel for everyone, plus private person-to-person chats.</p>
+            <h2>Chat</h2>
+            <p class="muted">Colony channel, private channels, and person-to-person chats — verified residents only.</p>
           </div>
         </header>
         <div class="msg-layout" id="msgLayout">
           <aside class="msg-sidebar" id="msgSidebar">
             <div class="msg-sidebar-head">
               <h3>Conversations</h3>
-              <button type="button" class="btn ghost compact" id="msgRefreshThreadsBtn">Refresh</button>
+              <div class="msg-sidebar-actions">
+                <button type="button" class="btn secondary compact" id="msgNewChannelBtn">New channel</button>
+                <button type="button" class="btn ghost compact" id="msgRefreshThreadsBtn">Refresh</button>
+              </div>
             </div>
             <div class="msg-new-dm">
               <div class="msg-peer-search-row">
@@ -789,6 +792,19 @@
                 <p class="muted" id="msgConversationMeta"></p>
               </div>
               <div class="msg-channel-tools" id="msgChannelTools" hidden>
+                <details class="msg-manage-menu" id="msgManageMenu" hidden>
+                  <summary class="btn ghost compact">Manage</summary>
+                  <div class="msg-manage-panel">
+                    <button type="button" class="btn ghost compact" id="msgManageRenameBtn">Rename</button>
+                    <button type="button" class="btn ghost compact" id="msgManageOfficialBtn">Toggle Official</button>
+                    <button type="button" class="btn ghost compact" id="msgManageMembersBtn">Members</button>
+                    <button type="button" class="btn ghost compact" id="msgManageIconBtn">Channel icon</button>
+                    <button type="button" class="btn ghost compact" id="msgManageBgBtn">Background</button>
+                    <button type="button" class="btn ghost compact" id="msgManageArchiveBtn">Archive channel</button>
+                  </div>
+                </details>
+                <button type="button" class="btn ghost compact" id="msgLeaveChannelBtn" hidden>Leave</button>
+                <button type="button" class="btn ghost compact" id="msgEscalateBtn" hidden>Escalate</button>
                 <details class="msg-cleanup-menu">
                   <summary class="btn ghost compact">Cleanup</summary>
                   <div class="msg-cleanup-panel">
@@ -816,6 +832,17 @@
                 <label class="btn ghost compact msg-attach-label" title="Attach images or PDF (max 5 MB each, up to 3 files)">
                   Attach
                   <input id="msgAttachInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple hidden>
+                </label>
+                <label class="msg-theme-label" id="msgCardThemeWrap" hidden>
+                  Card
+                  <select id="msgCardTheme">
+                    <option value="plain">Default</option>
+                    <option value="notice">Notice</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="celebrate">Celebrate</option>
+                    <option value="official">Official</option>
+                    <option value="thanks">Thanks</option>
+                  </select>
                 </label>
                 <span class="muted msg-attach-hint" id="msgAttachHint">Images or PDF · max 5 MB each · up to 3</span>
               </div>
@@ -2026,10 +2053,10 @@
             </div>
             <fieldset class="push-prefs" id="pushPrefsFields">
               <legend>Alert me about</legend>
-              <label class="check"><input type="checkbox" data-pref="messages" checked> Messages</label>
+              <label class="check"><input type="checkbox" data-pref="messages" checked> Chat</label>
               <label class="check"><input type="checkbox" data-pref="notices" checked> Notices</label>
               <label class="check"><input type="checkbox" data-pref="concerns" checked> Concerns</label>
-              <label class="check"><input type="checkbox" data-pref="dues" checked> Dues / payments</label>
+              <label class="check"><input type="checkbox" data-pref="dues" checked> Accounts / payments</label>
               <label class="check"><input type="checkbox" data-pref="treasury" checked> Treasury</label>
               <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues certificate</label>
               <label class="check"><input type="checkbox" data-pref="no_objection" checked> No Objection certificate</label>
@@ -3127,6 +3154,123 @@
         <div class="btn-row">
           <button type="submit" class="btn primary" id="photoCropApplyBtn">Apply &amp; save</button>
           <button type="button" class="btn ghost" id="photoCropCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="msgCreateChannelDialog" class="ledger-dialog msg-channel-dialog" aria-labelledby="msgCreateChannelTitle">
+      <form id="msgCreateChannelForm" class="stack" method="dialog">
+        <header class="panel-head">
+          <h3 id="msgCreateChannelTitle">New private channel</h3>
+          <p class="muted">Invite household members, delegates, and registered tenants from the colony directory.</p>
+        </header>
+        <label>
+          Channel name
+          <input id="msgCreateChannelTitleInput" maxlength="80" required placeholder="e.g. Block A water committee" autocomplete="off">
+        </label>
+        <label class="check">
+          <input type="checkbox" id="msgCreateChannelOfficial"> Mark as Official (committee / EC-backed)
+        </label>
+        <label>
+          Add people
+          <input id="msgCreateChannelPeopleSearch" type="search" placeholder="Search members, delegates, tenants…" autocomplete="off">
+        </label>
+        <div id="msgCreateChannelPeopleResults" class="msg-people-results" hidden></div>
+        <div id="msgCreateChannelSelected" class="msg-people-selected"></div>
+        <p class="muted" id="msgCreateChannelStatus"></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="msgCreateChannelSubmit">Create channel</button>
+          <button type="button" class="btn ghost" id="msgCreateChannelCancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="msgChannelLookDialog" class="ledger-dialog msg-channel-dialog" aria-labelledby="msgChannelLookTitle">
+      <div class="stack">
+        <header class="panel-head">
+          <h3 id="msgChannelLookTitle">Channel look</h3>
+          <p class="muted">Icon and chat background for this private channel.</p>
+        </header>
+        <div class="msg-look-section">
+          <h4>Icon</h4>
+          <div class="msg-look-icon-row">
+            <img id="msgChannelIconPreview" class="msg-channel-icon-preview" alt="" hidden>
+            <span class="msg-channel-icon-fallback" id="msgChannelIconFallback" aria-hidden="true">C</span>
+            <label class="btn secondary compact">
+              Upload icon
+              <input id="msgChannelIconFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif" hidden>
+            </label>
+            <button type="button" class="btn ghost compact" id="msgChannelIconClear">Remove</button>
+          </div>
+        </div>
+        <div class="msg-look-section">
+          <h4>Background</h4>
+          <div id="msgChannelBgPresets" class="msg-bg-presets" role="group" aria-label="Background style"></div>
+          <label class="btn secondary compact">
+            Upload custom image
+            <input id="msgChannelBgFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif" hidden>
+          </label>
+          <button type="button" class="btn ghost compact" id="msgChannelBgClear">Clear custom image</button>
+        </div>
+        <p class="muted" id="msgChannelLookStatus"></p>
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="msgChannelLookClose">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="msgManageMembersDialog" class="ledger-dialog msg-channel-dialog" aria-labelledby="msgManageMembersTitle">
+      <div class="stack">
+        <header class="panel-head">
+          <h3 id="msgManageMembersTitle">Channel members</h3>
+          <p class="muted" id="msgManageMembersHint">Add or remove people. Owners can transfer ownership when leaving.</p>
+        </header>
+        <div id="msgManageMembersList" class="msg-members-list"></div>
+        <label>
+          Add people
+          <input id="msgManageMembersSearch" type="search" placeholder="Search by name or plot…" autocomplete="off">
+        </label>
+        <div id="msgManageMembersResults" class="msg-people-results" hidden></div>
+        <p class="muted" id="msgManageMembersStatus"></p>
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="msgManageMembersClose">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="msgEscalateDialog" class="ledger-dialog msg-channel-dialog" aria-labelledby="msgEscalateTitle">
+      <form id="msgEscalateForm" class="stack" method="dialog">
+        <header class="panel-head">
+          <h3 id="msgEscalateTitle">Escalate to Concerns</h3>
+          <p class="muted">Creates a formal mailbox concern with recent messages quoted. EC can track it there.</p>
+        </header>
+        <label>
+          Subject
+          <input id="msgEscalateSubject" maxlength="160" required placeholder="Short subject">
+        </label>
+        <label>
+          Category
+          <select id="msgEscalateCategory">
+            <option value="other">Other</option>
+            <option value="maintenance">Maintenance &amp; repairs</option>
+            <option value="water">Water supply</option>
+            <option value="sanitation">Cleanliness &amp; garbage</option>
+            <option value="security">Security, gates &amp; parking</option>
+            <option value="amenities">Common areas &amp; amenities</option>
+            <option value="neighbour">Neighbour / plot matters</option>
+            <option value="committee">EC / RWA functioning</option>
+            <option value="dues">Dues &amp; payments</option>
+          </select>
+        </label>
+        <label>
+          Extra note (optional)
+          <textarea id="msgEscalateNote" rows="3" maxlength="1500" placeholder="What should EC look at?"></textarea>
+        </label>
+        <p class="muted" id="msgEscalatePreview"></p>
+        <p class="muted" id="msgEscalateStatus"></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="msgEscalateSubmit">Create concern</button>
+          <button type="button" class="btn ghost" id="msgEscalateCancel">Cancel</button>
         </div>
       </form>
     </dialog>

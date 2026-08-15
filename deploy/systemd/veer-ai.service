@@ -1,0 +1,16 @@
+[Unit]
+Description=Veer AI native moderation sidecar
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/cityofmandi.veerlabs.solutions/veercanvas/services/veer-ai
+Environment=VEER_AI_BIND=127.0.0.1:8095
+Environment=RUST_LOG=info
+ExecStart=/var/www/cityofmandi.veerlabs.solutions/data/bin/veer-ai
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

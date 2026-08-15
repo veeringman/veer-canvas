@@ -20,11 +20,15 @@ Unofficial civic hub. Do not impersonate government, MC Mandi, or HIMUDA.
 - [x] Publisher register / sign-in (`/join`) and listing desk (`/publish`)
 - [x] Operator moderation queue at `/admin/`
 - [x] Public feed of approved news, ads, services, places, businesses
+- [x] Mandi Adda city chat (`/adda`) — public rooms, Adda + publisher identity, DMs, private channels, Sanyard pulse bridge
+- [x] Sponsored header ads manager (animation types + Independence Day seed)
+- [ ] AI moderator for Mandi Adda (hate, obscenity, and related abuse) — **v1 shipped**: Rust `veer-ai` rules engine + Flask flag/block modes; model backends next
 - [ ] Events calendar
 - [ ] Transport & weather pointers
 - [ ] More neighbourhood portals besides Sanyard
 - [ ] Email verification for publishers
 - [ ] Hindi (and later Pahari) copy
+- [ ] Mandi Adda push notifications / AuthBuddy SSO
 
 ## Guardrails
 

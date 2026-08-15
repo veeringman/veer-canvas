@@ -17,11 +17,18 @@ Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporati
 | URL | Who | Purpose |
 |-----|-----|---------|
 | `/` | Public | City hub |
+| `/adda` | Public + Adda/publisher accounts | **Mandi Adda** — city chat (public rooms, DMs, private channels, Sanyard pulse) |
 | `/join` | Publishers | Register or sign in |
 | `/publish` | Publishers | Submit news, ads, services, businesses, or a custom kind |
-| `/admin/` | Hub operators | Moderation, features, offerings, hosted pages |
+| `/admin/` | Hub operators | Moderation, features, offerings, hosted pages, **sponsored header ads** |
 | `/cms/` | Authors | VeerCanvas CMS |
 | `/b/veerlabs` | Public | Example hosted business page |
+
+## Mandi Adda
+
+City chat at `/adda`. Guests can **read** public topic rooms. Signing in with a **Mandi Adda** account (or a publisher account via `/join?next=/adda`) unlocks posting, DMs, and private channels. Hub operators can moderate public rooms. Neighbourhood syndicate posts from Sanyard appear in the read-only **Sanyard pulse** room. Storage lives in `data/hub.db` (`adda_*` tables); files under `data/adda/`.
+
+**Safety:** posts are checked by the Rust **Veer AI** sidecar (`services/veer-ai`, `127.0.0.1:8095`). Mode in `data/ai.env`: `flag` (default, hold as hidden), `block`, or `off`.
 
 Same first-boot CMS/operator login: username `admin`. Change it after sign-in.
 

@@ -219,6 +219,7 @@ rsync -az --delete \
   --exclude 'share/' \
   --exclude 'venv/' \
   --exclude 'plate-ocr/target/' \
+  --exclude 'services/veer-ai/target/' \
   --exclude '.git' \
   --exclude 'prompts/' \
   --exclude 'site.config.json' \
@@ -387,6 +388,16 @@ rsync -az \
   -e "$RSYNC_SSH" \
   "$VEERCANVAS_ROOT/cli/" \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/cli/"
+
+if [[ -d "$VEERCANVAS_ROOT/services/veer-ai" ]]; then
+  echo "Syncing veer-ai (Rust AI sidecar) ..."
+  ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/veercanvas/services'"
+  rsync -az \
+    -e "$RSYNC_SSH" \
+    --exclude 'target/' \
+    "$VEERCANVAS_ROOT/services/veer-ai/" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/services/veer-ai/"
+fi
 
 # Platform (site create) and Ops (observability) need the sites/ inventory tree.
 if [[ "$IS_PLATFORM" == "1" || "$IS_PLATFORM" == "true" || "$IS_OPS" == "1" || "$IS_OPS" == "true" ]]; then

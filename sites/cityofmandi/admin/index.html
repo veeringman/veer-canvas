@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260814paint">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
-  <script src="/admin/admin.js?v=20260814pub2" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260815lean1">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260815sp1">
+  <script src="/admin/admin.js?v=20260815sp1" defer></script>
 </head>
 <body class="desk-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -62,7 +62,10 @@
         <form id="featuresForm" class="desk-toggles">
           <label class="desk-check"><input type="checkbox" name="news"> News</label>
           <label class="desk-check"><input type="checkbox" name="places"> Places</label>
+          <label class="desk-check"><input type="checkbox" name="scitech"> SciTech</label>
+          <label class="desk-check"><input type="checkbox" name="culture"> Culture</label>
           <label class="desk-check"><input type="checkbox" name="services"> Services</label>
+          <label class="desk-check"><input type="checkbox" name="channels"> Channels</label>
           <label class="desk-check"><input type="checkbox" name="ads"> Ads</label>
           <label class="desk-check"><input type="checkbox" name="neighbourhoods"> Neighbourhoods</label>
           <label class="desk-check"><input type="checkbox" name="businesses"> Business pages</label>
@@ -77,6 +80,18 @@
         <div id="servicesList" class="desk-stack"></div>
         <button type="button" class="btn ghost compact" id="addServiceBtn">Add service</button>
         <button type="button" class="btn primary compact" id="saveServicesBtn">Save services</button>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Header</p>
+        <h2>Sponsored ads</h2>
+        <p class="muted">Center header animations (Independence Day, marquee, pulse, confetti, fade &amp; slide, sparkle, image banner). Ads may include an image.</p>
+        <div id="sponsoredList" class="desk-stack"></div>
+        <div class="desk-actions">
+          <button type="button" class="btn ghost compact" id="addSponsoredBtn">Add sponsored ad</button>
+          <button type="button" class="btn primary compact" id="saveSponsoredBtn">Save sponsored ads</button>
+        </div>
+        <p class="muted" id="sponsoredStatus"></p>
       </section>
 
       <section class="desk-card">

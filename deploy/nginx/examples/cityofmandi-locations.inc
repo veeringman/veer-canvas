@@ -55,6 +55,7 @@ location ^~ /b/ {
 
 location = /join { try_files /join.html =404; }
 location = /publish { try_files /publish.html =404; }
+location = /adda { try_files /adda.html =404; }
 
 location / {
     try_files $uri $uri/ =404;

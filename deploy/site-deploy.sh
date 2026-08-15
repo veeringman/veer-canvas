@@ -326,6 +326,59 @@ EOF
     exit 1
   fi
   echo "Admin service ${SERVICE_NAME} is active on port ${ADMIN_PORT}"
+
+  if [[ "${SITE_ID}" == "cityofmandi" ]]; then
+    install_veer_ai
+  fi
+}
+
+install_veer_ai() {
+  local src="$WEB_ROOT/veercanvas/services/veer-ai"
+  local bin_dir="$WEB_ROOT/data/bin"
+  local unit_src="$WEB_ROOT/veercanvas/deploy/systemd/veer-ai.service"
+  local unit_dst="/etc/systemd/system/veer-ai.service"
+  mkdir -p "$bin_dir"
+  if [[ ! -d "$src" ]]; then
+    echo "veer-ai source missing — skip"
+    return 0
+  fi
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "Installing rustup for ubuntu (needed for veer-ai) ..."
+    if ! sudo -u ubuntu bash -lc 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal'; then
+      echo "warning: rustup install failed — Mandi Adda moderation will fail-open" >&2
+      return 0
+    fi
+  fi
+  echo "Building veer-ai (Rust AI moderator) ..."
+  if ! sudo -u ubuntu bash -lc 'source "$HOME/.cargo/env" 2>/dev/null; cd "'"$src"'" && cargo build --release'; then
+    echo "warning: veer-ai build failed — Mandi Adda moderation will fail-open" >&2
+    return 0
+  fi
+  install -m 755 "$src/target/release/veer-ai" "$bin_dir/veer-ai"
+  chown ubuntu:ubuntu "$bin_dir/veer-ai" 2>/dev/null || true
+  if [[ -f "$unit_src" ]]; then
+    sed "s|/var/www/cityofmandi.veerlabs.solutions|$WEB_ROOT|g" "$unit_src" > "$unit_dst"
+    systemctl daemon-reload
+    systemctl enable veer-ai.service
+    systemctl restart veer-ai.service || true
+    sleep 1
+    if systemctl is-active --quiet veer-ai.service; then
+      echo "veer-ai is active on 127.0.0.1:8095"
+    else
+      echo "warning: veer-ai failed to start" >&2
+      journalctl -u veer-ai -n 20 --no-pager >&2 || true
+    fi
+  fi
+  if [[ ! -f "$WEB_ROOT/data/ai.env" ]] || ! grep -q 'VEER_AI_URL' "$WEB_ROOT/data/ai.env" 2>/dev/null; then
+    cat > "$WEB_ROOT/data/ai.env" <<'EOF'
+VEER_AI_URL=http://127.0.0.1:8095
+VEER_AI_MODE=flag
+VEER_AI_TIMEOUT_MS=280
+EOF
+    chown ubuntu:ubuntu "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    chmod 600 "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    systemctl restart "${SERVICE_NAME}.service" || true
+  fi
 }
 
 echo "[1/4] Nginx config for $DOMAIN"
