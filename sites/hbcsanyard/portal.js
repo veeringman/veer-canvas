@@ -5341,6 +5341,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function directorySearchHay(r) {
+    const delegates = (r.delegates || []).map((d) => [d.name, d.phone, d.identityLabel].join(' ')).join(' ');
     const extra = directoryCanViewOccupancy
       ? [
           (r.tenants || []).map((t) => t.name || '').join(' '),
@@ -5352,7 +5353,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       r.houseId, r.plotNo, r.section, hh,
       r.ownerName, r.name, r.primaryDelegateName, r.displayName,
       r.phone, r.email, r.officialTitle, committeeRoleLabel(r),
-      r.ecSeatHolderName, ...extra,
+      r.ecSeatHolderName, delegates, ...extra,
     ].map((v) => String(v || '').toLowerCase()).join(' ');
   }
 
@@ -5374,8 +5375,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const lookup = el('directoryLookup');
     if (lookup) {
       lookup.placeholder = directoryCanViewOccupancy
-        ? 'Look up plot, owner, phone, tenant, vehicle…'
-        : 'Look up plot, owner, phone…';
+        ? 'Look up plot, owner, delegate, phone, tenant, vehicle…'
+        : 'Look up plot, owner, delegate, phone…';
     }
     if (!box) return;
     const q = (el('directoryLookup')?.value || '').trim().toLowerCase();
@@ -5412,18 +5413,31 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const emailHtml = email
         ? `<a class="dir-contact" href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
         : '<span class="muted">—</span>';
+      const delegates = r.delegates || [];
       const tenants = r.tenants || [];
       const vehicles = r.vehicles || [];
+      const delegateRows = delegates.map((d) => {
+        const label = d.identityLabel || 'Delegate';
+        const phone = (d.phone || '').trim();
+        const phoneBit = phone
+          ? ` · <a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
+          : '';
+        return `<li><strong>${escapeHtml(d.name || '—')}</strong><span class="muted"> · ${escapeHtml(label)}</span>${phoneBit}</li>`;
+      }).join('');
       const tenantRows = tenants.map((t) => `<li>${escapeHtml(t.name || 'Tenant')}</li>`).join('');
       const vehicleRows = vehicles.map((v) => {
         const bits = [v.plate, v.vehicleTypeLabel, v.kindLabel].filter(Boolean);
         return `<li><span class="dir-plate">${escapeHtml(v.plate || '')}</span>${bits.length > 1 ? `<span class="muted"> · ${escapeHtml(bits.slice(1).join(' · '))}</span>` : ''}</li>`;
       }).join('');
-      const occupancyHtml = directoryCanViewOccupancy ? `
-        <div class="dir-folds">
-          ${directoryFoldHtml('Tenants', tenants.length, tenantRows, 'No tenants recorded for this plot.')}
-          ${directoryFoldHtml('Vehicles', vehicles.length, vehicleRows, 'No member or tenant vehicles registered.')}
-        </div>` : '';
+      const folds = [
+        directoryFoldHtml('Delegates', delegates.length, delegateRows, 'No household members recorded for this plot.'),
+      ];
+      if (directoryCanViewOccupancy) {
+        folds.push(
+          directoryFoldHtml('Tenants', tenants.length, tenantRows, 'No tenants recorded for this plot.'),
+          directoryFoldHtml('Vehicles', vehicles.length, vehicleRows, 'No member or tenant vehicles registered.'),
+        );
+      }
       return `
       <article class="dir-card" data-house-id="${escapeHtml(r.houseId)}">
         <header class="dir-card-head">
@@ -5449,7 +5463,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           </div>
         </dl>
         ${seatBit}
-        ${occupancyHtml}
+        <div class="dir-folds">${folds.join('')}</div>
       </article>`;
     }).join('');
     hydrateAvatars(box).catch(() => {});
@@ -6771,6 +6785,67 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     hydrateAvatars(box).catch(() => {});
   }
 
+  function msgThemeIconSvg(theme) {
+    const icons = {
+      notice: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor" stroke="none"/></svg>',
+      urgent: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l9 16H3L12 3z"/><path d="M12 10v4"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor" stroke="none"/></svg>',
+      celebrate: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/><circle cx="12" cy="12" r="9"/></svg>',
+      official: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l2.2 4.5 5 .7-3.6 3.5.9 5L12 13.8 7.5 15.7l.9-5L4.8 7.2l5-.7L12 2z"/></svg>',
+      thanks: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-4.35-9.5-8.1C.7 10.1 1.5 6.8 4.4 5.4 6.5 4.4 9 5 12 7.4c3-2.4 5.5-3 7.6-2 2.9 1.4 3.7 4.7 1.9 7.5C19 16.65 12 21 12 21z"/></svg>',
+    };
+    return icons[theme] || '';
+  }
+
+  function setMsgCardTheme(theme) {
+    const next = (theme || 'plain').trim() || 'plain';
+    const input = el('msgCardTheme');
+    if (input) input.value = next;
+    document.querySelectorAll('#msgCardThemeWrap .msg-theme-chip').forEach((btn) => {
+      const on = btn.getAttribute('data-theme') === next;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function renderMsgHeadAvatar(thread) {
+    const box = el('msgHeadAvatar');
+    if (!box) return;
+    if (!thread || !thread.kind) {
+      box.hidden = true;
+      box.innerHTML = '';
+      box.classList.remove('is-round');
+      return;
+    }
+    box.hidden = false;
+    box.classList.toggle('is-round', thread.kind === 'dm' || thread.kind === 'ai');
+    if (thread.kind === 'ai') {
+      box.innerHTML = aiAvatarHtml({ size: 'sm', className: 'msg-head-ai' });
+      return;
+    }
+    if (thread.kind === 'group' && thread.iconUrl) {
+      box.innerHTML = `<img src="${escapeHtml(thread.iconUrl)}" alt="">`;
+      return;
+    }
+    if (thread.kind === 'group') {
+      box.textContent = String(thread.title || 'C').slice(0, 1).toUpperCase();
+      return;
+    }
+    if (thread.kind === 'dm') {
+      if (thread.peerPhotoUrl) {
+        box.innerHTML = personAvatarHtml({ photoUrl: thread.peerPhotoUrl }, { size: 'sm', className: 'msg-head-peer' });
+        hydrateAvatars(box).catch(() => {});
+      } else {
+        box.textContent = String(thread.title || '?').slice(0, 1).toUpperCase();
+      }
+      return;
+    }
+    if (thread.kind === 'colony') {
+      box.textContent = 'C';
+      return;
+    }
+    box.textContent = String(thread.title || '?').slice(0, 1).toUpperCase();
+  }
+
   function renderMsgFeed(messages, { append = false } = {}) {
     const feed = el('msgFeed');
     if (!feed) return;
@@ -6834,9 +6909,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         ? 'RWA Assistant · only you see this'
         : `${escapeHtml(m.houseId || '')} · ${escapeHtml(m.authorName || '')}`;
       const theme = (m.cardTheme || '').trim();
-      const themeClass = theme ? ` theme-${escapeHtml(theme)}` : '';
-      const themeBadge = theme
-        ? `<span class="msg-card-theme-badge">${escapeHtml(m.cardThemeLabel || theme)}</span>`
+      const themeClass = theme && theme !== 'plain' ? ` theme-${escapeHtml(theme)}` : '';
+      const themeLabel = escapeHtml(m.cardThemeLabel || theme || '');
+      const themeBadge = (theme && theme !== 'plain' && msgThemeIconSvg(theme))
+        ? `<span class="msg-card-theme-badge" title="${themeLabel}" aria-label="${themeLabel}">${msgThemeIconSvg(theme)}</span>`
         : '';
       return `<article class="msg-row${mine ? ' is-mine' : ''}${isAi ? ' is-ai' : ''}" data-msg-id="${escapeHtml(m.id)}">
         ${avatar}
@@ -6872,11 +6948,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     state.msgIsAiThread = Boolean(data.isAi || (data.thread && data.thread.kind === 'ai'));
     const thread = data.thread || {};
     state.msgActiveThread = thread;
+    renderMsgHeadAvatar(thread);
     if (el('msgConversationTitle')) {
-      const badge = thread.kind === 'group' && thread.isOfficial
-        ? 'Official · '
-        : '';
-      el('msgConversationTitle').textContent = `${badge}${thread.title || 'Conversation'}`;
+      el('msgConversationTitle').textContent = thread.title || 'Conversation';
+    }
+    const chip = el('msgOfficialChip');
+    if (chip) {
+      chip.hidden = !(thread.kind === 'group' && thread.isOfficial);
     }
     if (el('msgConversationMeta')) {
       if (thread.kind === 'ai') {
@@ -6888,30 +6966,46 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         const arch = thread.archivedAt ? ' · Archived' : '';
         el('msgConversationMeta').textContent = `Private channel · ${n} ${n === 1 ? 'person' : 'people'}${arch}`;
       } else {
-        el('msgConversationMeta').textContent = `Private person-to-person · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
+        el('msgConversationMeta').textContent = `Private · plots ${thread.houseA || ''} & ${thread.houseB || ''}`;
       }
     }
     const tools = el('msgChannelTools');
     if (tools) {
       const showTools = state.msgCanCleanup || state.msgCanManage || state.msgCanLeave || state.msgCanEscalate;
       tools.hidden = !showTools;
-      const manageMenu = el('msgManageMenu');
-      if (manageMenu) manageMenu.hidden = !state.msgCanManage;
-      if (el('msgLeaveChannelBtn')) el('msgLeaveChannelBtn').hidden = !state.msgCanLeave;
-      if (el('msgEscalateBtn')) el('msgEscalateBtn').hidden = !state.msgCanEscalate || state.msgIsAiThread;
+      const moreMenu = el('msgMoreMenu');
+      if (moreMenu) moreMenu.open = false;
+      const setHidden = (id, hidden) => {
+        if (el(id)) el(id).hidden = hidden;
+      };
+      setHidden('msgQuickMembersBtn', !state.msgCanManage);
+      setHidden('msgQuickLookBtn', !state.msgCanManage);
+      setHidden('msgManageRenameBtn', !state.msgCanManage);
+      setHidden('msgManageOfficialBtn', !state.msgCanManage);
+      setHidden('msgManageMembersBtn', !state.msgCanManage);
+      setHidden('msgManageIconBtn', !state.msgCanManage);
+      setHidden('msgManageBgBtn', !state.msgCanManage);
+      setHidden('msgManageArchiveBtn', !state.msgCanManage);
+      setHidden('msgLeaveChannelBtn', !state.msgCanLeave);
+      setHidden('msgEscalateBtn', !state.msgCanEscalate || state.msgIsAiThread);
       if (el('msgManageOfficialBtn')) {
         el('msgManageOfficialBtn').textContent = thread.isOfficial ? 'Remove Official' : 'Mark Official';
       }
       if (el('msgManageArchiveBtn')) {
         el('msgManageArchiveBtn').textContent = thread.archivedAt ? 'Unarchive channel' : 'Archive channel';
       }
-      const cleanupMenu = tools.querySelector('.msg-cleanup-menu');
-      if (cleanupMenu) {
-        cleanupMenu.hidden = !state.msgCanCleanup;
-        cleanupMenu.open = false;
-      }
-      const clearHiddenBtn = tools.querySelector('[data-cleanup="clear_hidden"]');
-      if (clearHiddenBtn) clearHiddenBtn.hidden = thread.kind !== 'colony';
+      const cleanupBtns = tools.querySelectorAll('[data-cleanup]');
+      cleanupBtns.forEach((btn) => {
+        const action = btn.getAttribute('data-cleanup');
+        if (action === 'clear_hidden') {
+          btn.hidden = !state.msgCanCleanup || thread.kind !== 'colony';
+        } else {
+          btn.hidden = !state.msgCanCleanup;
+        }
+      });
+      const showCleanup = state.msgCanCleanup;
+      setHidden('msgCleanupDivider', !showCleanup);
+      setHidden('msgCleanupLabel', !showCleanup);
     }
     if (el('msgComposeForm')) {
       el('msgComposeForm').hidden = isViewOnly() || Boolean(thread.archivedAt && thread.kind === 'group');
@@ -6919,7 +7013,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const themeWrap = el('msgCardThemeWrap');
     if (themeWrap) {
       themeWrap.hidden = Boolean(state.msgIsAiThread) || thread.kind === 'dm';
-      if (el('msgCardTheme') && !themeWrap.hidden) el('msgCardTheme').value = 'plain';
+      if (!themeWrap.hidden) setMsgCardTheme('plain');
     }
     applyMsgFeedBackground(thread);
     const attachLabel = document.querySelector('.msg-attach-label');
@@ -8575,7 +8669,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         ${item.canRemove ? `<button type="button" class="btn ghost compact parking-remove" data-id="${escapeHtml(item.id)}" data-kind="${escapeHtml(kind)}">${removeLabel}</button>` : ''}
         ${ec && status === 'pending_renewal' ? `<button type="button" class="btn primary compact parking-approve" data-id="${escapeHtml(item.id)}">Approve</button><button type="button" class="btn ghost compact parking-reject" data-id="${escapeHtml(item.id)}">Decline</button>` : ''}
         ${ec && (status === 'active' || status === 'pending_renewal') ? `<button type="button" class="btn ghost compact parking-revoke" data-id="${escapeHtml(item.id)}">Revoke</button>` : ''}
-      </div>`;
+      </div>
+      ${ec ? parkingUpgradeStaffPanelHtml(item) : ''}`;
   }
 
   function parkingDetailHtml(item) {
@@ -8675,6 +8770,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function fillParkingStaffCategories(categories) {
+    if (Array.isArray(categories) && categories.length) {
+      parkingStaffCategoriesCache = categories;
+    }
     const sel = el('parkingStaffCategory');
     if (!sel || !Array.isArray(categories) || !categories.length) return;
     const current = sel.value || 'maid';
@@ -8684,6 +8782,58 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
     }).join('');
     if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+  }
+
+  let parkingStaffCategoriesCache = [];
+
+  function parkingUpgradeStaffPanelHtml(item) {
+    if (!item || item.kind !== 'adhoc') return '';
+    if (!hasEntitlement('pass_upgrade_staff')) return '';
+    const status = (item.status || '').toLowerCase();
+    if (status !== 'active' && status !== 'expired') return '';
+    const cats = parkingStaffCategoriesCache.length
+      ? parkingStaffCategoriesCache
+      : [
+          { id: 'maid', label: 'Maid' },
+          { id: 'cook', label: 'Cook' },
+          { id: 'gardener', label: 'Gardener' },
+          { id: 'driver', label: 'Driver' },
+          { id: 'caretaker', label: 'Caretaker' },
+          { id: 'other', label: 'Other' },
+        ];
+    const guess = String(item.category || item.adhocCategory || 'other').toLowerCase();
+    const catOpts = cats.map((c) => {
+      const id = c.id || c;
+      const label = c.label || String(id);
+      const sel = id === guess || (guess === 'delivery' && id === 'other') ? ' selected' : '';
+      return `<option value="${escapeHtml(id)}"${sel}>${escapeHtml(label)}</option>`;
+    }).join('');
+    const pid = escapeHtml(item.id || '');
+    return `
+      <details class="parking-upgrade-staff">
+        <summary>Convert to staff pass</summary>
+        <form class="parking-upgrade-staff-form" data-pass-id="${pid}">
+          <label>Plot / house id
+            <input name="houseId" required autocomplete="off" placeholder="e.g. A-12 or house id">
+          </label>
+          <label>Role
+            <select name="category">${catOpts}</select>
+          </label>
+          <label>Valid for
+            <select name="months">
+              <option value="1">1 month</option>
+              <option value="3" selected>3 months</option>
+              <option value="6">6 months</option>
+              <option value="12">12 months</option>
+            </select>
+          </label>
+          <label>Mobile <span class="muted">(optional)</span>
+            <input name="phone" maxlength="16" inputmode="tel" autocomplete="tel" placeholder="10-digit number">
+          </label>
+          <button type="submit" class="btn primary compact">Upgrade to staff</button>
+          <p class="muted parking-upgrade-staff-status" aria-live="polite"></p>
+        </form>
+      </details>`;
   }
 
   async function loadParkingPanel() {
@@ -8939,11 +9089,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           ? `<p class="parking-ocr-note">OCR was not exact — confirm this is <strong>${escapeHtml(data.pass.plateDisplay || match.plate || '')}</strong> before waving through.</p>`
           : '';
         if (data.pass.detailLevel === 'general') {
-          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}`;
+          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingUpgradeStaffPanelHtml(data.pass)}`;
         } else if (data.pass.detailLevel === 'manage') {
           box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: true })}`;
         } else {
-          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: false })}`;
+          box.innerHTML = `${note}${parkingDetailHtml(data.pass)}${parkingCardHtml(data.pass, { ec: false })}${parkingUpgradeStaffPanelHtml(data.pass)}`;
         }
       }
     }
@@ -10506,7 +10656,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         `/api/rwa/messages/threads/${encodeURIComponent(state.msgActiveThreadId)}/cleanup`,
         { method: 'POST', body: JSON.stringify(payload) },
       );
-      const menu = el('msgChannelTools')?.querySelector('.msg-cleanup-menu');
+      const menu = el('msgMoreMenu');
       if (menu) menu.open = false;
       if (el('msgComposeStatus')) {
         el('msgComposeStatus').textContent = `Cleanup done — ${data.deleted || 0} message(s) removed.`;
@@ -10615,9 +10765,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     feed.style.backgroundImage = '';
     if (!thread || thread.kind !== 'group') return;
     const style = (thread.bgStyle || 'none').trim() || 'none';
-    if (style && style !== 'none') feed.classList.add(`msg-bg-${style}`);
+    if (style && style !== 'none') {
+      feed.classList.add(`msg-bg-${style}`, 'has-room-bg');
+    }
     if (style === 'custom' && thread.bgUrl) {
-      feed.style.backgroundImage = `url("${String(thread.bgUrl).replace(/"/g, '')}")`;
+      const url = String(thread.bgUrl).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      // Light wash layered over the image so chat stays readable.
+      feed.style.backgroundImage = `linear-gradient(rgba(255,252,246,0.42), rgba(255,250,242,0.52)), url("${url}")`;
     }
   }
 
@@ -10804,6 +10958,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   el('msgManageRenameBtn')?.addEventListener('click', async () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     const current = state.msgActiveThread?.title || '';
     const next = window.prompt('Channel name', current);
     if (next == null) return;
@@ -10814,6 +10969,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
   el('msgManageOfficialBtn')?.addEventListener('click', async () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     try {
       await patchActiveGroup({ isOfficial: !state.msgActiveThread?.isOfficial });
     } catch (e) {
@@ -10821,6 +10977,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
   el('msgManageArchiveBtn')?.addEventListener('click', async () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     const archived = Boolean(state.msgActiveThread?.archivedAt);
     const ok = window.confirm(archived ? 'Unarchive this channel?' : 'Archive this channel? Members keep history but cannot post.');
     if (!ok) return;
@@ -10856,6 +11013,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   el('msgManageMembersBtn')?.addEventListener('click', async () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     state.msgManageThreadId = state.msgActiveThreadId;
     if (el('msgManageMembersSearch')) el('msgManageMembersSearch').value = '';
     if (el('msgManageMembersResults')) {
@@ -10933,8 +11091,27 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
   });
 
-  el('msgManageIconBtn')?.addEventListener('click', () => openChannelLookDialog());
-  el('msgManageBgBtn')?.addEventListener('click', () => openChannelLookDialog());
+  el('msgQuickMembersBtn')?.addEventListener('click', () => {
+    el('msgManageMembersBtn')?.click();
+  });
+  el('msgQuickLookBtn')?.addEventListener('click', () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
+    openChannelLookDialog();
+  });
+  el('msgCardThemeWrap')?.addEventListener('click', (event) => {
+    const chip = event.target.closest('.msg-theme-chip');
+    if (!chip) return;
+    event.preventDefault();
+    setMsgCardTheme(chip.getAttribute('data-theme') || 'plain');
+  });
+  el('msgManageIconBtn')?.addEventListener('click', () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
+    openChannelLookDialog();
+  });
+  el('msgManageBgBtn')?.addEventListener('click', () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
+    openChannelLookDialog();
+  });
   el('msgChannelLookClose')?.addEventListener('click', () => el('msgChannelLookDialog')?.close());
   el('msgChannelIconFile')?.addEventListener('change', async () => {
     const file = el('msgChannelIconFile')?.files?.[0];
@@ -11033,6 +11210,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('msgLeaveChannelBtn')?.addEventListener('click', async () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     if (!state.msgActiveThreadId) return;
     const isOwner = state.msgActiveThread?.myRole === 'owner'
       || state.msgActiveThread?.ownerMemberId === state.session?.resident?.memberId;
@@ -11077,6 +11255,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('msgEscalateBtn')?.addEventListener('click', () => {
+    if (el('msgMoreMenu')) el('msgMoreMenu').open = false;
     if (!state.msgActiveThreadId || state.msgIsAiThread) return;
     const title = state.msgActiveThread?.title || 'Chat';
     if (el('msgEscalateSubject')) el('msgEscalateSubject').value = `From Chat: ${title}`.slice(0, 160);
@@ -11521,6 +11700,52 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('parkingPendingList')?.addEventListener('click', onParkingActionClick);
   el('parkingAdhocList')?.addEventListener('click', onParkingActionClick);
   el('parkingLookupResult')?.addEventListener('click', onParkingActionClick);
+  el('parkingAdhocList')?.addEventListener('submit', onParkingUpgradeStaffSubmit);
+  el('parkingLookupResult')?.addEventListener('submit', onParkingUpgradeStaffSubmit);
+
+  async function onParkingUpgradeStaffSubmit(event) {
+    const form = event.target.closest('form.parking-upgrade-staff-form');
+    if (!form) return;
+    event.preventDefault();
+    if (!hasEntitlement('pass_upgrade_staff')) {
+      window.alert('Pass · upgrade to staff entitlement required');
+      return;
+    }
+    const id = form.getAttribute('data-pass-id');
+    if (!id) return;
+    const fd = new FormData(form);
+    const houseId = String(fd.get('houseId') || '').trim();
+    const statusEl = form.querySelector('.parking-upgrade-staff-status');
+    const btn = form.querySelector('button[type="submit"]');
+    if (!houseId) {
+      if (statusEl) statusEl.textContent = 'Enter the household plot or house id.';
+      return;
+    }
+    if (!window.confirm(`Convert this ad-hoc pass to a staff pass for ${houseId}?`)) return;
+    if (btn) btn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Upgrading…';
+    try {
+      const data = await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/upgrade-staff`, {
+        method: 'POST',
+        body: JSON.stringify({
+          houseId,
+          category: String(fd.get('category') || 'other'),
+          months: Number(fd.get('months') || 3),
+          phone: String(fd.get('phone') || '').trim(),
+        }),
+      });
+      if (statusEl) statusEl.textContent = `Upgraded to staff · ${data.pass?.code || ''} · plot ${data.pass?.plotNo || houseId}`;
+      await loadParkingPanel();
+      if (data.pass) {
+        applyParkingLookupResult({ pass: { ...data.pass, detailLevel: 'manage' }, match: { kind: 'exact' } }, data.pass.code || '');
+      }
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err.message || 'Upgrade failed';
+      else window.alert(err.message || 'Upgrade failed');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
 
   async function onParkingActionClick(event) {
     const btn = event.target.closest('button[data-id]');

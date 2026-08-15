@@ -46,6 +46,9 @@ def load_ai_config(site_root: pathlib.Path | None = None) -> dict[str, str]:
         root = pathlib.Path(site_root)
         _load_env_file(root / "data" / "ai.env")
         _load_env_file(root / "data" / "smtp.env")
+    rag_on = (os.environ.get("VEER_AI_RAG") or "1").strip().lower() not in {
+        "0", "false", "off", "no",
+    }
     return {
         "apiKey": (os.environ.get("RWA_AI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip(),
         "baseUrl": (
@@ -54,6 +57,9 @@ def load_ai_config(site_root: pathlib.Path | None = None) -> dict[str, str]:
             or "https://api.openai.com/v1"
         ).rstrip("/"),
         "model": (os.environ.get("RWA_AI_MODEL") or "gpt-4o-mini").strip(),
+        "veerAiUrl": (os.environ.get("VEER_AI_URL") or "http://127.0.0.1:8095").rstrip("/"),
+        "veerAiRag": "1" if rag_on else "0",
+        "veerAiRagTimeoutMs": (os.environ.get("VEER_AI_RAG_TIMEOUT_MS") or "1200").strip(),
     }
 
 
@@ -76,21 +82,300 @@ def ai_status(site_root: pathlib.Path, conn=None) -> dict[str, Any]:
             draft_info = int(row["n"] if hasattr(row, "keys") else row[0] or 0)
         except Exception:
             draft_info = 0
+    rag_engine = "python-lexical"
+    rag_version = None
+    if cfg.get("veerAiRag") == "1":
+        health = _veer_ai_health(cfg)
+        if health and health.get("ok"):
+            rag_meta = health.get("rag") or {}
+            rag_engine = f"veer-ai/{rag_meta.get('engine') or 'bm25+mmr'}"
+            rag_version = health.get("version")
     return {
         "configured": bool(cfg["apiKey"]),
         "model": cfg["model"] if cfg["apiKey"] else None,
         "mode": "llm+rag" if cfg["apiKey"] else "rag-only",
         "avatarUrl": AI_AVATAR_URL,
-        # Corpus is rebuilt from DB + Info Centre files on every question — no separate reindex.
         "knowledgeLive": True,
         "publishedInfoDocs": published_info,
         "draftInfoDocs": draft_info,
+        "ragEngine": rag_engine,
+        "ragVersion": rag_version,
         "knowledgeNote": (
-            "Every uploaded or authored Information Centre document is included in "
-            "assistant knowledge on the next question (published for members; drafts "
-            "for Info managers). No separate reindex step."
+            "Assistant knowledge covers Directory, Notices, Information Centre, "
+            "Works & Events, Campaigns, Marketplace, Proceedings, Parking/Pass guides, "
+            "bank/UPI, FAQ, and your own dues/concerns/household. "
+            "Retrieval uses Veer AI BM25 + hashed n-gram mini-embeddings + MMR (v0.79); "
+            "answers use mined short passages. When an API key is set, optional OpenAI "
+            "embedding re-ranking hybridizes the top hits."
         ),
     }
+
+
+def _veer_ai_health(cfg: dict[str, str]) -> dict[str, Any] | None:
+    url = f"{cfg.get('veerAiUrl') or 'http://127.0.0.1:8095'}/health"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=0.4) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _doc_prior_boost(doc: dict[str, str], intents: set[str], *, browse: bool) -> float:
+    """Intent / structure priors applied before Rust BM25 (or Python fallback)."""
+    boost = 1.0
+    src = (doc.get("source") or "").strip()
+    if _is_info_structure_chunk(doc):
+        boost *= 1.6 if browse else 0.55
+    elif _is_info_content_chunk(doc) and ("info" in intents or "compare" in intents):
+        boost *= 1.55 if browse else 1.85
+    family = _info_family(doc.get("title") or "", doc.get("text") or "")
+    if "compare" in intents and family in {"act", "bylaws"}:
+        boost *= 2.1
+    if intents:
+        if src in intents or (src == "me" and "me" in intents) or (
+            src == "info" and ("info" in intents or "compare" in intents)
+        ):
+            boost *= 2.4
+        elif src == "faq" and intents & {
+            "dues", "concerns", "ec", "info", "compare",
+            "works", "campaigns", "directory", "marketplace",
+            "proceedings", "parking", "bank", "notice",
+        }:
+            if "info" in intents and not browse:
+                boost *= 0.7
+            else:
+                boost *= 1.15
+        else:
+            boost *= 0.85
+    if src in {"dues", "me"} and "dues" in intents:
+        boost *= 1.5
+    if src == "directory" and "directory" in intents:
+        boost *= 2.2
+    if src == "campaigns" and "campaigns" in intents:
+        boost *= 2.2
+    if src == "works" and "works" in intents:
+        boost *= 2.0
+    if src == "marketplace" and "marketplace" in intents:
+        boost *= 2.2
+    if src == "proceedings" and "proceedings" in intents:
+        boost *= 2.2
+    if src == "parking" and "parking" in intents:
+        boost *= 2.2
+    if src == "bank" and ("bank" in intents or "dues" in intents):
+        boost *= 2.0
+    return max(0.15, min(boost, 6.0))
+
+
+def retrieve_via_veer_ai(
+    query: str,
+    corpus: list[dict[str, str]],
+    *,
+    k: int = 8,
+    site_root: pathlib.Path | None = None,
+    expand_with: str | None = None,
+) -> list[dict[str, str]] | None:
+    """Rank corpus via veer-ai /v1/rag/retrieve. Returns None on failure (caller falls back)."""
+    cfg = load_ai_config(site_root)
+    if cfg.get("veerAiRag") != "1":
+        return None
+    if not corpus:
+        return []
+    intents = _query_intent(query)
+    browse = _is_info_browse_query(query)
+    docs = []
+    for d in corpus:
+        text = (d.get("text") or "")[:12000]
+        title = (d.get("title") or "")[:240]
+        if not text and not title:
+            continue
+        docs.append({
+            "id": d.get("id") or "",
+            "title": title,
+            "text": text,
+            "source": d.get("source") or "",
+            "boost": _doc_prior_boost(d, intents, browse=browse),
+        })
+    if not docs:
+        return []
+    try:
+        timeout_ms = int(cfg.get("veerAiRagTimeoutMs") or 1200)
+    except ValueError:
+        timeout_ms = 1200
+    timeout_s = max(0.25, min(timeout_ms / 1000.0, 8.0))
+    payload = {
+        "query": query,
+        "k": max(1, min(int(k or 8), 40)),
+        "site_id": "hbcsanyard",
+        "docs": docs,
+        "bm25_b": 0.78,
+        "bm25_k1": 1.35,
+        "mmr_lambda": 0.72,
+    }
+    if expand_with:
+        payload["expand_with"] = expand_with[:1500]
+    url = f"{cfg['veerAiUrl']}/v1/rag/retrieve"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not data or not data.get("ok"):
+        return None
+    by_id = {d.get("id"): d for d in corpus if d.get("id")}
+    out: list[dict[str, str]] = []
+    for hit in data.get("hits") or []:
+        hid = hit.get("id")
+        if hid and hid in by_id:
+            item = dict(by_id[hid])
+            item["_ragScore"] = hit.get("score")
+            item["_ragEngine"] = data.get("engine") or "bm25+mmr"
+            out.append(item)
+        elif hit.get("text"):
+            out.append({
+                "id": hid or "",
+                "title": hit.get("title") or "",
+                "text": hit.get("text") or "",
+                "source": hit.get("source") or "",
+                "_ragScore": hit.get("score"),
+                "_ragEngine": data.get("engine") or "bm25+mmr",
+            })
+    return out
+
+
+def retrieve_smart(
+    query: str,
+    corpus: list[dict[str, str]],
+    *,
+    k: int = 4,
+    site_root: pathlib.Path | None = None,
+    expand_with: str | None = None,
+) -> tuple[list[dict[str, str]], str]:
+    """Prefer Veer AI BM25/MMR; optionally hybrid re-rank with embeddings; else Python lexical."""
+    rust = retrieve_via_veer_ai(
+        query, corpus, k=max(k, 16), site_root=site_root, expand_with=expand_with
+    )
+    if rust is not None:
+        engine = "veer-ai-bm25-ngram"
+        ranked = rust
+    else:
+        engine = "python-lexical"
+        ranked = retrieve(query, corpus, k=max(k, 16))
+    hybrid = _embedding_hybrid_rerank(query, ranked, site_root=site_root, keep=k)
+    if hybrid is not None:
+        return hybrid, f"{engine}+openai-embed"
+    return ranked[:k], engine
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na <= 0 or nb <= 0:
+        return 0.0
+    return dot / ((na ** 0.5) * (nb ** 0.5))
+
+
+def _openai_embeddings(
+    cfg: dict[str, str], texts: list[str]
+) -> list[list[float]] | None:
+    if not cfg.get("apiKey") or not texts:
+        return None
+    model = (
+        os.environ.get("RWA_AI_EMBED_MODEL")
+        or os.environ.get("OPENAI_EMBED_MODEL")
+        or "text-embedding-3-small"
+    ).strip()
+    url = f"{cfg['baseUrl']}/embeddings"
+    # Cap payload size for latency
+    cleaned = [(t or "")[:2000] for t in texts[:24]]
+    payload = {"model": model, "input": cleaned}
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {cfg['apiKey']}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    rows = data.get("data") or []
+    if len(rows) != len(cleaned):
+        return None
+    rows = sorted(rows, key=lambda r: int(r.get("index") or 0))
+    out: list[list[float]] = []
+    for r in rows:
+        emb = r.get("embedding")
+        if not isinstance(emb, list) or not emb:
+            return None
+        out.append([float(x) for x in emb])
+    return out
+
+
+def _embedding_hybrid_rerank(
+    query: str,
+    candidates: list[dict[str, str]],
+    *,
+    site_root: pathlib.Path | None,
+    keep: int,
+) -> list[dict[str, str]] | None:
+    """Reciprocal-rank fusion of BM25 order + embedding similarity when an API key exists."""
+    if not candidates:
+        return []
+    cfg = load_ai_config(site_root)
+    if not cfg.get("apiKey"):
+        return None
+    embed_on = (os.environ.get("VEER_AI_EMBED") or os.environ.get("RWA_AI_EMBED") or "1").strip().lower()
+    if embed_on in {"0", "false", "off", "no"}:
+        return None
+    pool = candidates[: min(20, len(candidates))]
+    texts = [f"{c.get('title') or ''}\n{c.get('text') or ''}" for c in pool]
+    vectors = _openai_embeddings(cfg, [query] + texts)
+    if not vectors or len(vectors) != len(texts) + 1:
+        return None
+    qv = vectors[0]
+    scored: list[tuple[float, dict[str, str]]] = []
+    for i, doc in enumerate(pool):
+        # RRF: BM25 rank (i) + embedding rank later — score cosine now, fuse after sort
+        scored.append((_cosine(qv, vectors[i + 1]), doc))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    embed_rank = {id(doc): r for r, (_s, doc) in enumerate(scored)}
+    fused: list[tuple[float, dict[str, str]]] = []
+    for bm25_r, doc in enumerate(pool):
+        er = embed_rank.get(id(doc), bm25_r)
+        rrf = 1.0 / (60 + bm25_r) + 1.0 / (60 + er)
+        fused.append((rrf, doc))
+    fused.sort(key=lambda x: x[0], reverse=True)
+    out = []
+    seen = set()
+    for _s, doc in fused:
+        did = doc.get("id")
+        if did in seen:
+            continue
+        seen.add(did)
+        item = dict(doc)
+        item["_embedHybrid"] = True
+        out.append(item)
+        if len(out) >= keep:
+            break
+    return out
 
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+", re.I)
@@ -295,17 +580,127 @@ def _info_doc_section_units(
     return cleaned
 
 
-def _chunk(text: str, *, size: int = 700, overlap: int = 80) -> list[str]:
+def _chunk(text: str, *, size: int = 320, overlap: int = 48) -> list[str]:
+    """Sentence-aware fine chunks — prefer short topical passages over long dumps."""
     raw = re.sub(r"\s+", " ", (text or "").strip())
     if not raw:
         return []
     if len(raw) <= size:
         return [raw]
+    # Split on sentence / clause boundaries when possible.
+    parts = re.split(r"(?<=[.!?।;:])\s+|\n+", raw)
+    sentences = [p.strip() for p in parts if p and p.strip()]
+    if len(sentences) <= 1:
+        out: list[str] = []
+        i = 0
+        while i < len(raw):
+            out.append(raw[i : i + size])
+            i += max(1, size - overlap)
+        return out
     out = []
-    i = 0
-    while i < len(raw):
-        out.append(raw[i : i + size])
-        i += max(1, size - overlap)
+    buf = ""
+    for sent in sentences:
+        if not buf:
+            buf = sent
+            continue
+        if len(buf) + 1 + len(sent) <= size:
+            buf = f"{buf} {sent}"
+            continue
+        out.append(buf)
+        # Overlap: keep tail of previous chunk when it helps continuity.
+        if overlap > 0 and len(buf) > overlap:
+            tail = buf[-overlap:].lstrip()
+            buf = f"{tail} {sent}".strip() if tail else sent
+            if len(buf) > size + overlap:
+                buf = sent
+        else:
+            buf = sent
+    if buf:
+        out.append(buf)
+    # Hard-cap any oversized leftover sentences.
+    final: list[str] = []
+    for ch in out:
+        if len(ch) <= size + 80:
+            final.append(ch)
+        else:
+            i = 0
+            while i < len(ch):
+                final.append(ch[i : i + size])
+                i += max(1, size - overlap)
+    return final or [raw[:size]]
+
+
+def _mine_passage(query: str, text: str, *, max_chars: int = 280) -> str:
+    """Extract the query-relevant sentence window from a chunk (passage mining)."""
+    raw = re.sub(r"\s+", " ", (text or "").strip())
+    if not raw:
+        return ""
+    if len(raw) <= max_chars:
+        return raw
+    q_tokens = set(_tokenize(query))
+    if not q_tokens:
+        return raw[: max_chars - 1] + "…"
+    parts = re.split(r"(?<=[.!?।;:])\s+|\n+", raw)
+    sents = [p.strip() for p in parts if p and p.strip()]
+    if len(sents) <= 1:
+        # Sliding window by words
+        words = raw.split()
+        best = raw[:max_chars]
+        best_score = -1.0
+        for i in range(0, max(1, len(words) - 8)):
+            window = " ".join(words[i : i + 42])
+            if not window:
+                continue
+            overlap = len(q_tokens & set(_tokenize(window)))
+            score = overlap / (len(q_tokens) ** 0.5) - 0.002 * abs(len(window) - max_chars // 2)
+            if score > best_score:
+                best_score = score
+                best = window
+        return best if len(best) <= max_chars else best[: max_chars - 1] + "…"
+
+    scored: list[tuple[float, int, str]] = []
+    for i, sent in enumerate(sents):
+        toks = set(_tokenize(sent))
+        overlap = len(q_tokens & toks)
+        # Prefer sentences that actually hit query terms; slight length preference for denser hits.
+        score = float(overlap) * 2.0 + (0.15 if overlap else 0.0) * min(len(toks), 12)
+        if overlap:
+            scored.append((score, i, sent))
+    if not scored:
+        return raw[: max_chars - 1] + "…"
+    scored.sort(key=lambda x: x[0], reverse=True)
+    # Grow a window around the best sentence until budget is filled.
+    best_i = scored[0][1]
+    picked = {best_i}
+    piece = sents[best_i]
+    # Add neighbors that also match query terms
+    for _score, i, sent in scored[1:]:
+        if abs(i - best_i) <= 2 and len(piece) + 1 + len(sent) <= max_chars:
+            picked.add(i)
+            # rebuild in order
+            ordered = [sents[j] for j in sorted(picked)]
+            piece = " ".join(ordered)
+    if len(piece) > max_chars:
+        piece = piece[: max_chars - 1] + "…"
+    return piece
+
+
+def _trim_chunk_for_context(query: str, chunk: dict[str, str], *, max_chars: int = 280) -> dict[str, str]:
+    """Return a copy of chunk with text mined down to the relevant span."""
+    out = dict(chunk)
+    text = out.get("text") or ""
+    src = (out.get("source") or "").strip()
+    # Structure / inventory chunks: keep short as-is when browse; else mine hard.
+    if _is_info_structure_chunk(out):
+        cap = 360 if _is_info_browse_query(query) else 180
+        out["text"] = _mine_passage(query, text, max_chars=cap)
+        return out
+    if src == "info":
+        out["text"] = _mine_passage(query, text, max_chars=max(220, max_chars))
+    elif src in {"proceedings", "works", "campaigns", "notice"}:
+        out["text"] = _mine_passage(query, text, max_chars=max_chars)
+    else:
+        out["text"] = _mine_passage(query, text, max_chars=min(max_chars, 260))
     return out
 
 
@@ -727,6 +1122,99 @@ def build_member_context(conn, actor: dict | None) -> list[dict[str, str]]:
     except Exception:
         pass
 
+    # --- Own campaign pledges / contributions (no other plots) ---
+    try:
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='campaign_pledges'"
+        ).fetchone():
+            pledges = conn.execute(
+                """
+                SELECT p.amount, p.note, p.created_at, c.title AS campaign_title, c.status AS campaign_status
+                FROM campaign_pledges p
+                LEFT JOIN colony_campaigns c ON c.id = p.campaign_id
+                WHERE p.house_id = ?
+                ORDER BY p.created_at DESC
+                LIMIT 12
+                """,
+                (house_id,),
+            ).fetchall()
+            contribs = []
+            if conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='campaign_contributions'"
+            ).fetchone():
+                contribs = conn.execute(
+                    """
+                    SELECT co.amount, co.method, co.status, co.paid_on, c.title AS campaign_title
+                    FROM campaign_contributions co
+                    LEFT JOIN colony_campaigns c ON c.id = co.campaign_id
+                    WHERE co.house_id = ?
+                    ORDER BY co.created_at DESC
+                    LIMIT 12
+                    """,
+                    (house_id,),
+                ).fetchall()
+            if pledges or contribs:
+                lines = [f"Your campaign activity for plot {house_id}:"]
+                for p in pledges:
+                    lines.append(
+                        f"- Pledge {_inr(p['amount'])} toward "
+                        f"{(p['campaign_title'] or 'campaign').strip()} "
+                        f"({p['campaign_status'] or '—'}; {p['created_at'] or '—'})"
+                        + (f" · {(p['note'] or '')[:80]}" if p["note"] else "")
+                    )
+                for co in contribs:
+                    lines.append(
+                        f"- Contribution {_inr(co['amount'])} via {co['method'] or '—'} "
+                        f"toward {(co['campaign_title'] or 'campaign').strip()} · "
+                        f"status {co['status'] or '—'} · paid {co['paid_on'] or '—'}"
+                    )
+                docs.append({
+                    "id": f"me:campaigns:{house_id}",
+                    "title": "Your campaign pledges / contributions",
+                    "source": "campaigns",
+                    "text": "\n".join(lines),
+                    "priority": "high",
+                })
+    except Exception:
+        pass
+
+    # --- Own documents vault (titles only; open vault for files) ---
+    try:
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='vault_documents'"
+        ).fetchone():
+            vcols = {row[1] for row in conn.execute("PRAGMA table_info(vault_documents)").fetchall()}
+            title_col = "title" if "title" in vcols else ("original_name" if "original_name" in vcols else None)
+            if title_col:
+                vrows = conn.execute(
+                    f"""
+                    SELECT {title_col} AS title, doc_type, created_at
+                    FROM vault_documents
+                    WHERE house_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 20
+                    """,
+                    (house_id,),
+                ).fetchall()
+                if vrows:
+                    lines = [
+                        f"Documents vault for plot {house_id} (titles only; open Dues → Documents vault for files):"
+                    ]
+                    for v in vrows:
+                        dtype = ""
+                        if "doc_type" in v.keys() and v["doc_type"]:
+                            dtype = f" [{v['doc_type']}]"
+                        lines.append(f"- {(v['title'] or 'document').strip()}{dtype}")
+                    docs.append({
+                        "id": f"me:vault:{house_id}",
+                        "title": "Your documents vault",
+                        "source": "me",
+                        "text": "\n".join(lines),
+                        "priority": "normal",
+                    })
+    except Exception:
+        pass
+
     return docs
 
 
@@ -863,7 +1351,22 @@ def build_corpus(
         (
             "Portal FAQ — info and works",
             "Information Centre content is hierarchical (folder → document → sections). "
-            "Works & Events tracks colony projects. Directory lists plots and residents.",
+            "Works & Events tracks colony projects, maintenance, and events. "
+            "Campaigns cover funding drives and pledges. "
+            "Directory lists plots, owners, and delegates. "
+            "Marketplace has resident buy/sell/service listings. "
+            "Proceedings holds General House and EC meeting minutes when published.",
+        ),
+        (
+            "Portal FAQ — parking and passes",
+            "Parking / Pass covers member vehicles, visitor passes, tenant vehicles, "
+            "household staff selfie passes, and main-gate ad-hoc passes. "
+            "Residents register vehicles from the Pass tab; gate staff validate plates or QR codes.",
+        ),
+        (
+            "Portal FAQ — payments bank",
+            "Colony dues can be paid by UPI or bank transfer using the RWA collection account "
+            "shown under Dues / Payments. Upload a receipt after payment for EC/Treasury verification.",
         ),
         (
             "Portal FAQ — Information Centre analysis",
@@ -1203,7 +1706,7 @@ def build_corpus(
                             f"Section: {heading}\n"
                         )
                         payload = base + (body if body else "(No extractable text in this section.)")
-                        for ci, ch in enumerate(_chunk(payload[:20000], size=900, overlap=120)):
+                        for ci, ch in enumerate(_chunk(payload[:12000], size=360, overlap=48)):
                             docs.append({
                                 "id": f"info:{r['id']}:s{si}:{ci}",
                                 "title": f"Info Centre [{folder_title}]: {title} · {heading}",
@@ -1243,9 +1746,9 @@ def build_corpus(
                 })
 
             if len(hierarchy_lines) > 1:
-                # Keep hierarchy overview within a useful retrieval size
+                # Compact hierarchy overview — fine chunks, capped so dumps don't dominate RAG
                 hier_text = "\n".join(hierarchy_lines)
-                for i, ch in enumerate(_chunk(hier_text[:24000], size=1200, overlap=100)):
+                for i, ch in enumerate(_chunk(hier_text[:12000], size=400, overlap=40)):
                     docs.append({
                         "id": f"info:hierarchy:{i}",
                         "title": "Information Centre content hierarchy",
@@ -1270,16 +1773,53 @@ def build_corpus(
         pass
 
     try:
+        work_cols = {row[1] for row in conn.execute("PRAGMA table_info(colony_works)").fetchall()}
+        select = ["id", "title", "summary", "status", "location"]
+        for col in (
+            "kind", "category", "details", "benefits", "timeline_notes",
+            "start_date", "end_date", "event_date", "estimated_cost", "actual_cost",
+            "assigned_to", "visibility",
+        ):
+            if col in work_cols:
+                select.append(col)
+        visibility_clause = "AND COALESCE(visibility, 'published') = 'published'" if "visibility" in work_cols else ""
         rows = conn.execute(
-            """
-            SELECT id, title, summary, status, location
+            f"""
+            SELECT {", ".join(select)}
             FROM colony_works
-            ORDER BY updated_at DESC LIMIT 40
+            WHERE 1=1 {visibility_clause}
+            ORDER BY updated_at DESC LIMIT 80
             """
         ).fetchall()
         for r in rows:
-            text = f"{r['title']}\nStatus: {r['status']}\nLocation: {r['location'] or ''}\n{r['summary'] or ''}"
-            for i, ch in enumerate(_chunk(text, size=500)):
+            bits = [
+                f"Works & Events: {r['title']}",
+                f"Status: {r['status'] or '—'}",
+            ]
+            if "kind" in r.keys() and r["kind"]:
+                bits.append(f"Kind: {r['kind']}")
+            if "category" in r.keys() and r["category"]:
+                bits.append(f"Category: {r['category']}")
+            if r["location"]:
+                bits.append(f"Location: {r['location']}")
+            for label, key in (
+                ("Summary", "summary"),
+                ("Details", "details"),
+                ("Benefits", "benefits"),
+                ("Timeline", "timeline_notes"),
+                ("Start", "start_date"),
+                ("End", "end_date"),
+                ("Event date", "event_date"),
+                ("Assigned", "assigned_to"),
+            ):
+                if key in r.keys() and (r[key] or "").strip():
+                    bits.append(f"{label}: {str(r[key]).strip()}")
+            if "estimated_cost" in r.keys() and r["estimated_cost"] not in (None, ""):
+                bits.append(f"Estimated cost: {_inr(r['estimated_cost'])}")
+            if "actual_cost" in r.keys() and r["actual_cost"] not in (None, ""):
+                bits.append(f"Actual cost: {_inr(r['actual_cost'])}")
+            text = "\n".join(bits)
+            for i, ch in enumerate(_chunk(text, size=360, overlap=48)):
                 docs.append({
                     "id": f"work:{r['id']}:{i}",
                     "title": f"Works: {r['title']}",
@@ -1289,18 +1829,351 @@ def build_corpus(
     except Exception:
         pass
 
+    # --- Campaigns / funding drives ---
     try:
-        n = conn.execute(
-            "SELECT COUNT(*) AS n FROM residents WHERE status='active' AND house_id != ? AND house_id != ?",
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='colony_campaigns'"
+        ).fetchone():
+            rows = conn.execute(
+                """
+                SELECT id, title, kind, summary, details, status, audience, target_amount,
+                       deadline, event_date, location, payment_instructions, mode
+                FROM colony_campaigns
+                WHERE status IN ('active', 'paused', 'completed')
+                ORDER BY
+                  CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
+                  updated_at DESC
+                LIMIT 40
+                """
+            ).fetchall()
+            for r in rows:
+                bits = [
+                    f"Campaign: {r['title']}",
+                    f"Status: {r['status']}",
+                    f"Kind: {r['kind'] or 'general'}",
+                    f"Mode: {r['mode'] or 'both'}",
+                ]
+                if r["location"]:
+                    bits.append(f"Location: {r['location']}")
+                if r["deadline"]:
+                    bits.append(f"Deadline: {r['deadline']}")
+                if r["event_date"]:
+                    bits.append(f"Event date: {r['event_date']}")
+                if r["target_amount"] not in (None, ""):
+                    bits.append(f"Target: {_inr(r['target_amount'])}")
+                if (r["summary"] or "").strip():
+                    bits.append(f"Summary: {r['summary'].strip()}")
+                if (r["details"] or "").strip():
+                    bits.append(f"Details: {r['details'].strip()}")
+                if (r["payment_instructions"] or "").strip():
+                    bits.append(f"Payment instructions: {r['payment_instructions'].strip()}")
+                text = "\n".join(bits)
+                for i, ch in enumerate(_chunk(text, size=360, overlap=48)):
+                    docs.append({
+                        "id": f"campaign:{r['id']}:{i}",
+                        "title": f"Campaign: {r['title']}",
+                        "source": "campaigns",
+                        "text": ch,
+                    })
+    except Exception:
+        pass
+
+    # --- Marketplace listings (published) ---
+    try:
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='colony_marketplace'"
+        ).fetchone():
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(colony_marketplace)").fetchall()}
+            select = ["id", "title", "kind", "status", "house_id"]
+            for col in (
+                "description", "summary", "details", "price_text", "category",
+                "contact_name", "area", "published_at",
+            ):
+                if col in cols:
+                    select.append(col)
+            rows = conn.execute(
+                f"""
+                SELECT {", ".join(select)}
+                FROM colony_marketplace
+                WHERE status = 'published'
+                ORDER BY COALESCE(published_at, updated_at) DESC
+                LIMIT 60
+                """
+            ).fetchall()
+            for r in rows:
+                bits = [
+                    f"Marketplace: {r['title'] or '(listing)'}",
+                    f"Kind: {r['kind'] or 'listing'}",
+                    f"Plot: {r['house_id'] or '—'}",
+                ]
+                if "category" in r.keys() and r["category"]:
+                    bits.append(f"Category: {r['category']}")
+                if "area" in r.keys() and r["area"]:
+                    bits.append(f"Area: {r['area']}")
+                if "price_text" in r.keys() and r["price_text"]:
+                    bits.append(f"Price: {r['price_text']}")
+                if "contact_name" in r.keys() and r["contact_name"]:
+                    bits.append(f"Contact name: {r['contact_name']}")
+                for key in ("description", "summary", "details"):
+                    if key in r.keys() and (r[key] or "").strip():
+                        bits.append(str(r[key]).strip())
+                        break
+                text = "\n".join(bits)
+                for i, ch in enumerate(_chunk(text, size=600)):
+                    docs.append({
+                        "id": f"market:{r['id']}:{i}",
+                        "title": f"Marketplace: {r['title'] or r['id']}",
+                        "source": "marketplace",
+                        "text": ch,
+                    })
+    except Exception:
+        pass
+
+    # --- Meeting proceedings / MOM (published) ---
+    try:
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='meeting_proceedings'"
+        ).fetchone():
+            rows = conn.execute(
+                """
+                SELECT id, meeting_type, meeting_subtype, title, meeting_date, venue,
+                       chair_person, agenda, proceedings_body, status, visibility
+                FROM meeting_proceedings
+                WHERE status = 'published'
+                  AND COALESCE(visibility, 'published') = 'published'
+                ORDER BY meeting_date DESC
+                LIMIT 30
+                """
+            ).fetchall()
+            for r in rows:
+                mtype = "General House" if (r["meeting_type"] or "") == "gh" else "Executive Committee"
+                bits = [
+                    f"Proceedings ({mtype}): {r['title']}",
+                    f"Date: {r['meeting_date'] or '—'}",
+                ]
+                if r["venue"]:
+                    bits.append(f"Venue: {r['venue']}")
+                if r["chair_person"]:
+                    bits.append(f"Chair: {r['chair_person']}")
+                if r["agenda"]:
+                    bits.append(f"Agenda:\n{r['agenda']}")
+                if r["proceedings_body"]:
+                    bits.append(f"Minutes:\n{r['proceedings_body']}")
+                text = "\n".join(bits)
+                for i, ch in enumerate(_chunk(text, size=360, overlap=48)):
+                    docs.append({
+                        "id": f"mom:{r['id']}:{i}",
+                        "title": f"Proceedings: {r['title']}",
+                        "source": "proceedings",
+                        "text": ch,
+                    })
+    except Exception:
+        pass
+
+    # --- Directory (public plot cards; phones only for own plot) ---
+    try:
+        own = _actor_house(actor)
+        rows = conn.execute(
+            """
+            SELECT house_id, plot_no, section, name, official_title, role,
+                   is_ec_member, is_office_bearer, phone, email, status
+            FROM residents
+            WHERE status = 'active'
+              AND house_id != ? AND house_id != ?
+            ORDER BY section COLLATE NOCASE, CAST(plot_no AS INTEGER), plot_no COLLATE NOCASE
+            LIMIT 400
+            """,
             (_SUPERADMIN, _ADHOC_GATE),
-        ).fetchone()["n"]
+        ).fetchall()
+        section_counts: dict[str, int] = {}
+        for r in rows:
+            sec = (r["section"] or "—").strip() or "—"
+            section_counts[sec] = section_counts.get(sec, 0) + 1
+            roles = []
+            if (r["role"] or "") == "admin":
+                roles.append("EC Admin")
+            if int(r["is_office_bearer"] or 0) or (r["official_title"] or "").strip():
+                roles.append((r["official_title"] or "Office bearer").strip())
+            elif int(r["is_ec_member"] or 0):
+                roles.append("EC member")
+            delegate = ""
+            try:
+                drow = conn.execute(
+                    """
+                    SELECT name FROM household_members
+                    WHERE house_id = ? AND status = 'active' AND is_primary_delegate = 1
+                    LIMIT 1
+                    """,
+                    (r["house_id"],),
+                ).fetchone()
+                if drow and (drow["name"] or "").strip():
+                    delegate = (drow["name"] or "").strip()
+            except Exception:
+                pass
+            lines = [
+                f"Directory plot {r['house_id']} (plot no {r['plot_no'] or r['house_id']})",
+                f"Section: {sec}",
+                f"Owner / household name: {(r['name'] or '').strip() or '—'}",
+            ]
+            if delegate:
+                lines.append(f"Primary delegate: {delegate}")
+            if roles:
+                lines.append(f"Roles: {', '.join(roles)}")
+            if own and own == (r["house_id"] or ""):
+                if r["phone"]:
+                    lines.append(f"Phone: {r['phone']}")
+                if r["email"]:
+                    lines.append(f"Email: {r['email']}")
+            text = "\n".join(lines)
+            docs.append({
+                "id": f"dir:plot:{r['house_id']}",
+                "title": f"Directory: {r['house_id']}",
+                "source": "directory",
+                "text": text,
+            })
+        overview = [
+            f"Directory overview: {len(rows)} active plots in Himuda Housing Colony Sanyard.",
+            "Sections: " + ", ".join(f"{k} ({v})" for k, v in sorted(section_counts.items())),
+            "Contact phones/emails for other plots are limited for privacy; open Directory after sign-in for your own contacts.",
+        ]
         docs.append({
             "id": "dir:stats",
             "title": "Directory overview",
             "source": "directory",
-            "text": f"Himuda Housing Colony Sanyard active plots in the directory: {int(n)}. "
-            "Use the Directory tab to browse plot holders. Contact details are limited for privacy.",
+            "text": "\n".join(overview),
         })
+    except Exception:
+        pass
+
+    # --- Bank / UPI collection account ---
+    try:
+        row = conn.execute(
+            """
+            SELECT label, bank_name, account_no, ifsc, upi_id, upi_name
+            FROM bank_accounts
+            WHERE is_primary = 1
+            ORDER BY id ASC LIMIT 1
+            """
+        ).fetchone()
+        if not row:
+            row = conn.execute(
+                "SELECT label, bank_name, account_no, ifsc, upi_id, upi_name FROM bank_accounts ORDER BY id ASC LIMIT 1"
+            ).fetchone()
+        if row:
+            acct = (row["account_no"] or "").strip()
+            if len(acct) > 4:
+                acct_disp = ("*" * max(0, len(acct) - 4)) + acct[-4:]
+            else:
+                acct_disp = acct or "—"
+            bits = [
+                "RWA collection account for colony dues and payments:",
+                f"Label: {(row['label'] or 'Primary').strip()}",
+                f"Bank: {(row['bank_name'] or '—').strip()}",
+                f"Account (masked): {acct_disp}",
+                f"IFSC: {(row['ifsc'] or '—').strip()}",
+            ]
+            if row["upi_id"]:
+                bits.append(f"UPI ID: {row['upi_id']}")
+            if row["upi_name"]:
+                bits.append(f"UPI name: {row['upi_name']}")
+            docs.append({
+                "id": "bank:primary",
+                "title": "Payments — bank / UPI",
+                "source": "bank",
+                "text": "\n".join(bits),
+            })
+    except Exception:
+        pass
+
+    # --- Parking / Pass knowledge (public how-to, not plate inventory) ---
+    try:
+        import rwa_parking as _park  # type: ignore
+        st = _park.settings(conn)
+        bits = [
+            "Parking and Pass overview for Himuda Housing Colony Sanyard:",
+            f"Default visitor pass hours: {st.get('defaultHours')}",
+            f"Allowed visitor hours: {', '.join(str(h) for h in (st.get('allowedHours') or []))}",
+            f"Tenant / staff lease months: {', '.join(str(m) for m in (st.get('allowedMonths') or []))}",
+            f"Ad-hoc gate hours: {', '.join(str(h) for h in (st.get('adhocHours') or []))}",
+            f"Max staff passes per plot: {st.get('maxStaffPerPlot')}",
+        ]
+        cats = st.get("staffCategories") or []
+        if cats:
+            bits.append(
+                "Staff roles: "
+                + ", ".join(c.get("label") or c.get("id") for c in cats if isinstance(c, dict))
+            )
+        adhoc = st.get("adhocCategories") or []
+        if adhoc:
+            bits.append(
+                "Ad-hoc gate categories: "
+                + ", ".join(c.get("label") or c.get("id") for c in adhoc if isinstance(c, dict))
+            )
+        if st.get("gatePassUrl"):
+            bits.append(f"Public gate pass page: {st.get('gatePassUrl')}")
+        docs.append({
+            "id": "parking:guide",
+            "title": "Parking / Pass guide",
+            "source": "parking",
+            "text": "\n".join(bits),
+        })
+        # Own-plot active passes only (privacy)
+        house = _actor_house(actor)
+        if house:
+            own_passes = conn.execute(
+                """
+                SELECT kind, plate_display, plate, status, visitor_name, expires_at, public_code
+                FROM parking_passes
+                WHERE house_id = ? AND status IN ('active', 'pending_renewal', 'expired')
+                ORDER BY updated_at DESC LIMIT 20
+                """,
+                (house,),
+            ).fetchall()
+            if own_passes:
+                lines = [f"Parking passes for your plot {house}:"]
+                for p in own_passes:
+                    who = (p["visitor_name"] or p["plate_display"] or p["plate"] or "").strip()
+                    lines.append(
+                        f"- {p['kind']}: {who} · {p['status']}"
+                        f"{(' · expires ' + p['expires_at']) if p['expires_at'] else ''}"
+                        f"{(' · ' + p['public_code']) if p['public_code'] else ''}"
+                    )
+                docs.append({
+                    "id": f"parking:mine:{house}",
+                    "title": "Your parking passes",
+                    "source": "parking",
+                    "text": "\n".join(lines),
+                })
+    except Exception:
+        pass
+
+    # --- Chat channels overview (no private message bodies) ---
+    try:
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='msg_threads'"
+        ).fetchone():
+            colony = conn.execute(
+                "SELECT COUNT(*) AS n FROM msg_threads WHERE kind = 'colony'"
+            ).fetchone()
+            groups = conn.execute(
+                """
+                SELECT COUNT(*) AS n FROM msg_threads
+                WHERE kind = 'group' AND (archived_at IS NULL OR archived_at = '')
+                """
+            ).fetchone()
+            docs.append({
+                "id": "chat:overview",
+                "title": "Chat overview",
+                "source": "chat",
+                "text": (
+                    "Messages / Chat includes a colony channel for all residents, "
+                    "private person-to-person chats, private channels (groups), "
+                    f"and a private AI Assistant thread. "
+                    f"Active private channels on record: {int((groups or {})['n'] if groups else 0)}. "
+                    f"Colony channels: {int((colony or {})['n'] if colony else 0)}. "
+                    "Assistant answers never share other residents' private chats."
+                ),
+            })
     except Exception:
         pass
 
@@ -1355,8 +2228,21 @@ def _query_intent(query: str) -> set[str]:
         intents.add("info")
     if any(t in ql for t in ("notice", "notices", "circular")):
         intents.add("notice")
-    if any(t in ql for t in ("work", "works", "event", "project", "maintenance")):
+    if any(t in ql for t in ("work", "works", "event", "project", "maintenance", "contractor")):
         intents.add("works")
+    if any(t in ql for t in ("campaign", "campaigns", "pledge", "plantation", "fundraising", "drive")):
+        intents.add("campaigns")
+    if any(t in ql for t in ("directory", "plot", "plots", "section", "resident", "residents", "owner", "delegate")):
+        intents.add("directory")
+    if any(t in ql for t in ("marketplace", "buy", "sell", "listing", "classified", "ad", "ads")):
+        intents.add("marketplace")
+    if any(t in ql for t in ("proceeding", "proceedings", "minutes", "mom", "meeting", "agm", "gh")):
+        intents.add("proceedings")
+    if any(t in ql for t in ("parking", "pass", "passes", "vehicle", "gate", "adhoc", "staff", "plate")):
+        intents.add("parking")
+    if any(t in ql for t in ("upi", "bank", "ifsc", "account", "transfer")):
+        intents.add("bank")
+        intents.add("dues")
     return intents
 
 
@@ -1487,9 +2373,13 @@ def retrieve(query: str, corpus: list[dict[str, str]], *, k: int = 4) -> list[di
                 src == "info" and ("info" in intents or "compare" in intents)
             ):
                 score += 3.0
-            elif src == "faq" and intents & {"dues", "concerns", "ec", "info", "compare"}:
+            elif src == "faq" and intents & {
+                "dues", "concerns", "ec", "info", "compare",
+                "works", "campaigns", "directory", "marketplace",
+                "proceedings", "parking", "bank", "notice",
+            }:
                 # FAQ about Information Centre often restates the whole hierarchy
-                if src == "faq" and "info" in intents and not browse:
+                if "info" in intents and not browse:
                     score -= 1.0
                 else:
                     score += 0.4
@@ -1547,7 +2437,7 @@ def retrieve(query: str, corpus: list[dict[str, str]], *, k: int = 4) -> list[di
 
 
 def _force_personal_chunks(query: str, personal: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Pull only the personal docs that match the question intent (max 2)."""
+    """Pull only the personal docs that match the question intent (max 3)."""
     if not personal:
         return []
     intents = _query_intent(query)
@@ -1562,13 +2452,17 @@ def _force_personal_chunks(query: str, personal: list[dict[str, str]]) -> list[d
         want_sources.add("concerns")
     if "me" in intents:
         want_sources.add("me")
+    if "parking" in intents:
+        want_sources.add("parking")
+    if "campaigns" in intents:
+        want_sources.add("campaigns")
     if not want_sources:
         return []
     out: list[dict[str, str]] = []
     for d in personal:
         if (d.get("source") or "") in want_sources:
             out.append(d)
-        if len(out) >= 2:
+        if len(out) >= 3:
             break
     return out
 
@@ -1852,11 +2746,35 @@ def answer_query(
     intents = _query_intent(q)
     browse = _is_info_browse_query(q)
     info_heavy = "info" in intents or "compare" in intents
-    retrieve_k = 14 if "compare" in intents else (10 if info_heavy else 4)
-    merge_limit = 14 if "compare" in intents else (8 if info_heavy else 4)
+    broad = bool(
+        intents
+        & {
+            "works",
+            "campaigns",
+            "directory",
+            "marketplace",
+            "proceedings",
+            "parking",
+            "bank",
+            "notice",
+        }
+    )
+    retrieve_k = 10 if "compare" in intents else (8 if (info_heavy or broad) else 5)
+    merge_limit = 8 if "compare" in intents else (6 if (info_heavy or broad) else 4)
     if info_heavy and not browse and "compare" not in intents:
-        merge_limit = 6
-    retrieved = retrieve(q, corpus, k=retrieve_k)
+        merge_limit = 5
+    expand_bits: list[str] = []
+    for turn in (history or [])[-4:]:
+        if (turn.get("role") or "") == "user" and (turn.get("content") or "").strip():
+            expand_bits.append(str(turn["content"]).strip()[:400])
+    expand_with = "\n".join(expand_bits) if expand_bits else None
+    retrieved, rag_engine = retrieve_smart(
+        q,
+        corpus,
+        k=retrieve_k,
+        site_root=site_root,
+        expand_with=expand_with,
+    )
     forced = _force_personal_chunks(q, personal)
     info_forced = _force_info_hierarchy_chunks(public, q)
     # Browse: inventory first. Content/compare: retrieved section text first.
@@ -1864,6 +2782,9 @@ def answer_query(
         chunks = _merge_chunks(forced, info_forced, retrieved, limit=merge_limit)
     else:
         chunks = _merge_chunks(forced, retrieved, info_forced, limit=merge_limit)
+    # Passage mining — keep only the query-relevant span of each hit.
+    passage_budget = 420 if "compare" in intents else (320 if info_heavy else 260)
+    chunks = [_trim_chunk_for_context(q, c, max_chars=passage_budget) for c in chunks]
     answer_chunks = _pick_answer_chunks(q, chunks)
 
     cfg = load_ai_config(site_root)
@@ -1877,10 +2798,11 @@ def answer_query(
             "answer": _extractive_answer(q, answer_chunks),
             "sources": sources,
             "mode": "rag-only",
+            "ragEngine": rag_engine,
         }
 
     context = "\n\n".join(
-        f"[{c.get('title')}]\n{c.get('text')}" for c in answer_chunks
+        f"[{c.get('title')}]\n{c.get('text')}" for c in answer_chunks if (c.get("text") or "").strip()
     ) or "(No matching records found.)"
     house = _actor_house(actor) or "unknown"
     if "compare" in intents:
@@ -1959,4 +2881,9 @@ def answer_query(
     except ValueError:
         answer = _extractive_answer(q, answer_chunks)
         mode = "rag-only-fallback"
-    return {"answer": answer, "sources": sources, "mode": mode}
+    return {
+        "answer": answer,
+        "sources": sources,
+        "mode": mode,
+        "ragEngine": rag_engine,
+    }

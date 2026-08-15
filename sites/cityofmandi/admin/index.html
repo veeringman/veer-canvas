@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260815lean1">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260815sp1">
-  <script src="/admin/admin.js?v=20260815sp1" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260815contact1">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260815contact1">
+  <script src="/admin/admin.js?v=20260815contact1" defer></script>
 </head>
 <body class="desk-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -80,6 +80,45 @@
         <div id="servicesList" class="desk-stack"></div>
         <button type="button" class="btn ghost compact" id="addServiceBtn">Add service</button>
         <button type="button" class="btn primary compact" id="saveServicesBtn">Save services</button>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Mailbox</p>
+        <h2>Contact Board</h2>
+        <p class="muted">Public form at <a href="/contact">/contact</a>. Open items land here for operators and assigned staff. <a href="/contact#mailbox">Open full mailbox</a></p>
+        <div id="mailboxPreview" class="desk-stack"></div>
+        <button type="button" class="btn ghost compact" id="mailboxRefreshBtn">Refresh mailbox</button>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Staff</p>
+        <h2>Channel admins &amp; moderators</h2>
+        <p class="muted">Assign Mandi Adda users to citywide or a specific room. Admins can enable/disable/hide channels; moderators can hide posts and work the mailbox for their area.</p>
+        <form id="staffForm" class="desk-form">
+          <div class="desk-row-grid">
+            <label>Adda user email <input id="staffEmail" type="email" required placeholder="name@example.com"></label>
+            <label>Role
+              <select id="staffRole">
+                <option value="moderator">Moderator</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <label>Area / channel
+              <select id="staffArea"></select>
+            </label>
+          </div>
+          <button type="submit" class="btn primary compact">Assign</button>
+          <p class="error" id="staffError" hidden></p>
+        </form>
+        <div id="staffList" class="desk-stack"></div>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Channels</p>
+        <h2>Enable / disable / hide</h2>
+        <p class="muted">Disabled rooms cannot accept posts. Hidden rooms leave the public list (staff still see them).</p>
+        <div id="channelFlagsList" class="desk-stack"></div>
+        <button type="button" class="btn ghost compact" id="channelsRefreshBtn">Refresh channels</button>
       </section>
 
       <section class="desk-card">

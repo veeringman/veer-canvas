@@ -2167,6 +2167,161 @@ def issue_staff_pass(
     return item
 
 
+def upgrade_adhoc_to_staff(
+    conn: sqlite3.Connection,
+    *,
+    pass_id: str,
+    actor: dict,
+    house_id: str,
+    category: str | None = None,
+    months: int | None = None,
+    phone: str | None = None,
+    name: str | None = None,
+    site_root: pathlib.Path,
+) -> dict[str, Any]:
+    """EC: convert an ad-hoc gate pass into a household staff pass (reuse selfie)."""
+    from init_rwa_db import SYSTEM_HOUSE_IDS
+
+    ensure_parking_passes_table(conn)
+    expire_due_passes(conn)
+    if actor.get("viewOnly"):
+        raise PermissionError("View-only access cannot upgrade a pass")
+    item = get_pass(conn, pass_id, site_root=site_root)
+    if not item:
+        raise ValueError("Pass not found")
+    if item.get("kind") != KIND_ADHOC:
+        raise ValueError("Only ad-hoc gate passes can be upgraded to staff")
+    if item.get("status") == "revoked":
+        raise ValueError("This pass was revoked and cannot be upgraded")
+    if item.get("status") not in ("active", "expired"):
+        raise ValueError("This pass cannot be upgraded")
+    if not item.get("photoFilename"):
+        raise ValueError("Ad-hoc pass has no selfie to attach to the staff pass")
+
+    target = (house_id or "").strip().upper()
+    if not target or target in SYSTEM_HOUSE_IDS:
+        raise ValueError("Choose a household plot for the staff pass")
+    plot = conn.execute(
+        "SELECT house_id, plot_no, status FROM residents WHERE house_id = ?",
+        (target,),
+    ).fetchone()
+    if not plot:
+        # Allow plot_no lookup (e.g. "A-12")
+        plot = conn.execute(
+            """
+            SELECT house_id, plot_no, status FROM residents
+            WHERE UPPER(REPLACE(TRIM(plot_no), ' ', '')) = ?
+               OR UPPER(TRIM(plot_no)) = ?
+            LIMIT 1
+            """,
+            (re.sub(r"\s+", "", target), target),
+        ).fetchone()
+    if not plot:
+        raise ValueError("Plot not found — enter a valid house id or plot number")
+    target = (plot["house_id"] or "").strip()
+    if (plot["status"] or "").strip().lower() not in ("", "active"):
+        raise ValueError("That plot is not active")
+
+    visitor_name = normalize_visitor(name) if (name or "").strip() else normalize_visitor(item.get("visitorName") or "")
+    if len(visitor_name) < 2:
+        raise ValueError("Enter the staff member's full name")
+    cat = normalize_staff_category(category or item.get("category") or item.get("adhocCategory") or "other")
+    lease_months = int(months) if months not in (None, "") else DEFAULT_STAFF_MONTHS
+    if lease_months not in ALLOWED_MONTHS:
+        raise ValueError("Staff pass duration must be 1, 3, 6, or 12 months")
+    phone_norm = ""
+    if phone:
+        phone_norm = rwa_household.normalize_phone(phone) or ""
+        digits = re.sub(r"\D", "", phone_norm)
+        if phone_norm and len(digits) < 10:
+            raise ValueError("Enter a valid 10-digit mobile number, or leave it blank")
+
+    active = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM parking_passes
+        WHERE house_id = ? AND kind = ? AND status = 'active' AND id != ?
+        """,
+        (target, KIND_STAFF, pass_id),
+    ).fetchone()
+    count = int((active["n"] if active else 0) or 0)
+    if count >= STAFF_MAX_ACTIVE:
+        raise ValueError(
+            f"This plot already has {STAFF_MAX_ACTIVE} active staff passes. End one before adding another."
+        )
+
+    code = _new_code(conn, KIND_STAFF)
+    plate = f"STAFF{pass_id.replace('pp_', '').upper()[:8]}"
+    plate_display = STAFF_CATEGORIES.get(cat, "Staff")
+    issued_at, expires_at = _apply_month_window(lease_months)
+    now = utc_now()
+
+    conn.execute(
+        """
+        UPDATE parking_passes SET
+          public_code = ?,
+          house_id = ?,
+          member_id = ?,
+          member_name = ?,
+          kind = ?,
+          plate = ?,
+          plate_display = ?,
+          vehicle_type = 'foot',
+          visitor_name = ?,
+          tenant_id = '',
+          tenant_phone = ?,
+          tenant_email = '',
+          tenant_note = ?,
+          lease_hours = 0,
+          lease_months = ?,
+          status = 'active',
+          issued_at = ?,
+          expires_at = ?,
+          renew_count = 0,
+          last_renewed_at = NULL,
+          pending_renew_hours = 0,
+          pending_renew_at = NULL,
+          approved_by_house_id = ?,
+          approved_by_name = ?,
+          revoked_reason = '',
+          updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            code,
+            target,
+            actor.get("memberId") or "",
+            _actor_name(actor),
+            KIND_STAFF,
+            plate,
+            plate_display,
+            visitor_name,
+            phone_norm,
+            cat,
+            lease_months,
+            issued_at,
+            expires_at,
+            actor.get("houseId") or "",
+            _actor_name(actor),
+            now,
+            pass_id,
+        ),
+    )
+    _add_event(
+        conn,
+        pass_id=pass_id,
+        action="upgraded_to_staff",
+        actor=actor,
+        note=f"Ad-hoc → staff · plot {target} · {lease_months} mo ({STAFF_CATEGORIES.get(cat, cat)})",
+    )
+    conn.commit()
+    out = get_pass(conn, pass_id, site_root=site_root, with_qr=True)
+    if not out:
+        raise ValueError("Pass could not be loaded after upgrade")
+    delivery = send_pass_email(conn, out, actor=actor, site_root=site_root, reason="issued")
+    out["emailDelivery"] = delivery
+    return out
+
+
 def list_adhoc_passes(
     conn: sqlite3.Connection,
     *,

@@ -301,6 +301,8 @@
       showDesk();
       await loadModeration();
       await loadSponsored();
+      await loadMailboxPreview();
+      await loadStaffAndChannels();
     } catch {
       /* stay on login */
     }
@@ -322,6 +324,8 @@
       showDesk();
       await loadModeration();
       await loadSponsored();
+      await loadMailboxPreview();
+      await loadStaffAndChannels();
     } catch (err) {
       $("loginError").hidden = false;
       $("loginError").textContent = err.message;
@@ -389,6 +393,125 @@
       await loadSponsored();
     } catch (err) {
       $("sponsoredStatus").textContent = err.message;
+    }
+  });
+
+  async function loadMailboxPreview() {
+    const box = $("mailboxPreview");
+    if (!box) return;
+    try {
+      const data = await api("/api/board/mailbox?status=open");
+      const items = data.items || [];
+      if (!items.length) {
+        box.innerHTML = `<p class="muted">No open Contact Board messages.</p>`;
+        return;
+      }
+      box.innerHTML = items.slice(0, 8).map((item) => `
+        <article class="desk-row">
+          <p class="landing-meta">${escapeText(item.status)} · ${escapeText(item.areaTitle || item.areaId)} · ${escapeText(item.authorName || "")}</p>
+          <strong>${escapeText(item.subject)}</strong>
+          <p>${escapeText((item.body || "").slice(0, 140))}</p>
+          <p class="landing-contact"><a href="/contact#mail/${encodeURIComponent(item.id)}">Open</a></p>
+        </article>
+      `).join("");
+    } catch (err) {
+      box.innerHTML = `<p class="muted">${escapeText(err.message)}</p>`;
+    }
+  }
+
+  async function loadStaffAndChannels() {
+    const staffBox = $("staffList");
+    const chanBox = $("channelFlagsList");
+    const areaSel = $("staffArea");
+    if (!staffBox || !chanBox || !areaSel) return;
+    try {
+      const [staffData, chanData] = await Promise.all([
+        api("/api/board/staff"),
+        api("/api/board/channels"),
+      ]);
+      areaSel.innerHTML = [
+        `<option value="citywide">Citywide</option>`,
+        ...(chanData.channels || []).map(
+          (c) => `<option value="${escapeAttr(c.id)}">${escapeText(c.title)}</option>`
+        ),
+      ].join("");
+      const staff = staffData.staff || [];
+      staffBox.innerHTML = staff.length
+        ? staff.map((s) => `
+          <article class="desk-row">
+            <p class="landing-meta">${escapeText(s.role)} · ${escapeText(s.areaTitle)}</p>
+            <strong>${escapeText(s.displayName)}</strong>
+            <p>${escapeText(s.email)}</p>
+            <div class="desk-actions">
+              <button type="button" class="btn ghost compact" data-staff-area="${escapeAttr(s.areaId)}" data-staff-user="${escapeAttr(s.userId)}">Remove</button>
+            </div>
+          </article>
+        `).join("")
+        : `<p class="muted">No channel staff assigned yet.</p>`;
+      staffBox.querySelectorAll("[data-staff-user]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          await api("/api/board/staff", {
+            method: "DELETE",
+            body: JSON.stringify({
+              areaId: btn.getAttribute("data-staff-area"),
+              userId: btn.getAttribute("data-staff-user"),
+            }),
+          });
+          await loadStaffAndChannels();
+        });
+      });
+      const channels = chanData.channels || [];
+      chanBox.innerHTML = channels.length
+        ? channels.map((c) => `
+          <article class="desk-row" data-channel="${escapeAttr(c.id)}">
+            <strong>${escapeText(c.title)}</strong>
+            <p class="landing-meta">${escapeText(c.kind)} · ${escapeText(c.id)}</p>
+            <label class="desk-check"><input type="checkbox" name="enabled" ${c.enabled ? "checked" : ""} ${c.canAdmin ? "" : "disabled"}> Enabled</label>
+            <label class="desk-check"><input type="checkbox" name="hidden" ${c.hidden ? "checked" : ""} ${c.canAdmin ? "" : "disabled"}> Hidden</label>
+            <div class="desk-actions">
+              <button type="button" class="btn primary compact" data-save-channel="${escapeAttr(c.id)}" ${c.canAdmin ? "" : "disabled"}>Save</button>
+            </div>
+          </article>
+        `).join("")
+        : `<p class="muted">No public channels found.</p>`;
+      chanBox.querySelectorAll("[data-save-channel]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const row = btn.closest("[data-channel]");
+          await api(`/api/board/channels/${encodeURIComponent(btn.getAttribute("data-save-channel"))}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              enabled: row.querySelector('[name="enabled"]').checked,
+              hidden: row.querySelector('[name="hidden"]').checked,
+            }),
+          });
+          await loadStaffAndChannels();
+        });
+      });
+    } catch (err) {
+      staffBox.innerHTML = `<p class="muted">${escapeText(err.message)}</p>`;
+      chanBox.innerHTML = `<p class="muted">${escapeText(err.message)}</p>`;
+    }
+  }
+
+  $("mailboxRefreshBtn")?.addEventListener("click", loadMailboxPreview);
+  $("channelsRefreshBtn")?.addEventListener("click", loadStaffAndChannels);
+  $("staffForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    $("staffError").hidden = true;
+    try {
+      await api("/api/board/staff", {
+        method: "POST",
+        body: JSON.stringify({
+          email: $("staffEmail").value.trim(),
+          role: $("staffRole").value,
+          areaId: $("staffArea").value,
+        }),
+      });
+      $("staffEmail").value = "";
+      await loadStaffAndChannels();
+    } catch (err) {
+      $("staffError").hidden = false;
+      $("staffError").textContent = err.message;
     }
   });
 

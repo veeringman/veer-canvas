@@ -11,6 +11,7 @@ Roles (nested):
 - manage_proceedings default seed grants it to General Secretary (EC Committee register).
 - pass_general is implicit for every signed-in resident (request + limited validate).
 - pass_manage is grantable; default-seeded to all EC members (EC Admin can change).
+- pass_upgrade_staff is grantable; default-seeded to all EC members (convert ad-hoc → staff).
 """
 
 from __future__ import annotations
@@ -33,6 +34,11 @@ ENTITLEMENT_DEFS: list[dict[str, str]] = [
         "id": "pass_manage",
         "label": "Pass · manage",
         "description": "Full pass validation for all plots, renewals, and settings (default for EC members; EC Admin can change)",
+    },
+    {
+        "id": "pass_upgrade_staff",
+        "label": "Pass · upgrade to staff",
+        "description": "Convert an ad-hoc gate pass into a household staff pass (default for EC members; EC Admin can change)",
     },
     {"id": "manage_roster", "label": "Resident roster", "description": "View and edit plot contacts"},
     {"id": "manage_dues", "label": "Dues ledger", "description": "View and curate colony dues"},
@@ -114,6 +120,51 @@ def ensure_ready(conn: sqlite3.Connection) -> None:
     ensure_default_treasury(conn)
     ensure_default_proceedings_secretary(conn)
     ensure_default_pass_manage(conn)
+    ensure_default_pass_upgrade_staff(conn)
+
+
+def _seed_ec_member_entitlement(
+    conn: sqlite3.Connection,
+    *,
+    entitlement: str,
+    meta_key: str,
+) -> None:
+    """Once: grant entitlement to every active EC member / office bearer (skip EC Admin)."""
+    ensure_entitlements_schema(conn)
+    flagged = conn.execute(
+        "SELECT value FROM meta WHERE key = ?",
+        (meta_key,),
+    ).fetchone()
+    if flagged:
+        return
+    now = utc_now()
+    rows = conn.execute(
+        """
+        SELECT house_id, role, is_ec_member, is_office_bearer, official_title
+        FROM residents
+        WHERE house_id != ?
+          AND status = 'active'
+        """,
+        (SUPERADMIN_HOUSE_ID,),
+    ).fetchall()
+    for r in rows:
+        is_admin = (r["role"] or "") == "admin"
+        is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(str(r["official_title"] or "").strip()) or is_admin
+        is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_admin
+        if not is_mem or is_admin:
+            continue
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
+            VALUES (?, ?, 'system:default', ?)
+            """,
+            (r["house_id"], entitlement, now),
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+        (meta_key, now),
+    )
+    conn.commit()
 
 
 def _seed_explicit_grant_for_title(
@@ -219,44 +270,14 @@ def ensure_default_proceedings_secretary(conn: sqlite3.Connection) -> None:
 
 def ensure_default_pass_manage(conn: sqlite3.Connection) -> None:
     """Once: grant pass_manage to every active EC member / office bearer / EC admin plot."""
-    ensure_entitlements_schema(conn)
-    flagged = conn.execute(
-        "SELECT value FROM meta WHERE key = ?",
-        ("pass_manage_defaulted",),
-    ).fetchone()
-    if flagged:
-        return
-    now = utc_now()
-    rows = conn.execute(
-        """
-        SELECT house_id, role, is_ec_member, is_office_bearer, official_title
-        FROM residents
-        WHERE house_id != ?
-          AND status = 'active'
-        """,
-        (SUPERADMIN_HOUSE_ID,),
-    ).fetchall()
-    for r in rows:
-        is_admin = (r["role"] or "") == "admin"
-        is_ob = bool(int(r["is_office_bearer"] or 0)) or bool(str(r["official_title"] or "").strip()) or is_admin
-        is_mem = bool(int(r["is_ec_member"] or 0)) or is_ob or is_admin
-        if not is_mem:
-            continue
-        # EC Admins get pass_manage implicitly — no stored row needed.
-        if is_admin:
-            continue
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
-            VALUES (?, 'pass_manage', 'system:default', ?)
-            """,
-            (r["house_id"], now),
-        )
-    conn.execute(
-        "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-        ("pass_manage_defaulted", now),
+    _seed_ec_member_entitlement(conn, entitlement="pass_manage", meta_key="pass_manage_defaulted")
+
+
+def ensure_default_pass_upgrade_staff(conn: sqlite3.Connection) -> None:
+    """Once: grant pass_upgrade_staff to every active EC member / office bearer."""
+    _seed_ec_member_entitlement(
+        conn, entitlement="pass_upgrade_staff", meta_key="pass_upgrade_staff_defaulted"
     )
-    conn.commit()
 
 
 def grant_pass_manage_if_needed(
@@ -267,6 +288,40 @@ def grant_pass_manage_if_needed(
     commit: bool = False,
 ) -> None:
     """Grant pass_manage when a plot joins the EC (skipped for EC Admin — implicit)."""
+    _grant_ec_desk_entitlement_if_needed(
+        conn,
+        house_id,
+        entitlement="pass_manage",
+        granted_by=granted_by,
+        commit=commit,
+    )
+
+
+def grant_pass_upgrade_staff_if_needed(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    granted_by: str | None = None,
+    commit: bool = False,
+) -> None:
+    """Grant pass_upgrade_staff when a plot joins the EC (skipped for EC Admin — implicit)."""
+    _grant_ec_desk_entitlement_if_needed(
+        conn,
+        house_id,
+        entitlement="pass_upgrade_staff",
+        granted_by=granted_by,
+        commit=commit,
+    )
+
+
+def _grant_ec_desk_entitlement_if_needed(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    entitlement: str,
+    granted_by: str | None = None,
+    commit: bool = False,
+) -> None:
     ensure_entitlements_schema(conn)
     hid = (house_id or "").strip()
     if not hid or hid == SUPERADMIN_HOUSE_ID:
@@ -280,9 +335,9 @@ def grant_pass_manage_if_needed(
     conn.execute(
         """
         INSERT OR IGNORE INTO resident_entitlements(house_id, entitlement, granted_by, granted_at)
-        VALUES (?, 'pass_manage', ?, ?)
+        VALUES (?, ?, ?, ?)
         """,
-        (hid, (granted_by or "system:ec_join")[:80], utc_now()),
+        (hid, entitlement, (granted_by or "system:ec_join")[:80], utc_now()),
     )
     if commit:
         conn.commit()

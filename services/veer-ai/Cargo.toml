@@ -1,8 +1,8 @@
 [package]
 name = "veer-ai"
-version = "0.1.0"
+version = "0.79.0"
 edition = "2021"
-description = "VeerCanvas native AI platform — content moderation sidecar"
+description = "VeerCanvas native AI platform — moderation + BM25/ngram RAG sidecar"
 
 [[bin]]
 name = "veer-ai"

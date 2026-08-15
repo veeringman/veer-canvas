@@ -59,6 +59,7 @@ SEED_ROOMS = [
     ("adda_services", "public", "Services", "Trades, help, and local services"),
     ("adda_jobs", "public", "Jobs", "Openings, gigs, and hiring around Mandi"),
     ("adda_seri_live", "public", "Seri Live", "Seri Live channel"),
+    ("adda_dilli_lahore", "public", "Dilli Lahore Ki", "Fun gossip — light chatter only"),
     ("adda_channels", "public", "Channels", "Topic boards and channel talk"),
     ("adda_neighbourhoods", "public", "Neighbourhoods", "Colony and locality chatter"),
     ("adda_nb_sundernagar", "public", "Sunder Nagar", "Sundernagar town board"),
@@ -83,6 +84,7 @@ HIGHLIGHT_ROOM_IDS = (
     "adda_jobs",
     "adda_nb_sundernagar",
     "adda_seri_live",
+    "adda_dilli_lahore",
 )
 
 
@@ -283,6 +285,21 @@ def register(app, *, check_login, site_root: pathlib.Path):
             );
             """
         )
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(adda_threads)").fetchall()}
+        if "enabled" not in cols:
+            conn.execute(
+                "ALTER TABLE adda_threads ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1"
+            )
+        if "hidden" not in cols:
+            conn.execute(
+                "ALTER TABLE adda_threads ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0"
+            )
+        try:
+            import board_contact
+
+            board_contact.ensure_schema(conn)
+        except Exception:
+            pass
         now = _now()
         for tid, kind, title, subtitle in SEED_ROOMS:
             conn.execute(
@@ -426,6 +443,23 @@ def register(app, *, check_login, site_root: pathlib.Path):
     def can_access(conn: sqlite3.Connection, thread: sqlite3.Row, user: sqlite3.Row | None) -> bool:
         kind = thread["kind"]
         if kind in ("public", "bridge"):
+            try:
+                import board_contact
+
+                staff_ok = board_contact.can_moderate_area(
+                    conn,
+                    user["id"] if user else None,
+                    thread["id"],
+                    operator=is_operator(),
+                )
+            except Exception:
+                staff_ok = is_operator()
+            enabled = int(thread["enabled"]) if "enabled" in thread.keys() else 1
+            hidden = int(thread["hidden"]) if "hidden" in thread.keys() else 0
+            if thread["archived_at"] and not staff_ok:
+                return False
+            if (not enabled or hidden) and not staff_ok:
+                return False
             return True
         if not user:
             return False
@@ -440,16 +474,55 @@ def register(app, *, check_login, site_root: pathlib.Path):
             return False
         if thread["archived_at"]:
             return False
+        enabled = int(thread["enabled"]) if "enabled" in thread.keys() else 1
+        if not enabled:
+            try:
+                import board_contact
+
+                if not board_contact.can_moderate_area(
+                    conn, user["id"], thread["id"], operator=is_operator()
+                ):
+                    return False
+            except Exception:
+                if not is_operator():
+                    return False
         if thread["kind"] == "public":
             return True
         return is_member(conn, thread["id"], user["id"])
+
+    def can_moderate_thread(
+        conn: sqlite3.Connection, thread: sqlite3.Row, user: sqlite3.Row | None
+    ) -> bool:
+        if thread["kind"] not in ("public", "bridge"):
+            return False
+        try:
+            import board_contact
+
+            return board_contact.can_moderate_area(
+                conn,
+                user["id"] if user else None,
+                thread["id"],
+                operator=is_operator(),
+            )
+        except Exception:
+            return is_operator()
 
     def can_manage_group(conn: sqlite3.Connection, thread: sqlite3.Row, user: sqlite3.Row | None) -> bool:
         if not user or thread["kind"] != "group":
             return False
         if is_operator():
             return True
-        return thread["owner_user_id"] == user["id"]
+        if thread["owner_user_id"] == user["id"]:
+            return True
+        # Group channel admins
+        row = conn.execute(
+            """
+            SELECT role FROM adda_thread_members
+            WHERE thread_id = ? AND user_id = ? AND left_at IS NULL
+            """,
+            (thread["id"], user["id"]),
+        ).fetchone()
+        return bool(row and row["role"] == "admin")
 
     def unread_count(conn: sqlite3.Connection, thread_id: str, user_id: str | None) -> int:
         if not user_id:
@@ -513,10 +586,13 @@ def register(app, *, check_login, site_root: pathlib.Path):
             "subtitle": thread["subtitle"] or "",
             "isOfficial": bool(thread["is_official"]),
             "archivedAt": thread["archived_at"],
+            "enabled": bool(int(thread["enabled"])) if "enabled" in thread.keys() else True,
+            "hidden": bool(int(thread["hidden"])) if "hidden" in thread.keys() else False,
             "ownerUserId": thread["owner_user_id"],
             "memberCount": member_count(conn, thread["id"]) if thread["kind"] == "group" else 0,
             "canManage": can_manage_group(conn, thread, user),
             "canPost": can_post(conn, thread, user),
+            "canModerate": can_moderate_thread(conn, thread, user),
             "readOnly": thread["kind"] == "bridge",
             "iconUrl": f"/api/adda/threads/{thread['id']}/icon" if icon else "",
             "hasIcon": bool(icon),
@@ -804,11 +880,14 @@ def register(app, *, check_login, site_root: pathlib.Path):
                            WHEN 'adda_jobs' THEN 3
                            WHEN 'adda_nb_sundernagar' THEN 4
                            WHEN 'adda_seri_live' THEN 5
+                           WHEN 'adda_dilli_lahore' THEN 6
                            ELSE 100
                          END,
                          CASE kind WHEN 'public' THEN 0 ELSE 1 END, title
                 """
             ).fetchall():
+                if not can_access(conn, r, user):
+                    continue
                 out.append(public_thread(conn, r, user))
             if user:
                 for r in conn.execute(
@@ -845,7 +924,7 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 return jsonify({"ok": False, "error": "Room not found"}), 404
             if not can_access(conn, thread, user):
                 return jsonify({"ok": False, "error": "Sign in to view this conversation"}), 401
-            include_hidden = is_operator() and thread["kind"] in ("public", "bridge")
+            include_hidden = can_moderate_thread(conn, thread, user)
             if since:
                 anchor = conn.execute(
                     "SELECT created_at FROM adda_messages WHERE id = ? AND thread_id = ?",
@@ -892,11 +971,23 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 "thread": public_thread(conn, thread, user),
                 "messages": messages,
                 "pinned": pinned,
-                "canModerate": is_operator() and thread["kind"] in ("public", "bridge"),
+                "canModerate": can_moderate_thread(conn, thread, user),
                 "canManage": can_manage_group(conn, thread, user),
                 "canPost": can_post(conn, thread, user),
                 "canEscalate": bool(user) and thread["kind"] != "bridge",
                 "canLeave": bool(user) and thread["kind"] == "group" and is_member(conn, thread_id, user["id"]),
+                "canAdminChannel": (
+                    thread["kind"] in ("public", "bridge")
+                    and (
+                        is_operator()
+                        or (
+                            user
+                            and __import__("board_contact").can_admin_area(
+                                conn, user["id"], thread["id"], operator=False
+                            )
+                        )
+                    )
+                ),
             })
         finally:
             conn.close()
@@ -1572,13 +1663,6 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 return jsonify({"ok": False, "error": "Cannot escalate this room"}), 400
             if not can_access(conn, thread, user):
                 return jsonify({"ok": False, "error": "Not allowed"}), 403
-            # Need a publisher to file a hub post
-            pub_id = session.get("publisher_id") or user["publisher_id"]
-            if not pub_id:
-                return jsonify({
-                    "ok": False,
-                    "error": "Link a publisher account at /join to post to the city board",
-                }), 400
             rows = conn.execute(
                 """
                 SELECT author_name, body FROM adda_messages
@@ -1595,9 +1679,6 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 quotes.append(f"- {r['author_name']}: {line}")
             subject = (payload.get("subject") or f"From Mandi Adda: {thread['title']}").strip()[:120]
             note = (payload.get("body") or payload.get("note") or "").strip()
-            kind = (payload.get("kind") or "news").strip().lower()
-            if kind not in ("news", "ad", "event", "place", "service"):
-                kind = "news"
             body_parts = [
                 f"Escalated from Mandi Adda ({thread['kind']}): {thread['title']}",
                 f"Open: /adda#room/{thread_id}",
@@ -1606,44 +1687,63 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 body_parts.append("")
                 body_parts.append("Quoted:")
                 body_parts.extend(quotes)
-            if note:
-                body_parts.append("")
-                body_parts.append(note)
-            body_text = "\n".join(body_parts)[:4000]
+            body_text = "\n".join(body_parts)[:8000]
+            import board_contact
+
+            board_contact.ensure_schema(conn)
+            mid = f"bm_{secrets.token_hex(8)}"
             now = _now()
-            cur = conn.execute(
+            full = body_text
+            if note:
+                full = f"{note.strip()}\n\n---\n\n{body_text}"
+            conn.execute(
                 """
-                INSERT INTO posts(
-                  publisher_id, kind, title, summary, body, category, url, phone,
-                  location, slug, plan, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, '', '', '', 'Mandi', '', 'listed', 'pending', ?, ?)
+                INSERT INTO board_mail(
+                  id, area_id, category, subject, body, status,
+                  author_name, author_email, author_user_id, author_publisher_id,
+                  source_adda_thread_id, created_at, updated_at
+                ) VALUES (?, ?, 'adda', ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (int(pub_id), kind, subject, (note or subject)[:600], body_text, now, now),
+                (
+                    mid,
+                    thread["id"],
+                    subject[:160],
+                    full[:8000],
+                    user["display_name"],
+                    user["email"] or "",
+                    user["id"],
+                    user["publisher_id"],
+                    thread["id"],
+                    now,
+                    now,
+                ),
             )
             conn.commit()
             return jsonify({
                 "ok": True,
-                "postId": int(cur.lastrowid),
-                "url": "/publish",
-                "message": "Submitted to the city board for operator review",
+                "mailId": mid,
+                "url": f"/contact#mail/{mid}",
+                "message": "Sent to the Contact Board mailbox",
             }), 201
         finally:
             conn.close()
 
     @app.post("/api/adda/messages/<message_id>/moderate")
     def adda_moderate(message_id: str):
-        if not is_operator():
-            return jsonify({"ok": False, "error": "Operator access required"}), 403
+        link_publisher_session()
         payload = request.get_json(force=True, silent=True) or {}
         action = str(payload.get("action") or "").strip().lower()
         conn = db()
         try:
+            user = current_user(conn)
             row = conn.execute("SELECT * FROM adda_messages WHERE id = ?", (message_id,)).fetchone()
             if not row:
                 return jsonify({"ok": False, "error": "Message not found"}), 404
             thread = conn.execute("SELECT * FROM adda_threads WHERE id = ?", (row["thread_id"],)).fetchone()
             if not thread or thread["kind"] not in ("public", "bridge"):
                 return jsonify({"ok": False, "error": "Only public rooms can be moderated here"}), 400
+            if not can_moderate_thread(conn, thread, user):
+                return jsonify({"ok": False, "error": "Moderator access required"}), 403
             if action == "hide":
                 conn.execute("UPDATE adda_messages SET status = 'hidden' WHERE id = ?", (message_id,))
             elif action == "unhide":

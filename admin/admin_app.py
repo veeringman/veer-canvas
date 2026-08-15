@@ -8587,6 +8587,46 @@ def api_rwa_parking_staff_issue():
         conn.close()
 
 
+@app.route("/api/rwa/parking/passes/<pass_id>/upgrade-staff", methods=["POST"])
+def api_rwa_parking_upgrade_staff(pass_id):
+    """EC: convert an ad-hoc gate pass into a household staff pass."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "pass_upgrade_staff"):
+            return jsonify({"ok": False, "error": "Pass · upgrade to staff entitlement required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        item = rwa_parking.upgrade_adhoc_to_staff(
+            conn,
+            pass_id=pass_id,
+            actor=sess["resident"],
+            house_id=payload.get("houseId") or payload.get("plotNo") or payload.get("plot") or "",
+            category=payload.get("category") or payload.get("staffCategory"),
+            months=payload.get("months") if payload.get("months") not in (None, "") else payload.get("leaseMonths"),
+            phone=payload.get("phone") or payload.get("tenantPhone") or "",
+            name=payload.get("name") or payload.get("visitorName"),
+            site_root=SITE_ROOT,
+        )
+        _notify_parking(
+            conn,
+            event_type="staff",
+            item=item,
+            extra_body=(
+                f"Upgraded ad-hoc → staff · {item.get('visitorName')} · "
+                f"{item.get('staffCategoryLabel') or 'Staff'} · plot {item.get('plotNo')} · {item.get('code')}"
+            ),
+        )
+        return jsonify({"ok": True, "pass": item})
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
+    except (ValueError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/parking/passes/<pass_id>/photo", methods=["GET"])
 def api_rwa_parking_pass_photo(pass_id):
     """Serve a pass selfie to the plot owner or Pass · general / manage."""
@@ -10296,9 +10336,11 @@ DASHBOARD_HTML = """
 if SITE_ID == "cityofmandi":
     import civic_hub
     import adda_live
+    import board_contact
 
     civic_hub.register(app, check_login=check_login, site_root=SITE_ROOT)
     adda_live.register(app, check_login=check_login, site_root=SITE_ROOT)
+    board_contact.register(app, check_login=check_login, site_root=SITE_ROOT)
 
 
 if __name__ == "__main__":

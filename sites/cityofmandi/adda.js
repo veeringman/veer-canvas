@@ -102,6 +102,7 @@
     closeRoomsDrawer();
     $("addaRoom").hidden = true;
     $("addaEmpty").hidden = false;
+    if ($("addaChannelAdmin")) $("addaChannelAdmin").hidden = true;
     if (location.hash) {
       history.replaceState(null, "", location.pathname + location.search);
     }
@@ -131,6 +132,7 @@
     "adda_jobs",
     "adda_nb_sundernagar",
     "adda_seri_live",
+    "adda_dilli_lahore",
   ];
   const HIGHLIGHT_RANK = Object.fromEntries(HIGHLIGHT_ROOM_IDS.map((id, i) => [id, i]));
 
@@ -335,6 +337,11 @@
         $("addaManageOfficial").checked = !!t.isOfficial;
         $("addaManageBg").value = t.bgStyle || "none";
         loadMembers(id);
+      }
+      $("addaChannelAdmin").hidden = !data.canAdminChannel;
+      if (data.canAdminChannel) {
+        $("addaChanEnabled").checked = t.enabled !== false;
+        $("addaChanHidden").checked = !!t.hidden;
       }
       renderThreadList();
       syncMobileChrome();
@@ -673,15 +680,32 @@
         method: "POST",
         body: JSON.stringify({
           subject: $("addaEscSubject").value.trim(),
-          kind: $("addaEscKind").value,
           note: $("addaEscNote").value.trim(),
         }),
       });
       $("addaEscalateDialog").close();
-      alert(data.message || "Submitted for review");
+      if (data.url) location.href = data.url;
+      else alert(data.message || "Sent to Contact Board");
     } catch (err) {
       $("addaEscError").hidden = false;
       $("addaEscError").textContent = err.message;
+    }
+  });
+
+  $("addaSaveChannelFlags")?.addEventListener("click", async () => {
+    if (!state.activeId) return;
+    try {
+      await api(`/api/board/channels/${encodeURIComponent(state.activeId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          enabled: $("addaChanEnabled").checked,
+          hidden: $("addaChanHidden").checked,
+        }),
+      });
+      await openThread(state.activeId);
+      await loadThreads();
+    } catch (err) {
+      alert(err.message);
     }
   });
 

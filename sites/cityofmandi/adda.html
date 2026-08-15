@@ -13,9 +13,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260815hl2">
-  <script src="/sponsored.js?v=20260815sp1" defer></script>
-  <script src="/adda.js?v=20260815hl3" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260815run1">
+  <script src="/sponsored.js?v=20260815run1" defer></script>
+  <script src="/adda.js?v=20260815dilli1" defer></script>
 </head>
 <body class="adda-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -33,6 +33,7 @@
       </div>
       <div class="landing-sponsored" data-sponsored-slot aria-label="Sponsored"></div>
       <div class="adda-top-actions">
+        <a class="btn ghost compact" href="/contact">Contact Board</a>
         <button type="button" class="btn ghost compact adda-back-btn" id="addaBackBtn" hidden aria-label="Back to rooms">← Rooms</button>
         <span class="adda-user-chip" id="addaUserChip" hidden></span>
         <button type="button" class="btn ghost compact" id="addaAuthBtn">Sign in</button>
@@ -63,7 +64,7 @@
         <div class="adda-empty" id="addaEmpty">
           <p class="landing-section-kicker">Mandi Adda · Live</p>
           <h1>Pick a room</h1>
-          <p class="muted">Public topics are open to everyone. Sign in to join the conversation.</p>
+          <p class="muted">Public topics are open to everyone. Sign in to join the conversation. Need the board? <a href="/contact">Contact Board</a>.</p>
         </div>
 
         <section class="adda-room" id="addaRoom" hidden>
@@ -93,6 +94,17 @@
                     <button type="button" class="btn ghost compact" id="addaLeaveBtn">Leave</button>
                   </div>
                   <div class="adda-members" id="addaMembersBox"></div>
+                </div>
+              </details>
+              <details class="adda-manage" id="addaChannelAdmin" hidden>
+                <summary class="btn ghost compact">Channel admin</summary>
+                <div class="adda-manage-panel">
+                  <p class="muted">Enable, disable, or hide this public room for everyone.</p>
+                  <label class="adda-check"><input type="checkbox" id="addaChanEnabled"> Enabled</label>
+                  <label class="adda-check"><input type="checkbox" id="addaChanHidden"> Hidden from public list</label>
+                  <div class="adda-manage-row">
+                    <button type="button" class="btn ghost compact" id="addaSaveChannelFlags">Save visibility</button>
+                  </div>
                 </div>
               </details>
               <button type="button" class="btn ghost compact" id="addaEscalateBtn" hidden>Escalate to board</button>
@@ -167,22 +179,13 @@
 
   <dialog class="adda-dialog" id="addaEscalateDialog">
     <form method="dialog" class="adda-dialog-form" id="addaEscalateForm">
-      <h3>Escalate to city board</h3>
-      <p class="muted">Creates a pending listing for hub operators. Needs a linked publisher account.</p>
+      <h3>Escalate to Contact Board</h3>
+      <p class="muted">Quotes recent messages into the Contact Board mailbox for operators and channel moderators.</p>
       <label>Subject <input id="addaEscSubject" maxlength="120"></label>
-      <label>Kind
-        <select id="addaEscKind">
-          <option value="news">News</option>
-          <option value="ad">Ad</option>
-          <option value="event">Event</option>
-          <option value="place">Place</option>
-          <option value="service">Service</option>
-        </select>
-      </label>
       <label>Note <textarea id="addaEscNote" rows="3" maxlength="800"></textarea></label>
       <p class="error" id="addaEscError" hidden></p>
       <div class="adda-dialog-actions">
-        <button type="submit" class="btn primary" value="ok">Submit</button>
+        <button type="submit" class="btn primary" value="ok">Send to mailbox</button>
         <button type="submit" class="btn ghost" value="cancel">Cancel</button>
       </div>
     </form>

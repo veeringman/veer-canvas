@@ -18,7 +18,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 RESERVED_SLUGS = {
     "www", "mail", "smtp", "admin", "cms", "api", "static", "site", "b",
-    "join", "publish", "login", "logout",
+    "join", "publish", "login", "logout", "adda", "contact",
 }
 DEFAULT_KINDS = [
     {"id": "news", "title": "News", "lede": "A public update for the city board."},

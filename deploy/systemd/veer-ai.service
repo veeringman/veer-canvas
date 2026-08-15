@@ -1,5 +1,5 @@
 [Unit]
-Description=Veer AI native moderation sidecar
+Description=Veer AI native sidecar (moderation + RAG v0.78)
 After=network.target
 
 [Service]

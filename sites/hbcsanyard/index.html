@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260815chat2">
+  <link rel="stylesheet" href="portal.css?v=20260815chat3">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260815chat2" defer></script>
+  <script src="portal.js?v=20260815chat3" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -786,32 +786,45 @@
           </aside>
           <div class="msg-main" id="msgMain">
             <header class="msg-conversation-head" id="msgConversationHead">
-              <button type="button" class="btn ghost compact msg-back" id="msgBackBtn" hidden>Back</button>
-              <div class="msg-conversation-titles">
-                <h3 id="msgConversationTitle">Select a conversation</h3>
-                <p class="muted" id="msgConversationMeta"></p>
+              <button type="button" class="btn ghost compact msg-back msg-head-icon-btn" id="msgBackBtn" hidden title="Back to conversations" aria-label="Back to conversations">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div class="msg-conversation-identity" id="msgConversationIdentity">
+                <span class="msg-head-avatar" id="msgHeadAvatar" hidden aria-hidden="true"></span>
+                <div class="msg-conversation-titles">
+                  <div class="msg-title-row">
+                    <h3 id="msgConversationTitle">Select a conversation</h3>
+                    <span class="msg-official-chip" id="msgOfficialChip" hidden>Official</span>
+                  </div>
+                  <p class="muted" id="msgConversationMeta"></p>
+                </div>
               </div>
               <div class="msg-channel-tools" id="msgChannelTools" hidden>
-                <details class="msg-manage-menu" id="msgManageMenu" hidden>
-                  <summary class="btn ghost compact">Manage</summary>
-                  <div class="msg-manage-panel">
-                    <button type="button" class="btn ghost compact" id="msgManageRenameBtn">Rename</button>
-                    <button type="button" class="btn ghost compact" id="msgManageOfficialBtn">Toggle Official</button>
-                    <button type="button" class="btn ghost compact" id="msgManageMembersBtn">Members</button>
-                    <button type="button" class="btn ghost compact" id="msgManageIconBtn">Channel icon</button>
-                    <button type="button" class="btn ghost compact" id="msgManageBgBtn">Background</button>
-                    <button type="button" class="btn ghost compact" id="msgManageArchiveBtn">Archive channel</button>
-                  </div>
-                </details>
-                <button type="button" class="btn ghost compact" id="msgLeaveChannelBtn" hidden>Leave</button>
-                <button type="button" class="btn ghost compact" id="msgEscalateBtn" hidden>Escalate</button>
-                <details class="msg-cleanup-menu">
-                  <summary class="btn ghost compact">Cleanup</summary>
-                  <div class="msg-cleanup-panel">
-                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="30">Delete older than 30 days</button>
-                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="7">Delete older than 7 days</button>
-                    <button type="button" class="btn ghost compact" data-cleanup="clear_hidden">Remove hidden</button>
-                    <button type="button" class="btn ghost compact msg-cleanup-danger" data-cleanup="clear_all">Clear entire channel</button>
+                <button type="button" class="btn ghost compact msg-head-icon-btn" id="msgQuickMembersBtn" hidden title="Members" aria-label="Members">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </button>
+                <button type="button" class="btn ghost compact msg-head-icon-btn" id="msgQuickLookBtn" hidden title="Icon &amp; background" aria-label="Icon and background">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20 12.5A7.5 7.5 0 1 1 8.5 5"/><path d="M16 8l6 6"/><path d="M14 16H4a2 2 0 0 1-2-2V6"/></svg>
+                </button>
+                <details class="msg-more-menu" id="msgMoreMenu">
+                  <summary class="btn ghost compact msg-head-icon-btn" title="More actions" aria-label="More actions">
+                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                  </summary>
+                  <div class="msg-more-panel">
+                    <button type="button" class="btn ghost compact" id="msgManageRenameBtn" hidden>Rename channel</button>
+                    <button type="button" class="btn ghost compact" id="msgManageOfficialBtn" hidden>Toggle Official</button>
+                    <button type="button" class="btn ghost compact" id="msgManageMembersBtn" hidden>Manage members</button>
+                    <button type="button" class="btn ghost compact" id="msgManageIconBtn" hidden>Channel icon</button>
+                    <button type="button" class="btn ghost compact" id="msgManageBgBtn" hidden>Background</button>
+                    <button type="button" class="btn ghost compact" id="msgManageArchiveBtn" hidden>Archive channel</button>
+                    <button type="button" class="btn ghost compact" id="msgEscalateBtn" hidden>Escalate to Concerns</button>
+                    <button type="button" class="btn ghost compact" id="msgLeaveChannelBtn" hidden>Leave channel</button>
+                    <div class="msg-more-divider" id="msgCleanupDivider" hidden></div>
+                    <p class="msg-more-label" id="msgCleanupLabel" hidden>Cleanup</p>
+                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="30" hidden>Delete older than 30 days</button>
+                    <button type="button" class="btn ghost compact" data-cleanup="older_than" data-days="7" hidden>Delete older than 7 days</button>
+                    <button type="button" class="btn ghost compact" data-cleanup="clear_hidden" hidden>Remove hidden</button>
+                    <button type="button" class="btn ghost compact msg-cleanup-danger" data-cleanup="clear_all" hidden>Clear entire channel</button>
                   </div>
                 </details>
               </div>
@@ -833,17 +846,27 @@
                   Attach
                   <input id="msgAttachInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.pdf" multiple hidden>
                 </label>
-                <label class="msg-theme-label" id="msgCardThemeWrap" hidden>
-                  Card
-                  <select id="msgCardTheme">
-                    <option value="plain">Default</option>
-                    <option value="notice">Notice</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="celebrate">Celebrate</option>
-                    <option value="official">Official</option>
-                    <option value="thanks">Thanks</option>
-                  </select>
-                </label>
+                <div class="msg-theme-picker" id="msgCardThemeWrap" hidden role="group" aria-label="Message style">
+                  <input type="hidden" id="msgCardTheme" value="plain">
+                  <button type="button" class="msg-theme-chip is-active" data-theme="plain" title="Default" aria-label="Default" aria-pressed="true">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button type="button" class="msg-theme-chip" data-theme="notice" title="Notice" aria-label="Notice" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button type="button" class="msg-theme-chip" data-theme="urgent" title="Urgent" aria-label="Urgent" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3L12 3z"/><path d="M12 10v4"/><circle cx="12" cy="16.5" r="0.8" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button type="button" class="msg-theme-chip" data-theme="celebrate" title="Celebrate" aria-label="Celebrate" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/><circle cx="12" cy="12" r="9"/><path d="M12 3v2M5.6 5.6l1.4 1.4M3 12h2M18.4 5.6l-1.4 1.4M21 12h-2"/></svg>
+                  </button>
+                  <button type="button" class="msg-theme-chip" data-theme="official" title="Official" aria-label="Official" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.2 4.5 5 .7-3.6 3.5.9 5L12 13.8 7.5 15.7l.9-5L4.8 7.2l5-.7L12 2z"/></svg>
+                  </button>
+                  <button type="button" class="msg-theme-chip" data-theme="thanks" title="Thanks" aria-label="Thanks" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.1C.7 10.1 1.5 6.8 4.4 5.4 6.5 4.4 9 5 12 7.4c3-2.4 5.5-3 7.6-2 2.9 1.4 3.7 4.7 1.9 7.5C19 16.65 12 21 12 21z"/></svg>
+                  </button>
+                </div>
                 <span class="muted msg-attach-hint" id="msgAttachHint">Images or PDF · max 5 MB each · up to 3</span>
               </div>
               <div id="msgEmojiPicker" class="msg-emoji-picker" hidden></div>
@@ -1617,7 +1640,7 @@
         <div class="directory-toolbar">
           <label class="roster-search directory-lookup">
             <span class="sr-only">Look up a plot, owner, phone, tenant, or vehicle</span>
-            <input id="directoryLookup" type="search" placeholder="Look up plot, owner, phone, tenant, vehicle…" autocomplete="off" enterkeyhint="search">
+            <input id="directoryLookup" type="search" placeholder="Look up plot, owner, delegate, phone…" autocomplete="off" enterkeyhint="search">
           </label>
           <p class="muted" id="directoryLookupMeta"></p>
         </div>
@@ -2695,7 +2718,7 @@
             <div class="roster-toolbar">
               <div>
                 <h3>Roles &amp; entitlements</h3>
-                <p class="muted">EC Member → Office Bearer → EC Admin. Members and bearers can receive one-off entitlements (including Pass · manage); EC Admins have all access. Every resident has Pass · general (type, validity, code; full details for own-plot vehicles).</p>
+                <p class="muted">EC Member → Office Bearer → EC Admin. Members and bearers can receive one-off entitlements (including Pass · manage and Pass · upgrade to staff); EC Admins have all access. Every resident has Pass · general (type, validity, code; full details for own-plot vehicles).</p>
               </div>
               <button type="button" class="btn ghost compact" id="rolesRefreshBtn">Refresh</button>
             </div>

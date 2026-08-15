@@ -327,7 +327,7 @@ EOF
   fi
   echo "Admin service ${SERVICE_NAME} is active on port ${ADMIN_PORT}"
 
-  if [[ "${SITE_ID}" == "cityofmandi" ]]; then
+  if [[ "${SITE_ID}" == "cityofmandi" || "${SITE_ID}" == "hbcsanyard" ]]; then
     install_veer_ai
   fi
 }
@@ -349,9 +349,9 @@ install_veer_ai() {
       return 0
     fi
   fi
-  echo "Building veer-ai (Rust AI moderator) ..."
+  echo "Building veer-ai (Rust AI sidecar v0.79 — moderation + BM25/ngram RAG) ..."
   if ! sudo -u ubuntu bash -lc 'source "$HOME/.cargo/env" 2>/dev/null; cd "'"$src"'" && cargo build --release'; then
-    echo "warning: veer-ai build failed — Mandi Adda moderation will fail-open" >&2
+    echo "warning: veer-ai build failed — moderation/RAG will fall back" >&2
     return 0
   fi
   install -m 755 "$src/target/release/veer-ai" "$bin_dir/veer-ai"
@@ -369,7 +369,37 @@ install_veer_ai() {
       journalctl -u veer-ai -n 20 --no-pager >&2 || true
     fi
   fi
-  if [[ ! -f "$WEB_ROOT/data/ai.env" ]] || ! grep -q 'VEER_AI_URL' "$WEB_ROOT/data/ai.env" 2>/dev/null; then
+  if [[ ! -f "$WEB_ROOT/data/ai.env" ]]; then
+    if [[ "${SITE_ID}" == "hbcsanyard" ]]; then
+      cat > "$WEB_ROOT/data/ai.env" <<'EOF'
+# RWA Assistant — set RWA_AI_API_KEY for LLM answers; RAG works without it.
+# RWA_AI_API_KEY=
+# RWA_AI_BASE_URL=https://api.openai.com/v1
+# RWA_AI_MODEL=gpt-4o-mini
+VEER_AI_URL=http://127.0.0.1:8095
+VEER_AI_RAG=1
+VEER_AI_RAG_TIMEOUT_MS=1200
+EOF
+    else
+      cat > "$WEB_ROOT/data/ai.env" <<'EOF'
+VEER_AI_URL=http://127.0.0.1:8095
+VEER_AI_MODE=flag
+VEER_AI_TIMEOUT_MS=280
+EOF
+    fi
+    chown ubuntu:ubuntu "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    chmod 600 "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    systemctl restart "${SERVICE_NAME}.service" || true
+  elif [[ "${SITE_ID}" == "hbcsanyard" ]] && ! grep -q 'VEER_AI_URL' "$WEB_ROOT/data/ai.env" 2>/dev/null; then
+    cat >> "$WEB_ROOT/data/ai.env" <<'EOF'
+
+VEER_AI_URL=http://127.0.0.1:8095
+VEER_AI_RAG=1
+VEER_AI_RAG_TIMEOUT_MS=1200
+EOF
+    chown ubuntu:ubuntu "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    systemctl restart "${SERVICE_NAME}.service" || true
+  elif [[ "${SITE_ID}" != "hbcsanyard" ]] && ! grep -q 'VEER_AI_URL' "$WEB_ROOT/data/ai.env" 2>/dev/null; then
     cat > "$WEB_ROOT/data/ai.env" <<'EOF'
 VEER_AI_URL=http://127.0.0.1:8095
 VEER_AI_MODE=flag

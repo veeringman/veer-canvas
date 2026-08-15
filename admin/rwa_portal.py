@@ -1410,6 +1410,48 @@ def mask_phone(phone: str | None) -> str:
     return f"{'*' * max(0, len(digits) - 4)}{digits[-4:]}"
 
 
+def _directory_delegates(
+    conn: sqlite3.Connection, house_ids: list[str]
+) -> dict[str, list[dict]]:
+    """Active household members (owner + delegates) for directory cards (batch)."""
+    delegates_by: dict[str, list[dict]] = {}
+    ids = [str(h).strip() for h in house_ids if str(h).strip()]
+    if not ids:
+        return delegates_by
+    placeholders = ",".join("?" for _ in ids)
+    try:
+        ensure_household_members_table(conn)
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM household_members
+            WHERE status = 'active' AND house_id IN ({placeholders})
+            ORDER BY is_primary DESC, is_primary_delegate DESC, can_manage DESC,
+              CASE relation
+                WHEN 'owner' THEN 0 WHEN 'spouse' THEN 1 WHEN 'parent' THEN 2
+                WHEN 'child' THEN 3 ELSE 4 END,
+              name COLLATE NOCASE
+            """,
+            ids,
+        ).fetchall()
+        for row in rows:
+            pub = household.public_member(row, include_contacts=True)
+            hid = (pub.get("houseId") or "").strip()
+            name = (pub.get("name") or "").strip()
+            if not hid or not name:
+                continue
+            delegates_by.setdefault(hid, []).append({
+                "name": name,
+                "identityLabel": pub.get("identityLabel") or pub.get("relationLabel") or "Delegate",
+                "phone": (pub.get("phone") or "").strip(),
+                "isPrimary": bool(pub.get("isPrimary")),
+                "isPrimaryDelegate": bool(pub.get("isPrimaryDelegate")),
+            })
+    except sqlite3.OperationalError:
+        pass
+    return delegates_by
+
+
 def _directory_household_extras(
     conn: sqlite3.Connection, house_ids: list[str]
 ) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
@@ -1564,10 +1606,16 @@ def directory(
                 else (entitlements.load_grants(conn, r["house_id"]) if is_mem else [])
             )
         out.append(item)
+    house_ids = [row["houseId"] for row in out]
+    delegates_by = _directory_delegates(conn, house_ids)
+    tenants_by: dict[str, list[dict]] = {}
+    vehicles_by: dict[str, list[dict]] = {}
     if include_occupancy:
-        tenants_by, vehicles_by = _directory_household_extras(conn, [row["houseId"] for row in out])
-        for item in out:
-            hid = item.get("houseId") or ""
+        tenants_by, vehicles_by = _directory_household_extras(conn, house_ids)
+    for item in out:
+        hid = item.get("houseId") or ""
+        item["delegates"] = delegates_by.get(hid) or []
+        if include_occupancy:
             item["tenants"] = tenants_by.get(hid) or []
             item["vehicles"] = vehicles_by.get(hid) or []
     out.sort(
@@ -6532,8 +6580,14 @@ def update_profile(
             commit=False,
         )
     elif is_ec_member and not was_ec_member and role != "admin":
-        # New EC members get Pass · manage by default (EC Admin can revoke later).
+        # New EC members get Pass · manage / upgrade-staff by default (EC Admin can revoke later).
         entitlements.grant_pass_manage_if_needed(
+            conn,
+            resident["house_id"],
+            granted_by=actor.get("houseId") or "system:ec_join",
+            commit=False,
+        )
+        entitlements.grant_pass_upgrade_staff_if_needed(
             conn,
             resident["house_id"],
             granted_by=actor.get("houseId") or "system:ec_join",

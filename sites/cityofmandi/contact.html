@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Contact Board — City of Mandi</title>
+  <meta name="description" content="Write to the City of Mandi Contact Board — an independent civic mailbox, not a government office.">
+  <link rel="canonical" href="https://cityofmandi.com/contact">
+  <meta name="theme-color" content="#163c44">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260815contact3">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260815contact3">
+  <script src="/sponsored.js?v=20260815run1" defer></script>
+  <script src="/contact.js?v=20260815contact1" defer></script>
+</head>
+<body class="desk-body contact-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell contact-shell">
+    <header class="landing-top" id="landingTop">
+      <div class="landing-top-left">
+        <a class="landing-top-brand" href="/" aria-label="City of Mandi home">
+          <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40" decoding="async">
+        </a>
+        <a class="landing-brand-adda" href="/adda" aria-label="Mandi Adda — Live">
+          <span class="nav-live-mark" aria-hidden="true">Live</span>
+          <span class="landing-brand-adda-label">Mandi Adda</span>
+        </a>
+      </div>
+      <div class="landing-sponsored" data-sponsored-slot aria-label="Sponsored"></div>
+      <div class="landing-top-right">
+        <nav class="landing-nav" aria-label="Contact">
+          <a href="/">Home</a>
+          <a href="/adda">Mandi Adda</a>
+          <a href="/contact" aria-current="page">Contact Board</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="desk-card contact-hero">
+      <p class="landing-section-kicker">Mailbox</p>
+      <h1>Contact Board</h1>
+      <p class="muted">Write to the city board — questions, tips, and concerns. This is an independent civic mailbox, not Municipal Corporation Mandi or any government office.</p>
+      <div class="contact-tabs" role="tablist">
+        <button type="button" class="btn primary compact is-tab" id="tabWrite" aria-selected="true">Write</button>
+        <button type="button" class="btn ghost compact is-tab" id="tabMine" aria-selected="false">My messages</button>
+        <button type="button" class="btn ghost compact is-tab" id="tabBox" aria-selected="false" hidden>Board mailbox</button>
+      </div>
+    </section>
+
+    <section class="desk-card" id="writePanel">
+      <h2>Send a message</h2>
+      <form id="contactForm" class="desk-form">
+        <div class="desk-row-grid">
+          <label>Your name <input id="contactName" name="name" autocomplete="name" required></label>
+          <label>Email <input id="contactEmail" name="email" type="email" autocomplete="email"></label>
+        </div>
+        <div class="desk-row-grid">
+          <label>Category
+            <select id="contactCategory" name="category"></select>
+          </label>
+          <label>Area / channel
+            <select id="contactArea" name="areaId"></select>
+          </label>
+        </div>
+        <label>Subject <input id="contactSubject" name="subject" maxlength="160" required></label>
+        <label>Message <textarea id="contactBody" name="body" rows="6" maxlength="6000" required></textarea></label>
+        <button type="submit" class="btn primary">Send to Contact Board</button>
+        <p class="muted" id="contactHint"></p>
+        <p class="error" id="contactError" hidden></p>
+        <p class="ok" id="contactOk" hidden></p>
+      </form>
+    </section>
+
+    <section class="desk-card" id="minePanel" hidden>
+      <h2>Your messages</h2>
+      <p class="muted">Sign in on <a href="/adda">Mandi Adda</a> to track replies. Guest messages still reach the board.</p>
+      <div id="mineList" class="desk-stack"></div>
+    </section>
+
+    <section class="desk-card" id="boxPanel" hidden>
+      <h2>Board mailbox</h2>
+      <p class="muted">Open for operators and assigned channel admins / moderators.</p>
+      <div class="desk-actions" style="margin-bottom:0.75rem">
+        <label class="desk-check">Status
+          <select id="boxStatusFilter">
+            <option value="">All active</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </label>
+        <button type="button" class="btn ghost compact" id="boxRefresh">Refresh</button>
+      </div>
+      <div id="boxList" class="desk-stack"></div>
+    </section>
+
+    <section class="desk-card" id="detailPanel" hidden>
+      <button type="button" class="btn ghost compact" id="detailBack">← Back</button>
+      <p class="landing-meta" id="detailMeta"></p>
+      <h2 id="detailSubject"></h2>
+      <p id="detailBody" class="contact-body-text"></p>
+      <div id="detailReplies" class="desk-stack"></div>
+      <form id="replyForm" class="desk-form" hidden>
+        <label>Reply <textarea id="replyBody" rows="4" maxlength="6000" required></textarea></label>
+        <div class="desk-actions">
+          <button type="submit" class="btn primary compact">Send reply</button>
+          <select id="detailStatus" hidden>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="hidden">Hidden</option>
+          </select>
+          <button type="button" class="btn ghost compact" id="detailStatusBtn" hidden>Update status</button>
+        </div>
+        <p class="error" id="replyError" hidden></p>
+      </form>
+    </section>
+
+    <footer class="landing-foot muted">
+      <p class="landing-foot-brand">City of Mandi · Contact Board · independent hub</p>
+      <p class="landing-disclaimer">Not affiliated with Municipal Corporation Mandi. <a href="/">Home</a> · <a href="/admin/">Portal desk</a></p>
+    </footer>
+  </div>
+</body>
+</html>
