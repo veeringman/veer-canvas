@@ -85,9 +85,27 @@
   object-fit: cover;
   border: 1px solid rgba(22, 60, 68, 0.12);
 }
+.spotlight-image-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.55rem;
+  align-items: end;
+  margin-top: 0.35rem;
+}
+.spotlight-preview {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(22, 60, 68, 0.12);
+}
+.spotlight-preview.is-cover {
+  border-radius: 10px;
+}
 @media (max-width: 640px) {
   .desk-row-grid { grid-template-columns: 1fr; }
-  .sponsored-image-row { grid-template-columns: 1fr; }
+  .sponsored-image-row,
+  .spotlight-image-row { grid-template-columns: 1fr; }
 }
 .desk-tabs {
   display: flex;

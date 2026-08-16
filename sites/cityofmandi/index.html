@@ -17,10 +17,17 @@
   <meta property="og:image" content="https://cityofmandi.com/assets/cityofmandi-mark.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260815contact3">
-  <script src="sponsored.js?v=20260815run1" defer></script>
-  <script src="hub.js?v=20260815tabs1" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260817ux2">
+  <script src="live.js?v=20260815live1" defer></script>
+  <script src="sponsored.js?v=20260815live1" defer></script>
+  <script src="spotlight.js?v=20260815live1" defer></script>
+  <script src="hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="hub-prefs.js?v=20260817mymandi1" defer></script>
+  <script src="hub-geo.js?v=20260816locboards1" defer></script>
+  <script src="hub.js?v=20260817mymandi1" defer></script>
+  <script src="board.js?v=20260816locboards1" defer></script>
+  <script src="food.js?v=20260816rentals1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -33,28 +40,71 @@
         </a>
         <a class="landing-brand-adda" href="/adda" aria-label="Mandi Adda — Live">
           <span class="nav-live-mark" aria-hidden="true">Live</span>
-          <span class="landing-brand-adda-label">Mandi Adda</span>
+          <span class="landing-brand-adda-label">Adda</span>
         </a>
+        <div class="landing-boards-nav" id="landingBoardsNav">
+          <button
+            type="button"
+            class="landing-boards-btn"
+            id="landingBoardsBtn"
+            aria-expanded="false"
+            aria-haspopup="true"
+            aria-controls="landingBoardsMenu"
+            aria-label="Boards menu"
+          >
+            <span class="landing-boards-burger" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+            <span class="landing-boards-label" data-i18n="boards">Boards</span>
+            <svg class="landing-boards-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M2.2 4.2 6 8l3.8-3.8.9.9L6 9.8 1.3 5.1z"/>
+            </svg>
+          </button>
+          <div class="landing-boards-menu" id="landingBoardsMenu" hidden role="menu"></div>
+        </div>
       </div>
       <div class="landing-sponsored" data-sponsored-slot aria-label="Sponsored"></div>
       <div class="landing-top-right">
-        <nav class="landing-nav" aria-label="City sections">
-          <a href="#landing-news">News</a>
-          <a href="#landing-places">Places</a>
-          <a href="#landing-scitech">SciTech</a>
-          <a href="#landing-culture">Culture</a>
-          <a href="#landing-services">Services</a>
-          <a href="#landing-channels">Channels</a>
-          <a href="#landing-ads">Ads</a>
-          <a href="#landing-businesses">Businesses</a>
-          <a href="#landing-neighbourhoods">Neighbourhoods</a>
-          <a href="/contact">Contact Board</a>
-          <a href="#landing-about" class="landing-nav-connect">About</a>
-        </nav>
-        <a class="landing-signin" href="/join" id="landingPublishBtn">
-          <span>Publish</span>
-          <span class="landing-signin-arrow" aria-hidden="true">→</span>
+        <a href="/contact" class="landing-nav-contact" aria-label="Contact Board · संपर्क बोर्ड" title="Contact Board">
+          <svg class="landing-nav-contact-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h12V8H6zm0 4v2h8v-2H6z"/>
+          </svg>
+          <span class="landing-nav-contact-pulse" aria-hidden="true"></span>
         </a>
+        <div class="landing-account" id="landingAccount">
+          <div class="landing-account-guest" id="landingAccountGuest">
+            <a class="landing-account-signin" href="/join?mode=login&amp;next=%2F" id="landingSignInBtn">
+              <svg class="landing-account-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12zm0 2c-3.6 0-8 1.8-8 4.5V21h16v-2.5C20 15.8 15.6 14 12 14z"/>
+              </svg>
+              <span data-i18n="signIn">Sign in</span>
+            </a>
+          </div>
+          <div class="landing-account-user" id="landingAccountUser" hidden>
+            <button type="button" class="landing-account-chip" id="landingAccountChip" aria-expanded="false" aria-haspopup="true" aria-controls="landingAccountMenu">
+              <span class="landing-account-avatar" id="landingAccountAvatar" aria-hidden="true">?</span>
+              <span class="landing-account-name" id="landingAccountName">Account</span>
+              <svg class="landing-account-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M2.2 4.2 6 8l3.8-3.8.9.9L6 9.8 1.3 5.1z"/>
+              </svg>
+            </button>
+            <div class="landing-account-menu" id="landingAccountMenu" hidden role="menu">
+              <a href="/publish" role="menuitem">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M5 4h14v2H5V4zm0 4h14v12H5V8zm3 3v2h8v-2H8z"/></svg>
+                Publish desk
+              </a>
+              <a href="/adda" role="menuitem">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 4h16v12H7l-3 3V4zm3 4v2h10V8H7zm0 4v2h7v-2H7z"/></svg>
+                Mandi Adda
+              </a>
+              <a href="/account" role="menuitem">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8v-1.5C5 15.6 8.1 14 12 14s7 1.6 7 4.5V20H5z"/></svg>
+                Board preferences
+              </a>
+              <button type="button" class="landing-account-signout" id="landingSignOutBtn" role="menuitem">Sign out</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -71,43 +121,103 @@
             decoding="async"
             fetchpriority="high"
           >
+          <button
+            type="button"
+            class="landing-spotlight-orbit"
+            id="landingSpotlightOrbit"
+            hidden
+            aria-label="Open Mandi Spotlight"
+          ></button>
         </div>
         <div class="landing-hero-copy">
-          <p class="landing-hero-kicker">Himachal Pradesh · Independent city hub</p>
+          <p class="landing-hero-kicker" data-i18n="heroKicker">Himachal Pradesh · Independent city hub</p>
           <h1 id="landingHeroTitle">
             <span class="landing-hero-lead">The Great</span>
             <span class="landing-hero-name">City of Mandi</span>
           </h1>
-          <p class="landing-greeting">The civic home for news, places, services, and everyday life in Mandi — by the city, not the corporation.</p>
-          <div class="landing-hero-cta">
-            <button type="button" class="btn primary landing-cta-primary" id="landingHeroExploreBtn">Explore Mandi</button>
-            <a class="btn ghost landing-cta-secondary" href="/contact">Contact Board</a>
+          <p class="landing-greeting" data-i18n="heroGreeting">The civic home for news, places, services, and everyday life in Mandi — by the city, not the corporation.</p>
+          <a
+            class="landing-hero-seri"
+            id="landingHeroLabour"
+            href="#landing-labour"
+            hidden
+            aria-label="Labour market — open now until 10 AM"
+          >
+            <span class="landing-hero-seri-live" aria-hidden="true">Live · लाइव</span>
+            <span class="landing-hero-seri-copy">
+              <em class="landing-hero-seri-mark">Mandi’s labour market · मंडी का मज़दूर बाज़ार</em>
+              <strong>Labour · मज़दूर बाज़ार</strong>
+              <span>Morning pickup at Seri · सेरी पर सुबह की हाज़िरी — open till 10 AM</span>
+            </span>
+            <span class="landing-hero-seri-go" aria-hidden="true">→</span>
+          </a>
+
+          <div class="my-mandi" id="myMandiHome" hidden>
+            <p class="my-mandi-kicker">My Mandi · मेरी मंडी</p>
+            <p class="my-mandi-board" id="myMandiBoardLabel">Labour</p>
+            <p class="my-mandi-meta" id="myMandiMeta">Mandi · today</p>
+            <div class="my-mandi-roles" aria-hidden="true">
+              <span class="my-mandi-role">Citizen</span>
+              <span class="my-mandi-role">Partner</span>
+              <span class="my-mandi-role">Merchant</span>
+            </div>
+            <div class="landing-hero-cta my-mandi-cta">
+              <button type="button" class="btn primary landing-cta-primary" id="myMandiOpenBtn">Open my board</button>
+              <a class="btn ghost landing-cta-secondary" href="/account" id="myMandiChangeLink">Change · बदलें</a>
+            </div>
+            <button type="button" class="my-mandi-explore" id="myMandiExploreAll">Explore all boards · सब बोर्ड</button>
+          </div>
+
+          <div class="landing-hero-cta" id="landingHeroGuestCta">
+            <button type="button" class="btn primary landing-cta-primary" id="landingHeroExploreBtn" data-i18n="explore">Explore Mandi</button>
+            <a class="btn ghost landing-cta-secondary" href="/join?next=%2F" id="landingHeroSignIn">Sign in · My Mandi</a>
           </div>
         </div>
       </div>
-      <a class="landing-scroll-hint" href="#landing-board" aria-label="Browse the city board">
+      <a class="landing-scroll-hint" href="#landing-spotlight" aria-label="Browse the city board">
         <span>Explore</span>
       </a>
     </section>
 
+    <section
+      class="landing-spotlight"
+      id="landingSpotlight"
+      hidden
+      aria-labelledby="landingSpotlightTitle"
+    ></section>
+
     <div class="landing-board" id="landing-board" hidden>
       <aside class="landing-side" aria-label="Quick links">
-        <p class="landing-side-label">On this page</p>
+        <p class="landing-side-label" data-i18n="onThisPage">On this page</p>
         <nav class="landing-side-nav">
           <a href="/adda" class="landing-side-nav-adda">
             <span class="nav-live-mark" aria-hidden="true">Live</span>
             Mandi Adda
           </a>
+          <a href="#landing-spotlight">Spotlight</a>
           <a href="#landing-news">News</a>
           <a href="#landing-places">Places</a>
           <a href="#landing-scitech">SciTech</a>
           <a href="#landing-culture">Culture</a>
           <a href="#landing-services">Services</a>
+          <a href="#landing-labour">Labour market · मज़दूर बाज़ार</a>
+          <a href="#landing-taxi">Cabs &amp; taxis · कैब</a>
+          <a href="#landing-experts">SME / Experts · विशेषज्ञ</a>
+          <a href="#landing-vehicle">Vehicle service · वाहन</a>
+          <a href="#landing-doctor">Doc on call · डॉक्टर</a>
+          <a href="#landing-tours">Tours &amp; travels · टूर्स</a>
+          <a href="#landing-tutors">Tutors · ट्यूटर</a>
+          <a href="#landing-home">Home services · घर सेवा</a>
+          <a href="#landing-food">Food · खाना</a>
+          <a href="#landing-grocery">Grocery · किराना</a>
+          <a href="#landing-hardware">Hardware · हार्डवेयर</a>
+          <a href="#landing-haulage">Trucks &amp; tempo · ढुलाई</a>
+          <a href="#landing-rentals">To rent or sell · किराये / बिक्री</a>
           <a href="#landing-channels">Channels</a>
           <a href="#landing-ads">Ads</a>
           <a href="#landing-businesses">Businesses</a>
           <a href="#landing-neighbourhoods">Neighbourhoods</a>
-          <a href="/contact">Contact Board</a>
+          <a href="/contact" class="landing-side-contact">Contact Board · संपर्क</a>
           <a href="#landing-about">About this hub</a>
         </nav>
         <a class="landing-side-card landing-side-card-adda" href="/adda">
@@ -281,6 +391,253 @@
           </div>
         </section>
 
+        <section class="landing-section" id="landing-labour" aria-labelledby="landingLabourTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Seri · रोज़ · सेरी</p>
+              <h2 id="landingLabourTitle">Labour market <span class="seri-hi-title" lang="hi">मज़दूर बाज़ार</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Mandi’s morning labour market at Seri — construction, garden, clean. Citizens post needs; workers register, mark available, and respond in-app. Contact stays private until a response.
+              <span class="seri-hi-line" lang="hi">मंडी का सुबह का मज़दूर बाज़ार — सेरी पर निर्माण, बागवानी, सफाई। संपर्क ऐप में जवाब देने तक निजी रहता है।</span>
+            </p>
+          </header>
+
+          <div class="seri-board-actions" id="labourBoardActions">
+            <label class="board-locality-label muted">Area
+              <select id="labourLocalitySelect" class="board-locality-select" aria-label="Home locality filter"></select>
+            </label>
+            <button type="button" class="btn ghost compact hub-locate-inline" data-hub-locate="labour">Use my location</button>
+            <a class="btn primary compact" id="labourRegisterBtn" href="/labour?next=%2F%23landing-labour">Register · पंजीकरण</a>
+            <a class="btn ghost compact" id="labourSignInBtn" href="/labour?mode=login&amp;next=%2F%23landing-labour">Sign in · साइन इन</a>
+            <button type="button" class="btn primary compact" id="labourMarkAvailableBtn" hidden>Mark available today · आज उपलब्ध</button>
+            <button type="button" class="btn ghost compact" id="labourLogoutBtn" hidden>Sign out · साइन आउट</button>
+            <a class="btn ghost compact" id="labourPrefsBtn" href="/account" hidden>Preferences · प्राथमिकताएँ</a>
+            <a class="btn ghost compact" href="/join?next=%2F%23landing-labour">Post a need · ज़रूरत लिखें</a>
+          </div>
+          <p class="seri-worker-status muted" id="labourProviderStatus" hidden></p>
+
+          <div class="seri-board-grid">
+            <div class="seri-board-col">
+              <h3 class="seri-board-col-title">Today’s needs · आज की ज़रूरतें</h3>
+              <div id="landingLabourList" class="landing-grid landing-grid-ads">
+                <article class="landing-card">
+                  <p class="landing-meta">How it works · कैसे काम करता है</p>
+                  <strong>Needs on the board, contact in private · ज़रूरत बोर्ड पर, संपर्क निजी</strong>
+                  <p>Post what Mandi’s day needs — registered workers answer with “I’m available.” Only you see their number on the publish desk.
+                    <span class="seri-hi-line" lang="hi">मंडी के दिन का काम लिखें — पंजीकृत मजदूर जवाब देते हैं। नंबर सिर्फ आपके डेस्क पर दिखता है।</span>
+                  </p>
+                  <p class="landing-contact"><a href="/join?next=%2F%23landing-labour">Publish a labour need · मज़दूर ज़रूरत</a></p>
+                </article>
+              </div>
+            </div>
+            <div class="seri-board-col">
+              <h3 class="seri-board-col-title">Available workers · उपलब्ध मजदूर</h3>
+              <div id="landingLabourProviders" class="landing-grid landing-grid-ads">
+                <article class="landing-card" data-board-providers-empty="1">
+                  <p class="landing-meta">Workers · मज़दूर</p>
+                  <strong>Register, then mark available each morning · पंजीकरण, फिर हर सुबह उपलब्ध</strong>
+                  <p>Profiles show name, photo, skills, and area — not phone numbers.
+                    <span class="seri-hi-line" lang="hi">प्रोफ़ाइल में नाम, फोटो, कौशल और इलाका — फोन नंबर नहीं।</span>
+                  </p>
+                  <p class="landing-contact"><a href="/labour?next=%2F%23landing-labour">Labour registration · मज़दूर पंजीकरण</a></p>
+                </article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-taxi" aria-labelledby="landingTaxiTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Rides · रोज़ · सवारी</p>
+              <h2 id="landingTaxiTitle">Cabs &amp; taxis <span class="seri-hi-title" lang="hi">कैब और टैक्सी</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Ride requests and drivers on duty. Post from / to / when; drivers respond in-app. Contact stays private until a response.
+              <span class="seri-hi-line" lang="hi">सवारी अनुरोध और ड्यूटी पर ड्राइवर। संपर्क ऐप में जवाब देने तक निजी रहता है।</span>
+            </p>
+          </header>
+
+          <div class="seri-board-actions" id="taxiBoardActions">
+            <label class="board-locality-label muted">Area
+              <select id="taxiLocalitySelect" class="board-locality-select" aria-label="Home locality filter"></select>
+            </label>
+            <button type="button" class="btn ghost compact hub-locate-inline" data-hub-locate="taxi">Use my location</button>
+            <a class="btn primary compact" id="taxiRegisterBtn" href="/taxi?next=%2F%23landing-taxi">Register · पंजीकरण</a>
+            <a class="btn ghost compact" id="taxiSignInBtn" href="/taxi?mode=login&amp;next=%2F%23landing-taxi">Sign in · साइन इन</a>
+            <button type="button" class="btn primary compact" id="taxiMarkAvailableBtn" hidden>Mark on duty today · आज ड्यूटी</button>
+            <button type="button" class="btn ghost compact" id="taxiLogoutBtn" hidden>Sign out · साइन आउट</button>
+            <a class="btn ghost compact" id="taxiPrefsBtn" href="/account" hidden>Preferences · प्राथमिकताएँ</a>
+            <a class="btn ghost compact" href="/join?next=%2F%23landing-taxi">Request a ride · सवारी लिखें</a>
+          </div>
+          <p class="seri-worker-status muted" id="taxiProviderStatus" hidden></p>
+
+          <div class="seri-board-grid">
+            <div class="seri-board-col">
+              <h3 class="seri-board-col-title">Ride requests · सवारी अनुरोध</h3>
+              <div id="landingTaxiList" class="landing-grid landing-grid-ads">
+                <article class="landing-card">
+                  <p class="landing-meta">How it works · कैसे काम करता है</p>
+                  <strong>Request on the board, contact in private · अनुरोध बोर्ड पर, संपर्क निजी</strong>
+                  <p>Publish pickup, drop, and when. Drivers on duty respond; only you see their number on the publish desk.</p>
+                  <p class="landing-contact"><a href="/join?next=%2F%23landing-taxi">Publish a ride request · सवारी अनुरोध</a></p>
+                </article>
+              </div>
+            </div>
+            <div class="seri-board-col">
+              <h3 class="seri-board-col-title">Drivers on duty · ड्यूटी पर ड्राइवर</h3>
+              <div id="landingTaxiProviders" class="landing-grid landing-grid-ads">
+                <article class="landing-card" data-board-providers-empty="1">
+                  <p class="landing-meta">Drivers · ड्राइवर</p>
+                  <strong>Register, then mark on duty · पंजीकरण, फिर ड्यूटी चिह्नित करें</strong>
+                  <p>Profiles show name, photo, routes, and area — not phone numbers.</p>
+                  <p class="landing-contact"><a href="/taxi?next=%2F%23landing-taxi">Driver registration · ड्राइवर पंजीकरण</a></p>
+                </article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-food" aria-labelledby="landingFoodTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Order · रोज़ · ऑर्डर</p>
+              <h2 id="landingFoodTitle">Food &amp; restaurants <span class="seri-hi-title" lang="hi">खाना और रेस्तराँ</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Order from kitchens near you. Cart on your phone, pay on delivery (COD).
+              <span class="seri-hi-line" lang="hi">आस-पास की रसोई से ऑर्डर करें। डिलीवरी पर भुगतान।</span>
+            </p>
+          </header>
+          <div class="seri-board-actions" id="foodBoardActions">
+            <a class="btn primary compact" href="/merchant">Merchant desk · व्यापारी</a>
+            <a class="btn ghost compact" href="/delivery">Delivery partners · डिलीवरी</a>
+            <a class="btn ghost compact" href="/b/demo-rasoi">Demo kitchen · डेमो</a>
+          </div>
+          <div id="landingFoodList" class="landing-grid landing-grid-ads">
+            <article class="landing-card">
+              <p class="landing-meta">How it works · कैसे काम करता है</p>
+              <strong>Browse · cart · COD at the door</strong>
+              <p>Open a shop, add dishes, place the order with your mobile. No online payment in v1.
+                <span class="seri-hi-line" lang="hi">दुकान खोलें, डिश जोड़ें, मोबाइल से ऑर्डर करें।</span>
+              </p>
+              <p class="landing-contact"><a href="/b/demo-rasoi">Try Demo Rasoi · डेमो रसोई</a></p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-grocery" aria-labelledby="landingGroceryTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Kirana · रोज़ · किराना</p>
+              <h2 id="landingGroceryTitle">Grocers <span class="seri-hi-title" lang="hi">किराना</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Kirana and daily needs, delivered locally. Same cart · COD flow as food.
+              <span class="seri-hi-line" lang="hi">किराना और रोज़मर्रा — स्थानीय डिलीवरी।</span>
+            </p>
+          </header>
+          <div class="seri-board-actions">
+            <a class="btn primary compact" href="/merchant">Merchant desk · व्यापारी</a>
+            <a class="btn ghost compact" href="/delivery?role=delivery_grocery">Delivery · डिलीवरी</a>
+            <a class="btn ghost compact" href="/b/demo-kirana">Demo kirana · डेमो</a>
+          </div>
+          <div id="landingGroceryList" class="landing-grid landing-grid-ads">
+            <article class="landing-card">
+              <p class="landing-meta">How it works</p>
+              <strong>Staples to your door · COD</strong>
+              <p>Browse a kirana, add bags and kilos, pay when it arrives.</p>
+              <p class="landing-contact"><a href="/b/demo-kirana">Try Demo Kirana</a></p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-hardware" aria-labelledby="landingHardwareTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Supplies · सामग्री</p>
+              <h2 id="landingHardwareTitle">Hardware <span class="seri-hi-title" lang="hi">हार्डवेयर</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Hardware and building supplies — order or pickup, COD.
+              <span class="seri-hi-line" lang="hi">हार्डवेयर और निर्माण सामग्री।</span>
+            </p>
+          </header>
+          <div class="seri-board-actions">
+            <a class="btn primary compact" href="/merchant">Merchant desk · व्यापारी</a>
+            <a class="btn ghost compact" href="/delivery?role=delivery_hardware">Delivery · डिलीवरी</a>
+            <a class="btn ghost compact" href="/b/demo-hardware">Demo hardware · डेमो</a>
+          </div>
+          <div id="landingHardwareList" class="landing-grid landing-grid-ads">
+            <article class="landing-card">
+              <p class="landing-meta">How it works</p>
+              <strong>Cement, pipe, wire — listed prices</strong>
+              <p>Counters list stock; partners claim heavy deliveries.</p>
+              <p class="landing-contact"><a href="/b/demo-hardware">Try Demo Hardware</a></p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-haulage" aria-labelledby="landingHaulageTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Load · ढुलाई</p>
+              <h2 id="landingHaulageTitle">Trucks &amp; tempo <span class="seri-hi-title" lang="hi">ट्रक और टेम्पो</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Book a tempo or truck trip across Mandi. Partners claim on duty.
+              <span class="seri-hi-line" lang="hi">मंडी में सामान ढुलाई — ड्यूटी पर दावा करें।</span>
+            </p>
+          </header>
+          <div class="seri-board-actions">
+            <a class="btn primary compact" href="/merchant">Haulage desk · डेस्क</a>
+            <a class="btn ghost compact" href="/delivery?role=haulage">Drivers · ड्राइवर</a>
+            <a class="btn ghost compact" href="/b/demo-tempo">Demo tempo · डेमो</a>
+          </div>
+          <div id="landingHaulageList" class="landing-grid landing-grid-ads">
+            <article class="landing-card">
+              <p class="landing-meta">How it works</p>
+              <strong>Pick a trip type · claim race</strong>
+              <p>Customer books a listed trip; on-duty partners claim first.</p>
+              <p class="landing-contact"><a href="/b/demo-tempo">Try Demo Tempo</a></p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section" id="landing-rentals" aria-labelledby="landingRentalsTitle" lang="en">
+          <header class="landing-section-head">
+            <div>
+              <p class="landing-section-kicker">Everyday · Market · बाज़ार</p>
+              <h2 id="landingRentalsTitle">To rent or sell <span class="seri-hi-title" lang="hi">किराये या बिक्री</span></h2>
+            </div>
+            <p class="muted landing-section-lede">
+              Brokers are registered businesses. Browse listings by category — real estate, auto, electronics, furniture, and more.
+              <span class="seri-hi-line" lang="hi">ब्रोकर पंजीकृत व्यवसाय हैं। संपत्ति, वाहन, इलेक्ट्रॉनिक्स आदि की सूची देखें।</span>
+            </p>
+          </header>
+          <div class="seri-board-actions">
+            <a class="btn primary compact" href="/merchant">Broker desk · ब्रोकर डेस्क</a>
+            <a class="btn ghost compact" href="/join?next=%2Fmerchant">Register business · व्यवसाय</a>
+            <a class="btn ghost compact" href="/b/demo-broker">Demo broker · डेमो</a>
+            <a class="btn ghost compact" href="/publish?kind=rentals">Post a want-ad · विज्ञापन</a>
+          </div>
+          <p class="muted rentals-cats-hint">
+            Categories · श्रेणियाँ:
+            Real estate · Auto · Electronics · Furniture · Appliances · Fashion · Tools · Industrial · Other
+          </p>
+          <div id="landingRentalsList" class="landing-grid landing-grid-ads">
+            <article class="landing-card">
+              <p class="landing-meta">How it works · कैसे काम करता है</p>
+              <strong>Brokers list · you shortlist · enquire</strong>
+              <p>A registered broker opens a desk, adds rent/sale listings by category. You shortlist and send an enquiry — no delivery race.
+                <span class="seri-hi-line" lang="hi">ब्रोकर सूची जोड़ते हैं; आप शॉर्टलिस्ट करके पूछताछ भेजते हैं।</span>
+              </p>
+              <p class="landing-contact"><a href="/b/demo-broker">Try Demo Mandi Brokers · डेमो</a></p>
+            </article>
+          </div>
+        </section>
+
         <section class="landing-section" id="landing-channels" aria-labelledby="landingChannelsTitle">
           <header class="landing-section-head">
             <div>
@@ -445,7 +802,7 @@
         </div>
         <div class="landing-connect-actions">
           <a class="btn primary" href="#landing-businesses">See businesses</a>
-          <a class="btn ghost" href="/contact">Contact Board</a>
+          <a class="btn ghost" href="/contact" data-i18n="contactBoard">Contact Board</a>
           <a class="btn ghost" href="#landing-about">Read the disclaimer</a>
         </div>
       </div>
@@ -453,7 +810,7 @@
 
     <footer class="landing-foot muted">
       <p class="landing-foot-brand">City of Mandi · civic home · Mandi, Himachal Pradesh 175001</p>
-      <p class="landing-disclaimer">Not affiliated with Municipal Corporation Mandi or any government body. <a href="/contact">Contact Board</a> · <a href="/admin/">Portal desk</a></p>
+      <p class="landing-disclaimer">Not affiliated with Municipal Corporation Mandi or any government body. <a href="/contact" data-i18n="contactBoard">Contact Board</a> · <a href="/admin/">Portal desk</a></p>
       <p class="gate-managed">
         <span>Managed By</span>
         <picture>

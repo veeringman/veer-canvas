@@ -1,5 +1,5 @@
 (() => {
-  const FEATURE_KEYS = ["news", "places", "scitech", "culture", "services", "channels", "ads", "neighbourhoods", "businesses"];
+  const FEATURE_KEYS = ["news", "places", "scitech", "culture", "services", "labour", "taxi", "boards", "seri", "channels", "ads", "neighbourhoods", "businesses"];
   let ANIMATIONS = [
     { id: "independence", label: "Independence Day" },
     { id: "marquee", label: "Marquee" },
@@ -301,6 +301,7 @@
       showDesk();
       await loadModeration();
       await loadSponsored();
+      await loadSpotlight();
       await loadMailboxPreview();
       await loadStaffAndChannels();
     } catch {
@@ -324,6 +325,7 @@
       showDesk();
       await loadModeration();
       await loadSponsored();
+      await loadSpotlight();
       await loadMailboxPreview();
       await loadStaffAndChannels();
     } catch (err) {
@@ -393,6 +395,190 @@
       await loadSponsored();
     } catch (err) {
       $("sponsoredStatus").textContent = err.message;
+    }
+  });
+
+  let FEED_POSTS = [];
+
+  function postOptions(selected) {
+    const sel = selected == null || selected === "" ? "" : String(selected);
+    const opts = [`<option value="">— none —</option>`];
+    FEED_POSTS.forEach((p) => {
+      const id = String(p.id);
+      const label = `${p.kind || "post"} · ${p.title || id}${p.publisherName ? " · " + p.publisherName : ""}`;
+      opts.push(
+        `<option value="${escapeAttr(id)}"${id === sel ? " selected" : ""}>${escapeText(label)}</option>`
+      );
+    });
+    return opts.join("");
+  }
+
+  function bindSpotlightUpload(wrap, fileName, urlName, previewSel, statusMsg) {
+    const fileInput = wrap.querySelector(`[name="${fileName}"]`);
+    const urlInput = wrap.querySelector(`[name="${urlName}"]`);
+    const preview = wrap.querySelector(previewSel);
+    if (!fileInput || !urlInput || !preview) return;
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const data = await api("/api/hub/spotlight/upload", { method: "POST", body: fd });
+        urlInput.value = data.imageUrl || "";
+        if (data.imageUrl) {
+          preview.hidden = false;
+          preview.src = data.imageUrl;
+        }
+        $("spotlightStatus").textContent = statusMsg;
+      } catch (err) {
+        $("spotlightStatus").textContent = err.message;
+      }
+    });
+    urlInput.addEventListener("input", () => {
+      if (urlInput.value.trim()) {
+        preview.hidden = false;
+        preview.src = urlInput.value.trim();
+      } else {
+        preview.hidden = true;
+        preview.removeAttribute("src");
+      }
+    });
+  }
+
+  function spotlightRow(item = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = "desk-row spotlight-row";
+    const kind = item.kind || "person";
+    const status = item.status || "draft";
+    wrap.innerHTML = `
+      <div class="desk-row-grid">
+        <label>Id <input name="id" value="${escapeAttr(item.id || "")}" placeholder="spot-common-man"></label>
+        <label>Kind
+          <select name="kind">
+            <option value="person"${kind === "person" ? " selected" : ""}>Person</option>
+            <option value="post"${kind === "post" ? " selected" : ""}>Post</option>
+          </select>
+        </label>
+        <label>Status
+          <select name="status">
+            <option value="draft"${status === "draft" ? " selected" : ""}>Draft</option>
+            <option value="scheduled"${status === "scheduled" ? " selected" : ""}>Scheduled</option>
+            <option value="active"${status === "active" ? " selected" : ""}>Active</option>
+            <option value="archived"${status === "archived" ? " selected" : ""}>Archived</option>
+          </select>
+        </label>
+        <label>Linked post
+          <select name="linkedPostId">${postOptions(item.linkedPostId)}</select>
+        </label>
+      </div>
+      <label>Title <input name="title" value="${escapeAttr(item.title || "")}" placeholder="Name or story headline" required></label>
+      <label>Subtitle <input name="subtitle" value="${escapeAttr(item.subtitle || "")}" placeholder="One line — neighbourhood, role, or kicker"></label>
+      <label>Story <textarea name="body" rows="3" placeholder="Short rich story for the Spotlight strip">${escapeText(item.body || "")}</textarea></label>
+      <div class="desk-row-grid">
+        <label>CTA label <input name="ctaLabel" value="${escapeAttr(item.ctaLabel || "")}" placeholder="Meet / Read story"></label>
+        <label>CTA link <input name="ctaHref" value="${escapeAttr(item.ctaHref || "")}" placeholder="https:// or /path"></label>
+        <label>Starts (ISO) <input name="startsAt" value="${escapeAttr(item.startsAt || "")}" placeholder="2026-08-15T00:00:00Z"></label>
+        <label>Ends (ISO) <input name="endsAt" value="${escapeAttr(item.endsAt || "")}" placeholder="optional"></label>
+      </div>
+      <div class="spotlight-image-row">
+        <label>Portrait URL <input name="portraitUrl" value="${escapeAttr(item.portraitUrl || "")}" placeholder="/api/hub/spotlight/images/…"></label>
+        <label class="btn ghost compact sponsored-upload-btn">Upload portrait
+          <input type="file" name="portraitFile" accept="image/*" hidden>
+        </label>
+        <img class="spotlight-preview" alt="" ${item.portraitUrl ? `src="${escapeAttr(item.portraitUrl)}"` : "hidden"}>
+      </div>
+      <div class="spotlight-image-row">
+        <label>Cover URL <input name="coverUrl" value="${escapeAttr(item.coverUrl || "")}" placeholder="Wide strip image"></label>
+        <label class="btn ghost compact sponsored-upload-btn">Upload cover
+          <input type="file" name="coverFile" accept="image/*" hidden>
+        </label>
+        <img class="spotlight-preview is-cover" alt="" ${item.coverUrl ? `src="${escapeAttr(item.coverUrl)}"` : "hidden"}>
+      </div>
+      <label class="desk-check"><input type="checkbox" name="showInHeroCircle" ${item.showInHeroCircle ? "checked" : ""}> Show in Hero Circle (satellite by the seal)</label>
+      <div class="desk-actions"><button type="button" class="btn ghost compact remove">Remove</button></div>
+    `;
+    wrap.querySelector(".remove").addEventListener("click", () => wrap.remove());
+    bindSpotlightUpload(wrap, "portraitFile", "portraitUrl", ".spotlight-preview:not(.is-cover)", "Portrait uploaded — save Spotlight to keep.");
+    bindSpotlightUpload(wrap, "coverFile", "coverUrl", ".spotlight-preview.is-cover", "Cover uploaded — save Spotlight to keep.");
+    return wrap;
+  }
+
+  function readSpotlight() {
+    return [...$("spotlightList").querySelectorAll(".spotlight-row")].map((row) => {
+      const linkedRaw = row.querySelector('[name="linkedPostId"]').value.trim();
+      return {
+        id: row.querySelector('[name="id"]').value.trim(),
+        kind: row.querySelector('[name="kind"]').value,
+        status: row.querySelector('[name="status"]').value,
+        title: row.querySelector('[name="title"]').value.trim(),
+        subtitle: row.querySelector('[name="subtitle"]').value.trim(),
+        body: row.querySelector('[name="body"]').value.trim(),
+        ctaLabel: row.querySelector('[name="ctaLabel"]').value.trim(),
+        ctaHref: row.querySelector('[name="ctaHref"]').value.trim(),
+        portraitUrl: row.querySelector('[name="portraitUrl"]').value.trim(),
+        coverUrl: row.querySelector('[name="coverUrl"]').value.trim(),
+        linkedPostId: linkedRaw ? Number(linkedRaw) : null,
+        showInHeroCircle: row.querySelector('[name="showInHeroCircle"]').checked,
+        startsAt: row.querySelector('[name="startsAt"]').value.trim(),
+        endsAt: row.querySelector('[name="endsAt"]').value.trim(),
+      };
+    });
+  }
+
+  async function loadFeedPosts() {
+    try {
+      const data = await api("/api/hub/feed");
+      FEED_POSTS = Array.isArray(data.posts) ? data.posts : [];
+    } catch {
+      FEED_POSTS = [];
+    }
+  }
+
+  async function loadSpotlight() {
+    await loadFeedPosts();
+    const data = await api("/api/hub/spotlight/manage");
+    $("spotlightList").innerHTML = "";
+    const slots = data.slots || [];
+    if (!slots.length) {
+      $("spotlightList").appendChild(spotlightRow({
+        id: "",
+        kind: "person",
+        status: "draft",
+        title: "",
+        showInHeroCircle: false,
+      }));
+    } else {
+      slots.forEach((item) => $("spotlightList").appendChild(spotlightRow(item)));
+    }
+    if (data.current) {
+      $("spotlightStatus").textContent = `Live now: ${data.current.title}`;
+    } else {
+      $("spotlightStatus").textContent = "No Spotlight is live in the current window.";
+    }
+  }
+
+  $("addSpotlightBtn").addEventListener("click", () => {
+    $("spotlightList").appendChild(spotlightRow({
+      kind: "person",
+      status: "draft",
+      showInHeroCircle: false,
+    }));
+  });
+  $("saveSpotlightBtn").addEventListener("click", async () => {
+    try {
+      const data = await api("/api/hub/spotlight", {
+        method: "PUT",
+        body: JSON.stringify({ slots: readSpotlight() }),
+      });
+      if (data.current) {
+        $("spotlightStatus").textContent = `Saved. Live now: ${data.current.title}`;
+      } else {
+        $("spotlightStatus").textContent = "Saved. No slot is live in the current window.";
+      }
+      await loadSpotlight();
+    } catch (err) {
+      $("spotlightStatus").textContent = err.message;
     }
   });
 

@@ -18,21 +18,26 @@
   },
   "platform": false,
   "ops": false,
-  "status": "authoring",
+  "status": "live",
   "siteType": "responsive",
   "templateId": "civic-hub",
   "templateVersion": "0.1.0",
-  "locales": ["en"],
+  "locales": ["en", "hi"],
   "defaultLocale": "en",
   "repos": [],
   "integrations": [],
   "createdAt": "2026-08-14T07:30:00Z",
-  "updatedAt": "2026-08-14T07:30:00Z",
+  "updatedAt": "2026-08-16T02:15:00Z",
   "statusHistory": [
     {
       "status": "authoring",
       "at": "2026-08-14T07:30:00Z",
       "note": "Scaffolded civic hub homepage from housingcolonysanyard landing, teal-slate / copper theme"
+    },
+    {
+      "status": "live",
+      "at": "2026-08-16T02:15:00Z",
+      "note": "Public production on cityofmandi.com (+ www); Seri Subah + bilingual board live"
     }
   ]
 }

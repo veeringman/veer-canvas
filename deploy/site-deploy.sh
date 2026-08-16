@@ -305,6 +305,7 @@ EnvironmentFile=-$WEB_ROOT/data/vapid.env
 EnvironmentFile=-$WEB_ROOT/data/ai.env
 EnvironmentFile=-$WEB_ROOT/data/apple-wallet.env
 EnvironmentFile=-$WEB_ROOT/data/google-wallet.env
+EnvironmentFile=-$WEB_ROOT/data/payments.env
 EnvironmentFile=-/etc/veercanvas/${SITE_ID}.env
 ExecStart=$WEB_ROOT/venv/bin/python $ADMIN_APP
 Restart=always

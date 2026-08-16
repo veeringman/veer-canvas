@@ -7153,6 +7153,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     items: [],
     expandedId: null,
     editingId: null,
+    quotesByWork: {},
+    inviteWorkId: null,
   };
 
   const campaignsState = {
@@ -7297,6 +7299,108 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     el('worksManageBlock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function renderWorksQuotesBlock(workId) {
+    if (!hasEntitlement('manage_works')) return '';
+    const pack = worksState.quotesByWork[workId];
+    const loading = pack === undefined;
+    const invites = pack?.invites || [];
+    const responses = pack?.responses || [];
+    const counts = pack?.counts || {};
+    const responseRows = responses.length
+      ? `<ul class="works-quote-list">${responses.map((r) => `
+          <li>
+            <strong>${escapeHtml(r.vendorName || r.vendorEmail || 'Vendor')}</strong>
+            <span class="muted">${escapeHtml(r.vendorEmail || '')}${r.vendorPhone ? ' · ' + escapeHtml(r.vendorPhone) : ''}</span>
+            ${r.amount != null ? `<span>${formatRupee(r.amount)}</span>` : ''}
+            ${r.timeline ? `<span class="muted">${escapeHtml(r.timeline)}</span>` : ''}
+            ${r.notes ? `<p>${escapeHtml(r.notes)}</p>` : ''}
+          </li>`).join('')}</ul>`
+      : '<p class="muted">No quotes received yet.</p>';
+    const inviteRows = invites.length
+      ? `<ul class="works-quote-invites muted">${invites.slice(0, 8).map((i) => `
+          <li>${escapeHtml(i.vendorEmail)} · ${escapeHtml(i.status)}${i.emailError ? ' · send issue' : ''}</li>
+        `).join('')}</ul>`
+      : '';
+    return `
+      <div class="detail-block works-quotes-block" data-work-quotes="${escapeHtml(workId)}">
+        <div class="roster-toolbar" style="margin:0 0 0.45rem">
+          <strong>Quotes</strong>
+          <button type="button" class="btn primary compact" data-work-invite-quotes="${escapeHtml(workId)}">Invite quotes</button>
+        </div>
+        <p class="muted" style="margin:0 0 0.45rem">
+          ${loading ? 'Loading quotes…' : `${counts.responded || 0} response${(counts.responded || 0) === 1 ? '' : 's'} · ${counts.pending || 0} pending invite${(counts.pending || 0) === 1 ? '' : 's'}`}
+        </p>
+        ${loading ? '' : responseRows}
+        ${loading ? '' : inviteRows}
+      </div>`;
+  }
+
+  async function loadWorkQuotes(workId) {
+    if (!workId || !hasEntitlement('manage_works')) return;
+    try {
+      const data = await api(`/api/rwa/works/${encodeURIComponent(workId)}/quotes`);
+      worksState.quotesByWork[workId] = {
+        invites: data.invites || [],
+        responses: data.responses || [],
+        counts: data.counts || {},
+      };
+    } catch (e) {
+      worksState.quotesByWork[workId] = { invites: [], responses: [], counts: {}, error: e.message };
+    }
+    if (worksState.expandedId === workId) renderWorksList();
+  }
+
+  function openWorksQuoteInvite(workId) {
+    const work = worksState.items.find((w) => w.id === workId);
+    if (!work) return;
+    worksState.inviteWorkId = workId;
+    const dialog = el('worksQuoteInviteDialog');
+    if (el('worksQuoteInviteWorkTitle')) {
+      el('worksQuoteInviteWorkTitle').textContent = work.title || 'Work item';
+    }
+    if (el('worksQuoteInviteEmails')) el('worksQuoteInviteEmails').value = '';
+    if (el('worksQuoteInviteMessage')) el('worksQuoteInviteMessage').value = '';
+    if (el('worksQuoteInviteStatus')) el('worksQuoteInviteStatus').textContent = '';
+    dialog?.showModal();
+  }
+
+  async function submitWorksQuoteInvite(event) {
+    event.preventDefault();
+    const workId = worksState.inviteWorkId;
+    if (!workId) return;
+    const statusLine = el('worksQuoteInviteStatus');
+    const btn = el('worksQuoteInviteSubmitBtn');
+    const emails = el('worksQuoteInviteEmails')?.value || '';
+    const message = el('worksQuoteInviteMessage')?.value.trim() || '';
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Sending invites…';
+    try {
+      const data = await api(`/api/rwa/works/${encodeURIComponent(workId)}/quotes/invite`, {
+        method: 'POST',
+        body: JSON.stringify({ emails, message }),
+      });
+      worksState.quotesByWork[workId] = data.quotes || {
+        invites: data.invites || [],
+        responses: [],
+        counts: {},
+      };
+      const sent = (data.invites || []).length;
+      const failed = (data.invites || []).filter((i) => i.emailError || (i.emailDelivery && !i.emailDelivery.ok)).length;
+      if (statusLine) {
+        statusLine.textContent = failed
+          ? `Invited ${sent}; ${failed} email(s) had delivery issues (link still created).`
+          : `Sent ${sent} invite${sent === 1 ? '' : 's'}.`;
+      }
+      worksState.expandedId = workId;
+      renderWorksList();
+      setTimeout(() => el('worksQuoteInviteDialog')?.close(), 900);
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Invite failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   function renderWorksList() {
     const list = el('worksList');
     const statusLine = el('worksListStatus');
@@ -7310,6 +7414,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     list.innerHTML = items.map((w) => {
       const expanded = worksState.expandedId === w.id;
       const milestones = (w.milestones || []).slice(0, 6);
+      const canQuotes = hasEntitlement('manage_works') && ['maintenance', 'development'].includes(w.kind);
       return `
         <article class="works-card mobile-fold${expanded ? ' is-expanded' : ''}" data-work-id="${escapeHtml(w.id)}">
           <div class="meta">
@@ -7325,10 +7430,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
             ${w.benefits ? `<div class="detail-block"><strong>Benefits</strong>${escapeHtml(w.benefits)}</div>` : ''}
             ${w.estimatedCost != null ? `<div class="detail-block"><strong>Estimated cost</strong>${formatRupee(w.estimatedCost)}</div>` : ''}
             ${milestones.length ? `<div class="detail-block"><strong>Milestones</strong><ul class="works-milestone-list">${milestones.map((m) => `<li class="${m.done ? 'done' : ''}">${escapeHtml(m.date || '')} — ${escapeHtml(m.title || '')}</li>`).join('')}</ul></div>` : ''}
+            ${canQuotes || hasEntitlement('manage_works') ? renderWorksQuotesBlock(w.id) : ''}
           ` : ''}
           <div class="btn-row">
             <button type="button" class="btn ghost compact" data-work-toggle="${escapeHtml(w.id)}">${expanded ? 'Less' : 'Details'}</button>
             ${hasEntitlement('manage_works') ? `<button type="button" class="btn secondary compact" data-work-edit="${escapeHtml(w.id)}">Edit</button>` : ''}
+            ${hasEntitlement('manage_works') ? `<button type="button" class="btn primary compact" data-work-invite-quotes="${escapeHtml(w.id)}">Invite quotes</button>` : ''}
           </div>
         </article>`;
     }).join('');
@@ -12844,10 +12951,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('worksList')?.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-work-toggle]');
     const edit = event.target.closest('[data-work-edit]');
+    const invite = event.target.closest('[data-work-invite-quotes]');
     if (toggle) {
       const id = toggle.getAttribute('data-work-toggle');
       worksState.expandedId = worksState.expandedId === id ? null : id;
       renderWorksList();
+      if (worksState.expandedId && hasEntitlement('manage_works')) {
+        loadWorkQuotes(worksState.expandedId).catch(console.error);
+      }
+      return;
+    }
+    if (invite) {
+      openWorksQuoteInvite(invite.getAttribute('data-work-invite-quotes'));
       return;
     }
     if (edit) {
@@ -12855,6 +12970,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (work) fillWorksForm(work);
     }
   });
+
+  el('worksQuoteInviteForm')?.addEventListener('submit', submitWorksQuoteInvite);
+  el('worksQuoteInviteCloseBtn')?.addEventListener('click', () => el('worksQuoteInviteDialog')?.close());
+  el('worksQuoteInviteCancelBtn')?.addEventListener('click', () => el('worksQuoteInviteDialog')?.close());
 
   el('campaignsRefreshBtn')?.addEventListener('click', () => loadCampaigns().catch(console.error));
   el('campaignsKindFilter')?.addEventListener('change', () => loadCampaigns().catch(console.error));

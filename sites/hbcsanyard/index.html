@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260815chat3">
+  <link rel="stylesheet" href="portal.css?v=20260816quotes1">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260815chat3" defer></script>
+  <script src="portal.js?v=20260816quotes1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -1249,6 +1249,28 @@
             <p class="muted" id="worksFormStatus"></p>
           </form>
         </div>
+
+        <dialog id="worksQuoteInviteDialog" class="campaign-contribute-dialog" aria-labelledby="worksQuoteInviteTitle">
+          <form id="worksQuoteInviteForm" method="dialog" class="stack">
+            <header class="dialog-head">
+              <h3 id="worksQuoteInviteTitle">Invite quotes</h3>
+              <button type="button" class="btn ghost compact dialog-close" id="worksQuoteInviteCloseBtn" aria-label="Close">✕</button>
+            </header>
+            <p class="muted" id="worksQuoteInviteWorkTitle"></p>
+            <label>Vendor email(s)
+              <textarea id="worksQuoteInviteEmails" rows="3" required placeholder="vendor1@example.com, vendor2@example.com"></textarea>
+            </label>
+            <label>Message to vendors (optional)
+              <textarea id="worksQuoteInviteMessage" rows="3" maxlength="800" placeholder="Deadline, site visit, documents required…"></textarea>
+            </label>
+            <p class="muted">Each vendor gets an email with work details and a public link to respond. Responses land in the colony mailbox and under Quotes on this project.</p>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="worksQuoteInviteSubmitBtn">Send invites</button>
+              <button type="button" class="btn ghost" id="worksQuoteInviteCancelBtn">Cancel</button>
+            </div>
+            <p class="muted" id="worksQuoteInviteStatus"></p>
+          </form>
+        </dialog>
         </div><!-- /worksTabWorks -->
 
         <div id="worksTabCampaigns" class="works-tab-pane" hidden>

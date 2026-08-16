@@ -61,6 +61,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_access_events_table,
     ensure_info_documents_table,
     ensure_colony_works_table,
+    ensure_work_quote_tables,
     ensure_colony_campaigns_tables,
     ensure_meeting_proceedings_table,
     migrate_roman_plot_ids,
@@ -655,6 +656,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_grievances_table(conn)
         ensure_info_documents_table(conn)
         ensure_colony_works_table(conn)
+        ensure_work_quote_tables(conn)
         ensure_colony_campaigns_tables(conn)
         ensure_meeting_proceedings_table(conn)
         ensure_entitlements_schema(conn)
@@ -4638,13 +4640,437 @@ def upsert_colony_work(
 
 def delete_colony_work(conn: sqlite3.Connection, work_id: str) -> None:
     ensure_colony_works_table(conn)
+    ensure_work_quote_tables(conn)
     wid = (work_id or "").strip()
     if not wid:
         raise ValueError("work id required")
+    conn.execute("DELETE FROM work_quote_responses WHERE work_id = ?", (wid,))
+    conn.execute("DELETE FROM work_quote_invites WHERE work_id = ?", (wid,))
     cur = conn.execute("DELETE FROM colony_works WHERE id = ?", (wid,))
     conn.commit()
     if cur.rowcount < 1:
         raise ValueError("Work item not found")
+
+
+def _parse_email_list(raw) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        parts = [str(x) for x in raw]
+    else:
+        parts = re.split(r"[\s,;]+", str(raw))
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        email = part.strip().lower()
+        if not email:
+            continue
+        if not EMAIL_RE.match(email):
+            raise ValueError(f"Invalid email: {part.strip()}")
+        if email in seen:
+            continue
+        seen.add(email)
+        out.append(email)
+    return out[:40]
+
+
+def _quote_invite_public(row) -> dict:
+    keys = row.keys() if hasattr(row, "keys") else row
+    data = {k: row[k] for k in keys} if hasattr(row, "keys") else dict(row)
+    return {
+        "id": data.get("id"),
+        "workId": data.get("work_id"),
+        "vendorEmail": data.get("vendor_email") or "",
+        "vendorName": data.get("vendor_name") or "",
+        "status": data.get("status") or "sent",
+        "message": data.get("message") or "",
+        "invitedBy": data.get("invited_by") or "",
+        "createdAt": data.get("created_at"),
+        "expiresAt": data.get("expires_at"),
+        "emailSentAt": data.get("email_sent_at"),
+        "emailError": data.get("email_error") or "",
+        "publicUrl": data.get("_public_url") or "",
+    }
+
+
+def _quote_response_public(row) -> dict:
+    keys = row.keys() if hasattr(row, "keys") else row
+    data = {k: row[k] for k in keys} if hasattr(row, "keys") else dict(row)
+    amount = data.get("amount")
+    return {
+        "id": data.get("id"),
+        "inviteId": data.get("invite_id"),
+        "workId": data.get("work_id"),
+        "vendorEmail": data.get("vendor_email") or "",
+        "vendorName": data.get("vendor_name") or "",
+        "vendorPhone": data.get("vendor_phone") or "",
+        "amount": int(amount) if amount is not None else None,
+        "notes": data.get("notes") or "",
+        "timeline": data.get("timeline") or "",
+        "status": data.get("status") or "submitted",
+        "createdAt": data.get("created_at"),
+        "updatedAt": data.get("updated_at"),
+    }
+
+
+def _work_quote_public_url(token: str, site_root: pathlib.Path | None = None) -> str:
+    origin = _public_origin_for_share(site_root)
+    return f"{origin}/quote.html?t={token}"
+
+
+def send_quote_invite_email(
+    *,
+    to_email: str,
+    work: dict,
+    public_url: str,
+    message: str = "",
+    site_root: pathlib.Path | None = None,
+) -> dict:
+    cfg = load_smtp_config(site_root)
+    if not cfg["configured"]:
+        return {
+            "ok": False,
+            "channel": "dev",
+            "reason": "smtp_not_configured",
+            "hint": "Set RWA_SMTP_PASS in data/smtp.env",
+            "publicUrl": public_url,
+        }
+    title = work.get("title") or "Colony work"
+    summary = work.get("summary") or ""
+    details = (work.get("details") or "")[:1200]
+    location = work.get("location") or ""
+    est = work.get("estimatedCost")
+    est_line = f"Estimated budget: ₹{est:,}\n" if isinstance(est, int) else ""
+    note = f"\nNote from colony:\n{message.strip()}\n" if message.strip() else ""
+    body = (
+        f"You are invited to submit a quote for a colony work requirement.\n\n"
+        f"Work: {title}\n"
+        f"{('Location: ' + location + chr(10)) if location else ''}"
+        f"{est_line}"
+        f"{('Summary: ' + summary + chr(10)) if summary else ''}"
+        f"{('Details:\\n' + details + chr(10) + chr(10)) if details else ''}"
+        f"{note}"
+        f"Respond online (preferred):\n{public_url}\n\n"
+        f"You may also reply to this email with your quote; responses are tracked in the colony mailbox "
+        f"and in the project's Quotes section.\n\n"
+        f"— Mandi Housing Welfare Society\n"
+        f"  Housing Colony Sanyard, Mandi\n"
+    )
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"Quote invite — {title[:80]}"
+        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["To"] = to_email
+        msg["Reply-To"] = cfg["from"]
+        msg.set_content(body)
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=25) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(cfg["user"], cfg["password"])
+            smtp.send_message(msg)
+        return {"ok": True, "channel": "email", "from": cfg["from"], "publicUrl": public_url}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "channel": "dev", "error": str(exc), "publicUrl": public_url}
+
+
+def send_quote_received_email(
+    *,
+    work: dict,
+    response: dict,
+    site_root: pathlib.Path | None = None,
+) -> dict:
+    """Notify the colony mailbox when a vendor submits a quote."""
+    cfg = load_smtp_config(site_root)
+    if not cfg["configured"]:
+        return {"ok": False, "reason": "smtp_not_configured"}
+    to_email = (
+        os.environ.get("RWA_QUOTE_NOTIFY_EMAIL")
+        or cfg.get("from")
+        or ""
+    ).strip()
+    if not to_email:
+        return {"ok": False, "reason": "no_notify_email"}
+    title = work.get("title") or "Colony work"
+    amount = response.get("amount")
+    amount_line = f"Amount: ₹{amount:,}\n" if isinstance(amount, int) else "Amount: (not stated)\n"
+    body = (
+        f"A vendor submitted a quote for:\n\n"
+        f"Work: {title}\n"
+        f"Vendor: {response.get('vendorName') or '—'}\n"
+        f"Email: {response.get('vendorEmail') or '—'}\n"
+        f"Phone: {response.get('vendorPhone') or '—'}\n"
+        f"{amount_line}"
+        f"Timeline: {response.get('timeline') or '—'}\n"
+        f"Notes:\n{response.get('notes') or '—'}\n\n"
+        f"View all quotes in Works and Events → project → Quotes.\n\n"
+        f"— HBC Sanyard portal\n"
+    )
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"Quote received — {title[:80]}"
+        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["To"] = to_email
+        msg["Reply-To"] = response.get("vendorEmail") or cfg["from"]
+        msg.set_content(body)
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=25) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(cfg["user"], cfg["password"])
+            smtp.send_message(msg)
+        return {"ok": True, "channel": "email", "to": to_email}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+def invite_work_quotes(
+    conn: sqlite3.Connection,
+    work_id: str,
+    payload: dict,
+    *,
+    actor: dict | None = None,
+    site_root: pathlib.Path | None = None,
+) -> dict:
+    ensure_colony_works_table(conn)
+    ensure_work_quote_tables(conn)
+    work = get_colony_work(conn, work_id, as_admin=True)
+    if not work:
+        raise ValueError("Work item not found")
+    emails = _parse_email_list(payload.get("emails") or payload.get("email") or "")
+    if not emails:
+        raise ValueError("Enter at least one vendor email")
+    message = str(payload.get("message") or "").strip()[:800]
+    invited_by = ""
+    if actor:
+        invited_by = str(actor.get("member_id") or actor.get("house_id") or actor.get("name") or "")[:80]
+    now = utc_now()
+    expires = None
+    invites = []
+    for email in emails:
+        existing = conn.execute(
+            """
+            SELECT * FROM work_quote_invites
+            WHERE work_id = ? AND lower(vendor_email) = ? AND status IN ('sent','opened')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (work_id, email),
+        ).fetchone()
+        if existing and not conn.execute(
+            "SELECT id FROM work_quote_responses WHERE invite_id = ?",
+            (existing["id"],),
+        ).fetchone():
+            token = existing["token"]
+            invite_id = existing["id"]
+            conn.execute(
+                """
+                UPDATE work_quote_invites
+                SET message = ?, invited_by = ?, email_error = ''
+                WHERE id = ?
+                """,
+                (message, invited_by, invite_id),
+            )
+        else:
+            invite_id = "wqi_" + secrets.token_hex(8)
+            token = secrets.token_urlsafe(24)
+            conn.execute(
+                """
+                INSERT INTO work_quote_invites (
+                  id, work_id, token, vendor_email, vendor_name, status, message,
+                  invited_by, created_at, expires_at, email_sent_at, email_error
+                ) VALUES (?, ?, ?, ?, '', 'sent', ?, ?, ?, ?, NULL, '')
+                """,
+                (invite_id, work_id, token, email, message, invited_by, now, expires),
+            )
+        public_url = _work_quote_public_url(token, site_root)
+        delivery = send_quote_invite_email(
+            to_email=email,
+            work=work,
+            public_url=public_url,
+            message=message,
+            site_root=site_root,
+        )
+        if delivery.get("ok"):
+            conn.execute(
+                "UPDATE work_quote_invites SET email_sent_at = ?, email_error = '' WHERE id = ?",
+                (now, invite_id),
+            )
+        else:
+            err = str(delivery.get("error") or delivery.get("reason") or "send_failed")[:240]
+            conn.execute(
+                "UPDATE work_quote_invites SET email_error = ? WHERE id = ?",
+                (err, invite_id),
+            )
+        row = conn.execute("SELECT * FROM work_quote_invites WHERE id = ?", (invite_id,)).fetchone()
+        item = _quote_invite_public(row)
+        item["publicUrl"] = public_url
+        item["emailDelivery"] = delivery
+        invites.append(item)
+    conn.commit()
+    return {"workId": work_id, "invites": invites, "quotes": list_work_quotes(conn, work_id)}
+
+
+def list_work_quotes(conn: sqlite3.Connection, work_id: str) -> dict:
+    ensure_work_quote_tables(conn)
+    wid = (work_id or "").strip()
+    invites = conn.execute(
+        """
+        SELECT * FROM work_quote_invites
+        WHERE work_id = ?
+        ORDER BY created_at DESC
+        """,
+        (wid,),
+    ).fetchall()
+    responses = conn.execute(
+        """
+        SELECT * FROM work_quote_responses
+        WHERE work_id = ?
+        ORDER BY created_at DESC
+        """,
+        (wid,),
+    ).fetchall()
+    invite_list = []
+    for row in invites:
+        item = _quote_invite_public(row)
+        item["publicUrl"] = _work_quote_public_url(row["token"])
+        invite_list.append(item)
+    return {
+        "workId": wid,
+        "invites": invite_list,
+        "responses": [_quote_response_public(r) for r in responses],
+        "counts": {
+            "invited": len(invite_list),
+            "responded": len(responses),
+            "pending": sum(1 for i in invite_list if i["status"] in ("sent", "opened")),
+        },
+    }
+
+
+def get_public_quote_invite(conn: sqlite3.Connection, token: str) -> dict | None:
+    ensure_colony_works_table(conn)
+    ensure_work_quote_tables(conn)
+    tok = (token or "").strip()
+    if not tok:
+        return None
+    invite = conn.execute(
+        "SELECT * FROM work_quote_invites WHERE token = ?",
+        (tok,),
+    ).fetchone()
+    if not invite:
+        return None
+    if invite["status"] == "cancelled":
+        raise ValueError("This quote invite was cancelled")
+    work = get_colony_work(conn, invite["work_id"], as_admin=True)
+    if not work:
+        raise ValueError("Work item not found")
+    if invite["status"] == "sent":
+        conn.execute(
+            "UPDATE work_quote_invites SET status = 'opened' WHERE id = ? AND status = 'sent'",
+            (invite["id"],),
+        )
+        conn.commit()
+        invite = conn.execute("SELECT * FROM work_quote_invites WHERE id = ?", (invite["id"],)).fetchone()
+    existing = conn.execute(
+        "SELECT * FROM work_quote_responses WHERE invite_id = ?",
+        (invite["id"],),
+    ).fetchone()
+    return {
+        "invite": {
+            "id": invite["id"],
+            "vendorEmail": invite["vendor_email"],
+            "status": invite["status"],
+            "message": invite["message"] or "",
+            "alreadyResponded": bool(existing),
+        },
+        "work": {
+            "id": work["id"],
+            "title": work["title"],
+            "kind": work["kind"],
+            "kindLabel": work.get("kindLabel") or work["kind"],
+            "categoryLabel": work.get("categoryLabel") or "",
+            "summary": work.get("summary") or "",
+            "details": work.get("details") or "",
+            "location": work.get("location") or "",
+            "estimatedCost": work.get("estimatedCost"),
+            "startDate": work.get("startDate") or "",
+            "endDate": work.get("endDate") or "",
+            "statusLabel": work.get("statusLabel") or work.get("status") or "",
+        },
+        "response": _quote_response_public(existing) if existing else None,
+    }
+
+
+def submit_public_quote(
+    conn: sqlite3.Connection,
+    token: str,
+    payload: dict,
+    *,
+    site_root: pathlib.Path | None = None,
+) -> dict:
+    ensure_work_quote_tables(conn)
+    tok = (token or "").strip()
+    invite = conn.execute(
+        "SELECT * FROM work_quote_invites WHERE token = ?",
+        (tok,),
+    ).fetchone()
+    if not invite:
+        raise ValueError("Invalid or expired quote link")
+    if invite["status"] == "cancelled":
+        raise ValueError("This quote invite was cancelled")
+    existing = conn.execute(
+        "SELECT * FROM work_quote_responses WHERE invite_id = ?",
+        (invite["id"],),
+    ).fetchone()
+    if existing:
+        raise ValueError("A quote was already submitted for this invite")
+    work = get_colony_work(conn, invite["work_id"], as_admin=True)
+    if not work:
+        raise ValueError("Work item not found")
+    name = str(payload.get("vendorName") or payload.get("name") or "").strip()[:120]
+    phone = str(payload.get("vendorPhone") or payload.get("phone") or "").strip()[:40]
+    notes = str(payload.get("notes") or payload.get("quote") or "").strip()[:4000]
+    timeline = str(payload.get("timeline") or "").strip()[:400]
+    amount_raw = payload.get("amount")
+    amount = None
+    if amount_raw not in (None, ""):
+        amount = _as_int_rupees(amount_raw, field="quote amount", allow_negative=False)
+    if not name:
+        raise ValueError("Enter your name / firm name")
+    if not notes and amount is None:
+        raise ValueError("Enter a quote amount or notes")
+    now = utc_now()
+    rid = "wqr_" + secrets.token_hex(8)
+    conn.execute(
+        """
+        INSERT INTO work_quote_responses (
+          id, invite_id, work_id, vendor_email, vendor_name, vendor_phone,
+          amount, notes, timeline, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)
+        """,
+        (
+            rid,
+            invite["id"],
+            invite["work_id"],
+            invite["vendor_email"],
+            name,
+            phone,
+            amount,
+            notes,
+            timeline,
+            now,
+            now,
+        ),
+    )
+    conn.execute(
+        "UPDATE work_quote_invites SET status = 'responded' WHERE id = ?",
+        (invite["id"],),
+    )
+    conn.commit()
+    response = _quote_response_public(
+        conn.execute("SELECT * FROM work_quote_responses WHERE id = ?", (rid,)).fetchone()
+    )
+    notify = send_quote_received_email(work=work, response=response, site_root=site_root)
+    return {"ok": True, "response": response, "mailboxNotify": notify}
 
 
 def _as_int_rupees(value, *, field: str, allow_negative: bool = True) -> int:

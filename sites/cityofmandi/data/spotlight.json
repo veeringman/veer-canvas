@@ -1,0 +1,20 @@
+{
+  "slots": [
+    {
+      "id": "spot-common-man-mandi-streets",
+      "kind": "person",
+      "status": "active",
+      "title": "Ramesh of the morning lane",
+      "subtitle": "Indira Market \u00b7 chai, greetings, and the first light on Mandi streets",
+      "body": "Before the shops fully wake, Ramesh sets his kettle on the corner where the bazaar narrows toward the river quarter. Regulars know the pour before they order \u2014 strong, sweet, and handed over with a nod that says the town is open.\n\nHe is not on a billboard. He is Mandi\u2019s rhythm: early footsteps, steel tumblers, and the quiet pride of keeping a lane warm for whoever walks through.",
+      "portraitUrl": "/api/hub/spotlight/images/sl_9fab2622afc43074.webp",
+      "coverUrl": "/api/hub/spotlight/images/sl_6247aaff9be632b4.webp",
+      "ctaLabel": "Meet the lane",
+      "ctaHref": "#landing-spotlight",
+      "linkedPostId": null,
+      "showInHeroCircle": true,
+      "startsAt": "2026-08-15T18:10:11Z",
+      "endsAt": "2026-08-29T18:10:11Z"
+    }
+  ]
+}

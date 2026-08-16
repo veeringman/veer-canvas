@@ -1,5 +1,7 @@
 (() => {
   const ROTATE_MS = 9000;
+  let bootSeq = 0;
+  let booting = false;
 
   function esc(s) {
     return String(s ?? "")
@@ -10,10 +12,10 @@
   }
 
   function pickWeighted(ads) {
-    const total = ads.reduce((n, a) => n + Math.max(1, Number(a.weight) || 1), 0);
+    const total = ads.reduce((n, row) => n + Math.max(1, Number(row.weight) || 1), 0);
     let r = Math.random() * total;
     for (const ad of ads) {
-      r -= Math.max(1, Number(a.weight) || 1);
+      r -= Math.max(1, Number(ad.weight) || 1);
       if (r <= 0) return ad;
     }
     return ads[0];
@@ -59,12 +61,10 @@
     copy.classList.remove("is-running");
     title.style.removeProperty("--sp-overflow");
     title.style.removeProperty("--sp-run-duration");
-    // Restore plain text if we previously duplicated for seamless loop
     if (title.dataset.baseTitle) {
       title.textContent = title.dataset.baseTitle;
     }
 
-    // Measure without animation / ellipsis clipping side-effects
     const prevOverflow = title.style.overflow;
     const prevAnim = title.style.animation;
     title.style.overflow = "visible";
@@ -78,37 +78,40 @@
     const base = title.dataset.baseTitle || title.textContent || "";
     title.dataset.baseTitle = base;
     copy.classList.add("is-running");
-    // Seamless loop: two copies side by side
     title.innerHTML = `<span class="sp-run-track"><span class="sp-run-chunk">${esc(base)}</span><span class="sp-run-chunk" aria-hidden="true">${esc(base)}</span></span>`;
     const duration = Math.max(9, Math.min(32, (title.scrollWidth || overflowPx * 2) / 32));
     title.style.setProperty("--sp-run-duration", `${duration}s`);
   }
 
   function mount(el, ads) {
-    if (!el || !ads.length) {
-      if (el) {
-        el.innerHTML = `<div class="sp-ad sp-ad-empty" aria-hidden="true"></div>`;
-        el.hidden = true;
-      }
+    if (!el) return;
+    if (!ads.length) {
+      // Keep any already-rendered ad rather than blanking the header on a race.
+      if (el.querySelector(".sp-ad-title")) return;
+      el.innerHTML = "";
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
       return;
     }
     el.hidden = false;
+    el.removeAttribute("aria-hidden");
     let current = pickWeighted(ads);
     const paint = (ad) => {
       el.innerHTML = renderAd(ad);
       requestAnimationFrame(() => {
         applyRunningText(el);
-        // Re-check after fonts/layout settle
         window.setTimeout(() => applyRunningText(el), 120);
       });
     };
     paint(current);
 
-    const onResize = () => applyRunningText(el);
-    window.addEventListener("resize", onResize, { passive: true });
+    if (el._spResize) window.removeEventListener("resize", el._spResize);
+    el._spResize = () => applyRunningText(el);
+    window.addEventListener("resize", el._spResize, { passive: true });
 
+    if (el._spTimer) window.clearInterval(el._spTimer);
     if (ads.length < 2) return;
-    window.setInterval(() => {
+    el._spTimer = window.setInterval(() => {
       let next = pickWeighted(ads);
       if (ads.length > 1) {
         let guard = 0;
@@ -123,16 +126,43 @@
     }, ROTATE_MS);
   }
 
+  async function fetchAds() {
+    const res = await fetch("/api/hub/sponsored-ads", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`sponsored ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    return Array.isArray(data.ads) ? data.ads : [];
+  }
+
   async function boot() {
-    const slots = [...document.querySelectorAll("[data-sponsored-slot]")];
-    if (!slots.length) return;
+    if (booting) return;
+    booting = true;
+    const seq = ++bootSeq;
     try {
-      const res = await fetch("/api/hub/sponsored-ads", { credentials: "same-origin" });
-      const data = await res.json().catch(() => ({}));
-      const ads = Array.isArray(data.ads) ? data.ads : [];
-      slots.forEach((slot) => mount(slot, ads));
-    } catch {
-      slots.forEach((slot) => { slot.hidden = true; });
+      const slots = [...document.querySelectorAll("[data-sponsored-slot]")];
+      if (!slots.length) return;
+      let ads = [];
+      try {
+        ads = await fetchAds();
+      } catch {
+        try {
+          ads = await fetchAds();
+        } catch {
+          ads = [];
+        }
+      }
+      if (seq !== bootSeq) return;
+      slots.forEach((slot) => {
+        try {
+          mount(slot, ads);
+        } catch {
+          /* keep header usable if one slot fails */
+        }
+      });
+    } finally {
+      booting = false;
     }
   }
 
@@ -141,4 +171,8 @@
   } else {
     boot();
   }
+
+  document.addEventListener("city:live", (event) => {
+    if ((event.detail?.changed || []).includes("sponsored")) boot();
+  });
 })();

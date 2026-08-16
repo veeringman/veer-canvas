@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Board preferences — City of Mandi</title>
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="https://cityofmandi.com/account">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <meta name="theme-color" content="#163c44">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Noto+Sans+Devanagari:wght@400;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260816ux1">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="/hub-prefs.js?v=20260817mymandi1" defer></script>
+  <script src="/hub-geo.js?v=20260816locboards1" defer></script>
+  <script src="/account.js?v=20260817mymandi1" defer></script>
+</head>
+<body class="desk-body labour-body auth-body">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell labour-shell auth-shell">
+    <header class="desk-top labour-top auth-top">
+      <a class="landing-top-brand" href="/">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
+        <span class="landing-top-name">City of Mandi</span>
+      </a>
+      <a class="btn ghost compact" href="/">Hub</a>
+    </header>
+
+    <section class="desk-card labour-card auth-card">
+      <p class="landing-section-kicker">Your Mandi</p>
+      <h1>Preferences</h1>
+      <p class="muted">Choose your preferred board and locality. Live boards can use GPS to set the nearest area.</p>
+
+      <form id="prefsForm" class="desk-form labour-form auth-form" hidden>
+        <p class="muted" id="prefsHello"></p>
+        <label class="desk-check my-mandi-toggle">
+          <input type="checkbox" id="myMandiToggle" checked>
+          My Mandi home — open to my preferred board
+        </label>
+        <p class="auth-field-label">Preferred board</p>
+        <div class="hub-board-picker" id="prefsBoardPicker" role="group" aria-label="Preferred board"></div>
+        <select id="preferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+        <p class="auth-field-label" data-i18n="contentLang">Content language</p>
+        <div class="hub-lang-picker" id="prefsLangPicker" role="group" aria-label="Content language"></div>
+        <select id="contentLang" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+        <p class="muted labour-field-hint" data-i18n="contentLangHint">Board and page text in English or Hindi.</p>
+        <p class="auth-field-label">Home locality</p>
+        <div class="hub-loc-picker" id="prefsLocPicker" role="group" aria-label="Home locality"></div>
+        <label class="hub-loc-select-wrap">Area
+          <select id="homeLocality"></select>
+        </label>
+        <div class="hub-geo-panel">
+          <button type="button" class="btn ghost compact" id="hubLocateBtn">Use my location · मेरी लोकेशन</button>
+          <p class="muted hub-geo-status" id="hubGeoStatus">Map + GPS for live / immediate services.</p>
+          <div class="hub-geo-map" id="hubLocalityMap" role="img" aria-label="Locality map"></div>
+        </div>
+        <fieldset class="board-roles" id="prefsRoles">
+          <legend>Partner roles (phone + PIN)</legend>
+          <label class="desk-check"><input type="checkbox" id="roleLabour" value="labour"> Labour</label>
+          <label class="desk-check"><input type="checkbox" id="roleTaxi" value="taxi"> Cabs / taxi</label>
+          <label class="desk-check"><input type="checkbox" id="roleExperts" value="experts"> SME / Experts</label>
+          <label class="desk-check"><input type="checkbox" id="roleVehicle" value="vehicle"> Vehicle</label>
+          <label class="desk-check"><input type="checkbox" id="roleDoctor" value="doctor"> Doc on call</label>
+          <label class="desk-check"><input type="checkbox" id="roleTours" value="tours"> Tours</label>
+          <label class="desk-check"><input type="checkbox" id="roleTutors" value="tutors"> Tutors</label>
+          <label class="desk-check"><input type="checkbox" id="roleHome" value="home"> Home services</label>
+        </fieldset>
+        <button type="submit" class="btn primary auth-submit">Save preferences</button>
+        <p class="error" id="prefsError" hidden></p>
+        <p class="muted" id="prefsStatus"></p>
+      </form>
+
+      <p class="muted" id="prefsNeedLogin">
+        <a href="/join?mode=login&amp;next=%2Faccount">Sign in</a> (publisher) or
+        <a href="/labour?mode=login&amp;next=%2Faccount">partner sign-in</a>
+        to change preferences.
+      </p>
+    </section>
+  </div>
+</body>
+</html>

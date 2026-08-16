@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Labour registration — City of Mandi</title>
+  <meta name="description" content="Register as a labour worker for Mandi’s labour board. Mobile and photo required. English / Hindi.">
+  <link rel="canonical" href="https://cityofmandi.com/labour">
+  <link rel="icon" href="/assets/favicon.ico" sizes="any">
+  <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260816ux1">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="/hub-prefs.js?v=20260816lang1" defer></script>
+  <script src="/hub-geo.js?v=20260816locboards1" defer></script>
+  <script src="/labour.js?v=20260816lang1" defer></script>
+</head>
+<body class="desk-body labour-body auth-body" data-board="labour">
+  <div class="atmosphere" aria-hidden="true"></div>
+  <div class="desk-shell labour-shell auth-shell">
+    <header class="desk-top labour-top auth-top">
+      <a class="landing-top-brand" href="/">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
+        <span class="landing-top-name">City of Mandi</span>
+      </a>
+      <div class="labour-lang" role="group" aria-label="Language">
+        <button type="button" class="labour-lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" class="labour-lang-btn" data-lang="hi" aria-pressed="false">हिं</button>
+      </div>
+    </header>
+
+    <section class="desk-card labour-card auth-card">
+      <p class="landing-section-kicker" data-i18n="kicker">Labour board</p>
+      <h1 data-i18n="title">Worker registration</h1>
+      <p class="muted" data-i18n="lede">Join Mandi’s labour board. Mobile and photo are required (photo max 5 MB). Name, email, address, and ID are optional for now.</p>
+
+      <div class="desk-tabs auth-tabs" role="tablist">
+        <button type="button" class="btn ghost compact is-tab" id="tabRegister" aria-selected="true" data-i18n="tabRegister">Register</button>
+        <button type="button" class="btn ghost compact is-tab" id="tabLogin" aria-selected="false" data-i18n="tabLogin">Sign in</button>
+      </div>
+
+      <form id="registerForm" class="desk-form labour-form auth-form" novalidate>
+        <p class="auth-field-label" data-i18n="preferredBoard">Preferred board</p>
+        <div class="hub-board-picker" id="regBoardPicker" role="group" aria-label="Preferred board"></div>
+        <select id="regPreferredBoard" name="preferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+
+        <p class="auth-field-label" data-i18n="contentLang">Content language</p>
+        <div class="hub-lang-picker" id="regLangPicker" role="group" aria-label="Content language"></div>
+        <select id="regContentLang" name="contentLang" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+
+        <label>
+          <span data-i18n="phone">Mobile number <em class="labour-req">*</em></span>
+          <input id="regPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" required minlength="10" placeholder="98XXXXXXXX">
+        </label>
+        <label>
+          <span data-i18n="photo">Photo <em class="labour-req">*</em></span>
+          <input id="regPhoto" name="photo" type="file" accept="image/*" required>
+          <span class="labour-field-hint" data-i18n="photoHint">Clear face / upper body photo. Max 5 MB — saved as a small square WebP.</span>
+          <img id="regPhotoPreview" class="labour-photo-preview" alt="" hidden>
+        </label>
+        <label>
+          <span data-i18n="name">Name <em class="labour-opt" data-i18n="optional">(optional)</em></span>
+          <input id="regName" name="name" autocomplete="name" maxlength="80" placeholder="">
+        </label>
+        <label>
+          <span data-i18n="email">Email <em class="labour-opt" data-i18n="optional">(optional)</em></span>
+          <input id="regEmail" name="email" type="email" autocomplete="email" maxlength="120">
+        </label>
+        <label>
+          <span data-i18n="address">Address <em class="labour-opt" data-i18n="optional">(optional)</em></span>
+          <textarea id="regAddress" name="address" rows="2" maxlength="200" placeholder=""></textarea>
+        </label>
+        <p class="auth-field-label" data-i18n="homeLocality">Home locality</p>
+        <div class="hub-loc-picker" id="regLocPicker" role="group" aria-label="Home locality"></div>
+        <label class="hub-loc-select-wrap">
+          <span data-i18n="homeLocality">Home locality</span>
+          <select id="regLocality" name="homeLocality"></select>
+        </label>
+        <div class="hub-geo-panel">
+          <button type="button" class="btn ghost compact" id="hubLocateBtn">Use my location · मेरी लोकेशन</button>
+          <p class="muted hub-geo-status" id="hubGeoStatus">GPS sets preferred area for live services.</p>
+          <div class="hub-geo-map" id="hubLocalityMap" role="img" aria-label="Locality map"></div>
+        </div>
+        <label>
+          <span data-i18n="officialId">Official ID <em class="labour-opt" data-i18n="optional">(optional)</em></span>
+          <input id="regOfficialId" name="officialId" autocomplete="off" maxlength="40" placeholder="">
+          <span class="labour-field-hint" data-i18n="officialHint">Aadhaar / voter / other ID — kept private, not shown on the board.</span>
+        </label>
+        <label>
+          <span data-i18n="pin">PIN / password <em class="labour-req">*</em></span>
+          <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="4" required>
+        </label>
+        <button type="submit" class="btn primary auth-submit" data-i18n="create">Create labour account</button>
+      </form>
+
+      <form id="loginForm" class="desk-form labour-form auth-form" hidden novalidate>
+        <label>
+          <span data-i18n="phone">Mobile number <em class="labour-req">*</em></span>
+          <input id="loginPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" required minlength="10">
+        </label>
+        <label>
+          <span data-i18n="pin">PIN / password <em class="labour-req">*</em></span>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="auth-field-label" data-i18n="preferredBoard">Preferred board</p>
+        <div class="hub-board-picker" id="loginBoardPicker" role="group" aria-label="Preferred board"></div>
+        <select id="loginPreferredBoard" name="preferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+
+        <p class="auth-field-label" data-i18n="contentLang">Content language</p>
+        <div class="hub-lang-picker" id="loginLangPicker" role="group" aria-label="Content language"></div>
+        <select id="loginContentLang" name="contentLang" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+
+        <p class="auth-field-label" data-i18n="homeLocality">Home locality</p>
+        <div class="hub-loc-picker" id="loginLocPicker" role="group" aria-label="Home locality"></div>
+        <label class="hub-loc-select-wrap">
+          <span data-i18n="homeLocality">Home locality</span>
+          <select id="loginLocality" name="homeLocality"></select>
+        </label>
+        <p class="muted labour-field-hint" data-i18n="loginPrefsHint">We’ll open your preferred board after sign-in.</p>
+        <button type="submit" class="btn primary auth-submit" data-i18n="signin">Sign in</button>
+      </form>
+
+      <p class="error" id="authError" hidden></p>
+      <p class="muted labour-foot auth-foot">
+        <a href="/#landing-labour" data-i18n="backBoard">← Back to labour board</a>
+        · <a href="/account">Preferences</a>
+        · <a href="/join">Publisher sign-in</a>
+      </p>
+    </section>
+  </div>
+</body>
+</html>

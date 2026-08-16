@@ -10,9 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260814paint">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
-  <script src="/publish.js?v=20260814pub2" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <link rel="stylesheet" href="/admin/admin.css?v=20260816boards1">
+  <script src="/publish.js?v=20260816boards1" defer></script>
 </head>
 <body class="desk-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -30,19 +31,34 @@
     </header>
 
     <section class="desk-card">
-      <p class="landing-section-kicker">New listing</p>
+      <p class="landing-section-kicker">New listing · नई लिस्टिंग</p>
       <h1>What do you want to publish?</h1>
-      <p class="muted">News, ads, services, businesses, places, events — or another kind the city still needs. Portal operators review each listing before it appears on the public board.</p>
+      <p class="muted">News, ads, labour needs, ride requests, services, businesses — portal operators review each listing before it appears. Board contacts stay private until someone responds.</p>
       <form id="postForm" class="desk-form">
-        <label>Type
+        <label>Type · प्रकार
           <select id="kind" name="kind" required></select>
         </label>
         <label id="customKindWrap" hidden>Your own type
           <input id="customKind" name="customKind" placeholder="e.g. lost-found, roomshare">
         </label>
-        <label>Title <input id="title" name="title" required minlength="3" placeholder="e.g. Evening taxi from Mandi bus stand"></label>
-        <label>Short summary <textarea id="summary" name="summary" rows="3" required></textarea></label>
-        <div class="desk-row-grid">
+        <p class="muted" id="boardHint" hidden></p>
+        <label>Title · शीर्षक <input id="title" name="title" required minlength="3" placeholder="e.g. Need 2 labourers / Airport drop"></label>
+        <label>Short summary · संक्षिप्त विवरण <textarea id="summary" name="summary" rows="3" required></textarea></label>
+        <div class="desk-row-grid" id="labourFields" hidden>
+          <label>Category · श्रेणी
+            <select id="labourCategory" name="labourCategory"></select>
+          </label>
+          <label>Location · स्थान <input id="locationLabour" name="locationLabour" placeholder="Near Seri / colony name"></label>
+        </div>
+        <div class="desk-row-grid" id="taxiFields" hidden>
+          <label>Category · श्रेणी
+            <select id="taxiCategory" name="taxiCategory"></select>
+          </label>
+          <label>Pickup · कहाँ से <input id="taxiPickup" name="taxiPickup" placeholder="Mandi ISBT"></label>
+          <label>Drop · कहाँ तक <input id="taxiDropoff" name="taxiDropoff" placeholder="Bhuntar"></label>
+          <label>When · कब <input id="taxiWhen" name="taxiWhen" placeholder="Today 4 PM"></label>
+        </div>
+        <div class="desk-row-grid" id="contactFields">
           <label>Category <input id="category" name="category" placeholder="optional"></label>
           <label>Location <input id="location" name="location" placeholder="Mandi"></label>
           <label>Phone <input id="phone" name="phone" inputmode="tel"></label>
@@ -58,14 +74,14 @@
           </label>
           <label>Slug (hosted page) <input id="slug" name="slug" placeholder="veerlabs"></label>
         </div>
-        <button type="submit" class="btn primary">Submit for review</button>
+        <button type="submit" class="btn primary">Submit for review · समीक्षा के लिए भेजें</button>
         <p class="error" id="postError" hidden></p>
         <p class="muted" id="postStatus"></p>
       </form>
     </section>
 
     <section class="desk-card">
-      <p class="landing-section-kicker">Yours</p>
+      <p class="landing-section-kicker">Yours · आपकी लिस्टिंग</p>
       <h2>Listings</h2>
       <div id="myPosts" class="desk-stack"></div>
     </section>

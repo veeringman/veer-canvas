@@ -13,9 +13,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260815run1">
-  <script src="/sponsored.js?v=20260815run1" defer></script>
-  <script src="/adda.js?v=20260815dilli1" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <script src="/live.js?v=20260815live1" defer></script>
+  <script src="/sponsored.js?v=20260815live1" defer></script>
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="/hub-prefs.js?v=20260816lang1" defer></script>
+  <script src="/adda.js?v=20260816boardsnav1" defer></script>
 </head>
 <body class="adda-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -29,6 +32,24 @@
         <div class="landing-brand-adda is-static" aria-label="Mandi Adda — Live">
           <span class="nav-live-mark" aria-hidden="true">Live</span>
           <span class="landing-brand-adda-label">Mandi Adda</span>
+        </div>
+        <div class="landing-boards-nav" id="landingBoardsNav">
+          <button
+            type="button"
+            class="landing-boards-btn"
+            id="landingBoardsBtn"
+            aria-expanded="false"
+            aria-haspopup="true"
+            aria-controls="landingBoardsMenu"
+            aria-label="Boards menu"
+          >
+            <span class="landing-boards-burger" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="landing-boards-label">Boards</span>
+            <svg class="landing-boards-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M2.2 4.2 6 8l3.8-3.8.9.9L6 9.8 1.3 5.1z"/>
+            </svg>
+          </button>
+          <div class="landing-boards-menu" id="landingBoardsMenu" hidden role="menu"></div>
         </div>
       </div>
       <div class="landing-sponsored" data-sponsored-slot aria-label="Sponsored"></div>
@@ -136,14 +157,20 @@
     </div>
   </div>
 
-  <dialog class="adda-dialog" id="addaAuthDialog">
-    <form method="dialog" class="adda-dialog-form" id="addaAuthForm">
-      <h3>Mandi Adda account</h3>
-      <p class="muted">Create an Adda account, or use your publisher login from <a href="/join?next=/adda">/join</a>.</p>
-      <div class="desk-tabs" role="tablist">
+  <dialog class="adda-dialog auth-dialog" id="addaAuthDialog">
+    <form method="dialog" class="adda-dialog-form auth-form" id="addaAuthForm">
+      <h3>Mandi Adda</h3>
+      <p class="muted">Your local chat — pick a home board and locality so the rest of the hub feels like Mandi.</p>
+      <div class="desk-tabs auth-tabs" role="tablist">
         <button type="button" class="btn ghost compact is-tab" id="addaTabRegister" aria-selected="true">Register</button>
         <button type="button" class="btn ghost compact is-tab" id="addaTabLogin" aria-selected="false">Sign in</button>
       </div>
+      <p class="auth-field-label">I also use</p>
+      <div class="hub-board-picker" id="addaBoardPicker" role="group" aria-label="Preferred board"></div>
+      <select id="addaPreferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+      <label>Home locality
+        <select id="addaLocality"></select>
+      </label>
       <div id="addaRegFields">
         <label>Display name <input id="addaRegName" autocomplete="nickname" required></label>
         <label>Email <input id="addaRegEmail" type="email" autocomplete="email" required></label>

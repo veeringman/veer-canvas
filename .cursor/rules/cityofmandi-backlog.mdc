@@ -1,0 +1,16 @@
+---
+description: City of Mandi backlog & My Mandi product tracking for future sessions
+alwaysApply: true
+---
+
+# City of Mandi — backlog tracking
+
+When working on **cityofmandi** (`sites/cityofmandi/`, `admin/hub_*.py`, `admin/civic_hub.py`):
+
+1. Read and update **`sites/cityofmandi/BACKLOG.md`** for open/closed TODOs.
+2. Prefer **depth on one daily loop** (food+delivery or labour) over adding more boards.
+3. **My Mandi**: returning users with `hub_my_mandi=1` get a collapsed home (preferred board + locality). “Explore all boards” turns that off. Do not remove this without updating the backlog.
+4. Keep unofficial civic guardrails (disclaimer; no fake government authority).
+5. Deploy with: `SITE_ID=cityofmandi EC2_KEY=~/Downloads/VeerSetuHost.pem ./deploy/remote-deploy.sh`
+
+Mark backlog items `[x]` when shipping; add a one-line session note under Session notes.

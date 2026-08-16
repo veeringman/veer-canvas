@@ -3,35 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Business page — City of Mandi</title>
-  <meta name="description" content="A hosted business page on City of Mandi — the civic home of Mandi.">
+  <title>Shop — City of Mandi</title>
+  <meta name="description" content="Order from a City of Mandi shop — menu, cart, pay on delivery.">
   <meta name="theme-color" content="#163c44">
   <link rel="icon" href="/assets/favicon.ico" sizes="any">
   <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260814paint">
-  <script src="/business.js?v=20260814hub2" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans+Devanagari:wght@400;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="/business.js?v=20260816rentals1" defer></script>
 </head>
-<body>
+<body class="shop-body">
   <div class="atmosphere" aria-hidden="true"></div>
-  <div class="shell landing-shell board-open">
-    <header class="landing-top">
-      <a class="landing-top-brand" href="/">
-        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
-        <span class="landing-top-name">City of Mandi</span>
+  <div class="shop-shell">
+    <header class="shop-top">
+      <a class="landing-top-brand" href="/#landing-food" aria-label="City of Mandi home">
+        <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="36" height="36">
       </a>
-      <p class="desk-host muted" id="bizHost"></p>
+      <p class="shop-top-title" id="shopTopTitle">Shop</p>
+      <a class="shop-top-link" href="/merchant">Desk</a>
     </header>
-    <main class="landing-board" style="margin-top:1.5rem;grid-template-columns:1fr">
-      <section class="landing-section" id="bizSection">
-        <p class="muted">Loading business page…</p>
-      </section>
+    <main class="shop-main" id="bizSection">
+      <p class="muted shop-loading">Loading…</p>
     </main>
-    <footer class="landing-foot muted">
-      <p class="landing-foot-brand">Hosted on City of Mandi · civic home · not a government website</p>
-    </footer>
+    <div class="shop-cart-bar" id="shopCartBar" hidden>
+      <button type="button" class="shop-cart-btn" id="shopCartOpen">
+        <span id="shopCartCount">0</span>
+        <span class="shop-cart-label">View cart</span>
+        <strong id="shopCartTotal">₹0</strong>
+      </button>
+    </div>
+  </div>
+
+  <div class="shop-sheet" id="shopCartSheet" hidden>
+    <div class="shop-sheet-backdrop" data-sheet-close></div>
+    <div class="shop-sheet-card" role="dialog" aria-modal="true" aria-labelledby="shopCartTitle">
+      <header class="shop-sheet-head">
+        <h2 id="shopCartTitle">Your cart</h2>
+        <button type="button" class="btn ghost compact" data-sheet-close>Close</button>
+      </header>
+      <div id="shopCartLines" class="shop-cart-lines"></div>
+      <form id="shopCheckout" class="desk-form shop-checkout" novalidate>
+        <label>Name <input id="coName" name="name" autocomplete="name" required></label>
+        <label>Mobile <input id="coPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" required minlength="10"></label>
+        <label>Deliver to <textarea id="coAddress" name="address" rows="2" required placeholder="House / lane / landmark"></textarea></label>
+        <label>Note <input id="coNote" name="note" maxlength="200" placeholder="Optional"></label>
+        <fieldset class="shop-pay-methods">
+          <legend>Pay</legend>
+          <label class="merchant-check"><input type="radio" name="payMethod" id="payCod" value="cod" checked> Cash on delivery · COD</label>
+          <label class="merchant-check" id="payOnlineWrap" hidden><input type="radio" name="payMethod" id="payOnline" value="online"> Pay online</label>
+          <label class="merchant-check" id="payDemoWrap" hidden><input type="radio" name="payMethod" id="payDemo" value="demo"> Pay now (demo)</label>
+        </fieldset>
+        <p class="muted" id="shopFeeLine"></p>
+        <button type="submit" class="btn primary shop-place-btn" id="shopPlaceBtn">Place order · COD</button>
+        <p class="error" id="shopOrderError" hidden></p>
+      </form>
+    </div>
   </div>
 </body>
 </html>

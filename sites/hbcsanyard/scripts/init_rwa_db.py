@@ -610,6 +610,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_info_documents_table(conn)
     ensure_print_templates_table(conn)
     ensure_colony_works_table(conn)
+    ensure_work_quote_tables(conn)
     ensure_meeting_proceedings_table(conn)
     ensure_entitlements_schema(conn)
     ensure_report_templates_table(conn)
@@ -1615,6 +1616,56 @@ def ensure_colony_works_table(conn: sqlite3.Connection) -> None:
     ):
         if name not in cols:
             conn.execute(sql)
+    conn.commit()
+
+
+def ensure_work_quote_tables(conn: sqlite3.Connection) -> None:
+    """Vendor quote invites + responses for Works & Events projects."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS work_quote_invites (
+          id TEXT PRIMARY KEY,
+          work_id TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          vendor_email TEXT NOT NULL,
+          vendor_name TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'sent'
+            CHECK(status IN ('sent','opened','responded','cancelled','expired')),
+          message TEXT NOT NULL DEFAULT '',
+          invited_by TEXT,
+          created_at TEXT NOT NULL,
+          expires_at TEXT,
+          email_sent_at TEXT,
+          email_error TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY (work_id) REFERENCES colony_works(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_work_quote_invites_work
+          ON work_quote_invites(work_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_work_quote_invites_token
+          ON work_quote_invites(token);
+        CREATE TABLE IF NOT EXISTS work_quote_responses (
+          id TEXT PRIMARY KEY,
+          invite_id TEXT NOT NULL,
+          work_id TEXT NOT NULL,
+          vendor_email TEXT NOT NULL,
+          vendor_name TEXT NOT NULL DEFAULT '',
+          vendor_phone TEXT NOT NULL DEFAULT '',
+          amount INTEGER,
+          notes TEXT NOT NULL DEFAULT '',
+          timeline TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'submitted'
+            CHECK(status IN ('submitted','shortlisted','accepted','rejected','withdrawn')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (invite_id) REFERENCES work_quote_invites(id) ON DELETE CASCADE,
+          FOREIGN KEY (work_id) REFERENCES colony_works(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_work_quote_responses_work
+          ON work_quote_responses(work_id, created_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_work_quote_responses_invite
+          ON work_quote_responses(invite_id);
+        """
+    )
     conn.commit()
 
 

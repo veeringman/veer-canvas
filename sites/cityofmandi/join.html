@@ -2,51 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Join City of Mandi — publish</title>
-  <meta name="description" content="Register or sign in to publish news, ads, services, and businesses on City of Mandi — the civic home of Mandi.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sign in — City of Mandi</title>
+  <meta name="description" content="Sign in or register for City of Mandi — boards, Mandi Adda, and local orders.">
+  <meta name="theme-color" content="#163c44">
   <link rel="icon" href="/assets/favicon.ico" sizes="any">
   <link rel="icon" href="/assets/favicon-64.png?v=20260814paint" type="image/png" sizes="64x64">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260814paint">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260814pub2">
-  <script src="/join.js?v=20260814pub2" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Noto+Sans+Devanagari:wght@400;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260816ux1">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <script src="/hub-prefs.js?v=20260816lang1" defer></script>
+  <script src="/hub-geo.js?v=20260816locboards1" defer></script>
+  <script src="/join.js?v=20260816lang1" defer></script>
 </head>
-<body class="desk-body">
+<body class="desk-body auth-body">
   <div class="atmosphere" aria-hidden="true"></div>
-  <div class="desk-shell">
-    <header class="desk-top">
+  <div class="desk-shell auth-shell">
+    <header class="desk-top auth-top">
       <a class="landing-top-brand" href="/">
         <img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260814paint" alt="" width="40" height="40">
         <span class="landing-top-name">City of Mandi</span>
       </a>
-      <p class="desk-kicker">Publish</p>
+      <div id="hubLangMount"></div>
     </header>
 
-    <section class="desk-card">
-      <p class="landing-section-kicker">For Mandi</p>
-      <h1>Publish on the hub</h1>
-      <p class="muted">News, ads, services, businesses, places, events — and whatever the city still needs a board for. Listings are reviewed before they go public. This is not a government site.</p>
-      <div class="desk-tabs" role="tablist">
-        <button type="button" class="btn ghost compact is-tab" id="tabRegister" aria-selected="true">Register</button>
-        <button type="button" class="btn ghost compact is-tab" id="tabLogin" aria-selected="false">Sign in</button>
+    <section class="desk-card auth-card">
+      <p class="landing-section-kicker">Mandi · local</p>
+      <h1 data-i18n="yourPlace">Your place in the city</h1>
+      <p class="muted" data-i18n="pickBoardLoc">Pick the board you use most, your locality, and content language.</p>
+
+      <div class="desk-tabs auth-tabs" role="tablist">
+        <button type="button" class="btn ghost compact is-tab" id="tabRegister" aria-selected="true" data-i18n="register">Register</button>
+        <button type="button" class="btn ghost compact is-tab" id="tabLogin" aria-selected="false" data-i18n="login">Sign in</button>
       </div>
 
-      <form id="registerForm" class="desk-form">
-        <label>Your name <input id="regName" name="name" autocomplete="name" required></label>
-        <label>Email <input id="regEmail" name="email" type="email" autocomplete="email" required></label>
-        <label>Password (8+ characters) <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
-        <button type="submit" class="btn primary">Create account</button>
+      <form id="registerForm" class="desk-form auth-form">
+        <p class="auth-field-label" data-i18n="iCareAbout">I care about</p>
+        <div class="hub-board-picker" id="regBoardPicker" role="group" aria-label="Preferred board"></div>
+        <select id="regPreferredBoard" name="preferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+
+        <p class="auth-field-label" data-i18n="contentLang">Content language</p>
+        <div class="hub-lang-picker" id="regLangPicker" role="group" aria-label="Content language"></div>
+        <select id="regContentLang" name="contentLang" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+        <p class="muted labour-field-hint" data-i18n="contentLangHint">Board and page text in English or Hindi.</p>
+
+        <p class="auth-field-label" data-i18n="homeLocality">Home locality</p>
+        <div class="hub-loc-picker" id="regLocPicker" role="group" aria-label="Home locality"></div>
+        <label class="hub-loc-select-wrap"><span data-i18n="area">Area</span>
+          <select id="regLocality" name="homeLocality"></select>
+        </label>
+        <div class="hub-geo-panel" id="regGeoPanel">
+          <button type="button" class="btn ghost compact" id="hubLocateBtn" data-i18n="useLocation">Use my location</button>
+          <p class="muted hub-geo-status" id="hubGeoStatus" data-i18n="geoHint">Tap the map or use GPS — live boards prefer this area.</p>
+          <div class="hub-geo-map" id="hubLocalityMap" role="img" aria-label="Locality map"></div>
+        </div>
+        <label><span data-i18n="yourName">Your name</span> <input id="regName" name="name" autocomplete="name" required></label>
+        <label><span data-i18n="email">Email</span> <input id="regEmail" name="email" type="email" autocomplete="email" required></label>
+        <label><span data-i18n="password">Password (8+)</span> <input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button type="submit" class="btn primary auth-submit" data-i18n="createAccount">Create account</button>
       </form>
 
-      <form id="loginForm" class="desk-form" hidden>
-        <label>Email <input id="loginEmail" name="email" type="email" autocomplete="username" required></label>
-        <label>Password <input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
-        <button type="submit" class="btn primary">Sign in</button>
+      <form id="loginForm" class="desk-form auth-form" hidden>
+        <p class="auth-field-label" data-i18n="openMeInto">Open me into</p>
+        <div class="hub-board-picker" id="loginBoardPicker" role="group" aria-label="Preferred board"></div>
+        <select id="loginPreferredBoard" name="preferredBoard" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1"></select>
+
+        <p class="auth-field-label" data-i18n="contentLang">Content language</p>
+        <div class="hub-lang-picker" id="loginLangPicker" role="group" aria-label="Content language"></div>
+        <select id="loginContentLang" name="contentLang" class="hub-board-select-fallback" aria-hidden="true" tabindex="-1">
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+        </select>
+
+        <p class="auth-field-label" data-i18n="homeLocality">Home locality</p>
+        <div class="hub-loc-picker" id="loginLocPicker" role="group" aria-label="Home locality"></div>
+        <label class="hub-loc-select-wrap"><span data-i18n="area">Area</span>
+          <select id="loginLocality" name="homeLocality"></select>
+        </label>
+        <label><span data-i18n="email">Email</span> <input id="loginEmail" name="email" type="email" autocomplete="username" required></label>
+        <label><span data-i18n="passwordShort">Password</span> <input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="btn primary auth-submit" data-i18n="login">Sign in</button>
       </form>
       <p class="error" id="authError" hidden></p>
+      <p class="muted auth-foot">
+        <span data-i18n="partnerPhone">Partner with phone + PIN?</span>
+        <a href="/labour?mode=login" data-i18n="labour">Labour</a> ·
+        <a href="/taxi?mode=login" data-i18n="cabs">Cabs</a> ·
+        <a href="/partner?board=vehicle&amp;mode=login" data-i18n="services">Services</a> ·
+        <a href="/adda">Mandi Adda</a>
+      </p>
     </section>
   </div>
 </body>

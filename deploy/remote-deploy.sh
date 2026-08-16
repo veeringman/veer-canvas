@@ -274,6 +274,11 @@ if [[ -f "$SITE_DIR/data/syndicate.env.example" ]]; then
     "$SITE_DIR/data/syndicate.env.example" \
     "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/syndicate.env.example"
 fi
+if [[ -f "$SITE_DIR/data/payments.env.example" ]]; then
+  rsync -az --ignore-existing -e "$RSYNC_SSH" \
+    "$SITE_DIR/data/payments.env.example" \
+    "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/data/payments.env.example"
+fi
 # Never push real smtp/vapid/ai/drive secrets from the laptop; only create from example when absent.
 ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- "$WEB_ROOT" <<'REMOTE_ENV'
 set -euo pipefail
@@ -328,6 +333,13 @@ if [[ ! -f "$WEB_ROOT/data/google-wallet.env" && -f "$WEB_ROOT/data/google-walle
   echo "Created data/google-wallet.env from example (needs Google Wallet issuer ID)."
 else
   echo "Preserved existing data/google-wallet.env (or no example present)."
+fi
+if [[ ! -f "$WEB_ROOT/data/payments.env" && -f "$WEB_ROOT/data/payments.env.example" ]]; then
+  cp "$WEB_ROOT/data/payments.env.example" "$WEB_ROOT/data/payments.env"
+  chmod 600 "$WEB_ROOT/data/payments.env" || true
+  echo "Created data/payments.env from example (set RAZORPAY_* for live online pay)."
+else
+  echo "Preserved existing data/payments.env (or no example present)."
 fi
 # Do not create syndicate.env from the example — civic_hub writes a live token on first boot.
 if [[ -f "$WEB_ROOT/data/drive-sa.json" ]]; then

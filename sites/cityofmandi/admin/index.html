@@ -10,9 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/portal.css?v=20260815contact1">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260815contact1">
-  <script src="/admin/admin.js?v=20260815contact1" defer></script>
+  <link rel="stylesheet" href="/portal.css?v=20260817ux2">
+  <script src="/hub-i18n.js?v=20260816lang1" defer></script>
+  <link rel="stylesheet" href="/admin/admin.css?v=20260815spot1">
+  <script src="/admin/admin.js?v=20260815spot1" defer></script>
 </head>
 <body class="desk-body">
   <div class="atmosphere" aria-hidden="true"></div>
@@ -65,6 +66,10 @@
           <label class="desk-check"><input type="checkbox" name="scitech"> SciTech</label>
           <label class="desk-check"><input type="checkbox" name="culture"> Culture</label>
           <label class="desk-check"><input type="checkbox" name="services"> Services</label>
+          <label class="desk-check"><input type="checkbox" name="labour"> Labour market</label>
+          <label class="desk-check"><input type="checkbox" name="taxi"> Cabs &amp; taxis</label>
+          <label class="desk-check"><input type="checkbox" name="boards"> Profession boards</label>
+          <label class="desk-check"><input type="checkbox" name="seri"> Seri Subah (legacy)</label>
           <label class="desk-check"><input type="checkbox" name="channels"> Channels</label>
           <label class="desk-check"><input type="checkbox" name="ads"> Ads</label>
           <label class="desk-check"><input type="checkbox" name="neighbourhoods"> Neighbourhoods</label>
@@ -131,6 +136,18 @@
           <button type="button" class="btn primary compact" id="saveSponsoredBtn">Save sponsored ads</button>
         </div>
         <p class="muted" id="sponsoredStatus"></p>
+      </section>
+
+      <section class="desk-card">
+        <p class="landing-section-kicker">Landing</p>
+        <h2>Mandi Spotlight</h2>
+        <p class="muted">Time-boxed honour for a person or a post. One live slot at a time (overlapping windows → latest start wins). Optional “Show in Hero Circle” adds a small satellite by the seal — it never replaces the City mark.</p>
+        <div id="spotlightList" class="desk-stack"></div>
+        <div class="desk-actions">
+          <button type="button" class="btn ghost compact" id="addSpotlightBtn">Add Spotlight slot</button>
+          <button type="button" class="btn primary compact" id="saveSpotlightBtn">Save Spotlight</button>
+        </div>
+        <p class="muted" id="spotlightStatus"></p>
       </section>
 
       <section class="desk-card">

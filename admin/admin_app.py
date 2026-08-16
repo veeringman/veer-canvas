@@ -7648,7 +7648,10 @@ def api_rwa_works_item(work_id: str):
             work = rwa_portal.get_colony_work(conn, work_id, as_admin=is_admin)
             if not work:
                 return jsonify({"ok": False, "error": "Not found"}), 404
-            return jsonify({"ok": True, "work": work})
+            payload = {"ok": True, "work": work}
+            if is_admin:
+                payload["quotes"] = rwa_portal.list_work_quotes(conn, work_id)
+            return jsonify(payload)
 
         if not is_admin:
             return jsonify({"ok": False, "error": "Admin access required"}), 403
@@ -7661,6 +7664,72 @@ def api_rwa_works_item(work_id: str):
         payload["id"] = work_id
         work = rwa_portal.upsert_colony_work(conn, payload, actor=sess["resident"])
         return jsonify({"ok": True, "work": work})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/works/<work_id>/quotes", methods=["GET"])
+def api_rwa_work_quotes(work_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_works"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        work = rwa_portal.get_colony_work(conn, work_id, as_admin=True)
+        if not work:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        return jsonify({"ok": True, "work": work, **rwa_portal.list_work_quotes(conn, work_id)})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/works/<work_id>/quotes/invite", methods=["POST"])
+def api_rwa_work_quotes_invite(work_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_works"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_portal.invite_work_quotes(
+            conn,
+            work_id,
+            payload,
+            actor=sess["resident"],
+            site_root=SITE_ROOT,
+        )
+        return jsonify({"ok": True, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/public/quotes/<token>", methods=["GET", "POST"])
+def api_rwa_public_quote(token: str):
+    conn = _rwa_conn()
+    try:
+        if request.method == "GET":
+            data = rwa_portal.get_public_quote_invite(conn, token)
+            if not data:
+                return jsonify({"ok": False, "error": "Invalid or expired quote link"}), 404
+            return jsonify({"ok": True, **data})
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_portal.submit_public_quote(
+            conn,
+            token,
+            payload,
+            site_root=SITE_ROOT,
+        )
+        return jsonify(result)
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

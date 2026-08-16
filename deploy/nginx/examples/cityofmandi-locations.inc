@@ -54,6 +54,13 @@ location ^~ /b/ {
 }
 
 location = /join { try_files /join.html =404; }
+location = /labour { try_files /labour.html =404; }
+location = /taxi { try_files /taxi.html =404; }
+location = /partner { try_files /partner.html =404; }
+location = /account { try_files /account.html =404; }
+location = /merchant { try_files /merchant.html =404; }
+location = /order { try_files /order.html =404; }
+location = /delivery { try_files /delivery.html =404; }
 location = /publish { try_files /publish.html =404; }
 location = /adda { try_files /adda.html =404; }
 location = /contact { try_files /contact.html =404; }

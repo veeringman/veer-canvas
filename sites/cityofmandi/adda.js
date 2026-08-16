@@ -149,9 +149,30 @@
       else if (t.kind === "dm") dms.push(t);
       else if (t.kind === "group") groups.push(t);
     }
-    highlighted.sort((a, b) => (HIGHLIGHT_RANK[a.id] ?? 99) - (HIGHLIGHT_RANK[b.id] ?? 99));
-    publicRooms.sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+    const byUnreadThenTitle = (a, b) => {
+      const ua = Number(a.unread || 0);
+      const ub = Number(b.unread || 0);
+      if (ua !== ub) return ub - ua;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    };
+    highlighted.sort((a, b) => {
+      const ua = Number(a.unread || 0);
+      const ub = Number(b.unread || 0);
+      if (ua !== ub) return ub - ua;
+      return (HIGHLIGHT_RANK[a.id] ?? 99) - (HIGHLIGHT_RANK[b.id] ?? 99);
+    });
+    publicRooms.sort(byUnreadThenTitle);
+    bridge.sort(byUnreadThenTitle);
+    dms.sort(byUnreadThenTitle);
+    groups.sort(byUnreadThenTitle);
     return { highlighted, publicRooms, bridge, dms, groups };
+  }
+
+  function unreadAlert(count) {
+    const n = Number(count || 0);
+    if (n < 1) return "";
+    const label = n === 1 ? "1 new" : `${n > 99 ? "99+" : n} new`;
+    return `<span class="adda-unread-alert" aria-label="${esc(label)} unread">${esc(label)}</span>`;
   }
 
   function renderThreadList() {
@@ -163,7 +184,7 @@
       for (const t of items) {
         const active = t.id === state.activeId ? " is-active" : "";
         const pin = highlight || HIGHLIGHT_RANK[t.id] != null ? " is-highlight" : "";
-        const unread = t.unread ? `<span class="adda-unread">${t.unread}</span>` : "";
+        const hasUnread = Number(t.unread || 0) > 0 ? " has-unread" : "";
         const badge = t.isOfficial ? `<span class="adda-mini-official">Official</span>` : "";
         const preview = t.lastMessage
           ? `<span class="adda-preview">${esc(t.lastMessage.body)}</span>`
@@ -172,13 +193,13 @@
           ? `<img class="adda-list-icon" src="${esc(t.iconUrl)}" alt="">`
           : `<span class="adda-list-icon adda-list-icon-fallback">${esc((t.title || "?")[0])}</span>`;
         parts.push(`
-          <button type="button" class="adda-thread-btn${pin}${active}" data-thread="${esc(t.id)}">
+          <button type="button" class="adda-thread-btn${pin}${active}${hasUnread}" data-thread="${esc(t.id)}">
             ${icon}
             <span class="adda-thread-meta">
+              ${unreadAlert(t.unread)}
               <span class="adda-thread-name">${esc(t.title)} ${badge}</span>
               ${preview}
             </span>
-            ${unread}
           </button>
         `);
       }
@@ -415,6 +436,14 @@
     $("addaLoginFields").hidden = !login;
     $("addaTabRegister").setAttribute("aria-selected", login ? "false" : "true");
     $("addaTabLogin").setAttribute("aria-selected", login ? "true" : "false");
+    $("addaTabRegister").classList.toggle("is-active", !login);
+    $("addaTabLogin").classList.toggle("is-active", login);
+    if (window.HubPrefs) {
+      const prefs = window.HubPrefs.readPrefs();
+      window.HubPrefs.fillBoardSelects(["addaPreferredBoard"], "adda");
+      window.HubPrefs.fillLocalitySelects(["addaLocality"], prefs.loc);
+      window.HubPrefs.mountBoardPicker("addaBoardPicker", "addaPreferredBoard", "adda");
+    }
     $("addaAuthDialog").showModal();
   }
 
@@ -475,6 +504,9 @@
   $("addaTabRegister").addEventListener("click", () => showAuth(false));
   $("addaTabLogin").addEventListener("click", () => showAuth(true));
   $("addaAuthPublisher").addEventListener("click", () => {
+    const board = window.HubPrefs?.normalizeBoard($("addaPreferredBoard")?.value || "adda") || "adda";
+    const loc = window.HubPrefs?.normalizeLocality($("addaLocality")?.value || "mandi") || "mandi";
+    if (window.HubPrefs) window.HubPrefs.rememberPrefs(board, loc);
     location.href = "/join?next=/adda&mode=login";
   });
   $("addaLogoutBtn").addEventListener("click", async () => {
@@ -491,6 +523,11 @@
     $("addaAuthError").hidden = true;
     const login = $("addaLoginFields").hidden === false;
     try {
+      if (window.HubPrefs) {
+        const preferred = window.HubPrefs.normalizeBoard($("addaPreferredBoard")?.value || "adda");
+        const locality = window.HubPrefs.normalizeLocality($("addaLocality")?.value || "mandi");
+        window.HubPrefs.rememberPrefs(preferred, locality);
+      }
       if (login) {
         await api("/api/adda/login", {
           method: "POST",
@@ -722,8 +759,14 @@
     else leaveRoomView();
   });
 
+  document.addEventListener("city:live", (event) => {
+    if (!(event.detail?.changed || []).includes("adda")) return;
+    loadThreads().catch(() => {});
+  });
+
   (async () => {
     try {
+      if (window.HubPrefs?.mountBoardsNav) window.HubPrefs.mountBoardsNav();
       await refreshSession();
       // Publishers arriving from /join already have session; link if needed
       if (!state.user) {

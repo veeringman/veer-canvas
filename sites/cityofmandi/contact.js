@@ -251,4 +251,23 @@
 
   loadMeta().then(applyHash).catch(() => showPanel("write"));
   window.addEventListener("hashchange", applyHash);
+
+  if (window.HubPrefs?.mountBoardsNav) {
+    window.HubPrefs.mountBoardsNav();
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      window.HubPrefs?.mountBoardsNav?.();
+    });
+    setTimeout(() => window.HubPrefs?.mountBoardsNav?.(), 50);
+  }
+
+  document.addEventListener("city:live", (event) => {
+    if (!(event.detail?.changed || []).includes("contact")) return;
+    loadMeta().catch(() => {});
+    if (state.view === "mine") loadMine().catch(() => {});
+    if (state.view === "box") loadBox().catch(() => {});
+    if (state.view === "detail" && state.activeMailId) {
+      openMail(state.activeMailId).catch(() => {});
+    }
+  });
 })();

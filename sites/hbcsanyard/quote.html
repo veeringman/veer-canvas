@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit quote — Housing Colony Sanyard</title>
+  <meta name="theme-color" content="#15233f">
+  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --primary: #1a4f7a;
+      --surface: #ffffff;
+      --bg: #f3f6fa;
+      --text: #1a2236;
+      --muted: #64748b;
+      --radius: 12px;
+      --ok: #1a6b45;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+    .page { width: 100%; max-width: 560px; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
+    .brand { text-align: center; margin-bottom: 1rem; font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 1.25rem;
+    }
+    h1 { margin: 0 0 0.35rem; font-size: 1.25rem; }
+    .meta { color: var(--muted); font-size: 0.86rem; margin: 0 0 0.75rem; }
+    .summary { color: var(--muted); margin: 0 0 0.75rem; font-size: 0.93rem; }
+    .details { margin: 0.5rem 0 1rem; font-size: 0.9rem; line-height: 1.55; white-space: pre-wrap; }
+    .note {
+      margin: 0.75rem 0;
+      padding: 0.65rem 0.75rem;
+      background: rgba(26,79,122,0.06);
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+    label { display: block; font-size: 0.82rem; font-weight: 600; margin: 0.65rem 0 0.3rem; }
+    input, textarea {
+      width: 100%;
+      padding: 0.6rem 0.7rem;
+      border: 1px solid rgba(15,40,80,0.15);
+      border-radius: 8px;
+      font: inherit;
+      font-size: 0.92rem;
+    }
+    textarea { min-height: 6rem; resize: vertical; }
+    .btn {
+      margin-top: 1rem;
+      width: 100%;
+      padding: 0.7rem;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .msg { margin-top: 0.65rem; font-size: 0.86rem; color: var(--muted); }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: #b91c1c; }
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+    .done-box {
+      padding: 0.85rem;
+      background: rgba(26,107,69,0.08);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="brand">Mandi Housing Welfare Society · Housing Colony Sanyard</p>
+    <div id="root" class="card">
+      <p class="loading">Loading requirement…</p>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const token = (params.get("t") || params.get("token") || "").trim();
+      const root = document.getElementById("root");
+
+      function esc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function rupee(n) {
+        if (n == null || n === "") return "";
+        return "₹" + Number(n).toLocaleString("en-IN");
+      }
+
+      async function load() {
+        if (!token) {
+          root.innerHTML = `<p class="msg err">Missing quote link. Ask the colony to resend the invite.</p>`;
+          return;
+        }
+        const res = await fetch(`/api/rwa/public/quotes/${encodeURIComponent(token)}`, {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          root.innerHTML = `<p class="msg err">${esc(data.error || "Invalid or expired quote link")}</p>`;
+          return;
+        }
+        const work = data.work || {};
+        const invite = data.invite || {};
+        const existing = data.response;
+        document.title = `Quote — ${work.title || "Colony work"}`;
+
+        if (existing) {
+          root.innerHTML = `
+            <h1>${esc(work.title || "Work requirement")}</h1>
+            <p class="meta">${esc(work.kindLabel || "")}${work.location ? " · " + esc(work.location) : ""}</p>
+            <div class="done-box">
+              <strong>Quote already submitted</strong>
+              <p style="margin:0.4rem 0 0">Thank you, ${esc(existing.vendorName)}. The colony has your response in their mailbox and Quotes section.</p>
+              ${existing.amount != null ? `<p style="margin:0.4rem 0 0">Amount: <strong>${esc(rupee(existing.amount))}</strong></p>` : ""}
+            </div>`;
+          return;
+        }
+
+        root.innerHTML = `
+          <h1>${esc(work.title || "Work requirement")}</h1>
+          <p class="meta">${esc(work.kindLabel || "")}${work.categoryLabel ? " · " + esc(work.categoryLabel) : ""}${work.location ? " · " + esc(work.location) : ""}${work.estimatedCost != null ? " · Est. " + esc(rupee(work.estimatedCost)) : ""}</p>
+          ${work.summary ? `<p class="summary">${esc(work.summary)}</p>` : ""}
+          ${work.details ? `<div class="details">${esc(work.details)}</div>` : ""}
+          ${invite.message ? `<div class="note"><strong>Note from colony</strong><br>${esc(invite.message)}</div>` : ""}
+          <p class="meta">Invite for: ${esc(invite.vendorEmail || "")}</p>
+          <form id="quoteForm">
+            <label>Your name / firm *</label>
+            <input id="vendorName" name="vendorName" required maxlength="120" autocomplete="organization">
+            <label>Phone</label>
+            <input id="vendorPhone" name="vendorPhone" maxlength="40" inputmode="tel" autocomplete="tel">
+            <label>Quote amount (₹)</label>
+            <input id="amount" name="amount" type="number" min="0" step="1" placeholder="Optional">
+            <label>Timeline / availability</label>
+            <input id="timeline" name="timeline" maxlength="400" placeholder="e.g. 7–10 days after award">
+            <label>Quote details *</label>
+            <textarea id="notes" name="notes" required maxlength="4000" placeholder="Scope covered, inclusions, taxes, validity…"></textarea>
+            <button class="btn" type="submit" id="submitBtn">Submit quote</button>
+            <p class="msg" id="formMsg">A copy is emailed to the colony mailbox and stored under Quotes for this project.</p>
+          </form>`;
+
+        document.getElementById("quoteForm").addEventListener("submit", onSubmit);
+      }
+
+      async function onSubmit(event) {
+        event.preventDefault();
+        const btn = document.getElementById("submitBtn");
+        const msg = document.getElementById("formMsg");
+        btn.disabled = true;
+        msg.className = "msg";
+        msg.textContent = "Sending…";
+        try {
+          const res = await fetch(`/api/rwa/public/quotes/${encodeURIComponent(token)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              vendorName: document.getElementById("vendorName").value.trim(),
+              vendorPhone: document.getElementById("vendorPhone").value.trim(),
+              amount: document.getElementById("amount").value,
+              timeline: document.getElementById("timeline").value.trim(),
+              notes: document.getElementById("notes").value.trim(),
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+          msg.className = "msg ok";
+          msg.textContent = "Quote submitted. The colony will review it in Quotes and their mailbox.";
+          setTimeout(load, 800);
+        } catch (err) {
+          msg.className = "msg err";
+          msg.textContent = err.message || "Could not submit";
+          btn.disabled = false;
+        }
+      }
+
+      load().catch((err) => {
+        root.innerHTML = `<p class="msg err">${esc(err.message || "Could not load")}</p>`;
+      });
+    })();
+  </script>
+</body>
+</html>
