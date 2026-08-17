@@ -159,6 +159,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - **Quote invite email** — fixed literal `\n` before Details section (2026-08-17)
 - **Notification branding** — emails, share cards, and parking pass mail use “Housing Colony Sanyard” instead of “HBC Sanyard” (2026-08-17)
 - **Matters tab** — app header renamed from “Concerns” to “Matters” (2026-08-17)
+- **Print pad footer fix** — shared `print-pad-common.css` caps central writing area (not header/footer) so full sheet fits printable A4 (2026-08-17)
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes

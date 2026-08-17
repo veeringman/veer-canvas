@@ -3622,31 +3622,19 @@ def api_rwa_authbuddy_session():
             ).fetchone()
             if row:
                 member = dict(row)
-        if not member and identity.get("email"):
-            member = rwa_household.find_member_by_email_on_plot(conn, hid, identity["email"])
         if not member:
             return jsonify({
                 "ok": False,
-                "error": "No household member on this plot is linked to this AuthBuddy account. Sign in with email passcode once to link.",
+                "error": "No household member on this plot is linked to this AuthBuddy account. Sign in with email passcode once, then tap Link AuthBuddy.",
                 "needsLink": True,
             }), 403
         linked_uid = str(member.get("authbuddy_user_id") or "").strip()
-        if linked_uid and linked_uid != identity["user_id"]:
-            return jsonify({"ok": False, "error": "This plot member is linked to a different AuthBuddy account"}), 403
-        if not linked_uid:
-            mem_email = str(member.get("email") or "").strip().lower()
-            if not mem_email or mem_email != (identity.get("email") or ""):
-                return jsonify({
-                    "ok": False,
-                    "error": "AuthBuddy is not linked for this member yet. Use email passcode first, then link AuthBuddy.",
-                    "needsLink": True,
-                }), 403
-            member = rwa_household.link_authbuddy(
-                conn,
-                member["id"],
-                user_id=identity["user_id"],
-                username=identity.get("username"),
-            )
+        if linked_uid != identity["user_id"]:
+            return jsonify({
+                "ok": False,
+                "error": "This plot member is not linked to this AuthBuddy account. Sign in with email passcode first, then Link AuthBuddy.",
+                "needsLink": True,
+            }), 403
         sess = rwa_portal.create_session_for_resident(conn, resident, member=member)
         resp = jsonify({"ok": True, **_rwa_auth_payload(sess)})
         _rwa_set_session_cookie(resp, sess["token"])

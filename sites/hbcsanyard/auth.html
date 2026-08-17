@@ -7,153 +7,60 @@
   <meta name="description" content="Link or sign in with AuthBuddy for Himuda Housing Colony Sanyard.">
   <link rel="canonical" href="https://housingcolonysanyard.in/auth.html">
   <meta name="public-origin" content="https://housingcolonysanyard.in">
+  <meta name="theme-color" content="#15233f">
   <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260813auth1">
-  <!-- Do not load style.css here — it is the dark catalog theme and washes out this form. -->
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260818theme2">
   <script src="site-utils.js?v=20260812domain1" defer></script>
   <script src="site-meta.js?v=20260812domain1" defer></script>
-  <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="auth-page.js?v=20260813auth1" defer></script>
-  <style>
-    body.auth-body {
-      color: #15233f;
-      background: #f6f1e6;
-    }
-    .auth-page {
-      position: relative;
-      z-index: 1;
-      max-width: 520px;
-      margin: 0 auto;
-      padding: 1.5rem 1rem 3rem;
-      color: #15233f;
-    }
-    .auth-brand-row {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-      margin-bottom: 0.35rem;
-    }
-    .authbuddy-mark {
-      display: block;
-      flex: 0 0 auto;
-      border-radius: 10px;
-    }
-    .authbuddy-mark-lg { width: 48px; height: 48px; }
-    .auth-hero h1 { font-size: 1.6rem; margin: 0.25rem 0; color: #15233f; }
-    .auth-hero .lede,
-    .auth-hero .muted,
-    .auth-page .muted { color: rgba(21, 35, 63, 0.68); }
-    .auth-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
-    .auth-tab {
-      border: 1px solid #c5d0de;
-      background: #fff;
-      color: #15233f;
-      border-radius: 10px;
-      padding: 0.45rem 0.85rem;
-      cursor: pointer;
-      font: inherit;
-    }
-    .auth-tab.is-active { border-color: #0c7c7a; color: #0c7c7a; font-weight: 600; }
-    .auth-card {
-      background: #fff;
-      color: #15233f;
-      border-radius: 16px;
-      padding: 1.25rem;
-      box-shadow: 0 8px 28px rgba(21, 35, 63, 0.08);
-      border: 1px solid rgba(21, 35, 63, 0.08);
-    }
-    .auth-card label { display: block; margin: 0.75rem 0 0.35rem; font-weight: 600; font-size: 0.9rem; color: #15233f; }
-    .auth-card input {
-      width: 100%;
-      padding: 0.65rem 0.75rem;
-      border-radius: 10px;
-      border: 1px solid #c5d0de;
-      font: inherit;
-      box-sizing: border-box;
-      color: #15233f;
-      background: #fff;
-    }
-    .auth-card .btn { margin-top: 0.85rem; }
-    .auth-back { margin-bottom: 1rem; }
-    .auth-back .btn.ghost {
-      color: #15233f;
-      border-color: rgba(21, 35, 63, 0.2);
-      background: #fff;
-    }
-    .status-pill {
-      display: inline-block;
-      margin: 0.15rem 0.25rem 0.15rem 0;
-      padding: 0.2rem 0.55rem;
-      border-radius: 999px;
-      background: #e8f5f4;
-      color: #0c7c7a;
-      font-size: 0.75rem;
-    }
-    .status-pill.is-muted {
-      background: #eef1f5;
-      color: rgba(21, 35, 63, 0.55);
-    }
-    #authError { color: #b3261e; margin-top: 0.75rem; }
-    #authStatus { color: #0c7c7a; margin-top: 0.75rem; }
-    fieldset { border: 1px solid #c5d0de; border-radius: 12px; padding: 0.75rem 1rem; }
-    legend { padding: 0 0.35rem; font-weight: 600; }
-    .device-match-label {
-      margin: 0.35rem 0 0.25rem;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: rgba(21, 35, 63, 0.72);
-    }
-    .device-match-number {
-      margin: 0.25rem 0 0.85rem;
-      font-size: 2.75rem;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      line-height: 1;
-      color: #0c7c7a;
-      font-variant-numeric: tabular-nums;
-    }
-    .device-approve-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
-    }
-    .device-approve-actions .btn { margin-top: 0; text-decoration: none; }
-    .device-qr-img {
-      display: block;
-      margin: 0.5rem 0;
-      border-radius: 12px;
-      background: #fff;
-    }
-    @media (max-width: 820px) {
-      .device-qr-img { max-width: 140px; height: auto; }
-    }
-  </style>
+  <script src="auth.js?v=20260817pw2" defer></script>
+  <script src="auth-page.js?v=20260818theme1" defer></script>
 </head>
-<body class="auth-body">
-  <div class="atmosphere" aria-hidden="true"></div>
-  <main class="auth-page">
-    <p class="auth-back"><a class="btn ghost compact" href="index.html">← Back to portal</a></p>
-    <header class="auth-hero">
-      <div class="auth-brand-row">
-        <img class="authbuddy-mark authbuddy-mark-lg" src="assets/authbuddy/authbuddy-mark.png?v=20260812ab1" width="48" height="48" alt="AuthBuddy" decoding="async">
-        <div>
-          <p class="eyebrow">HBC Sanyard · AuthBuddy</p>
-          <h1 id="authTitle">Sign in</h1>
+<body>
+  <main class="shell landing-shell">
+    <header class="landing-top">
+      <a class="landing-top-brand" href="index.html" aria-label="Housing Colony Sanyard home">
+        <picture>
+          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp?v=20260810lite1">
+          <img class="landing-top-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="" width="36" height="36" decoding="async">
+        </picture>
+        <span class="landing-top-name">Housing Colony Sanyard</span>
+      </a>
+      <a class="landing-signin" href="index.html">← Colony home</a>
+    </header>
+    <section class="landing-hero landing-hero-login" aria-labelledby="authTitle">
+      <div class="landing-hero-glow" aria-hidden="true"></div>
+      <div class="landing-hero-inner">
+        <div class="landing-hero-seal">
+          <picture>
+            <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
+            <img
+              class="landing-seal"
+              src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
+              width="240"
+              height="240"
+              alt="Himuda Housing Colony Sanyard"
+              decoding="async"
+            >
+          </picture>
         </div>
-      </div>
-      <p class="lede muted" id="authSubtitle">Use the same AuthBuddy account as other VeerLabs apps if you already have one. Colony access still starts with your plot + email passcode.</p>
+        <div class="landing-hero-copy">
+          <p class="landing-hero-kicker">Mandi Housing Welfare Society · AuthBuddy</p>
+          <h1 id="authTitle">Sign in</h1>
+          <p class="landing-greeting" id="authSubtitle">Use AuthBuddy with the same email as this plot member. Colony access still starts with plot + email passcode.</p>
+          <section class="landing-login-card" id="loginCard">
+      <p class="auth-card-mark">
+        <img src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="22" height="22" alt="" decoding="async">
+        AuthBuddy
+      </p>
       <div id="methodPills"></div>
       <p class="muted" id="policyNotes"></p>
-    </header>
 
-    <div class="auth-tabs">
-      <button type="button" class="auth-tab is-active" data-tab="login">Sign in</button>
-      <button type="button" class="auth-tab" data-tab="register">Register</button>
-    </div>
+      <div class="gate-tabs" id="authPurposeTabs">
+        <button type="button" class="gate-tab is-active" data-tab="login">Sign in</button>
+        <button type="button" class="gate-tab" data-tab="register">Register</button>
+      </div>
 
-    <section class="auth-card">
       <form id="loginForm" class="stack">
         <div id="loginIdentifyStep">
           <label>Username<input id="loginUsername" name="username" autocomplete="username" required></label>
@@ -167,6 +74,9 @@
           <div id="loginMethodTabs" class="auth-tabs" hidden></div>
           <div id="loginPasswordBlock" hidden>
             <label>Password<input id="loginPassword" type="password" autocomplete="current-password"></label>
+            <p class="muted" id="forgotPasswordRow">
+              <a id="forgotPasswordLink" href="https://authbuddy.veerlabs.solutions/account?mode=forgot">Forgot password?</a>
+            </p>
           </div>
           <div id="loginOtpBlock" hidden>
             <label><span id="loginOtpLabelText">Authenticator code</span>
@@ -234,7 +144,7 @@
             </div>
           </div>
           <div id="mfaPasskeySetup" hidden>
-            <button type="button" class="btn primary" id="startPasskeySetup">Enroll passkey</button>
+            <button type="button" class="btn primary" id="startPasskeySetup">Use Face ID / fingerprint</button>
           </div>
           <div id="mfaHybridPqcSetup" hidden>
             <p class="muted">Open BuddyAuthenticator → Hybrid PQC → enroll keys, then verify below.</p>
@@ -265,8 +175,11 @@
         </div>
       </div>
 
-      <p id="authError" hidden></p>
+      <p class="error" id="authError" hidden></p>
       <p id="authStatus" hidden></p>
+          </section>
+        </div>
+      </div>
     </section>
   </main>
 </body>

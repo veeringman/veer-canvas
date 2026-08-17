@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260816quotes1">
+  <link rel="stylesheet" href="portal.css?v=20260818theme2">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
-  <script src="auth.js?v=20260813auth1" defer></script>
-  <script src="portal.js?v=20260816quotes1" defer></script>
+  <script src="auth.js?v=20260817face2" defer></script>
+  <script src="portal.js?v=20260818theme2" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -195,34 +195,42 @@
     </footer>
   </div>
 
-  <div id="gateView" class="shell gate-shell" hidden>
-    <p class="gate-back-row">
-      <button type="button" class="btn ghost compact" id="gateBackToLandingBtn">← Back to colony home</button>
-    </p>
-    <header class="gate-brand" id="gateBrand">
-      <div class="seal-ring">
+  <div id="gateView" class="shell landing-shell" hidden>
+    <header class="landing-top">
+      <a class="landing-top-brand" href="#landingHero" id="gateBackBrand" aria-label="Housing Colony Sanyard home">
         <picture>
-          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
-          <img
-            class="seal"
-            id="gateSeal"
-            src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
-            width="248"
-            height="248"
-            alt="Himuda Housing Colony Sanyard"
-            decoding="async"
-            fetchpriority="high"
-          >
+          <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp?v=20260810lite1">
+          <img class="landing-top-seal" src="assets/mhws-logo/mhws-logo-web-256.png?v=20260810lite1" alt="" width="36" height="36" decoding="async">
         </picture>
-      </div>
-      <div>
-        <p class="eyebrow">Mandi Housing Welfare Society · RWA · Mandi</p>
-        <h1>Himuda Housing Colony Sanyard</h1>
-        <p class="lede">Notices, directory, dues, and your household profile for Himuda Housing Colony Sanyard.</p>
-      </div>
+        <span class="landing-top-name">Housing Colony Sanyard</span>
+      </a>
+      <button type="button" class="landing-signin" id="gateBackToLandingBtn">
+        <span>← Colony home</span>
+      </button>
     </header>
-
-    <section class="gate-card" id="loginCard">
+    <section class="landing-hero landing-hero-login" aria-labelledby="gateHeroTitle">
+      <div class="landing-hero-glow" aria-hidden="true"></div>
+      <div class="landing-hero-inner">
+        <div class="landing-hero-seal" id="gateBrand">
+          <picture>
+            <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-512.webp?v=20260810lite1">
+            <img
+              class="landing-seal"
+              id="gateSeal"
+              src="assets/mhws-logo/mhws-logo-web-512.png?v=20260810lite1"
+              width="240"
+              height="240"
+              alt="Himuda Housing Colony Sanyard"
+              decoding="async"
+              fetchpriority="high"
+            >
+          </picture>
+        </div>
+        <div class="landing-hero-copy">
+          <p class="landing-hero-kicker">Mandi Housing Welfare Society · RWA · Mandi</p>
+          <h1 id="gateHeroTitle">Resident sign-in</h1>
+          <p class="landing-greeting">Notices, directory, dues, and your household profile for Himuda Housing Colony Sanyard.</p>
+          <section class="landing-login-card" id="loginCard">
       <div id="plotLoginPane">
         <h2>Residents</h2>
         <p class="muted" id="gateIntroCopy">Enter your house / plot number. If AuthBuddy is linked for your member, that will be offered first — email passcodes are only sent when you choose them.</p>
@@ -261,6 +269,10 @@
         <div id="authChoicePane" class="stack gate-auth-choice" hidden>
           <p class="muted" id="authChoiceHint"></p>
           <div id="authbuddyPrimaryBlock" class="stack" hidden>
+            <button type="button" class="btn primary btn-with-icon" id="authbuddyFaceIdBtn" hidden>
+              <img class="authbuddy-mark" src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="22" height="22" alt="" decoding="async">
+              <span id="authbuddyFaceIdLabel">Continue with Face ID</span>
+            </button>
             <button type="button" class="btn primary btn-with-icon" id="authbuddyContinueBtn">
               <img class="authbuddy-mark" src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="22" height="22" alt="" decoding="async">
               <span>Continue with AuthBuddy</span>
@@ -308,9 +320,10 @@
       </div>
 
       <p class="error" id="loginError" hidden></p>
-    </section>
-
-    <footer class="gate-foot muted">
+          </section>
+        </div>
+      </div>
+      <footer class="landing-login-foot">
       <p id="pwaInstallHint" class="pwa-hint" hidden></p>
       <p class="app-refresh-row">
         <button type="button" class="btn ghost compact" id="appRefreshBtn">Refresh app</button>
@@ -324,8 +337,9 @@
         </picture>
         <span class="superadmin-only" id="gateCmsHint" hidden>· CMS at /admin</span>
       </p>
-      <p class="gate-managed-note muted">Add to Home Screen for quick access</p>
-    </footer>
+      <p class="gate-managed-note">Add to Home Screen for quick access</p>
+      </footer>
+    </section>
   </div>
 
   <div id="appView" class="shell app-shell" hidden>
@@ -1657,7 +1671,7 @@
       <section class="panel" id="panel-directory" hidden>
         <header class="panel-head">
           <h2>Resident directory</h2>
-          <p class="muted">Active plots in Himuda Housing Colony Sanyard. Your household code is on your own plot card; EC Admin can see every code (registration / dues circulars).</p>
+          <p class="muted">Active plots in Himuda Housing Colony Sanyard. Tap a phone number to call or WhatsApp, or tap an email to write. Your household code is on your own plot card; EC Admin can see every code (registration / dues circulars).</p>
         </header>
         <div class="directory-toolbar">
           <label class="roster-search directory-lookup">
@@ -3318,6 +3332,16 @@
           <button type="button" class="btn ghost" id="msgEscalateCancel">Cancel</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="dirContactSheet" class="dir-contact-sheet" aria-labelledby="dirContactSheetTitle">
+      <div class="dir-contact-sheet-group">
+        <p class="dir-contact-sheet-kicker">Contact</p>
+        <p id="dirContactSheetTitle" class="dir-contact-sheet-title"></p>
+        <a class="dir-sheet-btn" id="dirContactCall" href="#">Call</a>
+        <a class="dir-sheet-btn" id="dirContactWhatsApp" href="#" rel="noopener">WhatsApp</a>
+      </div>
+      <button type="button" class="dir-sheet-btn dir-sheet-cancel" id="dirContactCancel">Cancel</button>
     </dialog>
 
     <dialog id="parkingScanDialog" class="parking-scan-dialog" aria-labelledby="parkingScanTitle">

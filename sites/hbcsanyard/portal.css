@@ -183,6 +183,93 @@ input:focus, textarea:focus, select:focus {
   font-size: 0.8rem;
 }
 
+.gate-shell.auth-shell .seal-ring {
+  width: clamp(120px, 32vw, 168px);
+  animation: none;
+}
+.gate-shell.auth-shell .gate-card {
+  max-width: 480px;
+  text-align: left;
+}
+.auth-card-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+.auth-card-mark img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.35rem;
+}
+.auth-tab {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--navy);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.auth-tab.is-active {
+  border-color: var(--gold-deep);
+  color: var(--navy-deep);
+  background: var(--gold-soft);
+}
+.status-pill {
+  display: inline-block;
+  margin: 0.15rem 0.25rem 0.15rem 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--navy);
+  font-size: 0.75rem;
+}
+.status-pill.is-muted {
+  background: rgba(21, 35, 63, 0.08);
+  color: var(--muted);
+}
+.device-match-label {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.device-match-number {
+  margin: 0.25rem 0 0.85rem;
+  font-size: 2.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+.device-approve-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.device-approve-actions .btn { margin-top: 0; text-decoration: none; }
+.device-qr-img {
+  display: block;
+  margin: 0.5rem 0;
+  border-radius: 12px;
+  background: #fff;
+}
+#authStatus { color: var(--leaf); margin-top: 0.75rem; }
+
 /* Pre-login public landing — civic brand showcase */
 .landing-shell {
   width: 100%;
@@ -287,6 +374,7 @@ input:focus, textarea:focus, select:focus {
   letter-spacing: 0.01em;
   line-height: 1.2;
   cursor: pointer;
+  text-decoration: none;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
 }
 .landing-signin-arrow {
@@ -429,6 +517,67 @@ input:focus, textarea:focus, select:focus {
 .landing-cta-city:hover {
   background: rgba(26, 61, 66, 0.55);
   border-color: rgba(159, 212, 216, 0.7);
+}
+
+.landing-hero-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-content: start;
+}
+.landing-hero-login .landing-hero-inner {
+  align-items: center;
+}
+.landing-hero-login .landing-hero-seal {
+  width: min(100%, 220px);
+}
+.landing-hero-login .landing-hero h1,
+.landing-hero-login h1 {
+  max-width: 16ch;
+  color: #fffdf8;
+  font-family: var(--display);
+  font-size: clamp(1.85rem, 4.4vw, 3rem);
+  line-height: 1.08;
+  margin: 0;
+}
+.landing-login-card {
+  width: 100%;
+  max-width: 440px;
+  margin-top: 0.35rem;
+  padding: 1.15rem 1.2rem 1.3rem;
+  border-radius: var(--radius);
+  background: rgba(255, 252, 246, 0.95);
+  border: 1px solid rgba(247, 243, 235, 0.16);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.32);
+  color: var(--navy);
+  text-align: left;
+}
+.landing-login-card h2 {
+  margin: 0 0 0.4rem;
+  font-family: var(--display);
+  font-size: 1.45rem;
+  color: var(--navy);
+}
+.landing-login-foot {
+  width: min(1080px, 100%);
+  margin: 1.25rem auto 0;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
+  text-align: center;
+  color: rgba(247, 243, 235, 0.55);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.landing-login-foot .btn.ghost {
+  color: #f7f3eb;
+  border-color: rgba(247, 243, 235, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+}
+.landing-hero-login .gate-managed,
+.landing-hero-login .gate-managed-note {
+  color: inherit;
 }
 .landing-scroll-hint {
   position: absolute;
@@ -4399,11 +4548,87 @@ th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; colo
 }
 .dir-contact {
   color: var(--navy);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
   overflow-wrap: anywhere;
   word-break: break-word;
+  cursor: pointer;
 }
-.dir-contact:hover { text-decoration: underline; }
+button.dir-contact {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0.2rem 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 650;
+  color: var(--navy);
+  text-align: left;
+  min-height: 2.5rem;
+}
+a.dir-contact {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  font-weight: 650;
+}
+.dir-contact:hover { color: var(--leaf); }
+
+.dir-contact-sheet {
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
+  margin: auto 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0px));
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+.dir-contact-sheet::backdrop {
+  background: rgba(14, 24, 44, 0.45);
+}
+.dir-contact-sheet-group {
+  background: rgba(255, 252, 246, 0.96);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+.dir-contact-sheet-kicker {
+  margin: 0;
+  padding: 0.7rem 1rem 0;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dir-contact-sheet-title {
+  margin: 0;
+  padding: 0.15rem 1rem 0.7rem;
+  text-align: center;
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+.dir-sheet-btn {
+  display: block;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  text-align: center;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: #1d6fd8;
+  background: rgba(255, 252, 246, 0.96);
+  border: 0;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+  cursor: pointer;
+}
+.dir-sheet-cancel {
+  border-radius: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
 .dir-seat {
   margin: 0.55rem 0 0;
   color: var(--muted);

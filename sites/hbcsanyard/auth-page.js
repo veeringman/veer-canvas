@@ -44,10 +44,11 @@
             window.location.replace(dest.indexOf('index.html') >= 0 ? 'index.html#home' : dest);
             return;
           }
-          setStatus((d && d.error) || 'AuthBuddy signed in — finish with email passcode if not linked yet.');
-          setTimeout(() => { window.location.replace(dest); }, 900);
+          setError((d && d.error) || 'This AuthBuddy account is not linked to a member on this plot. Use email passcode on the gate first, then Link AuthBuddy with the same email.');
         })
-        .catch(() => { window.location.replace(dest); });
+        .catch(() => {
+          setError('Could not open a colony session from AuthBuddy. Use email passcode on the gate first, then Link AuthBuddy.');
+        });
       return;
     }
 
@@ -68,10 +69,12 @@
             setTimeout(() => { window.location.replace(dest); }, 500);
             return;
           }
-          setError((d && d.error) || 'Could not link AuthBuddy');
-          setTimeout(() => { window.location.replace(dest); }, 1200);
+          setError((d && d.error) || 'Could not link AuthBuddy. Sign in to the colony with email passcode first, and use the same email on the AuthBuddy account.');
+          return;
         })
-        .catch(() => { window.location.replace(dest); });
+        .catch(() => {
+          setError('Could not link AuthBuddy. Stay on this page and try again, or go back and use email passcode.');
+        });
       return;
     }
 
@@ -121,26 +124,76 @@
     return flat.includes(method) || mfa.includes(method);
   }
 
+  function linkingColony() {
+    return params().get('purpose') === 'link';
+  }
+
+  function purposeTabs() {
+    return document.querySelectorAll('.gate-tab[data-tab], .auth-tab[data-tab]');
+  }
+
+  function applyAuthPurposeUi() {
+    const regTab = document.querySelector('[data-tab="register"]');
+    if (regTab) {
+      regTab.hidden = !linkingColony();
+      regTab.setAttribute('aria-hidden', linkingColony() ? 'false' : 'true');
+    }
+    const tabs = qs('authPurposeTabs');
+    if (tabs) tabs.hidden = !linkingColony();
+    const emailParam = (params().get('email') || '').trim();
+    if (emailParam) {
+      const em = qs('registerForm') && qs('registerForm').querySelector('[name="email"]');
+      if (em && !em.value) em.value = emailParam;
+    }
+  }
+
+  async function dropAuthbuddySession() {
+    try { window.VeerAuth.saveSessionId(''); } catch (_e) { /* ignore */ }
+    try {
+      await fetch('/agent/v1/logout?return_to=' + encodeURIComponent(window.location.href), {
+        method: 'GET',
+        credentials: 'include',
+        redirect: 'manual',
+      });
+    } catch (_e) { /* ignore */ }
+    try {
+      await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+    } catch (_e) { /* ignore */ }
+  }
+
   function showTab(whichTab) {
     const login = qs('loginForm');
     const register = qs('registerForm');
     const mfa = qs('mfaPanel');
-    document.querySelectorAll('.auth-tab[data-tab]').forEach((btn) => {
+    purposeTabs().forEach((btn) => {
       btn.classList.toggle('is-active', btn.dataset.tab === whichTab);
     });
     if (mfa) mfa.hidden = true;
     enrollForced = false;
     if (whichTab === 'register') {
+      if (!linkingColony()) {
+        setError('Register an AuthBuddy account only when linking from the colony portal (after email passcode).');
+        whichTab = 'login';
+      }
+    }
+    if (whichTab === 'register') {
       login.hidden = true;
       register.hidden = false;
-      qs('authTitle').textContent = 'Register';
-      qs('authSubtitle').textContent = 'Create an account using the methods allowed by this site’s AuthBuddy policy.';
+      qs('authTitle').textContent = 'Create AuthBuddy account';
+      qs('authSubtitle').textContent = 'Use the same email as this plot member. That is what links AuthBuddy to the colony roster — a random new email will not open the portal.';
       applyPolicyToRegisterForm();
     } else {
       login.hidden = false;
       register.hidden = true;
-      qs('authTitle').textContent = 'Sign in';
-      qs('authSubtitle').textContent = 'Enter your username. We’ll ask for the factors required by this site’s AuthBuddy policy.';
+      qs('authTitle').textContent = linkingColony() ? 'Link AuthBuddy' : 'Sign in';
+      qs('authSubtitle').textContent = linkingColony()
+        ? 'Sign in with an existing AuthBuddy user (same email as this plot member), or tap Register if you do not have one yet.'
+        : 'Sign in with the AuthBuddy account already linked to this plot member.';
       resetLoginToIdentify();
     }
   }
@@ -213,11 +266,62 @@
     if (method === 'password') return 'Password';
     if (method === 'totp') return 'TOTP';
     if (method === 'hotp') return 'HOTP';
-    if (method === 'passkey') return 'Passkey';
+    if (method === 'passkey') return 'Face ID / passkey';
     if (method === 'hybrid_pqc') return 'Hybrid PQC';
     if (method === 'qr') return 'QR / Approve';
     if (method === 'number_match') return 'Number match';
     return method;
+  }
+
+  function wantPasskeySetup() {
+    return params().get('setup') === 'passkey';
+  }
+
+  function hasEnrolledPasskey() {
+    return Boolean(loginOptions && loginOptions.has_passkey);
+  }
+
+  function shouldOfferPasskeySetup() {
+    if (hasEnrolledPasskey()) return false;
+    if (!(policy && (policy.passkey_allowed || policyAllows('passkey')))) return false;
+    if (wantPasskeySetup()) return true;
+    return /iPhone|iPad/.test(navigator.userAgent || '');
+  }
+
+  async function finishSignIn() {
+    if (wantPasskeySetup() && !hasEnrolledPasskey()) {
+      await startFaceIdEnroll(true);
+      return;
+    }
+    continueToReturn();
+  }
+
+  async function startFaceIdEnroll(autoStart) {
+    enrollUsername = enrollUsername
+      || (loginOptions && loginOptions.username)
+      || params().get('username')
+      || '';
+    mfaKind = 'passkey';
+    showMfaEnrollPanel('Use Face ID or fingerprint on this phone to finish setup.', { forced: false });
+    qs('mfaTitle').textContent = 'Set up Face ID';
+    const startBtn = qs('startPasskeySetup');
+    if (startBtn) startBtn.textContent = 'Use Face ID / fingerprint';
+    if (window.VeerAuth && window.VeerAuth.mountTopbarAuth) {
+      window.VeerAuth.mountTopbarAuth();
+    }
+    if (!autoStart) return;
+    try {
+      await runPasskeyEnroll();
+    } catch (err) {
+      const name = String(err && err.name || '');
+      const msg = String(err && err.message || '');
+      const cancelled = name === 'NotAllowedError' || /not allowed|abort|cancel/i.test(msg);
+      if (cancelled) {
+        setStatus('Face ID was cancelled. Tap the button to try again, or skip for now.');
+        return;
+      }
+      setError(msg || 'Face ID setup failed');
+    }
   }
 
   function buildChoosableLoginMethods(options) {
@@ -284,7 +388,12 @@
     qs('loginSubmitBtn').disabled = false;
     // Mobile / installed PWA: default to QR / Approve so match-number + QR show immediately.
     const preferQr = isMobileAuthUi();
-    if (preferQr && choosable.includes('qr')) activeLoginMethod = 'qr';
+    const settingUpPasskey = params().get('setup') === 'passkey';
+    const preferPasskey = choosable.includes('passkey')
+      && (settingUpPasskey || /iPhone|iPad/.test(navigator.userAgent || ''));
+    if (preferPasskey) activeLoginMethod = 'passkey';
+    else if (settingUpPasskey && choosable.includes('password')) activeLoginMethod = 'password';
+    else if (preferQr && choosable.includes('qr')) activeLoginMethod = 'qr';
     else if (choosable.includes('password')) activeLoginMethod = 'password';
     else if (choosable.includes('passkey')) activeLoginMethod = 'passkey';
     else if (choosable.includes('qr')) activeLoginMethod = 'qr';
@@ -298,7 +407,7 @@
     const tabs = qs('loginMethodTabs');
     const groups = [];
     if (methods.includes('password')) groups.push({ id: 'password', label: 'Password' });
-    if (methods.includes('passkey')) groups.push({ id: 'passkey', label: 'Passkey' });
+    if (methods.includes('passkey')) groups.push({ id: 'passkey', label: 'Face ID / passkey' });
     if (methods.includes('totp') || methods.includes('hotp')) groups.push({ id: 'otp', label: 'Authenticator' });
     if (methods.includes('qr')) groups.push({ id: 'qr', label: 'QR / Approve' });
 
@@ -421,7 +530,9 @@
     qs('mfaTitle').textContent = 'Set up authenticator';
     qs('mfaLead').textContent = enrollForced
       ? 'Site policy requires a second factor before you can access protected pages.'
-      : 'Enroll TOTP, HOTP, a passkey, or Hybrid PQC, then continue.';
+      : (params().get('setup') === 'passkey'
+        ? 'Add Face ID / fingerprint on this phone. You can skip and keep using password next time.'
+        : 'Enroll TOTP, HOTP, a passkey, or Hybrid PQC, then continue.');
     qs('mfaSetupBox').hidden = false;
     qs('mfaVerifyOnly').hidden = true;
     qs('mfaQrArea').hidden = true;
@@ -606,7 +717,7 @@
       if (st.session_id) window.VeerAuth.saveSessionId(st.session_id);
       if (statusEl) statusEl.textContent = 'Approved. Continuing…';
       setStatus('Verified. Continuing…');
-      setTimeout(() => { continueToReturn(); }, 500);
+      setTimeout(() => { finishSignIn().catch((err) => setError(err.message || 'Could not continue')); }, 500);
     } else if (st.status === 'expired') {
       stopDevicePoll();
       if (statusEl) statusEl.textContent = 'Challenge expired — tap Refresh QR.';
@@ -639,7 +750,7 @@
       if (st.session_id) window.VeerAuth.saveSessionId(st.session_id);
       if (statusEl) statusEl.textContent = 'Approved. Continuing…';
       setStatus('Hybrid PQC verified. Continuing…');
-      setTimeout(() => { continueToReturn(); }, 500);
+      setTimeout(() => { finishSignIn().catch((err) => setError(err.message || 'Could not continue')); }, 500);
     } else if (st.status === 'expired') {
       stopHybridPqcPoll();
       if (statusEl) statusEl.textContent = 'Challenge expired — tap Refresh challenge.';
@@ -672,6 +783,15 @@
   }
 
   async function afterAuthOk(message, forced) {
+    if (linkingColony() && forced === false) {
+      setStatus('AuthBuddy ready. Linking to this plot member…');
+      continueToReturn();
+      return;
+    }
+    if (wantPasskeySetup() || /Face ID/i.test(message || '')) {
+      await startFaceIdEnroll(true);
+      return;
+    }
     showMfaEnrollPanel(message || 'Complete authenticator setup to finish.', { forced: forced !== false });
     if (window.VeerAuth && window.VeerAuth.mountTopbarAuth) {
       window.VeerAuth.mountTopbarAuth();
@@ -713,6 +833,11 @@
 
   async function runPasskeyLogin(username) {
     setError('');
+    if (window.VeerAuth && typeof window.VeerAuth.authenticateWithPasskey === 'function') {
+      await window.VeerAuth.authenticateWithPasskey(username);
+      continueToReturn();
+      return;
+    }
     const begin = await window.VeerAuth.idpPost('/auth/passkey/authenticate/begin', { username });
     const webauthn = await loadWebAuthn();
     const assertion = await webauthn.startAuthentication({
@@ -774,7 +899,7 @@
     }
     if (data.session_id) window.VeerAuth.saveSessionId(data.session_id);
     setStatus('Authenticator verified. Continuing…');
-    setTimeout(() => { continueToReturn(); }, 700);
+    setTimeout(() => { finishSignIn().catch((err) => setError(err.message || 'Could not continue')); }, 700);
   }
 
   async function confirmMfaChallenge() {
@@ -795,7 +920,7 @@
         if (data.success) {
           if (data.session_id) window.VeerAuth.saveSessionId(data.session_id);
           setStatus('Verified. Continuing…');
-          setTimeout(() => { continueToReturn(); }, 500);
+          setTimeout(() => { finishSignIn().catch((err) => setError(err.message || 'Could not continue')); }, 500);
           return;
         }
         lastErr = new Error(data.message || 'Invalid code');
@@ -868,6 +993,10 @@
         });
         if (login.session_id) window.VeerAuth.saveSessionId(login.session_id);
         enrollUsername = username;
+        if (wantPasskeySetup() || shouldOfferPasskeySetup()) {
+          await startFaceIdEnroll(true);
+          return;
+        }
         if (login.enrollment_required) {
           await afterAuthOk(login.message || 'Enroll an authenticator to finish sign-in.', true);
           return;
@@ -894,7 +1023,7 @@
         method: activeLoginMethod === 'hotp' ? 'hotp' : 'totp',
         client_id: clientId(),
       });
-      continueToReturn();
+      await finishSignIn();
     } catch (err) {
       if (err.status === 401) {
         setError(activeLoginMethod === 'password'
@@ -910,10 +1039,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
-    const mode = params().get('mode');
-    if (mode === 'register') showTab('register');
+    const mode = params().get('mode') || '';
+    const wantRegister = linkingColony() && mode === 'register';
 
-    document.querySelectorAll('.auth-tab[data-tab]').forEach((btn) => {
+    purposeTabs().forEach((btn) => {
       btn.addEventListener('click', () => showTab(btn.dataset.tab));
     });
     document.querySelectorAll('.auth-tab[data-mfa]').forEach((btn) => {
@@ -933,12 +1062,6 @@
     });
     syncPasswordFields();
 
-    await new Promise((r) => setTimeout(r, 50));
-    if (!window.VeerAuth) {
-      setError('Auth helper failed to load');
-      return;
-    }
-
     qs('loginContinueBtn').addEventListener('click', () => {
       continueWithUsername().catch((err) => setError(err.message || 'Lookup failed'));
     });
@@ -956,7 +1079,6 @@
       if (!loginOptions) return;
       runPasskeyLogin(loginOptions.username).catch((err) => setError(err.message || 'Passkey failed'));
     });
-
     qs('continueAfterAuth').addEventListener('click', () => {
       if (enrollForced) {
         setError('Complete authenticator setup before continuing.');
@@ -998,100 +1120,9 @@
         startHybridPqcChallenge().catch((err) => setError(err.message || 'Could not refresh Hybrid PQC'));
       });
     }
-
-    try {
-      policy = await window.VeerAuth.getPolicy();
-      renderMethods(policy);
-      applyPolicyToRegisterForm();
-    } catch (_e) {
-      setStatus('Could not load policy from agent — using local defaults.');
-    }
-
-    const existing = await window.VeerAuth.getSession(true);
-    const purpose = params().get('purpose') || '';
-    const linkedUsername = (
-      params().get('username')
-      || params().get('authbuddyUsername')
-      || ''
-    ).trim();
-    // Colony gate login/bridge: if AuthBuddy is already signed in on this device
-    // (PWA localStorage + agent cookie) for the linked username, continue without
-    // forcing another password/QR challenge. Otherwise challenge as usual.
-    const forceCredentialChallenge = purpose === 'login' || purpose === 'bridge';
-    if (forceCredentialChallenge) {
-      const prior = linkedUsername
-        || (existing && existing.session
-          ? (existing.session.username || existing.session.email || '')
-          : '');
-      const existingUser = (existing && existing.session
-        ? (existing.session.username || existing.session.email || '')
-        : '').trim();
-      const sameUser = !linkedUsername
-        || !existingUser
-        || existingUser.toLowerCase() === String(linkedUsername).toLowerCase();
-      if (window.VeerAuth.isAuthenticated(existing) && sameUser) {
-        if (prior && qs('loginUsername')) qs('loginUsername').value = prior;
-        setStatus('Already signed in on this device. Continuing…');
-        continueToReturn();
-        return;
-      }
-      // Drop SSO so password / passkey / TOTP / QR is required again.
-      try { window.VeerAuth.saveSessionId(''); } catch (_e) { /* ignore */ }
-      try {
-        await fetch('/agent/v1/logout?return_to=' + encodeURIComponent(window.location.href), {
-          method: 'GET',
-          credentials: 'include',
-          redirect: 'manual',
-        });
-      } catch (_e) { /* ignore */ }
-      try {
-        await fetch('/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-      } catch (_e) { /* ignore */ }
-      showTab('login');
-      if (prior && qs('loginUsername')) {
-        qs('loginUsername').value = prior;
-      }
-      if (prior) {
-        qs('authSubtitle').textContent = `Sign in as ${prior} with any method allowed for HBC Sanyard.`;
-        setStatus('Choose password, passkey, authenticator code, or QR approve.');
-        await continueWithUsername();
-      } else {
-        setStatus('Sign in with AuthBuddy to continue to the colony portal.');
-      }
-    } else if (window.VeerAuth.isAuthenticated(existing)) {
-      // Already signed in — continue to the gated page (e.g. Learn more → project).
-      if (params().get('return_to')) {
-        setStatus('You are signed in. Continuing…');
-        continueToReturn();
-        return;
-      }
-      // Fully authenticated — optional extra enroll, allow skip unless policy forces.
-      if (policy && policy.mfa_required) {
-        // Already signed in with completed factors; just offer continue to catalog.
-        setStatus('You are signed in.');
-        showTab('login');
-      } else {
-        showMfaEnrollPanel('You are signed in. Optionally enroll another authenticator.', { forced: false });
-      }
-    } else if (linkedUsername) {
-      showTab('login');
-      if (qs('loginUsername')) qs('loginUsername').value = linkedUsername;
-      setStatus('Choose a sign-in method.');
-      await continueWithUsername();
-    } else if (window.VeerAuth.savedSessionId()) {
-      // Enrollment-only cookie may still exist — prompt to finish setup.
-      showMfaEnrollPanel('Finish authenticator setup to access protected pages.', { forced: true });
-    }
-
     qs('loginForm').addEventListener('submit', (event) => {
       submitLogin(event).catch((err) => setError(err.message || 'Login failed'));
     });
-
     qs('registerForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       setError('');
@@ -1145,5 +1176,111 @@
         }
       }
     });
+
+    applyAuthPurposeUi();
+    showTab(wantRegister ? 'register' : 'login');
+
+    await new Promise((r) => setTimeout(r, 50));
+    if (!window.VeerAuth) {
+      setError('Auth helper failed to load');
+      return;
+    }
+    const forgot = qs('forgotPasswordLink');
+    if (forgot) {
+      const idp = String((window.VeerAuth.config() || {}).idpPublicUrl || 'https://authbuddy.veerlabs.solutions').replace(/\/$/, '');
+      forgot.href = idp + '/account?mode=forgot';
+    }
+
+    try {
+      policy = await window.VeerAuth.getPolicy();
+      renderMethods(policy);
+      applyPolicyToRegisterForm();
+    } catch (_e) {
+      setStatus('Could not load policy from agent — using local defaults.');
+    }
+
+    const existing = await window.VeerAuth.getSession(true);
+    const purpose = params().get('purpose') || '';
+    const linkedUsername = (
+      params().get('username')
+      || params().get('authbuddyUsername')
+      || ''
+    ).trim();
+
+    if (wantRegister) {
+      if (window.VeerAuth.isAuthenticated(existing) || window.VeerAuth.savedSessionId()) {
+        await dropAuthbuddySession();
+      }
+      showTab('register');
+      setStatus('Create an AuthBuddy account with this plot member’s email, then we will link it.');
+      return;
+    }
+
+    const forceCredentialChallenge = purpose === 'login' || purpose === 'bridge';
+    if (forceCredentialChallenge) {
+      const prior = linkedUsername
+        || (existing && existing.session
+          ? (existing.session.username || existing.session.email || '')
+          : '');
+      const existingUser = (existing && existing.session
+        ? (existing.session.username || existing.session.email || '')
+        : '').trim();
+      const sameUser = !linkedUsername
+        || !existingUser
+        || existingUser.toLowerCase() === String(linkedUsername).toLowerCase();
+      if (window.VeerAuth.isAuthenticated(existing) && sameUser) {
+        if (prior && qs('loginUsername')) qs('loginUsername').value = prior;
+        if (params().get('setup') === 'passkey') {
+          enrollUsername = prior;
+          try {
+            const options = prior
+              ? await window.VeerAuth.idpPost('/auth/login/options', { username: prior })
+              : null;
+            loginOptions = options;
+            if (options && options.has_passkey) {
+              setStatus('Face ID is already set up. Continuing…');
+              continueToReturn();
+              return;
+            }
+          } catch (_e) { /* offer enroll */ }
+          await startFaceIdEnroll(false);
+          return;
+        }
+        setStatus('Already signed in on this device. Continuing…');
+        continueToReturn();
+        return;
+      }
+      await dropAuthbuddySession();
+      showTab('login');
+      if (prior && qs('loginUsername')) {
+        qs('loginUsername').value = prior;
+      }
+      if (prior) {
+        qs('authSubtitle').textContent = `Sign in as ${prior} with any method allowed for HBC Sanyard.`;
+        setStatus('Choose password, passkey, authenticator code, or QR approve.');
+        await continueWithUsername();
+      } else {
+        setStatus('Sign in with AuthBuddy to continue to the colony portal.');
+      }
+    } else if (window.VeerAuth.isAuthenticated(existing)) {
+      if (params().get('return_to')) {
+        setStatus('You are signed in. Continuing…');
+        continueToReturn();
+        return;
+      }
+      if (policy && policy.mfa_required) {
+        setStatus('You are signed in.');
+        showTab('login');
+      } else {
+        showMfaEnrollPanel('You are signed in. Optionally enroll another authenticator.', { forced: false });
+      }
+    } else if (linkedUsername) {
+      showTab('login');
+      if (qs('loginUsername')) qs('loginUsername').value = linkedUsername;
+      setStatus('Choose a sign-in method.');
+      await continueWithUsername();
+    } else if (window.VeerAuth.savedSessionId()) {
+      showMfaEnrollPanel('Finish authenticator setup to access protected pages.', { forced: true });
+    }
   });
 })();

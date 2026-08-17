@@ -1,0 +1,167 @@
+/**
+ * EC Desk pad print — one A4 page only. Header + footer fixed; central writing
+ * area capped. Sheet height accounts for accent strip (pad must not be 100%).
+ */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /* —— A4 letterhead-theme pads —— */
+  html.pad-a4-full {
+    height: 283mm !important;
+    overflow: hidden !important;
+  }
+  html.pad-a4-full body {
+    height: 283mm !important;
+    max-height: 283mm !important;
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  html.pad-a4-full .sheet {
+    width: 210mm !important;
+    height: 283mm !important;
+    min-height: 283mm !important;
+    max-height: 283mm !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid-page !important;
+  }
+  html.pad-a4-full .accent-edge,
+  html.pad-a4-full .accent-edge-thin {
+    flex-shrink: 0 !important;
+  }
+  html.pad-a4-full .pad {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding-top: 3mm !important;
+    padding-bottom: 2mm !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+  /* Shrink central white / writing zone only */
+  html.pad-a4-full .body-area,
+  html.pad-a4-full .body-spacer {
+    min-height: 0 !important;
+    flex: 0 1 auto !important;
+  }
+  html.pad-a4-full .sheet[data-layout="top"] .body-area {
+    max-height: 136mm !important;
+  }
+  html.pad-a4-full .sheet[data-layout="left"] .body-area {
+    max-height: 126mm !important;
+  }
+  html.pad-a4-blank .body-area {
+    max-height: 140mm !important;
+  }
+  html.pad-a4-full .body-spacer {
+    max-height: 4mm !important;
+    flex: 0 0 4mm !important;
+  }
+  html.pad-a4-full .foot {
+    flex-shrink: 0 !important;
+    margin-top: auto !important;
+  }
+  html.pad-a4-full .contacts {
+    padding-top: 1.8mm !important;
+    padding-bottom: 1.2mm !important;
+  }
+  html.pad-a4-full .slogan-bar {
+    padding-top: 1.4mm !important;
+    padding-bottom: 1.4mm !important;
+    margin-left: -12mm !important;
+    margin-right: -12mm !important;
+  }
+  html.pad-a4-blank .slogan-bar {
+    margin-left: -14mm !important;
+    margin-right: -14mm !important;
+  }
+
+  /* —— MOM register pads —— */
+  html.pad-mom {
+    --mom-print-h: 237mm;
+  }
+  html.pad-mom body {
+    overflow: hidden !important;
+  }
+  html.pad-mom .sheet {
+    height: var(--mom-print-h) !important;
+    min-height: var(--mom-print-h) !important;
+    max-height: var(--mom-print-h) !important;
+    overflow: hidden !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  html.pad-mom .sheet:last-of-type {
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+  html.pad-mom .pad {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding-top: 2mm !important;
+    padding-bottom: 2mm !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+  html.pad-mom .ruled-block.sm { min-height: 8mm !important; max-height: 8mm !important; }
+  html.pad-mom .ruled-block.md { min-height: 12mm !important; max-height: 12mm !important; }
+  html.pad-mom .ruled-block.lg { min-height: 18mm !important; max-height: 18mm !important; }
+  html.pad-mom .ruled-block.xl { min-height: 28mm !important; max-height: 28mm !important; }
+  html.pad-mom .ruled-block.xxl { min-height: 66mm !important; max-height: 66mm !important; flex: 0 1 auto !important; }
+  html.pad-mom .grow .ruled-block.xxl { min-height: 48mm !important; max-height: 48mm !important; }
+  html.pad-mom .foot-bar {
+    padding: 1.2mm 8mm !important;
+    margin-top: auto !important;
+    flex-shrink: 0 !important;
+  }
+  html.pad-mom .sign-row { margin-top: 1.5mm !important; }
+  html.pad-mom .banner { margin-bottom: 0.8mm !important; padding: 1mm 3mm !important; }
+
+  /* —— Envelope faces —— */
+  html.envelope-pad .sheet {
+    height: calc(var(--sheet-h) - 3mm) !important;
+    min-height: calc(var(--sheet-h) - 3mm) !important;
+    max-height: calc(var(--sheet-h) - 3mm) !important;
+    page-break-after: avoid !important;
+  }
+  html.envelope-pad .pad {
+    padding-top: 3mm !important;
+    padding-bottom: 2.5mm !important;
+    box-sizing: border-box !important;
+    height: auto !important;
+  }
+  html.envelope-pad .foot {
+    flex-shrink: 0 !important;
+  }
+
+  /* —— Cash receipt booklet —— */
+  html.pad-receipt body {
+    overflow: hidden !important;
+  }
+  html.pad-receipt .sheet-viewport .sheet {
+    aspect-ratio: 210 / 283 !important;
+    max-height: 283mm !important;
+    page-break-after: avoid !important;
+  }
+  html.pad-receipt .fields {
+    flex: 0 1 auto !important;
+    max-height: 54% !important;
+  }
+  html.pad-receipt .r-foot {
+    flex-shrink: 0 !important;
+  }
+  html.pad-receipt .sign .space {
+    height: 3.5mm !important;
+  }
+}

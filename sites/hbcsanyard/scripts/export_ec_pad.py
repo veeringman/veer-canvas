@@ -138,7 +138,7 @@ def render(office: list[dict], general: list[dict]) -> str:
     generated = datetime.now(IST).strftime("%d %b %Y")
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="pad-a4-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -356,7 +356,7 @@ def render(office: list[dict], general: list[dict]) -> str:
       display: grid;
       grid-template-columns: 1.35fr 1.25fr 1fr;
       gap: 3mm;
-      padding: 2.8mm 0 2.6mm;
+      padding: 2.2mm 0 2mm;
       border-top: 1pt solid rgba(11, 42, 86, 0.45);
       font-size: 7.4pt;
       align-items: start;
@@ -396,7 +396,7 @@ def render(office: list[dict], general: list[dict]) -> str:
       background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
       color: #f7f3ea;
       text-align: center;
-      padding: 2.3mm 10mm;
+      padding: 1.9mm 10mm;
       font-size: 8.2pt;
       font-weight: 700;
       letter-spacing: 0.24em;
@@ -417,7 +417,7 @@ def render(office: list[dict], general: list[dict]) -> str:
         margin: 0 !important;
         padding: 0 !important;
         width: 210mm !important;
-        height: 297mm !important;
+        height: 296mm !important;
         background: #fff !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -425,9 +425,9 @@ def render(office: list[dict], general: list[dict]) -> str:
       .screen-hint {{ display: none !important; }}
       .sheet {{
         width: 210mm !important;
-        height: 297mm !important;
-        min-height: 297mm !important;
-        max-height: 297mm !important;
+        height: 296mm !important;
+        min-height: 296mm !important;
+        max-height: 296mm !important;
         margin: 0 !important;
         border: 0 !important;
         background: #fff !important;
@@ -443,6 +443,7 @@ def render(office: list[dict], general: list[dict]) -> str:
       }}
     }}
   </style>
+  <link rel="stylesheet" href="print-pad-common.css?v=20260817pad4">
 </head>
 <body>
   <p class="screen-hint">

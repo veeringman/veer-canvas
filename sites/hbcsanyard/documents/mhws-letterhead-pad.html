@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="pad-a4-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -256,7 +256,7 @@
     }
     .sheet[data-layout="top"] .body-area {
       flex: 1;
-      min-height: 178mm;
+      min-height: 172mm;
     }
 
     /* —— Variant B: office bearers on left margin —— */
@@ -317,7 +317,7 @@
     .sheet[data-layout="left"] .body-area {
       grid-column: 2;
       grid-row: 3;
-      min-height: 188mm;
+      min-height: 182mm;
     }
     .sheet[data-layout="left"] .slogan-bar {
       margin-left: -7mm;
@@ -332,7 +332,7 @@
       display: grid;
       grid-template-columns: 1.35fr 1.25fr 1fr;
       gap: 3mm;
-      padding: 2.8mm 0 2.6mm;
+      padding: 2.2mm 0 2mm;
       border-top: 1pt solid rgba(11, 42, 86, 0.45);
       font-size: 7.4pt;
       align-items: start;
@@ -372,7 +372,7 @@
       background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
       color: #f7f3ea;
       text-align: center;
-      padding: 2.3mm 10mm;
+      padding: 1.9mm 10mm;
       font-size: 8.2pt;
       font-weight: 700;
       letter-spacing: 0.24em;
@@ -392,7 +392,6 @@
         margin: 0 !important;
         padding: 0 !important;
         width: 210mm !important;
-        height: 297mm !important;
         background: #fff !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
@@ -400,9 +399,6 @@
       .screen-hint { display: none !important; }
       .sheet {
         width: 210mm !important;
-        height: 297mm !important;
-        min-height: 297mm !important;
-        max-height: 297mm !important;
         margin: 0 !important;
         border: 0 !important;
         background: #fff !important;
@@ -418,6 +414,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="print-pad-common.css?v=20260817pad4">
 </head>
 <body>
   <p class="screen-hint">

@@ -10,6 +10,7 @@
     authbuddyReachable: false,
     preferAuthbuddy: false,
     authbuddyUsername: '',
+    authbuddyHasPasskey: false,
     pendingMemberName: '',
     pendingEmailMasked: '',
     msgThreads: [],
@@ -5369,6 +5370,67 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       </details>`;
   }
 
+  function indiaMobileDigits(raw) {
+    let d = String(raw || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.startsWith('00')) d = d.slice(2);
+    if (d.startsWith('91') && d.length >= 12) return d.slice(0, 12);
+    if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+    if (d.length === 10) return `91${d}`;
+    return d;
+  }
+
+  function directoryPhoneHtml(phone) {
+    const display = String(phone || '').trim();
+    if (!display) return '<span class="muted">—</span>';
+    const digits = indiaMobileDigits(display);
+    if (digits.length < 10) return escapeHtml(display);
+    return `<button type="button" class="dir-contact dir-contact-phone" data-phone="${escapeHtml(display)}" data-digits="${escapeHtml(digits)}" aria-label="Call or WhatsApp ${escapeHtml(display)}">${escapeHtml(display)}</button>`;
+  }
+
+  function directoryEmailHtml(email) {
+    const addr = String(email || '').trim();
+    if (!addr) return '<span class="muted">—</span>';
+    if (!addr.includes('@')) return escapeHtml(addr);
+    return `<a class="dir-contact dir-contact-email" href="mailto:${escapeHtml(addr)}">${escapeHtml(addr)}</a>`;
+  }
+
+  function openDirectoryHref(href) {
+    if (!href) return;
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (standalone || href.startsWith('tel:') || href.startsWith('mailto:')) {
+      window.location.href = href;
+      return;
+    }
+    const opened = window.open(href, '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = href;
+  }
+
+  function closeDirectoryContactSheet() {
+    const sheet = el('dirContactSheet');
+    if (sheet?.open) sheet.close();
+  }
+
+  function openDirectoryPhoneSheet(display, digits) {
+    const sheet = el('dirContactSheet');
+    if (!sheet || !digits) return;
+    const title = el('dirContactSheetTitle');
+    const callBtn = el('dirContactCall');
+    const waBtn = el('dirContactWhatsApp');
+    if (title) title.textContent = display || `+${digits}`;
+    if (callBtn) {
+      callBtn.href = `tel:+${digits}`;
+      callBtn.dataset.href = `tel:+${digits}`;
+    }
+    if (waBtn) {
+      waBtn.href = `https://wa.me/${digits}`;
+      waBtn.dataset.href = `https://wa.me/${digits}`;
+    }
+    if (typeof sheet.showModal === 'function') sheet.showModal();
+    else sheet.setAttribute('open', '');
+  }
+
   function renderDirectory() {
     const box = el('directoryList');
     const meta = el('directoryLookupMeta');
@@ -5407,21 +5469,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       const seatBit = (r.isEcMember || r.isOfficeBearer || r.isEcAdmin) && r.ecSeatHolderName
         ? `<p class="dir-seat">EC seat: ${escapeHtml(r.ecSeatHolderName)}</p>`
         : '';
-      const phoneHtml = phone
-        ? `<a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
-        : '<span class="muted">—</span>';
-      const emailHtml = email
-        ? `<a class="dir-contact" href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`
-        : '<span class="muted">—</span>';
+      const phoneHtml = directoryPhoneHtml(phone);
+      const emailHtml = directoryEmailHtml(email);
       const delegates = r.delegates || [];
       const tenants = r.tenants || [];
       const vehicles = r.vehicles || [];
       const delegateRows = delegates.map((d) => {
         const label = d.identityLabel || 'Delegate';
         const phone = (d.phone || '').trim();
-        const phoneBit = phone
-          ? ` · <a class="dir-contact" href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a>`
-          : '';
+        const phoneBit = phone ? ` · ${directoryPhoneHtml(phone)}` : '';
         return `<li><strong>${escapeHtml(d.name || '—')}</strong><span class="muted"> · ${escapeHtml(label)}</span>${phoneBit}</li>`;
       }).join('');
       const tenantRows = tenants.map((t) => `<li>${escapeHtml(t.name || 'Tenant')}</li>`).join('');
@@ -8649,12 +8705,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const paper = paperMap[paperRaw] ? paperRaw : 'a4';
     try { localStorage.setItem('mhws-mom-paper', paper); } catch (_) {}
 
-    const docHtml = `<!DOCTYPE html><html lang="en" data-paper="${paper}"><head><meta charset="utf-8">
+    const docHtml = `<!DOCTYPE html><html lang="en" class="pad-mom" data-paper="${paper}"><head><meta charset="utf-8">
       <title>${escapeHtml(p.title || 'Proceedings')}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260813mom16">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260817pad4">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260817pad4">
       <style>@page { size: ${paperMap[paper]}; margin: 10mm; }</style>
       </head><body>${html}
       <script>
@@ -10062,6 +10119,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('emailPasscodePrimaryBlock')) el('emailPasscodePrimaryBlock').hidden = true;
     if (el('authbuddyContinueBtn')) el('authbuddyContinueBtn').hidden = false;
     if (el('authbuddySignInBtn')) el('authbuddySignInBtn').hidden = true;
+    resetFaceIdGate();
     if (el('otpInput')) el('otpInput').value = '';
     if (el('otpContactEmail')) el('otpContactEmail').value = '';
     if (el('otpContactPhone')) el('otpContactPhone').value = '';
@@ -10110,6 +10168,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const abHint = el('authbuddyGateHint');
     const emailHint = el('emailPasscodeHint');
     const signBtn = el('authbuddySignInBtn');
+    resetFaceIdGate();
 
     if (state.preferAuthbuddy) {
       if (abBlock) abBlock.hidden = false;
@@ -10120,21 +10179,110 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         const uname = data.authbuddyUsername ? ` (${escapeHtml(data.authbuddyUsername)})` : '';
         abHint.innerHTML = `AuthBuddy is linked${uname}. Sign in with password, passkey, authenticator code, or QR approve — one factor is enough.`;
       }
+      offerFaceIdOnGate();
     } else {
       if (abBlock) abBlock.hidden = true;
       if (emailBlock) emailBlock.hidden = false;
       if (signBtn) {
-        // Offer AuthBuddy only when reachable (even if not yet linked — register/sign-in path).
-        signBtn.hidden = !state.authbuddyReachable;
-        const label = signBtn.querySelector('span') || signBtn;
-        label.textContent = state.authbuddyLinked ? 'Continue with AuthBuddy' : 'Sign in / register with AuthBuddy';
+        // Unlinked plots must prove inbox ownership via email OTP before AuthBuddy
+        // can be attached. Do not advertise AuthBuddy register as a portal login.
+        signBtn.hidden = true;
       }
       if (emailHint) {
         const dest = state.pendingEmailMasked
           ? ` to ${escapeHtml(state.pendingEmailMasked)}`
           : '';
-        emailHint.innerHTML = `A one-time code will be emailed${dest} only when you tap <strong>Send email passcode</strong>.`;
+        emailHint.innerHTML = `A one-time code will be emailed${dest} only when you tap <strong>Send email passcode</strong>. After that you can link AuthBuddy (same email) for faster return visits.`;
       }
+    }
+  }
+
+  function resetFaceIdGate() {
+    const faceBtn = el('authbuddyFaceIdBtn');
+    const continueBtn = el('authbuddyContinueBtn');
+    state.authbuddyHasPasskey = false;
+    if (faceBtn) {
+      faceBtn.hidden = true;
+      faceBtn.disabled = false;
+    }
+    if (continueBtn) {
+      continueBtn.classList.add('primary');
+      continueBtn.classList.remove('ghost');
+    }
+  }
+
+  function offerFaceIdOnGate() {
+    const faceBtn = el('authbuddyFaceIdBtn');
+    const label = el('authbuddyFaceIdLabel');
+    const continueBtn = el('authbuddyContinueBtn');
+    const abHint = el('authbuddyGateHint');
+    const username = state.authbuddyUsername;
+    if (!faceBtn) return;
+    state.authbuddyHasPasskey = false;
+    const bio = (window.VeerAuth && window.VeerAuth.biometricContinueLabel && window.VeerAuth.biometricContinueLabel()) || 'Continue with Face ID';
+    if (label) label.textContent = `Set up ${bio.replace(/^Continue with /i, '')}`;
+    faceBtn.hidden = false;
+    if (!username || !window.VeerAuth?.idpPost) return;
+    window.VeerAuth.idpPost('/auth/login/options', { username })
+      .then((options) => {
+        if (state.authbuddyUsername !== username) return;
+        const hasPasskey = Boolean(options && options.has_passkey);
+        state.authbuddyHasPasskey = hasPasskey;
+        if (label) label.textContent = hasPasskey ? bio : `Set up ${bio.replace(/^Continue with /i, '')}`;
+        if (hasPasskey && continueBtn) {
+          continueBtn.classList.remove('primary');
+          continueBtn.classList.add('ghost');
+        }
+        if (abHint) {
+          abHint.innerHTML = hasPasskey
+            ? 'Use Face ID / fingerprint on this phone, or open AuthBuddy for password, authenticator, or QR. Email passcode still works.'
+            : 'AuthBuddy is linked. Set up Face ID / fingerprint once (after password), then next visits can skip the password.';
+        }
+      })
+      .catch(() => { /* button still offers setup via AuthBuddy page */ });
+  }
+
+  async function continueWithFaceId() {
+    showError('');
+    const faceBtn = el('authbuddyFaceIdBtn');
+    const username = state.authbuddyUsername;
+    if (!username) {
+      window.location.href = authbuddyAuthUrl('login', { setup: 'passkey' });
+      return;
+    }
+    if (!state.authbuddyHasPasskey) {
+      window.location.href = authbuddyAuthUrl('login', { setup: 'passkey' });
+      return;
+    }
+    if (faceBtn) faceBtn.disabled = true;
+    try {
+      await window.VeerAuth.authenticateWithPasskey(username);
+      const sid = window.VeerAuth.savedSessionId();
+      const data = await api('/api/rwa/authbuddy/session', {
+        method: 'POST',
+        body: JSON.stringify({
+          houseId: state.pendingHouse,
+          memberId: state.pendingMemberId || undefined,
+          authbuddySessionId: sid,
+        }),
+      });
+      if (!data.token) throw new Error(data.error || 'Could not open the portal');
+      setAuthed(data);
+      ensurePanelVisibility('home');
+      applyRouteHash();
+    } catch (err) {
+      const msg = String(err && err.message || '');
+      const name = String(err && err.name || '');
+      const cancelled = name === 'NotAllowedError' || /not allowed|abort|cancel/i.test(msg);
+      if (cancelled) return;
+      const originIssue = name === 'SecurityError' || /origin|securityerror/i.test(msg);
+      if (originIssue) {
+        window.location.href = authbuddyAuthUrl('login');
+        return;
+      }
+      showError(msg || 'Face ID failed — try AuthBuddy or email passcode.');
+    } finally {
+      if (faceBtn) faceBtn.disabled = false;
     }
   }
 
@@ -10163,7 +10311,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     showError(data.message || 'Could not continue sign-in');
   }
 
-  function authbuddyAuthUrl(purpose) {
+  function authbuddyAuthUrl(purpose, extra) {
     const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
     const memberId = state.pendingMemberId || '';
     const username = state.authbuddyUsername || '';
@@ -10175,6 +10323,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (houseId) auth.searchParams.set('houseId', houseId);
     if (memberId) auth.searchParams.set('memberId', memberId);
     if (username) auth.searchParams.set('username', username);
+    if (extra && extra.setup) auth.searchParams.set('setup', extra.setup);
+    if (extra && extra.mode) auth.searchParams.set('mode', extra.mode);
+    const email = (extra && extra.email)
+      || (state.session && state.session.resident && state.session.resident.email)
+      || '';
+    if (purpose === 'link' && email) auth.searchParams.set('email', email);
     return auth.href;
   }
 
@@ -10249,14 +10403,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       'backdrop-filter:blur(2px)',
     ].join(';');
     modal.innerHTML = `
-      <div class="card" style="max-width:32rem;width:100%;max-height:min(92vh,40rem);overflow:auto;margin:0;padding:1.25rem 1.35rem;border-radius:14px;border:1px solid #b7ddd9;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.18)">
+      <div class="gate-card" style="max-width:32rem;width:100%;max-height:min(92vh,40rem);overflow:auto;margin:0;text-align:left">
         <h2 id="authbuddyLinkTitle" style="margin:0 0 0.4rem;font-size:1.2rem">Link AuthBuddy for faster sign-in</h2>
         <p style="margin:0 0 0.85rem;line-height:1.45">
           AuthBuddy is VeerLabs’ secure sign-in service.
           Linking it to this plot member lets you open the portal <strong>without waiting for an email passcode</strong>
           when the service is online — while plot + email OTP remains available anytime.
         </p>
-        <p style="margin:0 0 0.35rem;font-weight:600;color:#1a3a40">Prerequisite — authenticator app</p>
+        <p style="margin:0 0 0.35rem;font-weight:600;color:var(--navy)">Prerequisite — authenticator app</p>
         <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.95rem">
           Install <strong>BuddyAuthenticator</strong> on iPhone or Android <em>before</em> (or while) linking
           for authenticator codes, QR scan, on-phone approve, and Hybrid PQC.
@@ -10269,7 +10423,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           That path supports <em>rotating codes only</em> — not QR login approve, passkey helper flows, or Hybrid PQC.
           Password and passkey can still work in the browser without those apps.
         </p>
-        <p style="margin:0 0 0.35rem;font-weight:600;color:#1a3a40">What you can use (one method is enough)</p>
+        <p style="margin:0 0 0.35rem;font-weight:600;color:var(--navy)">What you can use (one method is enough)</p>
         <ul style="margin:0 0 0.85rem;padding-left:1.15rem;line-height:1.5;font-size:0.95rem">
           <li><strong>Password</strong> — AuthBuddy account password in the browser.</li>
           <li><strong>Passkey</strong> — Face ID / fingerprint / device unlock (phishing-resistant).</li>
@@ -10279,10 +10433,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         </ul>
         <p class="muted" style="margin:0 0 1rem;line-height:1.45;font-size:0.92rem">
           Already use AuthBuddy on VeerLabs? Sign in with the <strong>same email</strong> — we link this household member; you won’t need a second account.
+          New to AuthBuddy? Create an account with this plot member’s email, then we link it.
           For HBC Sanyard only <strong>one factor</strong> is required right now. Skip anytime; nothing colony-side changes if you choose Not now.
         </p>
         <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap">
-          <button type="button" class="btn primary" id="authbuddyLinkNowBtn">I have the app — Link AuthBuddy</button>
+          <button type="button" class="btn primary" id="authbuddyLinkNowBtn">I already have AuthBuddy</button>
+          <button type="button" class="btn secondary" id="authbuddyRegisterBtn">Create AuthBuddy account</button>
           <button type="button" class="btn ghost" id="authbuddyLinkDismissBtn">Not now</button>
         </p>
       </div>`;
@@ -10298,6 +10454,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       state.pendingHouse = r.houseId || '';
       state.pendingMemberId = r.memberId || '';
       window.location.href = authbuddyAuthUrl('link');
+    });
+    el('authbuddyRegisterBtn')?.addEventListener('click', () => {
+      state.pendingHouse = r.houseId || '';
+      state.pendingMemberId = r.memberId || '';
+      window.location.href = authbuddyAuthUrl('link', { mode: 'register' });
     });
   }
 
@@ -10578,6 +10739,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('restartLoginBtn')?.addEventListener('click', () => resetLoginForms());
   el('authbuddyContinueBtn')?.addEventListener('click', () => {
     window.location.href = authbuddyAuthUrl('login');
+  });
+  el('authbuddyFaceIdBtn')?.addEventListener('click', () => {
+    continueWithFaceId().catch((err) => showError(err.message || 'Face ID failed'));
   });
   el('authbuddySignInBtn')?.addEventListener('click', () => {
     const houseId = state.pendingHouse || (el('houseIdInput') && el('houseIdInput').value.trim()) || '';
@@ -11419,6 +11583,35 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('pushPrefsSaveBtn')?.addEventListener('click', () => savePushPrefs());
   el('directoryLookup')?.addEventListener('input', () => renderDirectory());
   el('directoryLookup')?.addEventListener('search', () => renderDirectory());
+  el('directoryList')?.addEventListener('click', (event) => {
+    const phoneBtn = event.target.closest?.('.dir-contact-phone');
+    if (phoneBtn) {
+      event.preventDefault();
+      openDirectoryPhoneSheet(phoneBtn.dataset.phone, phoneBtn.dataset.digits);
+      return;
+    }
+    const mail = event.target.closest?.('a.dir-contact-email');
+    if (mail) {
+      event.preventDefault();
+      openDirectoryHref(mail.getAttribute('href'));
+    }
+  });
+  el('dirContactCall')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    const href = event.currentTarget.dataset.href || event.currentTarget.getAttribute('href');
+    closeDirectoryContactSheet();
+    window.setTimeout(() => openDirectoryHref(href), 80);
+  });
+  el('dirContactWhatsApp')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    const href = event.currentTarget.dataset.href || event.currentTarget.getAttribute('href');
+    closeDirectoryContactSheet();
+    window.setTimeout(() => openDirectoryHref(href), 80);
+  });
+  el('dirContactCancel')?.addEventListener('click', () => closeDirectoryContactSheet());
+  el('dirContactSheet')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeDirectoryContactSheet();
+  });
 
   el('parkingMemberForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -11977,6 +12170,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     onScroll();
   })();
   el('gateBackToLandingBtn')?.addEventListener('click', () => {
+    showLanding();
+  });
+  el('gateBackBrand')?.addEventListener('click', (event) => {
+    event.preventDefault();
     showLanding();
   });
 

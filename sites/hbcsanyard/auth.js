@@ -290,7 +290,40 @@
     idpUrl,
     saveSessionId,
     savedSessionId,
+    biometricContinueLabel,
+    authenticateWithPasskey,
   };
+
+  function extractPublicKeyOptions(publicKey) {
+    if (!publicKey) return publicKey;
+    return publicKey.publicKey || publicKey.public_key || publicKey;
+  }
+
+  async function loadWebAuthn() {
+    return import('https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@13.1.2/+esm');
+  }
+
+  function biometricContinueLabel() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad/.test(ua)) return 'Continue with Face ID';
+    if (/Android/.test(ua)) return 'Continue with fingerprint';
+    if (/Mac/.test(ua)) return 'Continue with Touch ID';
+    return 'Continue with Face ID / fingerprint';
+  }
+
+  async function authenticateWithPasskey(username) {
+    const user = String(username || '').trim();
+    if (!user) throw new Error('Username required for Face ID / fingerprint');
+    const begin = await idpPost('/auth/passkey/authenticate/begin', { username: user });
+    const webauthn = await loadWebAuthn();
+    const assertion = await webauthn.startAuthentication({
+      optionsJSON: extractPublicKeyOptions(begin.public_key),
+    });
+    return idpPost('/auth/passkey/authenticate/complete', {
+      challenge_id: begin.challenge_id,
+      public_key: assertion,
+    });
+  }
 
   global.VeerAuth = VeerAuth;
 

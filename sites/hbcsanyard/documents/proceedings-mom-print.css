@@ -11,7 +11,7 @@
   --paper: #ffffff;
   --line: rgba(11, 42, 86, 0.10);
   --mom-page-h: 297mm;
-  --mom-print-h: 250mm; /* keep well under printable A4 (297 − 20mm margins) */
+  --mom-print-h: 237mm; /* fit one page inside @page 10mm margins */
 }
 body {
   margin: 0;
@@ -236,7 +236,7 @@ table.res-table th {
   background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
   color: #f7f3ea;
   text-align: center;
-  padding: 1.8mm 8mm;
+  padding: 1.5mm 8mm;
   font-size: 7.4pt;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -285,17 +285,19 @@ table.res-table th {
   }
   .pad {
     padding: 2mm 6mm 0;
+    padding-bottom: 3mm !important;
+    box-sizing: border-box !important;
   }
   .foot-bar {
     margin-left: -6mm;
     margin-right: -6mm;
   }
-  .ruled-block.sm { min-height: 12mm !important; }
-  .ruled-block.md { min-height: 20mm !important; }
-  .ruled-block.lg { min-height: 28mm !important; }
-  .ruled-block.xl { min-height: 42mm !important; }
-  .ruled-block.xxl { min-height: 95mm !important; }
-  .grow .ruled-block.xxl { min-height: 70mm !important; }
+  .ruled-block.sm { min-height: 9mm !important; max-height: 9mm !important; }
+  .ruled-block.md { min-height: 14mm !important; max-height: 14mm !important; }
+  .ruled-block.lg { min-height: 20mm !important; max-height: 20mm !important; }
+  .ruled-block.xl { min-height: 32mm !important; max-height: 32mm !important; }
+  .ruled-block.xxl { min-height: 72mm !important; max-height: 72mm !important; flex: 0 1 auto !important; }
+  .grow .ruled-block.xxl { min-height: 52mm !important; max-height: 52mm !important; }
   .section { margin: 1.2mm 0; }
   .sign-row { margin-top: 3mm; }
   .banner { margin: 1mm 0 2mm; padding: 1.6mm 3mm; }
