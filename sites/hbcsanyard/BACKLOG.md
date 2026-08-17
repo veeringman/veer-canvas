@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-14
+Last updated: 2026-08-17
 
 ---
 
@@ -155,6 +155,10 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Info Centre, Works & Events
 - EC desk, observability (super admin)
 - Print letterhead / EC committee pads (`documents/`)
+- **Quote invites hide estimated cost** — vendors enter their own amount; estimate stays on the EC works record only
+- **Quote invite email** — fixed literal `\n` before Details section (2026-08-17)
+- **Notification branding** — emails, share cards, and parking pass mail use “Housing Colony Sanyard” instead of “HBC Sanyard” (2026-08-17)
+- **Matters tab** — app header renamed from “Concerns” to “Matters” (2026-08-17)
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes

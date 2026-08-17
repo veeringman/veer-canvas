@@ -139,7 +139,7 @@
 
         root.innerHTML = `
           <h1>${esc(work.title || "Work requirement")}</h1>
-          <p class="meta">${esc(work.kindLabel || "")}${work.categoryLabel ? " · " + esc(work.categoryLabel) : ""}${work.location ? " · " + esc(work.location) : ""}${work.estimatedCost != null ? " · Est. " + esc(rupee(work.estimatedCost)) : ""}</p>
+          <p class="meta">${esc(work.kindLabel || "")}${work.categoryLabel ? " · " + esc(work.categoryLabel) : ""}${work.location ? " · " + esc(work.location) : ""}</p>
           ${work.summary ? `<p class="summary">${esc(work.summary)}</p>` : ""}
           ${work.details ? `<div class="details">${esc(work.details)}</div>` : ""}
           ${invite.message ? `<div class="note"><strong>Note from colony</strong><br>${esc(invite.message)}</div>` : ""}
@@ -149,8 +149,8 @@
             <input id="vendorName" name="vendorName" required maxlength="120" autocomplete="organization">
             <label>Phone</label>
             <input id="vendorPhone" name="vendorPhone" maxlength="40" inputmode="tel" autocomplete="tel">
-            <label>Quote amount (₹)</label>
-            <input id="amount" name="amount" type="number" min="0" step="1" placeholder="Optional">
+            <label>Your quote amount (₹) *</label>
+            <input id="amount" name="amount" type="number" min="0" step="1" required placeholder="Enter your quoted amount">
             <label>Timeline / availability</label>
             <input id="timeline" name="timeline" maxlength="400" placeholder="e.g. 7–10 days after award">
             <label>Quote details *</label>

@@ -2725,7 +2725,7 @@ def send_pass_email(
         card_title = "Member parking pass"
         validity = "Permanent member vehicle"
         subject_map = {"issued": "Member vehicle registered"}
-        subject = f"HBC Sanyard — {subject_map.get(reason, 'Member parking pass')}"
+        subject = f"Housing Colony Sanyard — {subject_map.get(reason, 'Member parking pass')}"
         text_title = "Member vehicle parking pass"
         card_bg, accent, btn_bg, btn_fg, stripe = "#15233f", "#c4a15a", "#c4a15a", "#15233f", "#3a2e16"
     elif tenant:
@@ -2736,7 +2736,7 @@ def send_pass_email(
             "renewed": "Tenant parking pass renewed",
             "approved": "Tenant parking pass approved",
         }
-        subject = f"HBC Sanyard — {subject_map.get(reason, 'Tenant parking pass')}"
+        subject = f"Housing Colony Sanyard — {subject_map.get(reason, 'Tenant parking pass')}"
         text_title = "Tenant vehicle parking pass"
         card_bg, accent, btn_bg, btn_fg, stripe = "#143322", "#b7ddb8", "#4d8f57", "#f6f1e6", "#0b1f16"
     elif staff:
@@ -2747,7 +2747,7 @@ def send_pass_email(
             "issued": "Household staff pass issued",
             "renewed": "Household staff pass renewed",
         }
-        subject = f"HBC Sanyard — {subject_map.get(reason, 'Household staff pass')}"
+        subject = f"Housing Colony Sanyard — {subject_map.get(reason, 'Household staff pass')}"
         text_title = "Household staff pass"
         card_bg, accent, btn_bg, btn_fg, stripe = "#241830", "#d4b8e8", "#7a5a9e", "#f6f1e6", "#160e1c"
     else:
@@ -2758,7 +2758,7 @@ def send_pass_email(
             "renewed": "Visitor parking pass renewed",
             "approved": "Visitor parking pass approved",
         }
-        subject = f"HBC Sanyard — {subject_map.get(reason, 'Visitor parking pass')}"
+        subject = f"Housing Colony Sanyard — {subject_map.get(reason, 'Visitor parking pass')}"
         text_title = "Visitor vehicle parking pass"
         card_bg, accent, btn_bg, btn_fg, stripe = "#3d1c18", "#f0c4a8", "#c46a3a", "#fff8f2", "#1c1010"
     who_line = f"Staff: {item.get('visitorName')}" if staff else f"Vehicle: {item.get('plateDisplay')}"
@@ -2804,7 +2804,7 @@ def send_pass_email(
     try:
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["From"] = f"Housing Colony Sanyard RWA <{cfg['from']}>"
         msg["To"] = to_email
         msg["Reply-To"] = cfg["from"]
         msg.set_content(text)

@@ -1,4 +1,4 @@
-"""HBC Sanyard / RWA portal API helpers (SQLite-backed)."""
+"""Housing Colony Sanyard / RWA portal API helpers (SQLite-backed)."""
 
 from __future__ import annotations
 
@@ -523,7 +523,7 @@ def save_platform_settings(site_root: pathlib.Path, payload: dict, conn: sqlite3
                 drive_map["DRIVE_RETAIN_DAYS"] = "14"
 
     lines = [
-        "# HBC Sanyard portal settings (managed via Super admin → Settings).",
+        "# Housing Colony Sanyard portal settings (managed via Super admin → Settings).",
         "# Do not commit this file with real secrets.",
         "",
     ]
@@ -933,8 +933,8 @@ def send_otp_email(email: str | None, code: str, house_id: str, site_root: pathl
         }
     try:
         msg = EmailMessage()
-        msg["Subject"] = "HBC Sanyard — code for resident login"
-        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["Subject"] = "Housing Colony Sanyard — code for resident login"
+        msg["From"] = f"Housing Colony Sanyard RWA <{cfg['from']}>"
         msg["To"] = email
         msg["Reply-To"] = cfg["from"]
         msg.set_content(
@@ -3128,7 +3128,7 @@ def get_info_share_meta(
                 "kind": "doc",
                 "available": False,
                 "id": did,
-                "title": "HBC Sanyard · Information Centre",
+                "title": "Housing Colony Sanyard · Information Centre",
                 "description": "Sign in to the residents portal to open this document.",
                 "deepLink": f"/#info/doc/{did}" if did else "/#info",
                 "badge": "Members only",
@@ -3141,7 +3141,7 @@ def get_info_share_meta(
                 "kind": "doc",
                 "available": True,
                 "id": doc["id"],
-                "title": "HBC Sanyard · Information Centre",
+                "title": "Housing Colony Sanyard · Information Centre",
                 "description": "Members-only document — sign in to the residents portal to open it.",
                 "badge": "Members only",
                 "category": "",
@@ -3155,7 +3155,7 @@ def get_info_share_meta(
             doc.get("folderTitle") or "",
             doc.get("categoryLabel") or "",
             doc.get("audienceLabel") or "",
-            "HBC Sanyard Information Centre",
+            "Housing Colony Sanyard Information Centre",
         ]
         fallback = " · ".join(b for b in bits if b)
         return {
@@ -3181,7 +3181,7 @@ def get_info_share_meta(
                 "kind": "folder",
                 "available": False,
                 "id": fid,
-                "title": "HBC Sanyard · Information Centre",
+                "title": "Housing Colony Sanyard · Information Centre",
                 "description": "Sign in to the residents portal to open this folder.",
                 "deepLink": "/#info",
                 "badge": "Members only",
@@ -3193,7 +3193,7 @@ def get_info_share_meta(
                 "kind": "folder",
                 "available": True,
                 "id": folder["id"],
-                "title": "HBC Sanyard · Information Centre",
+                "title": "Housing Colony Sanyard · Information Centre",
                 "description": "Members-only folder — sign in to the residents portal to open it.",
                 "badge": "Members only",
                 "deepLink": f"/#info/folder/{folder['id']}",
@@ -3206,7 +3206,7 @@ def get_info_share_meta(
         path_label = folder_full.get("pathLabel") or folder_full.get("title") or "Folder"
         count = int(folder_full.get("docCount") or 0)
         desc = summary or (
-            f"{count} document{'s' if count != 1 else ''} in Information Centre · HBC Sanyard"
+            f"{count} document{'s' if count != 1 else ''} in Information Centre · Housing Colony Sanyard"
         )
         return {
             "kind": "folder",
@@ -3225,7 +3225,7 @@ def render_info_share_page(
     *,
     page_url: str,
     image_url: str,
-    site_name: str = "HBC Sanyard",
+    site_name: str = "Housing Colony Sanyard",
     image_width: int = 480,
     image_height: int = 480,
     auto_open_app: bool = True,
@@ -3272,7 +3272,7 @@ def render_info_share_page(
     es = html.escape(site_name, quote=True)
     edeep = html.escape(deep, quote=True)
     eeyebrow = html.escape(eyebrow)
-    cta = "Open in HBC Sanyard app" if available else "Sign in to continue"
+    cta = "Open in Housing Colony Sanyard app" if available else "Sign in to continue"
     deep_js = json.dumps(deep)
     # Android Intent — opens installed Chrome PWA when link handling is enabled.
     # Fragment cannot appear before #Intent, so deep link is carried in ?info=.
@@ -3478,7 +3478,7 @@ def render_info_share_page(
       <span class="badge">{eb}</span>
       <p class="desc">{ed}</p>
       <a class="cta" id="openAppBtn" href="{edeep}">{html.escape(cta)}</a>
-      <p class="note">Android: tap the button — Chrome can open the installed HBC Sanyard app.<br>
+      <p class="note">Android: tap the button — Chrome can open the installed Housing Colony Sanyard app.<br>
       iPhone: WhatsApp cannot open Home Screen apps directly; tap <b>··· → Open in Safari</b>, then the button, or open the app and sign in.</p>
       <p class="note">Residents must sign in with their house / plot number to open the full document.</p>
     </div>
@@ -3735,7 +3735,7 @@ def _wrap_html_document(title: str, body_html: str) -> str:
         f"<h1>{safe_title}</h1></header>\n"
         f'<div class="content">\n{body}\n</div>\n'
         "</article>\n"
-        '<p class="foot">HBC Sanyard · Residents Welfare Association</p>\n'
+        '<p class="foot">Housing Colony Sanyard · Residents Welfare Association</p>\n'
         "</div>\n"
         "</body>\n</html>\n"
     )
@@ -4739,17 +4739,15 @@ def send_quote_invite_email(
     summary = work.get("summary") or ""
     details = (work.get("details") or "")[:1200]
     location = work.get("location") or ""
-    est = work.get("estimatedCost")
-    est_line = f"Estimated budget: ₹{est:,}\n" if isinstance(est, int) else ""
     note = f"\nNote from colony:\n{message.strip()}\n" if message.strip() else ""
     body = (
         f"You are invited to submit a quote for a colony work requirement.\n\n"
         f"Work: {title}\n"
         f"{('Location: ' + location + chr(10)) if location else ''}"
-        f"{est_line}"
         f"{('Summary: ' + summary + chr(10)) if summary else ''}"
-        f"{('Details:\\n' + details + chr(10) + chr(10)) if details else ''}"
+        f"{('Details:\n' + details + '\n\n') if details else ''}"
         f"{note}"
+        f"Please enter your quoted amount on the response form. The colony does not share an estimated budget.\n\n"
         f"Respond online (preferred):\n{public_url}\n\n"
         f"You may also reply to this email with your quote; responses are tracked in the colony mailbox "
         f"and in the project's Quotes section.\n\n"
@@ -4759,7 +4757,7 @@ def send_quote_invite_email(
     try:
         msg = EmailMessage()
         msg["Subject"] = f"Quote invite — {title[:80]}"
-        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["From"] = f"Housing Colony Sanyard RWA <{cfg['from']}>"
         msg["To"] = to_email
         msg["Reply-To"] = cfg["from"]
         msg.set_content(body)
@@ -4804,12 +4802,12 @@ def send_quote_received_email(
         f"Timeline: {response.get('timeline') or '—'}\n"
         f"Notes:\n{response.get('notes') or '—'}\n\n"
         f"View all quotes in Works and Events → project → Quotes.\n\n"
-        f"— HBC Sanyard portal\n"
+        f"— Housing Colony Sanyard portal\n"
     )
     try:
         msg = EmailMessage()
         msg["Subject"] = f"Quote received — {title[:80]}"
-        msg["From"] = f"HBC Sanyard RWA <{cfg['from']}>"
+        msg["From"] = f"Housing Colony Sanyard RWA <{cfg['from']}>"
         msg["To"] = to_email
         msg["Reply-To"] = response.get("vendorEmail") or cfg["from"]
         msg.set_content(body)
@@ -4991,7 +4989,6 @@ def get_public_quote_invite(conn: sqlite3.Connection, token: str) -> dict | None
             "summary": work.get("summary") or "",
             "details": work.get("details") or "",
             "location": work.get("location") or "",
-            "estimatedCost": work.get("estimatedCost"),
             "startDate": work.get("startDate") or "",
             "endDate": work.get("endDate") or "",
             "statusLabel": work.get("statusLabel") or work.get("status") or "",
@@ -5036,8 +5033,10 @@ def submit_public_quote(
         amount = _as_int_rupees(amount_raw, field="quote amount", allow_negative=False)
     if not name:
         raise ValueError("Enter your name / firm name")
-    if not notes and amount is None:
-        raise ValueError("Enter a quote amount or notes")
+    if amount is None:
+        raise ValueError("Enter your quote amount")
+    if not notes:
+        raise ValueError("Enter quote details")
     now = utc_now()
     rid = "wqr_" + secrets.token_hex(8)
     conn.execute(
