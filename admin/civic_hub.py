@@ -2180,6 +2180,7 @@ def register(app, *, check_login, site_root: pathlib.Path):
                 "ads": bool(features.get("ads", True)),
                 "neighbourhoods": bool(features.get("neighbourhoods", True)),
                 "businesses": bool(features.get("businesses", True)),
+                "heroBoardCards": bool(features.get("heroBoardCards", True)),
             },
             "services": cleaned_services,
             "publishKinds": existing.get("publishKinds") or [],

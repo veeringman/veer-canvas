@@ -35,6 +35,9 @@
         || (b.id === "experts" && nextRaw.includes("sme"))
       );
       if (hit) return hit.id;
+      if (nextRaw.includes("landing-news") || nextRaw.includes("landing-spotlight") || nextRaw.includes("landing-places")) {
+        return "city";
+      }
       if (nextRaw.includes("/partner")) {
         try {
           const q = new URL(nextRaw, location.origin).searchParams.get("board");

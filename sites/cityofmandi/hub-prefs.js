@@ -32,8 +32,12 @@
     { id: "birbilling", label: "Bir-Billing", labelHi: "बीर-बिलिंग", lat: 32.0420, lng: 76.7050 },
   ];
 
+  /** Visitor / citizen default — news & places, not a trade desk. */
+  const DEFAULT_BOARD = "city";
+
   /** Destination boards for contextual sign-in. */
   const BOARDS = [
+    { id: "city", label: "City board", labelHi: "शहर बोर्ड", home: "/#landing-news", kind: "hub", live: true },
     { id: "labour", label: "Labour", labelHi: "मज़दूर", home: "/#landing-labour", kind: "profession", live: true },
     { id: "taxi", label: "Cabs", labelHi: "कैब", home: "/#landing-taxi", kind: "profession", live: true },
     { id: "experts", label: "SME / Experts", labelHi: "विशेषज्ञ", home: "/#landing-experts", kind: "profession", live: false },
@@ -57,6 +61,9 @@
     travel: "tours",
     coaching: "tutors",
     mentor: "tutors",
+    explore: "city",
+    news: "city",
+    hub: "city",
   };
 
   const BOARD_IDS = new Set(BOARDS.map((b) => b.id));
@@ -65,7 +72,7 @@
     let id = String(raw || "").trim().toLowerCase();
     if (BOARD_ALIASES[id]) id = BOARD_ALIASES[id];
     if (BOARD_IDS.has(id)) return id;
-    return "labour";
+    return DEFAULT_BOARD;
   }
 
   function normalizeLocality(raw) {
@@ -157,11 +164,11 @@
   }
 
   function readPrefs() {
-    let board = "labour";
+    let board = DEFAULT_BOARD;
     let loc = "mandi";
     let lang = "en";
     try {
-      board = normalizeBoard(localStorage.getItem(BOARD_KEY) || "labour");
+      board = normalizeBoard(localStorage.getItem(BOARD_KEY) || DEFAULT_BOARD);
       loc = normalizeLocality(localStorage.getItem(LOCALITY_KEY) || "mandi");
       lang = readContentLang();
     } catch { /* ignore */ }
@@ -275,9 +282,11 @@
     const btn = document.getElementById(buttonId);
     const menu = document.getElementById(menuId);
     if (!root || !btn || !menu) return;
+    if (menu.dataset.mounted === "1") return;
+    menu.dataset.mounted = "1";
 
     const extras = [
-      { id: "explore", label: "City board", labelHi: "शहर बोर्ड", home: "/#landing-news", kind: "hub" },
+      { id: "explore", label: "All boards", labelHi: "सब बोर्ड", home: "/#landing-news", kind: "hub" },
       { id: "contact", label: "Contact", labelHi: "संपर्क", home: "/contact", kind: "hub" },
     ];
     const items = [...extras, ...BOARDS];
@@ -336,11 +345,125 @@
     });
   }
 
+  const ADDA_ICON = `<svg class="landing-brand-adda-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-3.5 2.6V15H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm13.5 3H20a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1v1.8L16.8 17H15.5v-2.1c1.7-.2 2-1.4 2-2.4V8z"/></svg>`;
+  const CONTACT_HTML = `<a href="/contact" class="landing-nav-contact" aria-label="Contact Board · संपर्क बोर्ड" title="Contact Board"><svg class="landing-nav-contact-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h12V8H6zm0 4v2h8v-2H6z"/></svg><span class="landing-nav-contact-pulse" aria-hidden="true"></span></a>`;
+
+  function pagePath() {
+    return (location.pathname || "/").replace(/\/+$/, "") || "/";
+  }
+
+  function addaLinkHtml(isStatic) {
+    const cls = `landing-brand-adda${isStatic ? " is-static" : ""}`;
+    const open = isStatic
+      ? `<div class="${cls}" aria-label="Mandi Adda — Live">`
+      : `<a class="${cls}" href="/adda" aria-label="Mandi Adda — Live">`;
+    const close = isStatic ? "</div>" : "</a>";
+    return `${open}<span class="nav-live-mark" aria-hidden="true">Live</span>${ADDA_ICON}<span class="landing-brand-adda-label">Adda</span>${close}`;
+  }
+
+  function boardsNavHtml() {
+    return `<div class="landing-boards-nav" id="landingBoardsNav"><button type="button" class="landing-boards-btn" id="landingBoardsBtn" aria-expanded="false" aria-haspopup="true" aria-controls="landingBoardsMenu" aria-label="Boards menu"><span class="landing-boards-burger" aria-hidden="true"><i></i><i></i><i></i></span><span class="landing-boards-label">Boards</span></button><div class="landing-boards-menu" id="landingBoardsMenu" hidden role="menu"></div></div>`;
+  }
+
+  function signinHtml() {
+    const next = encodeURIComponent(`${location.pathname}${location.search}` || "/");
+    return `<a class="landing-account-signin" href="/join?mode=login&amp;next=${next}" aria-label="Sign in"><svg class="landing-account-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12zm0 2c-3.6 0-8 1.8-8 4.5V21h16v-2.5C20 15.8 15.6 14 12 14z"/></svg><span>Sign in</span></a>`;
+  }
+
+  function ensureSiteChrome() {
+    const header = document.querySelector("header.landing-top, header.adda-top, header.desk-top, header.shop-top");
+    if (!header || header.dataset.siteChrome === "1") return header;
+    header.dataset.siteChrome = "1";
+    header.classList.add("site-chrome");
+
+    const path = pagePath();
+    const isAdda = /\/adda$/.test(path) || path.endsWith("adda.html");
+    const isJoin = /\/join$/.test(path) || path.endsWith("join.html");
+    const isContact = /\/contact$/.test(path) || path.endsWith("contact.html");
+    const isHome = path === "/" || path.endsWith("/index.html");
+
+    let left = header.querySelector(".landing-top-left");
+    if (!left) {
+      left = document.createElement("div");
+      left.className = "landing-top-left";
+      const brand = header.querySelector(".landing-top-brand");
+      if (brand) {
+        brand.querySelector(".landing-top-name")?.remove();
+        if (!brand.getAttribute("aria-label")) brand.setAttribute("aria-label", "City of Mandi home");
+        left.appendChild(brand);
+      } else {
+        left.insertAdjacentHTML("afterbegin", `<a class="landing-top-brand" href="/" aria-label="City of Mandi home"><img class="landing-top-seal" src="/assets/cityofmandi-mark.webp?v=20260817seal1" alt="" width="40" height="40" decoding="async"></a>`);
+      }
+      header.insertBefore(left, header.firstChild);
+    } else {
+      left.querySelector(".landing-top-name")?.remove();
+    }
+
+    const adda = left.querySelector(".landing-brand-adda");
+    if (!adda) {
+      left.insertAdjacentHTML("beforeend", addaLinkHtml(isAdda));
+    } else if (!adda.querySelector(".landing-brand-adda-icon")) {
+      const live = adda.querySelector(".nav-live-mark");
+      if (live) live.insertAdjacentHTML("afterend", ADDA_ICON);
+      else adda.insertAdjacentHTML("afterbegin", ADDA_ICON);
+    }
+
+    if (!document.getElementById("landingBoardsNav")) {
+      left.insertAdjacentHTML("beforeend", boardsNavHtml());
+    }
+
+    let right = header.querySelector(".landing-top-right");
+    if (!right) {
+      right = header.querySelector(".adda-top-actions, .desk-top-actions, #hubLangMount");
+      if (right) {
+        right.classList.add("landing-top-right");
+      } else {
+        right = document.createElement("div");
+        right.className = "landing-top-right";
+        header.appendChild(right);
+      }
+    }
+    const lang = header.querySelector(".labour-lang, .hub-lang-wrap, #hubLangMount");
+    if (lang && !right.contains(lang)) {
+      right.insertBefore(lang, right.firstChild);
+    }
+
+    if (!isContact && !right.querySelector(".landing-nav-contact")) {
+      right.insertAdjacentHTML("afterbegin", CONTACT_HTML);
+    }
+    if (
+      !isJoin
+      && !isHome
+      && !right.querySelector(".landing-account-signin, #landingSignInBtn, #addaAuthBtn")
+      && !header.querySelector("#logoutBtn")
+    ) {
+      right.insertAdjacentHTML("beforeend", signinHtml());
+    }
+
+    return header;
+  }
+
+  function bootSiteChrome() {
+    try {
+      ensureSiteChrome();
+      if (!document.getElementById("landingView")) mountBoardsNav();
+    } catch {
+      /* keep the page usable if chrome fails */
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootSiteChrome);
+  } else {
+    bootSiteChrome();
+  }
+
   window.HubPrefs = {
     BOARD_KEY,
     LOCALITY_KEY,
     LANG_KEY,
     MY_MANDI_KEY,
+    DEFAULT_BOARD,
     LOCALITIES,
     BOARDS,
     normalizeBoard,
@@ -365,5 +488,6 @@
     mountBoardPicker,
     mountLocalityPicker,
     mountBoardsNav,
+    ensureSiteChrome,
   };
 })();

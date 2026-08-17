@@ -198,7 +198,7 @@
     const current = prefs.loc || "mandi";
     if (HP) {
       HP.fillLocalitySelects(["regLocality", "loginLocality"], current);
-      const preferred = HP.normalizeBoard(prefs.board || boardId);
+      const preferred = HP.normalizeBoard(boardId || prefs.board);
       HP.fillBoardSelects(["regPreferredBoard", "loginPreferredBoard"], preferred);
       HP.mountBoardPicker("regBoardPicker", "regPreferredBoard", preferred);
       HP.mountBoardPicker("loginBoardPicker", "loginPreferredBoard", preferred);

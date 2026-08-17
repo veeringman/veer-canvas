@@ -174,8 +174,11 @@ PROFESSION_BOARDS = {
 # Where a signed-in user “lands” after auth (profession + commerce + Adda).
 HUB_HOME_BOARDS = frozenset(
     set(PROFESSION_BOARDS.keys())
-    | {"food", "grocery", "hardware", "haulage", "rentals", "adda"}
+    | {"city", "food", "grocery", "hardware", "haulage", "rentals", "adda"}
 )
+
+# Citizen / visitor default — city news board, not a trade desk.
+DEFAULT_PREFERRED_BOARD = "city"
 
 
 def normalize_preferred_board(raw: str | None) -> str:
@@ -190,9 +193,11 @@ def normalize_preferred_board(raw: str | None) -> str:
         key = "tours"
     if key in ("coaching", "mentor"):
         key = "tutors"
+    if key in ("explore", "news", "hub"):
+        key = "city"
     if key in HUB_HOME_BOARDS:
         return key
-    return "labour"
+    return DEFAULT_PREFERRED_BOARD
 
 
 def normalize_content_lang(raw: str | None) -> str:

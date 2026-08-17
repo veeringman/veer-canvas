@@ -25,9 +25,12 @@ Unofficial civic hub. Do not impersonate government, MC Mandi, or HIMUDA.
 - [x] Boards menu updates preferred board when picking a board
 - [x] Account toggle: “My Mandi home”
 - [x] **Responsive UX pass** — tap targets, header stack, board actions wrap, grids, My Mandi CTAs
+- [x] Header seal stays circular; portrait ads move from header onto hero
+- [x] Mobile header: equal circular action icons, tiny EN/हि toggle
+- [x] Same header chrome on boards, desks, Adda, shop, and contact
 - [ ] Soften demo CTAs once ≥3 real merchants on flagship board
 - [ ] Order status timeline on `/order` (accepted → on the way → delivered)
-- [ ] Enquiry / interest → WhatsApp deep-link (broker + profession boards)
+- [x] Hero board cards rotate every 10s; location from preference or GPS
 
 ---
 
@@ -119,6 +122,11 @@ Unofficial civic hub. Do not impersonate government, MC Mandi, or HIMUDA.
 |------|------|
 | 2026-08-16 | Localities, geo, new profession boards, EN/हिं, rentals board |
 | 2026-08-17 | My Mandi home + backlog tracking file |
-| 2026-08-17 | Responsive UX: buttons ≥44px, header reflow, board rails wrap, tablet grids |
+| 2026-08-17 | Hero board cards rotate every 10s; location from saved preference or GPS |
+| 2026-08-17 | Deployed hero board cards to cityofmandi.com |
+| 2026-08-17 | Card header: I ❤ My Mandi / मेरा ❤ मंडी |
+| 2026-08-17 | Compact glass board chip: next icon on card, teal theme |
+| 2026-08-17 | Home-screen app name CityOfMandi; teal opaque icon (no white corners) |
+| 2026-08-17 | Deployed compact board card, CityOfMandi PWA, responsive heart |
 
 **Deploy:** `SITE_ID=cityofmandi EC2_KEY=~/Downloads/VeerSetuHost.pem ./deploy/remote-deploy.sh`

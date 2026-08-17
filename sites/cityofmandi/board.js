@@ -344,8 +344,10 @@
     const hero = document.getElementById("landingHero");
     const banner = document.getElementById(board.heroId) || document.getElementById("landingHeroSeri");
     const section = resolveSection(board);
-    if (hero) hero.classList.toggle("is-seri-morning", live);
-    if (banner) banner.hidden = !live;
+    const cards = document.getElementById("heroBoardCards");
+    const usingCards = !!(cards && !cards.hidden);
+    if (hero) hero.classList.toggle("is-seri-morning", live && !usingCards);
+    if (banner) banner.hidden = true;
     if (section) section.classList.toggle("is-seri-morning", live);
   }
 
@@ -811,7 +813,7 @@
   ensureLandingSections();
 
   // Auto-set locality for live boards currently in view / preferred
-  const preferred = window.HubPrefs?.readPrefs?.().board || "labour";
+  const preferred = window.HubPrefs?.readPrefs?.().board || window.HubPrefs?.DEFAULT_BOARD || "city";
   if (window.HubGeo?.autoPreferForLive) {
     window.HubGeo.autoPreferForLive(preferred).then((nearest) => {
       if (!nearest?.id) return;

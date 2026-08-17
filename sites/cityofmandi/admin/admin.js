@@ -1,5 +1,5 @@
 (() => {
-  const FEATURE_KEYS = ["news", "places", "scitech", "culture", "services", "labour", "taxi", "boards", "seri", "channels", "ads", "neighbourhoods", "businesses"];
+  const FEATURE_KEYS = ["news", "places", "scitech", "culture", "services", "labour", "taxi", "boards", "seri", "channels", "ads", "neighbourhoods", "businesses", "heroBoardCards"];
   let ANIMATIONS = [
     { id: "independence", label: "Independence Day" },
     { id: "marquee", label: "Marquee" },

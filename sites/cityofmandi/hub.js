@@ -248,6 +248,8 @@
       fetch("/api/hub/feed", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ byKind: {} })),
     ]);
     const features = hub.features || {};
+    window.__hubFeatures = features;
+    syncHeroBoardCards();
     const map = {
       news: "landing-news",
       places: "landing-places",
@@ -456,7 +458,7 @@
 
   function preferredSectionId() {
     const HP = window.HubPrefs;
-    if (!HP) return "landing-labour";
+    if (!HP) return "landing-news";
     const { board } = HP.readPrefs();
     if (board === "adda") return "landing-news";
     return HP.boardSectionId(board) || `landing-${board}`;
@@ -507,6 +509,7 @@
       if (guestCta) guestCta.hidden = false;
       if (greeting) greeting.hidden = false;
       applyMyMandiCollapse(false);
+      syncHeroBoardCards();
       return false;
     }
     const prefs = HP.readPrefs();
@@ -524,6 +527,7 @@
     if (guestCta) guestCta.hidden = true;
     if (greeting) greeting.hidden = true;
     applyMyMandiCollapse(true);
+    syncHeroBoardCards();
     return true;
   }
 
@@ -537,6 +541,232 @@
     }
     const sectionId = preferredSectionId();
     openBoard({ scrollTo: sectionId });
+  }
+
+  const HERO_BOARD_ORDER = [
+    "city", "food", "grocery", "taxi", "rentals", "home", "vehicle",
+    "doctor", "tours", "labour", "haulage", "hardware", "experts", "tutors", "adda",
+  ];
+  const HERO_BOARD_LEDE = {
+    city: { en: "News, places, and everyday Mandi.", hi: "खबर, जगहें, और रोज़ की मंडी।" },
+    food: { en: "Kitchens and delivery near you.", hi: "आस-पास रसोई और डिलीवरी।" },
+    grocery: { en: "Kirana and daily needs.", hi: "किराना और रोज़मर्रा।" },
+    taxi: { en: "Cabs and local rides.", hi: "कैब और स्थानीय सवारी।" },
+    rentals: { en: "To rent or sell nearby.", hi: "किराये या बिक्री आस-पास।" },
+    home: { en: "Home help on the board.", hi: "घर की मदद बोर्ड पर।" },
+    vehicle: { en: "Service desks for your vehicle.", hi: "वाहन की सर्विस।" },
+    doctor: { en: "Doc on call in your area.", hi: "आपके इलाके में डॉक्टर।" },
+    tours: { en: "Day trips and travel desks.", hi: "घूमना और यात्रा।" },
+    labour: { en: "Morning work at Seri and around.", hi: "सेरी और आस-पास सुबह का काम।" },
+    haulage: { en: "Tempo and load moving.", hi: "टेम्पो और ढुलाई।" },
+    hardware: { en: "Supplies and hardware.", hi: "सामग्री और हार्डवेयर।" },
+    experts: { en: "Local experts and SMEs.", hi: "स्थानीय विशेषज्ञ।" },
+    tutors: { en: "Tutors near home.", hi: "घर के पास ट्यूटर।" },
+    adda: { en: "City chat on Mandi Adda.", hi: "मंडी अड्डा पर बात।" },
+  };
+  const HERO_ROTATE_MS = 10000;
+  let heroBoardTimer = 0;
+  let heroBoardIndex = 0;
+
+  function heroCardsWanted() {
+    const features = window.__hubFeatures || {};
+    return features.heroBoardCards !== false;
+  }
+
+  function hasBoardPreference() {
+    return !!window.HubPrefs?.isMyMandiOn();
+  }
+
+  function localityDisplay(loc) {
+    const HP = window.HubPrefs;
+    if (!HP) return "Mandi";
+    const lang = window.HubI18n?.readLang?.() || "en";
+    const row = HP.LOCALITIES.find((l) => l.id === loc);
+    const en = row?.label || HP.localityLabel(loc);
+    const hi = row?.labelHi || "";
+    if (lang === "hi" && hi) return hi;
+    return en;
+  }
+
+  function paintHeroBrand() {
+    const brand = el("heroBoardBrand");
+    if (!brand) return;
+    const lang = window.HubI18n?.readLang?.() || "en";
+    if (lang === "hi") {
+      brand.innerHTML = `मेरा <span class="hero-board-heart" aria-hidden="true">❤</span> मंडी`;
+    } else {
+      brand.innerHTML = `I <span class="hero-board-heart" aria-hidden="true">❤</span> My Mandi`;
+    }
+  }
+
+  function paintHeroLocality() {
+    const HP = window.HubPrefs;
+    const locEl = el("heroBoardLoc");
+    const loc = HP?.readPrefs().loc || "mandi";
+    if (locEl) locEl.textContent = localityDisplay(loc);
+    return loc;
+  }
+
+  function hasChosenLocality() {
+    try {
+      if (window.HubPrefs?.isMyMandiOn()) return true;
+      return Number(localStorage.getItem("hub_geo_manual_ts") || 0) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async function detectHeroLocality() {
+    const HP = window.HubPrefs;
+    const Geo = window.HubGeo;
+    paintHeroLocality();
+    if (!HP || !Geo?.detectNearest) return;
+    if (hasChosenLocality() || Geo.recentlyManual?.()) return;
+    if (Geo.recentlyAuto?.()) return;
+    try {
+      const hit = await Geo.detectNearest();
+      const next = hit?.nearest?.id;
+      if (!next) return;
+      const loc = HP.normalizeLocality(next);
+      try {
+        localStorage.setItem(HP.LOCALITY_KEY, loc);
+        localStorage.setItem("hub_geo_auto_ts", String(Date.now()));
+      } catch { /* ignore */ }
+      document.dispatchEvent(new CustomEvent("hub:locality", {
+        detail: { locality: loc, manual: false, source: "hero" },
+      }));
+      paintHeroLocality();
+    } catch {
+      paintHeroLocality();
+    }
+  }
+
+  function heroBoardList() {
+    const HP = window.HubPrefs;
+    if (!HP) return [];
+    if (hasBoardPreference()) {
+      const preferred = HP.boardMeta(HP.readPrefs().board);
+      return preferred ? [preferred] : [];
+    }
+    const byId = Object.fromEntries(HP.BOARDS.map((b) => [b.id, b]));
+    const ordered = HERO_BOARD_ORDER.map((id) => byId[id]).filter(Boolean);
+    HP.BOARDS.forEach((b) => {
+      if (!ordered.some((x) => x.id === b.id)) ordered.push(b);
+    });
+    return ordered;
+  }
+
+  function openHeroBoard(id) {
+    const HP = window.HubPrefs;
+    const home = HP?.boardHome(id) || `/#landing-${id}`;
+    if (id === "adda" || home.startsWith("/adda")) {
+      location.href = "/adda";
+      return;
+    }
+    const hash = home.includes("#") ? home.split("#")[1] : `landing-${id}`;
+    openBoard({ scrollTo: hash || "landing-news" });
+  }
+
+  function paintHeroBoard(index) {
+    const HP = window.HubPrefs;
+    const card = el("heroBoardCard");
+    const titleEl = el("heroBoardTitle");
+    const boards = heroBoardList();
+    if (!HP || !card || !boards.length) return;
+    heroBoardIndex = ((index % boards.length) + boards.length) % boards.length;
+    const board = boards[heroBoardIndex];
+    const lang = window.HubI18n?.readLang?.() || "en";
+    const title = lang === "hi"
+      ? `${board.labelHi || board.label} · ${board.label}`
+      : `${board.label}${board.labelHi ? " · " + board.labelHi : ""}`;
+    card.href = board.home;
+    card.setAttribute("data-hero-board", board.id);
+    card.setAttribute("aria-label", `${title} — ${localityDisplay(HP.readPrefs().loc)}`);
+    if (titleEl) titleEl.textContent = title;
+    paintHeroBrand();
+    paintHeroLocality();
+  }
+
+  function stopHeroBoardRotate() {
+    if (heroBoardTimer) {
+      window.clearInterval(heroBoardTimer);
+      heroBoardTimer = 0;
+    }
+  }
+
+  function startHeroBoardRotate() {
+    stopHeroBoardRotate();
+    if (hasBoardPreference()) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (reduce) return;
+    if (heroBoardList().length < 2) return;
+    heroBoardTimer = window.setInterval(() => {
+      paintHeroBoard(heroBoardIndex + 1);
+    }, HERO_ROTATE_MS);
+  }
+
+  function renderHeroBoardCards() {
+    const wrap = el("heroBoardCards");
+    const hero = el("landingHero");
+    const shell = el("landingView");
+    const nextBtn = el("heroBoardNext");
+    if (!wrap) return;
+    const show = heroCardsWanted();
+    const preferred = hasBoardPreference();
+    wrap.hidden = !show;
+    wrap.classList.toggle("is-preferred", preferred);
+    hero?.classList.toggle("has-board-cards", show);
+    shell?.classList.toggle("has-hero-pref-card", show && preferred);
+    if (nextBtn) {
+      nextBtn.hidden = preferred;
+      nextBtn.setAttribute("aria-hidden", preferred ? "true" : "false");
+    }
+    if (!show) {
+      stopHeroBoardRotate();
+      return;
+    }
+    if (preferred) heroBoardIndex = 0;
+    paintHeroBoard(heroBoardIndex);
+    startHeroBoardRotate();
+  }
+
+  function syncHeroBoardCards() {
+    renderHeroBoardCards();
+  }
+
+  function mountHeroBoardCards() {
+    const wrap = el("heroBoardCards");
+    const card = el("heroBoardCard");
+    const nextBtn = el("heroBoardNext");
+    if (!wrap || wrap.dataset.bound === "1") {
+      renderHeroBoardCards();
+      detectHeroLocality();
+      return;
+    }
+    wrap.dataset.bound = "1";
+    nextBtn?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      paintHeroBoard(heroBoardIndex + 1);
+      startHeroBoardRotate();
+    });
+    card?.addEventListener("click", (event) => {
+      const id = card.getAttribute("data-hero-board");
+      const href = card.getAttribute("href") || "";
+      if (!id) return;
+      if (id === "adda" || href.startsWith("/adda")) return;
+      event.preventDefault();
+      openHeroBoard(id);
+    });
+    document.addEventListener("hub:locality", () => paintHeroLocality());
+    document.addEventListener("hub:lang", () => renderHeroBoardCards());
+    document.addEventListener("hub:mymandi", () => renderHeroBoardCards());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopHeroBoardRotate();
+      else startHeroBoardRotate();
+    });
+    renderHeroBoardCards();
+    detectHeroLocality();
   }
 
   function mountMyMandi() {
@@ -571,6 +801,7 @@
     bindBoard();
     bindScrollChrome();
     mountMyMandi();
+    mountHeroBoardCards();
     loadPublicBoard().then(() => {
       if (window.HubPrefs?.isMyMandiOn()) paintMyMandiPanel();
     }).catch(() => {});

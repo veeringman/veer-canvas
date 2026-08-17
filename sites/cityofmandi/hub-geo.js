@@ -307,5 +307,7 @@
     mountLocalityMap,
     readCoords,
     saveCoords,
+    recentlyManual,
+    recentlyAuto,
   };
 })();
