@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="envelope-pad" data-tpl="envelope" data-paper-size="C5">
+<html lang="en" class="envelope-pad" data-tpl="envelope" data-paper-size="E2210">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Default C5 landscape — holds A5. C6 holds A6; C4 holds A4. */
-    @page { size: 229mm 162mm; margin: 0; }
+    /* Face is designed at 220 × 100 mm (22 × 10 cm landscape), then scaled to the chosen stock. */
+    @page { size: 220mm 100mm; margin: 0; }
     * { box-sizing: border-box; }
     :root {
       --navy: #0b2a56;
@@ -20,26 +20,33 @@
       --muted: #5a6a80;
       --line: rgba(11, 42, 86, 0.22);
       --paper: #ffffff;
-      --sheet-w: 229mm;
-      --sheet-h: 162mm;
+      --design-w: 220mm;
+      --design-h: 100mm;
+      --sheet-w: 220mm;
+      --sheet-h: 100mm;
+      --fit-x: 1;
+      --fit-y: 1;
     }
-    /* C6 114×162 mm — ISO / India-standard envelope that holds A6 paper (105×148 mm) */
     html[data-paper-size="C6"],
     html[data-paper-size="A6"] {
       --sheet-w: 162mm;
       --sheet-h: 114mm;
     }
-    /* C5 162×229 mm — holds A5 */
     html[data-paper-size="C5"],
     html[data-paper-size="A5"] {
       --sheet-w: 229mm;
       --sheet-h: 162mm;
     }
-    /* C4 229×324 mm — holds A4 */
     html[data-paper-size="C4"],
     html[data-paper-size="A4"] {
       --sheet-w: 324mm;
       --sheet-h: 229mm;
+    }
+    html[data-paper-size="E2210"],
+    html[data-paper-size="22X10"],
+    html[data-paper-size="CUSTOM"] {
+      --sheet-w: 220mm;
+      --sheet-h: 100mm;
     }
     body {
       margin: 0;
@@ -52,7 +59,7 @@
       padding: 10px 14px;
       font: 500 13px/1.45 system-ui, sans-serif;
       color: #445;
-      max-width: 229mm;
+      max-width: min(96vw, 42rem);
       margin: 0 auto;
     }
     .layout-picker {
@@ -74,45 +81,72 @@
       cursor: pointer;
       color: var(--navy);
     }
-    .layout-picker input { accent-color: var(--navy); }
+    .layout-picker input[type="radio"] { accent-color: var(--navy); }
+    .custom-size { flex-wrap: wrap; }
+    .custom-dims {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: 2px;
+    }
+    .custom-dims input {
+      width: 4.6rem;
+      padding: 3px 6px;
+      border: 1px solid rgba(11, 42, 86, 0.22);
+      border-radius: 6px;
+      font: 600 12.5px/1.3 system-ui, sans-serif;
+      color: var(--navy);
+    }
     .sheet {
       position: relative;
       width: var(--sheet-w);
       height: var(--sheet-h);
       min-height: var(--sheet-h);
       max-height: var(--sheet-h);
+      max-width: var(--sheet-w);
       margin: 0 auto 18px;
       padding: 0;
       background: var(--paper);
       border: 1pt solid rgba(11, 42, 86, 0.55);
       overflow: hidden;
+    }
+    .sheet-face {
+      width: var(--design-w);
+      height: var(--design-h);
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform: scale(var(--fit-x), var(--fit-y));
+      transform-origin: top left;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      background: var(--paper);
     }
     .accent-edge {
       display: grid;
-      grid-template-columns: 1fr 7mm 1fr;
-      height: 2.4mm;
-      flex: 0 0 auto;
+      grid-template-columns: 1fr 6mm 1fr;
+      height: 1.8mm;
+      flex: 0 0 1.8mm;
     }
     .accent-edge .n { background: var(--navy); }
     .accent-edge .g { background: var(--gold); }
     .accent-edge .e { background: var(--green); }
     .accent-edge-thin {
-      height: 0.4mm;
+      height: 0.35mm;
+      flex: 0 0 0.35mm;
       background: rgba(11, 42, 86, 0.12);
-      flex: 0 0 auto;
     }
     .wm {
       position: absolute;
       left: 50%;
-      top: 56%;
+      top: 58%;
       transform: translate(-50%, -50%);
-      width: min(78mm, 42%);
-      max-height: 48%;
+      width: 52mm;
+      max-height: 42%;
       height: auto;
       object-fit: contain;
-      opacity: 0.55;
+      opacity: 0.5;
       pointer-events: none;
       z-index: 0;
     }
@@ -120,29 +154,29 @@
       position: relative;
       z-index: 1;
       flex: 1;
+      min-height: 0;
       display: grid;
       grid-template-columns: 1fr auto;
       grid-template-rows: auto 1fr auto;
-      gap: 3mm 8mm;
-      padding: 5mm 8mm 4mm;
-      min-height: 0;
+      gap: 1.6mm 6mm;
+      padding: 2.4mm 6mm 2mm;
     }
     .return {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 3.2mm;
+      gap: 2.8mm;
       align-items: center;
       min-width: 0;
     }
     .return .logo {
-      width: 16mm;
+      width: 12mm;
       height: auto;
       display: block;
     }
     .return h1 {
       margin: 0;
       font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
-      font-size: 11pt;
+      font-size: 9pt;
       font-weight: 700;
       letter-spacing: 0.04em;
       color: var(--navy);
@@ -150,27 +184,27 @@
       text-transform: uppercase;
     }
     .return .colony {
-      margin: 0.5mm 0 0;
-      font-size: 8pt;
+      margin: 0.4mm 0 0;
+      font-size: 6.4pt;
       font-weight: 700;
       color: var(--navy-2);
     }
     .return .addr {
-      margin: 0.4mm 0 0;
-      font-size: 6.6pt;
+      margin: 0.3mm 0 0;
+      font-size: 5.5pt;
       font-weight: 600;
       color: var(--green);
     }
     .stamp {
-      width: 22mm;
-      height: 26mm;
+      width: 16mm;
+      height: 18mm;
       border: 0.7pt dashed rgba(11, 42, 86, 0.45);
       border-radius: 1mm;
       display: flex;
       align-items: center;
       justify-content: center;
       text-align: center;
-      font-size: 6pt;
+      font-size: 5pt;
       font-weight: 700;
       letter-spacing: 0.12em;
       text-transform: uppercase;
@@ -180,13 +214,13 @@
     .to-block {
       grid-column: 1 / -1;
       align-self: center;
-      width: min(128mm, 72%);
+      width: min(128mm, 70%);
       margin: 0 auto;
       min-width: 0;
     }
     .to-kicker {
-      margin: 0 0 2mm;
-      font-size: 7pt;
+      margin: 0 0 1.2mm;
+      font-size: 6.2pt;
       font-weight: 700;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -198,12 +232,12 @@
       list-style: none;
     }
     .to-lines li {
-      min-height: 7.2mm;
+      min-height: 5.2mm;
       border-bottom: 0.7pt solid var(--line);
-      font-size: 10.5pt;
+      font-size: 8.2pt;
       font-weight: 600;
       color: var(--navy);
-      line-height: 7.2mm;
+      line-height: 5.2mm;
       outline: none;
     }
     .to-lines li:focus {
@@ -214,10 +248,11 @@
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      gap: 4mm;
+      flex-wrap: wrap;
+      gap: 1.2mm 4mm;
       border-top: 0.7pt solid rgba(11, 42, 86, 0.16);
-      padding-top: 2mm;
-      font-size: 6.4pt;
+      padding-top: 1.2mm;
+      font-size: 5.3pt;
       font-weight: 600;
       color: var(--muted);
     }
@@ -228,54 +263,27 @@
       color: var(--green);
     }
 
-    html[data-paper-size="C6"] .return .logo,
-    html[data-paper-size="A6"] .return .logo { width: 12.5mm; }
-    html[data-paper-size="C6"] .return h1,
-    html[data-paper-size="A6"] .return h1 { font-size: 8.6pt; }
-    html[data-paper-size="C6"] .return .colony,
-    html[data-paper-size="A6"] .return .colony { font-size: 6.6pt; }
-    html[data-paper-size="C6"] .return .addr,
-    html[data-paper-size="A6"] .return .addr { font-size: 5.6pt; }
-    html[data-paper-size="C6"] .stamp,
-    html[data-paper-size="A6"] .stamp { width: 17mm; height: 20mm; font-size: 5pt; }
-    html[data-paper-size="C6"] .pad,
-    html[data-paper-size="A6"] .pad { padding: 3.8mm 5.5mm 3.2mm; gap: 2.2mm 5mm; }
-    html[data-paper-size="C6"] .to-block,
-    html[data-paper-size="A6"] .to-block { width: min(102mm, 78%); }
-    html[data-paper-size="C6"] .to-lines li,
-    html[data-paper-size="A6"] .to-lines li { min-height: 5.8mm; line-height: 5.8mm; font-size: 8.4pt; }
-    html[data-paper-size="C6"] .foot,
-    html[data-paper-size="A6"] .foot { font-size: 5.5pt; }
-
-    html[data-paper-size="C4"] .return .logo,
-    html[data-paper-size="A4"] .return .logo { width: 22mm; }
-    html[data-paper-size="C4"] .return h1,
-    html[data-paper-size="A4"] .return h1 { font-size: 16pt; }
-    html[data-paper-size="C4"] .return .colony,
-    html[data-paper-size="A4"] .return .colony { font-size: 11pt; }
-    html[data-paper-size="C4"] .return .addr,
-    html[data-paper-size="A4"] .return .addr { font-size: 8.5pt; }
-    html[data-paper-size="C4"] .stamp,
-    html[data-paper-size="A4"] .stamp { width: 28mm; height: 32mm; font-size: 7.5pt; }
-    html[data-paper-size="C4"] .pad,
-    html[data-paper-size="A4"] .pad { padding: 8mm 12mm 7mm; gap: 5mm 12mm; }
-    html[data-paper-size="C4"] .to-block,
-    html[data-paper-size="A4"] .to-block { width: min(188mm, 68%); }
-    html[data-paper-size="C4"] .to-kicker,
-    html[data-paper-size="A4"] .to-kicker { font-size: 9pt; }
-    html[data-paper-size="C4"] .to-lines li,
-    html[data-paper-size="A4"] .to-lines li { min-height: 10mm; line-height: 10mm; font-size: 14pt; }
-    html[data-paper-size="C4"] .foot,
-    html[data-paper-size="A4"] .foot { font-size: 8pt; }
-
     @media print {
-      body { background: #fff !important; }
+      html, body {
+        width: var(--sheet-w) !important;
+        height: var(--sheet-h) !important;
+        max-width: var(--sheet-w) !important;
+        max-height: var(--sheet-h) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        background: #fff !important;
+      }
       .screen-hint { display: none !important; }
       .sheet {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
         width: var(--sheet-w) !important;
         height: var(--sheet-h) !important;
         min-height: var(--sheet-h) !important;
         max-height: var(--sheet-h) !important;
+        max-width: var(--sheet-w) !important;
         margin: 0 !important;
         border: 0 !important;
         background: #fff !important;
@@ -284,97 +292,172 @@
         page-break-after: avoid;
         page-break-inside: avoid;
       }
-      .wm { opacity: 0.5; }
+      .sheet-face {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .wm { opacity: 0.45; }
       .accent-edge, .stamp {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
     }
   </style>
-  <link rel="stylesheet" href="print-pad-common.css?v=20260817pad4">
+  <link rel="stylesheet" href="print-pad-common.css?v=20260818env3">
+  <style id="envelopePageRule">@page { size: 220mm 100mm; margin: 0; }</style>
 </head>
 <body>
   <p class="screen-hint">
     Official envelope — Mandi Housing Welfare Society.<br>
-    Sizes are ISO <strong>C-series</strong> envelope stock sold in India (not A-series paper). Type the recipient, then <strong>Print</strong> landscape, margins <strong>None</strong>.
+    The face is a <strong>wide, short</strong> landscape (default 22 × 10 cm). Type the recipient, then <strong>Print</strong> at <strong>100% scale</strong>, margins <strong>None</strong>. The preview must stay wide, not tall.
     <span class="layout-picker" role="group" aria-label="Envelope stock size">
       <label>
-        <input type="radio" name="envSize" value="C6">
-        C6 · holds A6 · 162 × 114 mm
+        <input type="radio" name="envSize" value="E2210" checked>
+        22 × 10 cm · commercial
       </label>
       <label>
-        <input type="radio" name="envSize" value="C5" checked>
-        C5 · holds A5 · 229 × 162 mm
+        <input type="radio" name="envSize" value="C6">
+        C6 · holds A6
+      </label>
+      <label>
+        <input type="radio" name="envSize" value="C5">
+        C5 · holds A5
       </label>
       <label>
         <input type="radio" name="envSize" value="C4">
-        C4 · holds A4 · 324 × 229 mm
+        C4 · holds A4
+      </label>
+      <label class="custom-size">
+        <input type="radio" name="envSize" value="CUSTOM">
+        Custom
+        <span class="custom-dims">
+          <input type="number" id="envCustomW" min="8" max="40" step="0.1" value="22" inputmode="decimal" aria-label="Width in centimetres">
+          <span aria-hidden="true">×</span>
+          <input type="number" id="envCustomH" min="6" max="30" step="0.1" value="10" inputmode="decimal" aria-label="Height in centimetres">
+          <span>cm</span>
+        </span>
       </label>
     </span>
   </p>
 
   <div class="sheet" id="envelopeSheet">
-    <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
-    <div class="accent-edge-thin" aria-hidden="true"></div>
-    <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
+    <div class="sheet-face">
+      <div class="accent-edge" aria-hidden="true"><span class="n"></span><span class="g"></span><span class="e"></span></div>
+      <div class="accent-edge-thin" aria-hidden="true"></div>
+      <img class="wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8" alt="" aria-hidden="true">
 
-    <div class="pad">
-      <div class="return">
-        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
-        <div>
-          <h1>Mandi Housing Welfare Society</h1>
-          <p class="colony">Himuda Housing Colony Sanyard</p>
-          <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+      <div class="pad">
+        <div class="return">
+          <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
+          <div>
+            <h1>Mandi Housing Welfare Society</h1>
+            <p class="colony">Himuda Housing Colony Sanyard</p>
+            <p class="addr">Housing Colony Sanyard, Mandi HP 175001</p>
+          </div>
         </div>
+        <div class="stamp" aria-hidden="true">Stamp</div>
+
+        <section class="to-block" aria-label="Recipient">
+          <p class="to-kicker">To</p>
+          <ul class="to-lines">
+            <li contenteditable="true" data-placeholder="Name / designation"></li>
+            <li contenteditable="true" data-placeholder="Organisation / house"></li>
+            <li contenteditable="true" data-placeholder="Street / locality"></li>
+            <li contenteditable="true" data-placeholder="Town / district"></li>
+            <li contenteditable="true" data-placeholder="PIN code"></li>
+          </ul>
+        </section>
+
+        <footer class="foot">
+          <span>housingcolonysanyard@gmail.com</span>
+          <span class="slogan">Unity · Harmony · Progress</span>
+          <span class="web">housingcolonysanyard.in</span>
+        </footer>
       </div>
-      <div class="stamp" aria-hidden="true">Stamp</div>
-
-      <section class="to-block" aria-label="Recipient">
-        <p class="to-kicker">To</p>
-        <ul class="to-lines">
-          <li contenteditable="true" data-placeholder="Name / designation"></li>
-          <li contenteditable="true" data-placeholder="Organisation / house"></li>
-          <li contenteditable="true" data-placeholder="Street / locality"></li>
-          <li contenteditable="true" data-placeholder="Town / district"></li>
-          <li contenteditable="true" data-placeholder="PIN code"></li>
-        </ul>
-      </section>
-
-      <footer class="foot">
-        <span>housingcolonysanyard@gmail.com</span>
-        <span class="slogan">Unity · Harmony · Progress</span>
-        <span class="web">housingcolonysanyard.in</span>
-      </footer>
     </div>
   </div>
 
-  <style id="envelopePageRule">@page { size: 229mm 162mm; margin: 0; }</style>
   <script>
     (function () {
       const root = document.documentElement;
+      const DESIGN_W = 220;
+      const DESIGN_H = 100;
       const pageSizes = {
-        C6: '162mm 114mm',
-        C5: '229mm 162mm',
-        C4: '324mm 229mm',
+        E2210: [220, 100],
+        C6: [162, 114],
+        C5: [229, 162],
+        C4: [324, 229],
       };
-      const aliases = { A6: 'C6', A5: 'C5', A4: 'C4' };
+      const aliases = { A6: 'C6', A5: 'C5', A4: 'C4', '22X10': 'E2210' };
       const pageRule = document.getElementById('envelopePageRule');
+      const wInput = document.getElementById('envCustomW');
+      const hInput = document.getElementById('envCustomH');
+      const W_MIN = 8, W_MAX = 40, H_MIN = 6, H_MAX = 30;
+
+      const clamp = (n, lo, hi, fallback) => {
+        const v = Number(n);
+        if (!Number.isFinite(v)) return fallback;
+        return Math.min(hi, Math.max(lo, Math.round(v * 10) / 10));
+      };
+
+      const applyMm = (wMm, hMm) => {
+        const width = Math.max(hMm, wMm);
+        const height = Math.min(hMm, wMm);
+        root.style.setProperty('--sheet-w', width + 'mm');
+        root.style.setProperty('--sheet-h', height + 'mm');
+        root.style.setProperty('--fit-x', String(width / DESIGN_W));
+        root.style.setProperty('--fit-y', String(height / DESIGN_H));
+        if (pageRule) {
+          pageRule.textContent = `@page { size: ${width}mm ${height}mm; margin: 0; }`;
+        }
+      };
+
       const apply = (size) => {
-        const key = aliases[size] || (pageSizes[size] ? size : 'C5');
-        root.setAttribute('data-paper-size', key);
-        if (pageRule) pageRule.textContent = `@page { size: ${pageSizes[key]}; margin: 0; }`;
+        const raw = String(size || '').toUpperCase();
+        const key = aliases[raw] || (pageSizes[raw] ? raw : (raw === 'CUSTOM' ? 'CUSTOM' : 'E2210'));
+        if (key === 'CUSTOM') {
+          const wCm = clamp(wInput && wInput.value, W_MIN, W_MAX, 22);
+          const hCm = clamp(hInput && hInput.value, H_MIN, H_MAX, 10);
+          if (wInput) wInput.value = String(wCm);
+          if (hInput) hInput.value = String(hCm);
+          root.setAttribute('data-paper-size', 'CUSTOM');
+          root.setAttribute('data-custom-w', String(wCm));
+          root.setAttribute('data-custom-h', String(hCm));
+          applyMm(wCm * 10, hCm * 10);
+        } else {
+          const [wMm, hMm] = pageSizes[key];
+          root.setAttribute('data-paper-size', key);
+          applyMm(wMm, hMm);
+        }
         document.querySelectorAll('input[name="envSize"]').forEach((input) => {
           input.checked = input.value === key;
         });
       };
+
       document.querySelectorAll('input[name="envSize"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) apply(input.value);
         });
       });
+      const onCustomEdit = () => apply('CUSTOM');
+      const onCustomInput = () => {
+        const w = Number(wInput && wInput.value);
+        const h = Number(hInput && hInput.value);
+        if (!Number.isFinite(w) || !Number.isFinite(h)) return;
+        apply('CUSTOM');
+      };
+      wInput?.addEventListener('change', onCustomEdit);
+      hInput?.addEventListener('change', onCustomEdit);
+      wInput?.addEventListener('input', onCustomInput);
+      hInput?.addEventListener('input', onCustomInput);
+
+      const fromW = root.getAttribute('data-custom-w');
+      const fromH = root.getAttribute('data-custom-h');
+      if (fromW && wInput) wInput.value = fromW;
+      if (fromH && hInput) hInput.value = fromH;
       const fromDoc = (root.getAttribute('data-paper-size') || '').toUpperCase();
       const checked = document.querySelector('input[name="envSize"]:checked');
-      apply(fromDoc || (checked ? checked.value : 'C5'));
+      apply(fromDoc || (checked ? checked.value : 'E2210'));
     })();
   </script>
 </body>

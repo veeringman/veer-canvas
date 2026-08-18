@@ -1169,6 +1169,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       charterBlock.hidden = !(hasEntitlement('manage_roles') || hasEntitlement('sensitive_ops'));
     }
     prepareMobileSections();
+    if (typeof syncBoardTabs === 'function') syncBoardTabs();
   }
 
   function isViewOnly(r = state.session?.resident) {
@@ -2517,6 +2518,18 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return Boolean(n?.fixedTop) || n?.id === WELCOME_NOTICE_ID;
   }
 
+  function noticeActionIcon(kind) {
+    const icons = {
+      up: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14l6-6 6 6"/></svg>',
+      down: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10l6 6 6-6"/></svg>',
+      edit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>',
+      pin: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l1 7 3 2v2H5v-2l3-2 1-7z"/></svg>',
+      unpin: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l1 7 3 2v2H5v-2l3-2 1-7z"/></svg>',
+      trash: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>',
+    };
+    return `<span class="notice-action-icon" aria-hidden="true">${icons[kind] || ''}</span>`;
+  }
+
   function renderNoticeCard(n, { canMoveUp = false, canMoveDown = false } = {}) {
     const date = n.publishedAt ? formatIstDate(n.publishedAt) : '';
     const welcome = isWelcomeNotice(n);
@@ -2527,17 +2540,17 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const viewOnly = isViewOnly();
     const engageDisabled = viewOnly ? ' disabled title="View-only access"' : '';
     const moveActions = (hasEntitlement('manage_notices') && n.pinned && !welcome) ? `
-        <button type="button" class="btn ghost compact notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up">↑ Up</button>
-        <button type="button" class="btn ghost compact notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down">↓ Down</button>` : '';
+        <button type="button" class="notice-action-btn notice-move-up" data-id="${escapeHtml(n.id)}" ${canMoveUp ? '' : 'disabled'} title="Move up" aria-label="Move up">${noticeActionIcon('up')}</button>
+        <button type="button" class="notice-action-btn notice-move-down" data-id="${escapeHtml(n.id)}" ${canMoveDown ? '' : 'disabled'} title="Move down" aria-label="Move down">${noticeActionIcon('down')}</button>` : '';
     const pinDelete = welcome
       ? ''
       : `
-        <button type="button" class="btn ghost compact notice-pin" data-id="${escapeHtml(n.id)}" data-pinned="${n.pinned ? '1' : '0'}">${n.pinned ? 'Unpin' : 'Pin'}</button>
-        <button type="button" class="btn ghost compact notice-delete" data-id="${escapeHtml(n.id)}">Delete</button>`;
+        <button type="button" class="notice-action-btn notice-pin${n.pinned ? ' is-active' : ''}" data-id="${escapeHtml(n.id)}" data-pinned="${n.pinned ? '1' : '0'}" title="${n.pinned ? 'Unpin' : 'Pin'}" aria-label="${n.pinned ? 'Unpin' : 'Pin'}">${noticeActionIcon(n.pinned ? 'unpin' : 'pin')}</button>
+        <button type="button" class="notice-action-btn notice-delete" data-id="${escapeHtml(n.id)}" title="Delete" aria-label="Delete">${noticeActionIcon('trash')}</button>`;
     const actions = hasEntitlement('manage_notices') ? `
       <div class="notice-actions">
         ${moveActions}
-        <button type="button" class="btn ghost compact notice-edit" data-id="${escapeHtml(n.id)}">Edit</button>
+        <button type="button" class="notice-action-btn notice-edit" data-id="${escapeHtml(n.id)}" title="Edit" aria-label="Edit">${noticeActionIcon('edit')}</button>
         ${pinDelete}
       </div>` : '';
     const badges = [
@@ -2615,6 +2628,281 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       : '<p class="muted">No notices yet.</p>';
     refreshMobileListUi();
     if (sectionLang.notices === 'hi') renderNoticesOverlay();
+    syncBoardTabs();
+    await loadColonyServices();
+  }
+
+  const boardState = { tab: 'notices' };
+
+  function syncBoardTabs() {
+    const tab = boardState.tab === 'services' ? 'services' : 'notices';
+    document.querySelectorAll('.board-panel-tab').forEach((btn) => {
+      const on = btn.dataset.boardTab === tab;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const noticesPane = el('boardTabNotices');
+    const servicesPane = el('boardTabServices');
+    if (noticesPane) noticesPane.hidden = tab !== 'notices';
+    if (servicesPane) servicesPane.hidden = tab !== 'services';
+    const lead = el('boardPanelLead');
+    if (lead) {
+      lead.textContent = tab === 'services'
+        ? 'Staff, helplines, and recurring schedules.'
+        : 'EC notices and pinned updates.';
+    }
+    const langToggle = el('boardLangToggle');
+    const editBtn = el('colonyServicesEditBtn');
+    if (langToggle) langToggle.hidden = tab !== 'notices';
+    if (editBtn && hasEntitlement('manage_notices')) editBtn.hidden = tab !== 'services';
+  }
+
+  function setBoardTab(tab, { updateHash = true } = {}) {
+    boardState.tab = tab === 'services' ? 'services' : 'notices';
+    syncBoardTabs();
+    if (updateHash && state.session?.resident) {
+      const nextHash = boardState.tab === 'services' ? '#home/services' : '#home';
+      if (location.hash !== nextHash) {
+        history.replaceState(null, '', `${location.pathname}${location.search}${nextHash}`);
+      }
+    }
+    if (boardState.tab === 'services') {
+      loadColonyServices().catch(console.error);
+    }
+  }
+
+  function applyBoardRouteHash() {
+    const hash = (location.hash || '').replace(/^#/, '');
+    if (hash === 'home/services' || hash.startsWith('home/services/')) {
+      setBoardTab('services', { updateHash: false });
+      return true;
+    }
+    if (hash === 'home' || hash.startsWith('home/')) {
+      setBoardTab('notices', { updateHash: false });
+      return true;
+    }
+    return false;
+  }
+
+  let colonyServicesCache = null;
+  let colonyServicesEditing = false;
+
+  function colonyServicesPhoneHtml(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^\d+]/g, '');
+    if (!digits) return escapeHtml(phone);
+    return `<a href="tel:${escapeHtml(digits)}">${escapeHtml(phone)}</a>`;
+  }
+
+  function colonyServicesFieldDefs(kind) {
+    if (kind === 'staff') {
+      return [
+        { key: 'name', label: 'Name', placeholder: 'Staff name' },
+        { key: 'role', label: 'Role', placeholder: 'Watchman, gardener…' },
+        { key: 'responsibility', label: 'Responsibility', placeholder: 'What they handle', multiline: true },
+        { key: 'phone', label: 'Phone', placeholder: 'Mobile or gate phone' },
+        { key: 'hours', label: 'Hours / shift', placeholder: 'Timing' },
+        { key: 'notes', label: 'Notes', placeholder: 'Optional', multiline: true },
+      ];
+    }
+    if (kind === 'contacts') {
+      return [
+        { key: 'department', label: 'Department', placeholder: 'Water, electricity…' },
+        { key: 'forIssues', label: 'For issues', placeholder: 'When residents should call', multiline: true },
+        { key: 'contactName', label: 'Contact / office', placeholder: 'Person or helpline name' },
+        { key: 'phone', label: 'Phone', placeholder: 'Primary number' },
+        { key: 'altPhone', label: 'Alt phone', placeholder: 'Backup number' },
+        { key: 'hours', label: 'Hours', placeholder: 'Availability' },
+        { key: 'notes', label: 'Notes', placeholder: 'Optional', multiline: true },
+      ];
+    }
+    return [
+      { key: 'activity', label: 'Activity', placeholder: 'Water tanker, waste pickup…' },
+      { key: 'detail', label: 'Details', placeholder: 'What happens', multiline: true },
+      { key: 'when', label: 'When', placeholder: 'Day / time' },
+      { key: 'where', label: 'Where', placeholder: 'Location' },
+      { key: 'contact', label: 'Contact', placeholder: 'Who coordinates' },
+      { key: 'notes', label: 'Notes', placeholder: 'Optional', multiline: true },
+    ];
+  }
+
+  function colonyServicesEditorTarget(kind) {
+    return ({
+      staff: el('colonyStaffEditor'),
+      contacts: el('colonyContactsEditor'),
+      schedule: el('colonyScheduleEditor'),
+    })[kind];
+  }
+
+  function renderColonyServicesEditorRow(kind, row, idx) {
+    const fields = colonyServicesFieldDefs(kind);
+    const inputs = fields.map((f) => {
+      const val = escapeHtml(row[f.key] || '');
+      if (f.multiline) {
+        return `<label><span>${escapeHtml(f.label)}</span><textarea data-cs-field="${f.key}" rows="2" placeholder="${escapeHtml(f.placeholder || '')}">${val}</textarea></label>`;
+      }
+      return `<label><span>${escapeHtml(f.label)}</span><input data-cs-field="${f.key}" type="text" value="${val}" placeholder="${escapeHtml(f.placeholder || '')}"></label>`;
+    }).join('');
+    return `
+      <article class="colony-services-edit-row" data-cs-kind="${kind}" data-cs-id="${escapeHtml(row.id || '')}" data-cs-idx="${idx}">
+        <div class="colony-services-edit-fields">${inputs}</div>
+        <button type="button" class="btn ghost compact colony-services-remove" data-cs-remove="${kind}">Remove</button>
+      </article>`;
+  }
+
+  function renderColonyServicesEditor(data) {
+    ['staff', 'contacts', 'schedule'].forEach((kind) => {
+      const box = colonyServicesEditorTarget(kind);
+      if (!box) return;
+      const rows = Array.isArray(data[kind]) ? data[kind] : [];
+      box.innerHTML = rows.length
+        ? rows.map((row, idx) => renderColonyServicesEditorRow(kind, row, idx)).join('')
+        : '<p class="muted">No rows yet — add one.</p>';
+    });
+  }
+
+  function colonyServicesBlankRow(kind) {
+    const row = { id: `${kind}_${Math.random().toString(16).slice(2, 10)}` };
+    colonyServicesFieldDefs(kind).forEach((f) => { row[f.key] = ''; });
+    return row;
+  }
+
+  function readColonyServicesEditor() {
+    const out = { staff: [], contacts: [], schedule: [] };
+    ['staff', 'contacts', 'schedule'].forEach((kind) => {
+      const box = colonyServicesEditorTarget(kind);
+      if (!box) return;
+      box.querySelectorAll('.colony-services-edit-row').forEach((node) => {
+        const row = { id: node.getAttribute('data-cs-id') || '' };
+        node.querySelectorAll('[data-cs-field]').forEach((input) => {
+          row[input.getAttribute('data-cs-field')] = input.value.trim();
+        });
+        out[kind].push(row);
+      });
+    });
+    return out;
+  }
+
+  function setColonyServicesEditing(on) {
+    colonyServicesEditing = on;
+    const view = el('colonyServicesView');
+    const editor = el('colonyServicesEditor');
+    const editBtn = el('colonyServicesEditBtn');
+    if (view) view.hidden = on;
+    if (editor) editor.hidden = !on;
+    if (editBtn) editBtn.textContent = on ? 'Done' : 'Edit';
+  }
+
+  function renderColonyServicesView(data) {
+    const box = el('colonyServicesView');
+    if (!box || !data) return;
+    const staffCards = (data.staff || []).map((s) => `
+      <article class="colony-service-card">
+        <header class="colony-service-card-head">
+          <strong>${escapeHtml(s.role || 'Staff')}</strong>
+          ${s.name ? `<span class="colony-service-name">${escapeHtml(s.name)}</span>` : ''}
+        </header>
+        ${s.responsibility ? `<p>${escapeHtml(s.responsibility)}</p>` : ''}
+        <dl class="colony-service-meta">
+          ${s.phone ? `<div><dt>Phone</dt><dd>${colonyServicesPhoneHtml(s.phone)}</dd></div>` : ''}
+          ${s.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(s.hours)}</dd></div>` : ''}
+        </dl>
+        ${s.notes ? `<p class="muted colony-service-notes">${escapeHtml(s.notes)}</p>` : ''}
+      </article>
+    `).join('');
+    const contactCards = (data.contacts || []).map((c) => `
+      <article class="colony-service-card">
+        <header class="colony-service-card-head">
+          <strong>${escapeHtml(c.department || 'Contact')}</strong>
+        </header>
+        ${c.forIssues ? `<p class="colony-service-issue">${escapeHtml(c.forIssues)}</p>` : ''}
+        ${c.contactName ? `<p>${escapeHtml(c.contactName)}</p>` : ''}
+        <dl class="colony-service-meta">
+          ${c.phone ? `<div><dt>Phone</dt><dd>${colonyServicesPhoneHtml(c.phone)}</dd></div>` : ''}
+          ${c.altPhone ? `<div><dt>Alt</dt><dd>${colonyServicesPhoneHtml(c.altPhone)}</dd></div>` : ''}
+          ${c.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(c.hours)}</dd></div>` : ''}
+        </dl>
+        ${c.notes ? `<p class="muted colony-service-notes">${escapeHtml(c.notes)}</p>` : ''}
+      </article>
+    `).join('');
+    const scheduleCards = (data.schedule || []).map((s) => `
+      <article class="colony-service-card">
+        <header class="colony-service-card-head">
+          <strong>${escapeHtml(s.activity || 'Activity')}</strong>
+          ${s.when ? `<span class="colony-service-when">${escapeHtml(s.when)}</span>` : ''}
+        </header>
+        ${s.detail ? `<p>${escapeHtml(s.detail)}</p>` : ''}
+        <dl class="colony-service-meta">
+          ${s.where ? `<div><dt>Where</dt><dd>${escapeHtml(s.where)}</dd></div>` : ''}
+          ${s.contact ? `<div><dt>Contact</dt><dd>${escapeHtml(s.contact)}</dd></div>` : ''}
+        </dl>
+        ${s.notes ? `<p class="muted colony-service-notes">${escapeHtml(s.notes)}</p>` : ''}
+      </article>
+    `).join('');
+    box.innerHTML = `
+      <section class="colony-services-column">
+        <h4 class="colony-services-column-title">Society staff</h4>
+        <div class="colony-services-cards">${staffCards || '<p class="muted">No staff listed yet.</p>'}</div>
+      </section>
+      <section class="colony-services-column">
+        <h4 class="colony-services-column-title">Who to call</h4>
+        <div class="colony-services-cards">${contactCards || '<p class="muted">No contacts listed yet.</p>'}</div>
+      </section>
+      <section class="colony-services-column">
+        <h4 class="colony-services-column-title">Schedule</h4>
+        <div class="colony-services-cards">${scheduleCards || '<p class="muted">No schedule posted yet.</p>'}</div>
+      </section>`;
+    const status = el('colonyServicesStatus');
+    if (status) {
+      if (data.updatedAt) {
+        const by = data.updatedBy ? ` · ${data.updatedBy}` : '';
+        status.textContent = `Last updated ${formatIstDateTime(data.updatedAt)}${by}`;
+      } else {
+        status.textContent = '';
+      }
+    }
+  }
+
+  async function loadColonyServices() {
+    const view = el('colonyServicesView');
+    if (!view || !state.session) return;
+    try {
+      const data = await api('/api/rwa/colony-services');
+      colonyServicesCache = data.colonyServices || null;
+      renderColonyServicesView(colonyServicesCache);
+      if (colonyServicesEditing && colonyServicesCache) {
+        renderColonyServicesEditor(colonyServicesCache);
+      }
+    } catch (err) {
+      view.innerHTML = `<p class="muted">${escapeHtml(err.message || 'Could not load services')}</p>`;
+    }
+  }
+
+  async function saveColonyServices() {
+    const status = el('colonyServicesStatus');
+    if (status) status.textContent = 'Saving…';
+    try {
+      const payload = readColonyServicesEditor();
+      const data = await api('/api/rwa/colony-services', { method: 'PUT', body: JSON.stringify(payload) });
+      colonyServicesCache = data.colonyServices;
+      setColonyServicesEditing(false);
+      renderColonyServicesView(colonyServicesCache);
+      if (status) status.textContent = 'Saved.';
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Save failed';
+    }
+  }
+
+  function addColonyServicesRow(kind) {
+    const box = colonyServicesEditorTarget(kind);
+    if (!box) return;
+    const row = colonyServicesBlankRow(kind);
+    const empty = box.querySelector('.muted');
+    if (empty && !box.querySelector('.colony-services-edit-row')) {
+      box.innerHTML = '';
+    }
+    const idx = box.querySelectorAll('.colony-services-edit-row').length;
+    box.insertAdjacentHTML('beforeend', renderColonyServicesEditorRow(kind, row, idx));
   }
 
   let marketplaceCategories = {
@@ -9965,7 +10253,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       document.body.classList.remove('is-info-capture-guard');
       stopInfoWatermarkClockIfIdle();
     }
-    if (name === 'home') loadHome().catch(console.error);
+    if (name === 'home') {
+      loadHome().catch(console.error);
+      applyBoardRouteHash();
+    }
     if (name === 'dues') loadDues().catch((e) => { el('duesCard').innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`; });
     if (name === 'concerns') {
       loadMailbox().catch((e) => {
@@ -12137,9 +12428,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       switchPanel('parking');
       return;
     }
-    if (hash === 'dues' || hash === 'concerns' || hash === 'profile' || hash === 'home'
+    if (hash === 'dues' || hash === 'concerns' || hash === 'profile'
       || hash === 'directory' || hash === 'works' || hash === 'proceedings' || hash === 'admin') {
       switchPanel(hash);
+      return;
+    }
+    if (hash === 'home' || hash === 'home/services' || hash.startsWith('home/')) {
+      switchPanel('home');
+      applyBoardRouteHash();
+      return;
     }
   }
   window.addEventListener('hashchange', () => {
@@ -12565,6 +12862,39 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('noticeForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     await saveNotice({ asDraft: false });
+  });
+
+  el('colonyServicesEditBtn')?.addEventListener('click', () => {
+    if (!hasEntitlement('manage_notices') || !colonyServicesCache) return;
+    setBoardTab('services');
+    if (colonyServicesEditing) {
+      setColonyServicesEditing(false);
+      renderColonyServicesView(colonyServicesCache);
+      return;
+    }
+    renderColonyServicesEditor(colonyServicesCache);
+    setColonyServicesEditing(true);
+  });
+  el('colonyServicesSaveBtn')?.addEventListener('click', () => saveColonyServices().catch(console.error));
+  el('colonyServicesCancelBtn')?.addEventListener('click', () => {
+    setColonyServicesEditing(false);
+    if (colonyServicesCache) renderColonyServicesView(colonyServicesCache);
+    if (el('colonyServicesStatus')) el('colonyServicesStatus').textContent = '';
+  });
+  el('colonyServicesEditor')?.addEventListener('click', (event) => {
+    const addBtn = event.target.closest('[data-cs-add]');
+    if (addBtn) {
+      addColonyServicesRow(addBtn.getAttribute('data-cs-add'));
+      return;
+    }
+    const removeBtn = event.target.closest('[data-cs-remove]');
+    if (!removeBtn) return;
+    const row = removeBtn.closest('.colony-services-edit-row');
+    const box = row?.parentElement;
+    row?.remove();
+    if (box && !box.querySelector('.colony-services-edit-row')) {
+      box.innerHTML = '<p class="muted">No rows yet — add one.</p>';
+    }
   });
 
   el('noticeDraftBtn')?.addEventListener('click', async () => {
@@ -13101,6 +13431,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('infoCategoryFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
   el('infoStatusFilter')?.addEventListener('change', () => loadInfoCentre().catch(console.error));
 
+  document.querySelectorAll('.board-panel-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setBoardTab(btn.dataset.boardTab || 'notices');
+    });
+  });
+
   document.querySelectorAll('.works-panel-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       campaignsState.tab = btn.dataset.worksTab || 'works';
@@ -13334,6 +13670,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('templatesStatusFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
   el('templatesForm')?.addEventListener('submit', saveTemplate);
   el('templatesResetBtn')?.addEventListener('click', () => resetTemplatesForm());
+  el('templatesPaperSizeInput')?.addEventListener('change', syncTemplatesCustomSizeFields);
   el('templatesList')?.addEventListener('click', (event) => {
     const openBtn = event.target.closest('[data-tpl-open]');
     const downloadBtn = event.target.closest('[data-tpl-download]');
@@ -13705,6 +14042,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     paperSize: 'A4',
     orientation: 'portrait',
     background: 'watermark',
+    customWidthCm: 22,
+    customHeightCm: 10,
     colors: {
       heading: '#0b2a56',
       body: '#12233f',
@@ -13713,6 +14052,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       gold: '#c9a227',
     },
   };
+
+  function syncTemplatesCustomSizeFields() {
+    const custom = el('templatesPaperSizeInput')?.value === 'CUSTOM';
+    if (el('templatesCustomSizeWrap')) el('templatesCustomSizeWrap').hidden = !custom;
+  }
 
   function readTemplateOptionsFromForm() {
     const colors = {
@@ -13726,6 +14070,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       paperSize: el('templatesPaperSizeInput')?.value || 'A4',
       orientation: templatesOptionDefaults.orientation || 'portrait',
       background: el('templatesBackgroundInput')?.value || 'watermark',
+      customWidthCm: Number(el('templatesCustomW')?.value || templatesOptionDefaults.customWidthCm || 22),
+      customHeightCm: Number(el('templatesCustomH')?.value || templatesOptionDefaults.customHeightCm || 10),
       colors,
     };
   }
@@ -13734,11 +14080,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const opts = options && typeof options === 'object' ? options : templatesOptionDefaults;
     const colors = opts.colors || templatesOptionDefaults.colors;
     if (el('templatesPaperSizeInput')) el('templatesPaperSizeInput').value = opts.paperSize || 'A4';
+    if (el('templatesCustomW')) el('templatesCustomW').value = opts.customWidthCm ?? templatesOptionDefaults.customWidthCm ?? 22;
+    if (el('templatesCustomH')) el('templatesCustomH').value = opts.customHeightCm ?? templatesOptionDefaults.customHeightCm ?? 10;
     if (el('templatesBackgroundInput')) el('templatesBackgroundInput').value = opts.background || 'watermark';
     if (el('templatesColorHeading')) el('templatesColorHeading').value = colors.heading || '#0b2a56';
     if (el('templatesColorBody')) el('templatesColorBody').value = colors.body || '#12233f';
     if (el('templatesColorMuted')) el('templatesColorMuted').value = colors.muted || '#5a6a80';
     if (el('templatesColorAccent')) el('templatesColorAccent').value = colors.accent || '#1a6b3a';
+    syncTemplatesCustomSizeFields();
   }
 
   function templateIsHtml(doc) {
@@ -13829,8 +14178,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         ? new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
         : '';
       const opts = doc.options || {};
+      let paperLabel = opts.paperSize || 'A4';
+      if (opts.paperSize === 'E2210') paperLabel = '22 × 10 cm';
+      if (opts.paperSize === 'CUSTOM') {
+        const w = opts.customWidthCm || 22;
+        const h = opts.customHeightCm || 10;
+        paperLabel = `${w} × ${h} cm`;
+      }
       const optBits = [
-        opts.paperSize || 'A4',
+        paperLabel,
         opts.background === 'none' ? 'no watermark' : (opts.background === 'plain' ? 'plain' : 'watermark'),
       ].join(' · ');
       return `

@@ -129,17 +129,31 @@
   html.pad-mom .banner { margin-bottom: 0.8mm !important; padding: 1mm 3mm !important; }
 
   /* —— Envelope faces —— */
+  html.envelope-pad,
+  html.envelope-pad body {
+    width: var(--sheet-w) !important;
+    height: var(--sheet-h) !important;
+    max-width: var(--sheet-w) !important;
+    max-height: var(--sheet-h) !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
   html.envelope-pad .sheet {
-    height: calc(var(--sheet-h) - 3mm) !important;
-    min-height: calc(var(--sheet-h) - 3mm) !important;
-    max-height: calc(var(--sheet-h) - 3mm) !important;
+    width: var(--sheet-w) !important;
+    height: var(--sheet-h) !important;
+    min-height: var(--sheet-h) !important;
+    max-height: var(--sheet-h) !important;
+    max-width: var(--sheet-w) !important;
+    overflow: hidden !important;
     page-break-after: avoid !important;
+    page-break-inside: avoid !important;
   }
   html.envelope-pad .pad {
-    padding-top: 3mm !important;
-    padding-bottom: 2.5mm !important;
     box-sizing: border-box !important;
-    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
   }
   html.envelope-pad .foot {
     flex-shrink: 0 !important;

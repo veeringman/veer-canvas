@@ -43,7 +43,21 @@ TEMPLATE_EXT_MIME = {
 
 _STATIC_ALLOWED_PREFIXES = ("documents/", "assets/")
 
-PAPER_SIZES = ("A4", "A5", "A6", "Letter")
+PAPER_SIZES = ("A4", "A5", "A6", "Letter", "E2210", "CUSTOM")
+PAPER_SIZE_LABELS = {
+    "A4": "A4",
+    "A5": "A5",
+    "A6": "A6",
+    "Letter": "Letter",
+    "E2210": "22 × 10 cm (envelope)",
+    "CUSTOM": "Custom (cm)",
+}
+_PAPER_ALIASES = {
+    "22X10": "E2210",
+    "22CMX10CM": "E2210",
+}
+CUSTOM_W_CM = (8.0, 40.0, 22.0)
+CUSTOM_H_CM = (6.0, 30.0, 10.0)
 BACKGROUND_STYLES = ("watermark", "none", "plain")
 ORIENTATIONS = ("portrait", "landscape")
 
@@ -51,6 +65,8 @@ DEFAULT_TEMPLATE_OPTIONS: dict[str, Any] = {
     "paperSize": "A4",
     "orientation": "portrait",
     "background": "watermark",
+    "customWidthCm": CUSTOM_W_CM[2],
+    "customHeightCm": CUSTOM_H_CM[2],
     "colors": {
         "heading": "#0b2a56",
         "body": "#12233f",
@@ -80,11 +96,11 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
     {
         "id": "tpl-mhws-envelope",
         "title": "Official Envelope",
-        "description": "Printable envelope face on India-standard C-series stock: C6 holds A6, C5 holds A5, C4 holds A4. Return address pre-filled; type the recipient before printing.",
+        "description": "Printable envelope face that scales to the stock: 22×10 cm, C-series (C6/C5/C4), or a custom width × height in cm. Return address pre-filled; type the recipient before printing.",
         "category": "envelope",
-        "tags": ["envelope", "c6", "c5", "c4", "a6", "print", "official"],
+        "tags": ["envelope", "22x10", "custom", "c6", "c5", "c4", "print", "official"],
         "static_path": "documents/mhws-envelope-pad.html",
-        "options": {"paperSize": "A5", "orientation": "landscape", "background": "watermark"},
+        "options": {"paperSize": "E2210", "orientation": "landscape", "background": "watermark"},
     },
     {
         "id": "tpl-cash-receipt",
@@ -173,6 +189,24 @@ def _hex_color(raw: Any, fallback: str) -> str:
     return fallback
 
 
+def _cm_value(raw: Any, bounds: tuple[float, float, float]) -> float:
+    lo, hi, default = bounds
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if n != n:  # NaN
+        return default
+    return round(min(hi, max(lo, n)), 1)
+
+
+def _envelope_scale(width_mm: float, height_mm: float) -> tuple[float, float]:
+    """Fit the 220×100 mm landscape face into the requested stock (no overflow)."""
+    face_w = max(width_mm, height_mm)
+    face_h = min(width_mm, height_mm)
+    return face_w / 220.0, face_h / 100.0
+
+
 def normalize_options(raw: Any = None) -> dict[str, Any]:
     base = json.loads(json.dumps(DEFAULT_TEMPLATE_OPTIONS))
     data: dict[str, Any] = {}
@@ -190,6 +224,7 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         paper = "Letter"
     else:
         paper = paper.upper()
+    paper = _PAPER_ALIASES.get(paper, paper)
     if paper not in PAPER_SIZES:
         paper = base["paperSize"]
     orientation = str(data.get("orientation") or base.get("orientation") or "portrait").strip().lower()
@@ -203,18 +238,29 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         key: _hex_color(colors_in.get(key), fallback)
         for key, fallback in base["colors"].items()
     }
-    return {"paperSize": paper, "orientation": orientation, "background": bg, "colors": colors}
+    return {
+        "paperSize": paper,
+        "orientation": orientation,
+        "background": bg,
+        "customWidthCm": _cm_value(data.get("customWidthCm"), CUSTOM_W_CM),
+        "customHeightCm": _cm_value(data.get("customHeightCm"), CUSTOM_H_CM),
+        "colors": colors,
+    }
 
 
 def option_presets() -> dict[str, Any]:
     return {
-        "paperSizes": [{"id": s, "label": s} for s in PAPER_SIZES],
+        "paperSizes": [{"id": s, "label": PAPER_SIZE_LABELS.get(s, s)} for s in PAPER_SIZES],
         "backgrounds": [
             {"id": "watermark", "label": "Watermark"},
             {"id": "none", "label": "No watermark"},
             {"id": "plain", "label": "Plain white"},
         ],
         "defaults": DEFAULT_TEMPLATE_OPTIONS,
+        "customSize": {
+            "widthCm": {"min": CUSTOM_W_CM[0], "max": CUSTOM_W_CM[1], "default": CUSTOM_W_CM[2]},
+            "heightCm": {"min": CUSTOM_H_CM[0], "max": CUSTOM_H_CM[1], "default": CUSTOM_H_CM[2]},
+        },
     }
 
 
@@ -678,15 +724,36 @@ def _runtime_options_css(
     if orient == "landscape":
         sheet_w, sheet_min_h = sheet_min_h, sheet_w
     page_size = f"{paper if paper != 'Letter' else 'letter'} {orient}"
+    env_scale = 1.0
+    fit_x, fit_y = 1.0, 1.0
     if envelope:
-        env_key = {"A6": "C6", "A5": "C5", "A4": "C4", "C6": "C6", "C5": "C5", "C4": "C4"}.get(paper, "C5")
-        # ISO C-series (India-standard envelope stock), landscape face.
+        env_key = {
+            "A6": "C6",
+            "A5": "C5",
+            "A4": "C4",
+            "C6": "C6",
+            "C5": "C5",
+            "C4": "C4",
+            "E2210": "E2210",
+            "22X10": "E2210",
+            "CUSTOM": "CUSTOM",
+        }.get(paper, "E2210")
         env_dims = {
-            "C6": ("162mm", "114mm"),  # holds A6
-            "C5": ("229mm", "162mm"),  # holds A5
-            "C4": ("324mm", "229mm"),  # holds A4
+            "C6": (162.0, 114.0),
+            "C5": (229.0, 162.0),
+            "C4": (324.0, 229.0),
+            "E2210": (220.0, 100.0),
         }
-        sheet_w, sheet_min_h = env_dims[env_key]
+        if env_key == "CUSTOM":
+            w_cm = _cm_value(options.get("customWidthCm"), CUSTOM_W_CM)
+            h_cm = _cm_value(options.get("customHeightCm"), CUSTOM_H_CM)
+            w_mm, h_mm = w_cm * 10.0, h_cm * 10.0
+        else:
+            w_mm, h_mm = env_dims.get(env_key, env_dims["E2210"])
+        face_w, face_h = max(w_mm, h_mm), min(w_mm, h_mm)
+        fit_x, fit_y = _envelope_scale(face_w, face_h)
+        env_scale = min(fit_x, fit_y)
+        sheet_w, sheet_min_h = f"{face_w:g}mm", f"{face_h:g}mm"
         page_size = f"{sheet_w} {sheet_min_h}"
     hide_wm = bg in {"none", "plain"}
     if hide_wm:
@@ -710,7 +777,31 @@ def _runtime_options_css(
         )
     plain_css = "body { background: #fff !important; }" if bg == "plain" else ""
     sheet_css = ""
-    if not envelope:
+    if envelope:
+        sheet_css = f"""
+  :root, html {{
+    --sheet-w: {sheet_w};
+    --sheet-h: {sheet_min_h};
+    --fit-x: {fit_x:.4f};
+    --fit-y: {fit_y:.4f};
+    --env-scale: {env_scale:.4f};
+  }}
+  @page {{ size: {page_size}; margin: 0; }}
+  html.envelope-pad, html.envelope-pad body {{
+    width: {sheet_w} !important;
+    height: {sheet_min_h} !important;
+    max-width: {sheet_w} !important;
+    max-height: {sheet_min_h} !important;
+    overflow: hidden !important;
+  }}
+  html.envelope-pad .sheet {{
+    width: {sheet_w} !important;
+    height: {sheet_min_h} !important;
+    min-height: {sheet_min_h} !important;
+    max-height: {sheet_min_h} !important;
+    overflow: hidden !important;
+  }}"""
+    else:
         sheet_css = f"""
   .sheet {{
     width: {sheet_w};
@@ -924,9 +1015,16 @@ def inject_template_runtime(html: str, *, options: dict[str, Any], conn: sqlite3
         html = head_inject + html
     paper = str(opts.get("paperSize") or "A4")
     if is_envelope:
-        paper = {"A6": "C6", "A5": "C5", "A4": "C4"}.get(paper, paper)
-        if paper not in {"C4", "C5", "C6"}:
-            paper = "C5"
+        paper = {
+            "A6": "C6",
+            "A5": "C5",
+            "A4": "C4",
+            "22X10": "E2210",
+        }.get(paper, paper)
+        if paper not in {"C4", "C5", "C6", "E2210", "CUSTOM"}:
+            paper = "E2210"
+        html = _set_html_attr(html, "data-custom-w", f"{opts.get('customWidthCm') or CUSTOM_W_CM[2]:g}")
+        html = _set_html_attr(html, "data-custom-h", f"{opts.get('customHeightCm') or CUSTOM_H_CM[2]:g}")
     html = _set_html_attr(html, "data-paper-size", paper)
     return html
 

@@ -631,6 +631,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     except Exception:
         pass
     try:
+        import rwa_colony_services as _rwa_colony_services
+
+        _rwa_colony_services.ensure_colony_services_seed(conn)
+    except Exception:
+        pass
+    try:
         import rwa_vault as _rwa_vault
 
         _rwa_vault.ensure_vault_tables(conn)

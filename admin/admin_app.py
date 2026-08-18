@@ -3817,6 +3817,37 @@ def api_rwa_public_landing():
         conn.close()
 
 
+@app.route("/api/rwa/colony-services", methods=["GET", "PUT"])
+def api_rwa_colony_services():
+    """Residents: staff, utility contacts, and activity schedule on the colony board."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            import rwa_colony_services
+
+            return jsonify({"ok": True, "colonyServices": rwa_colony_services.get_colony_services(conn)})
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_notices"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        import rwa_colony_services
+
+        payload = request.get_json(force=True, silent=True) or {}
+        resident = sess["resident"]
+        data = rwa_colony_services.update_colony_services(
+            conn,
+            payload,
+            actor_house_id=resident.get("houseId"),
+            actor_name=resident.get("name"),
+        )
+        return jsonify({"ok": True, "colonyServices": data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/notices", methods=["GET"])
 def api_rwa_notices():
     conn = _rwa_conn()

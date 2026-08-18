@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260818theme2">
+  <link rel="stylesheet" href="portal.css?v=20260818env3">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260817face2" defer></script>
-  <script src="portal.js?v=20260818theme2" defer></script>
+  <script src="portal.js?v=20260818env3" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -400,27 +400,72 @@
 
     <main class="app-main">
       <section class="panel is-active" id="panel-home">
-        <header class="panel-head panel-head-lang">
-          <div class="panel-head-copy">
-            <h2>Colony board</h2>
-            <p class="muted">Pinned notices and updates from the Executive Committee.</p>
-          </div>
-          <div class="lang-toggle" data-lang-section="notices" role="group" aria-label="Notice language">
-            <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
-            <button type="button" class="lang-btn" data-lang="hi" title="हिन्दी" aria-pressed="false"><span class="lang-glyph" aria-hidden="true">अ</span><span class="lang-label">हिं</span></button>
-          </div>
-        </header>
-        <div class="lang-section-wrap" data-lang-section="notices">
-          <div id="noticeList" class="notice-list"></div>
-          <div class="lang-overlay" id="noticesLangOverlay" hidden>
-            <div class="lang-overlay-scrim" data-lang-close="notices" aria-hidden="true"></div>
-            <div class="lang-overlay-panel" role="dialog" aria-label="Hindi notices">
-              <header class="lang-overlay-head">
-                <h3>सूचनाएँ · Hindi</h3>
-                <button type="button" class="btn ghost compact" data-lang-close="notices">Close · बंद करें</button>
-              </header>
-              <div class="lang-overlay-body" id="noticesLangOverlayBody"></div>
+        <header class="board-head">
+          <div class="board-head-row">
+            <h2 class="board-head-title">Notice &amp; services</h2>
+            <div class="board-panel-tabs" role="tablist" aria-label="Notice and services">
+              <button type="button" class="board-panel-tab is-active" data-board-tab="notices" aria-selected="true">Notices</button>
+              <button type="button" class="board-panel-tab" data-board-tab="services" aria-selected="false">Services</button>
             </div>
+            <div class="board-head-tools">
+              <div class="lang-toggle board-lang-toggle" id="boardLangToggle" data-lang-section="notices" role="group" aria-label="Notice language">
+                <button type="button" class="lang-btn is-active" data-lang="en" title="English" aria-pressed="true"><span class="lang-glyph" aria-hidden="true">A</span><span class="lang-label">EN</span></button>
+                <button type="button" class="lang-btn" data-lang="hi" title="हिन्दी" aria-pressed="false"><span class="lang-glyph" aria-hidden="true">अ</span><span class="lang-label">हिं</span></button>
+              </div>
+              <button type="button" class="btn ghost compact board-edit-btn" id="colonyServicesEditBtn" data-entitlement="manage_notices" hidden>Edit</button>
+            </div>
+          </div>
+          <p class="muted board-head-lead" id="boardPanelLead">EC notices and pinned updates.</p>
+        </header>
+
+        <div id="boardTabNotices" class="board-tab-pane">
+          <div class="lang-section-wrap" data-lang-section="notices">
+            <div id="noticeList" class="notice-list"></div>
+            <div class="lang-overlay" id="noticesLangOverlay" hidden>
+              <div class="lang-overlay-scrim" data-lang-close="notices" aria-hidden="true"></div>
+              <div class="lang-overlay-panel" role="dialog" aria-label="Hindi notices">
+                <header class="lang-overlay-head">
+                  <h3>सूचनाएँ · Hindi</h3>
+                  <button type="button" class="btn ghost compact" data-lang-close="notices">Close · बंद करें</button>
+                </header>
+                <div class="lang-overlay-body" id="noticesLangOverlayBody"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="boardTabServices" class="board-tab-pane" hidden>
+          <div class="colony-services-wrap" id="colonyServicesWrap">
+            <div id="colonyServicesView" class="colony-services-grid"></div>
+            <div id="colonyServicesEditor" class="colony-services-editor" data-entitlement="manage_notices" hidden>
+              <p class="muted colony-services-editor-lead">Update staff roles, helpline numbers, and recurring schedules. Residents see the saved version here.</p>
+              <div class="colony-services-editor-section">
+                <header class="colony-services-editor-head">
+                  <h4>Society staff</h4>
+                  <button type="button" class="btn ghost compact" data-cs-add="staff">Add staff</button>
+                </header>
+                <div id="colonyStaffEditor" class="colony-services-rows"></div>
+              </div>
+              <div class="colony-services-editor-section">
+                <header class="colony-services-editor-head">
+                  <h4>Utility &amp; emergency contacts</h4>
+                  <button type="button" class="btn ghost compact" data-cs-add="contacts">Add contact</button>
+                </header>
+                <div id="colonyContactsEditor" class="colony-services-rows"></div>
+              </div>
+              <div class="colony-services-editor-section">
+                <header class="colony-services-editor-head">
+                  <h4>Activities &amp; schedule</h4>
+                  <button type="button" class="btn ghost compact" data-cs-add="schedule">Add item</button>
+                </header>
+                <div id="colonyScheduleEditor" class="colony-services-rows"></div>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn primary" id="colonyServicesSaveBtn">Save changes</button>
+                <button type="button" class="btn ghost" id="colonyServicesCancelBtn">Cancel</button>
+              </div>
+            </div>
+            <p class="muted" id="colonyServicesStatus"></p>
           </div>
         </div>
       </section>
@@ -2709,7 +2754,16 @@
                   <option value="A5">A5</option>
                   <option value="A6">A6</option>
                   <option value="Letter">Letter</option>
+                  <option value="E2210">22 × 10 cm (envelope)</option>
+                  <option value="CUSTOM">Custom (cm)</option>
                 </select>
+              </label>
+              <label class="span-2" id="templatesCustomSizeWrap" hidden>Custom size (width × height, cm)
+                <span class="tpl-custom-size">
+                  <input type="number" id="templatesCustomW" min="8" max="40" step="0.1" value="22" inputmode="decimal" aria-label="Width in centimetres">
+                  <span aria-hidden="true">×</span>
+                  <input type="number" id="templatesCustomH" min="6" max="30" step="0.1" value="10" inputmode="decimal" aria-label="Height in centimetres">
+                </span>
               </label>
               <label>Background
                 <select id="templatesBackgroundInput">

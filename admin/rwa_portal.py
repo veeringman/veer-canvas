@@ -687,6 +687,12 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
             repair_missing_info_files(conn, site_root)
         except Exception:
             pass
+        try:
+            import rwa_colony_services as _rwa_colony_services
+
+            _rwa_colony_services.ensure_colony_services_seed(conn)
+        except Exception:
+            pass
         migrate_roman_plot_ids(conn)
         ensure_superadmin_account(conn)
         try:
@@ -6480,6 +6486,8 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^POST /api/rwa/otp/request$"), "Request OTP"),
     (re.compile(r"^POST /api/rwa/otp/verify$"), "Verify OTP / sign in"),
     (re.compile(r"^GET /api/rwa/session$"), "Session check"),
+    (re.compile(r"^GET /api/rwa/colony-services$"), "View colony services"),
+    (re.compile(r"^PUT /api/rwa/colony-services$"), "Update colony services"),
     (re.compile(r"^GET /api/rwa/notices$"), "View notices"),
     (re.compile(r"^POST /api/rwa/notices$"), "Create notice"),
     (re.compile(r"^PATCH /api/rwa/notices/[^/]+$"), "Update notice"),
