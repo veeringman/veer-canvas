@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260818env3">
+  <link rel="stylesheet" href="portal.css?v=20260818inbox1">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260817face2" defer></script>
-  <script src="portal.js?v=20260818env3" defer></script>
+  <script src="portal.js?v=20260818inbox1" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -364,6 +364,13 @@
           </div>
         </div>
         <div class="app-top-actions">
+          <button type="button" class="notify-bell" id="notifyBellBtn" aria-label="Notifications" aria-haspopup="dialog" aria-expanded="false" aria-controls="notifyDialog" title="Notifications">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6.2 9.6a5.8 5.8 0 0 1 11.6 0c0 4.2 1.4 5.5 1.4 5.5H4.8s1.4-1.3 1.4-5.5"/>
+              <path d="M10 18.4a2 2 0 0 0 4 0"/>
+            </svg>
+            <span class="notify-bell-mark" id="notifyBellMark" hidden></span>
+          </button>
           <a class="btn ghost compact superadmin-only" href="/admin/" title="VeerCanvas content CMS" id="cmsNavLink" hidden>CMS</a>
           <button type="button" class="btn ghost compact" id="logoutBtn">Sign out</button>
         </div>
@@ -397,6 +404,17 @@
         </nav>
       </div>
     </header>
+
+    <dialog id="notifyDialog" class="notify-dialog" aria-labelledby="notifyDialogTitle">
+      <header class="dialog-head">
+        <div>
+          <h3 id="notifyDialogTitle">Notifications</h3>
+          <p class="muted" id="notifyDialogLead">Alerts for this plot — notices, dues, mailbox, parking, and votes.</p>
+        </div>
+        <button type="button" class="btn ghost compact dialog-close" id="notifyDialogCloseBtn" aria-label="Close">✕</button>
+      </header>
+      <div id="notifyDialogBody" class="notify-dialog-body"></div>
+    </dialog>
 
     <main class="app-main">
       <section class="panel is-active" id="panel-home">
@@ -1618,8 +1636,47 @@
               <button type="button" class="btn ghost compact" id="proceedingsPrintBtn">Print</button>
             </div>
           </div>
+          <div id="proceedingsVoteBar" class="proceedings-vote-bar admin-only" data-entitlement="manage_proceedings" hidden></div>
           <article id="proceedingsDetailBody" class="proceedings-page"></article>
         </div>
+
+        <dialog id="proceedingsVoteDialog" class="campaign-contribute-dialog" aria-labelledby="proceedingsVoteTitle">
+          <form id="proceedingsVoteForm" method="dialog" class="stack">
+            <header class="dialog-head">
+              <h3 id="proceedingsVoteTitle">Send voting request</h3>
+              <button type="button" class="btn ghost compact dialog-close" id="proceedingsVoteCloseBtn" aria-label="Close">✕</button>
+            </header>
+            <p class="muted" id="proceedingsVoteResolutionText"></p>
+            <label>Send to
+              <select id="proceedingsVoteAudience">
+                <option value="members">All members</option>
+                <option value="attendees">Meeting attendees</option>
+              </select>
+            </label>
+            <label>Pass when
+              <select id="proceedingsVoteCriteria">
+                <option value="simple_majority">Simple majority of votes cast</option>
+                <option value="two_thirds_cast">Two-thirds of votes cast</option>
+                <option value="two_thirds_eligible">Two-thirds of those invited</option>
+                <option value="three_fifths_cast">Three-fifths of votes cast</option>
+              </select>
+            </label>
+            <label>Deadline (optional)
+              <input id="proceedingsVoteDeadline" type="date">
+            </label>
+            <label>Note to members (optional)
+              <textarea id="proceedingsVoteNote" rows="2" maxlength="800" placeholder="Context, or why this needs circulation after the meeting…"></textarea>
+            </label>
+            <p class="muted" id="proceedingsVotePreviewStatus">Loading who will be invited…</p>
+            <div id="proceedingsVoteVoterList" class="proceedings-vote-voters" hidden></div>
+            <p class="muted">Each invited plot gets one vote. The request is emailed with a public page link, shown in the members area, and pushed to devices that have alerts enabled. The first response is recorded.</p>
+            <div class="btn-row">
+              <button type="submit" class="btn primary" id="proceedingsVoteSubmitBtn">Send voting request</button>
+              <button type="button" class="btn ghost" id="proceedingsVoteCancelBtn">Cancel</button>
+            </div>
+            <p class="muted" id="proceedingsVoteStatus"></p>
+          </form>
+        </dialog>
 
         <div class="roster-block admin-only proceedings-manage" id="proceedingsManageBlock" data-entitlement="manage_proceedings" hidden>
           <div class="roster-toolbar">
@@ -2146,7 +2203,7 @@
         <div class="roster-block" id="profileNotificationsBlock">
           <header class="panel-head">
             <h3>Notifications</h3>
-            <p class="muted">Push alerts on this device for messages, notices, concerns, dues, and certificate requests. On iPhone, add this site to your Home Screen first.</p>
+            <p class="muted">Push alerts on this device for messages, notices, concerns, dues, certificates, and resolution votes. On iPhone, add this site to your Home Screen first.</p>
           </header>
           <div class="stack narrow">
             <p class="muted" id="pushStatusText">Checking…</p>
@@ -2165,6 +2222,7 @@
               <label class="check"><input type="checkbox" data-pref="no_dues" checked> No Dues certificate</label>
               <label class="check"><input type="checkbox" data-pref="no_objection" checked> No Objection certificate</label>
               <label class="check"><input type="checkbox" data-pref="parking" checked> Parking pass</label>
+              <label class="check"><input type="checkbox" data-pref="resolutions" checked> Resolution votes</label>
             </fieldset>
             <p class="muted" id="pushCertPrefsHint">Issuers with the No Dues / No Objection entitlement are alerted when a resident raises a request. Residents are alerted when a certificate is issued, rejected, or sent back.</p>
             <button type="button" class="btn secondary compact" id="pushPrefsSaveBtn">Save preferences</button>

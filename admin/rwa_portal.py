@@ -64,6 +64,7 @@ from init_rwa_db import (  # noqa: E402
     ensure_work_quote_tables,
     ensure_colony_campaigns_tables,
     ensure_meeting_proceedings_table,
+    ensure_resolution_votes_tables,
     migrate_roman_plot_ids,
     ensure_otp_pending_columns,
     ensure_resident_profile_columns,
@@ -659,6 +660,7 @@ def open_rwa(site_root: pathlib.Path) -> sqlite3.Connection:
         ensure_work_quote_tables(conn)
         ensure_colony_campaigns_tables(conn)
         ensure_meeting_proceedings_table(conn)
+        ensure_resolution_votes_tables(conn)
         ensure_entitlements_schema(conn)
         ensure_report_templates_table(conn)
         ensure_bilingual_content_columns(conn)
@@ -4084,6 +4086,37 @@ def _public_origin_for_share(site_root: pathlib.Path | None = None) -> str:
     ).rstrip("/")
 
 
+def branded_email_html(*, text_body: str, site_root: pathlib.Path | None = None) -> str:
+    """HTML counterpart for colony emails — seal plus the same text as the plaintext part."""
+    origin = _public_origin_for_share(site_root)
+    logo = f"{origin}/assets/mhws-logo/mhws-logo-web-256.png"
+    body_html = html.escape(text_body or "").replace("\n", "<br>\n")
+    return (
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
+        "<body style=\"margin:0;background:#f3f6fa;padding:16px;"
+        "font-family:Georgia,'Times New Roman',serif;color:#1a2236;\">"
+        "<div style=\"max-width:560px;margin:0 auto;background:#ffffff;"
+        "border-radius:12px;padding:24px 20px;border:1px solid #e6e2d8;\">"
+        "<div style=\"text-align:center;margin-bottom:18px;\">"
+        f"<img src=\"{html.escape(logo)}\" alt=\"Mandi Housing Welfare Society\" "
+        "width=\"72\" height=\"72\" style=\"display:block;margin:0 auto 8px;\">"
+        "<p style=\"margin:0;font-size:13px;color:#64748b;font-family:system-ui,sans-serif;\">"
+        "Housing Colony Sanyard · Mandi Housing Welfare Society</p></div>"
+        f"<div style=\"font-size:15px;line-height:1.55;\">{body_html}</div>"
+        "</div></body></html>"
+    )
+
+
+def add_branded_html_alternative(
+    msg: EmailMessage,
+    *,
+    text_body: str,
+    site_root: pathlib.Path | None = None,
+) -> None:
+    msg.add_alternative(branded_email_html(text_body=text_body, site_root=site_root), subtype="html")
+
+
 def _sync_info_share_card(
     conn: sqlite3.Connection,
     site_root: pathlib.Path,
@@ -4767,6 +4800,7 @@ def send_quote_invite_email(
         msg["To"] = to_email
         msg["Reply-To"] = cfg["from"]
         msg.set_content(body)
+        add_branded_html_alternative(msg, text_body=body, site_root=site_root)
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=25) as smtp:
             smtp.ehlo()
             smtp.starttls()

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resolution vote — Housing Colony Sanyard</title>
+  <meta name="theme-color" content="#15233f">
+  <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --primary: #1a4f7a;
+      --navy: #15233f;
+      --gold: #c4a15a;
+      --surface: #ffffff;
+      --bg: #f3f6fa;
+      --text: #1a2236;
+      --muted: #64748b;
+      --radius: 12px;
+      --ok: #1a6b45;
+      --no: #b91c1c;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+    html[lang="hi"] body { font-family: "Noto Sans Devanagari", Inter, system-ui, sans-serif; }
+    .page { width: 100%; max-width: 560px; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .brand picture, .brand img { display: block; }
+    .brand-line { margin: 0; font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+    .lang-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      padding: 0.18rem;
+      border-radius: 999px;
+      border: 1px solid rgba(196, 161, 90, 0.55);
+      background: rgba(255, 252, 246, 0.95);
+    }
+    .lang-btn {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      min-width: 2.4rem;
+      height: 2rem;
+      padding: 0 0.55rem;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+    }
+    .lang-btn.is-active { background: var(--navy); color: #f7f3eb; }
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 1.25rem;
+    }
+    h1 { margin: 0 0 0.35rem; font-size: 1.25rem; }
+    .meta { color: var(--muted); font-size: 0.86rem; margin: 0 0 0.75rem; }
+    .resolution {
+      margin: 0.5rem 0 1rem;
+      padding: 0.85rem 0.9rem;
+      background: rgba(26,79,122,0.06);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .note {
+      margin: 0.75rem 0;
+      padding: 0.65rem 0.75rem;
+      background: #fff8e8;
+      border-radius: 8px;
+      font-size: 0.88rem;
+    }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-top: 1rem; }
+    .btn {
+      padding: 0.75rem;
+      border: 0;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn.accept { background: var(--ok); color: #fff; }
+    .btn.reject { background: var(--no); color: #fff; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .msg { margin-top: 0.65rem; font-size: 0.86rem; color: var(--muted); }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--no); }
+    .loading { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+    .done-box {
+      padding: 0.85rem;
+      background: rgba(26,107,69,0.08);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .closed-box {
+      padding: 0.85rem;
+      background: rgba(26,79,122,0.08);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="brand">
+      <picture>
+        <source type="image/webp" srcset="assets/mhws-logo/mhws-logo-web-256.webp">
+        <img src="assets/mhws-logo/mhws-logo-web-256.png" width="72" height="72" alt="Mandi Housing Welfare Society" decoding="async">
+      </picture>
+      <p class="brand-line" id="brandLine">Housing Colony Sanyard · Mandi Housing Welfare Society</p>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" class="lang-btn" data-lang="hi" aria-pressed="false">हिं</button>
+      </div>
+    </header>
+    <div class="card" id="root"><p class="loading">Loading ballot…</p></div>
+  </div>
+  <script>
+    (function () {
+      const STRINGS = {
+        en: {
+          brand: "Housing Colony Sanyard · Mandi Housing Welfare Society",
+          loading: "Loading ballot…",
+          missingToken: "This voting link is missing a token.",
+          invalidLink: "Invalid or expired voting link",
+          heading: "Resolution",
+          plot: "Plot",
+          recorded: "Your first response has been recorded. Later votes from this link are ignored.",
+          outcome: "Outcome",
+          votesFor: "For",
+          votesAgainst: "against",
+          closed: "Voting is closed.",
+          deadline: "Deadline",
+          instruction: "Accept or reject. The first response from this plot is recorded.",
+          accept: "Accept",
+          reject: "Reject",
+          recording: "Recording…",
+          recordFail: "Could not record vote",
+          loadFail: "Could not load",
+          accepted: "Accepted",
+          rejected: "Rejected",
+        },
+        hi: {
+          brand: "हाउसिंग कॉलोनी सनयार्ड · मंडी हाउसिंग वेलफेयर सोसाइटी",
+          loading: "मतपत्र लोड हो रहा है…",
+          missingToken: "इस मतदान लिंक में टोकन नहीं है।",
+          invalidLink: "अमान्य या समाप्त मतदान लिंक",
+          heading: "प्रस्ताव",
+          plot: "प्लाट",
+          recorded: "आपकी पहली प्रतिक्रिया दर्ज हो चुकी है। इस लिंक से बाद के मत नहीं लिए जाएँगे।",
+          outcome: "परिणाम",
+          votesFor: "पक्ष",
+          votesAgainst: "विपक्ष",
+          closed: "मतदान बंद है।",
+          deadline: "अंतिम तिथि",
+          instruction: "स्वीकार या अस्वीकार करें। इस प्लाट से पहली प्रतिक्रिया दर्ज होती है।",
+          accept: "स्वीकार",
+          reject: "अस्वीकार",
+          recording: "दर्ज किया जा रहा है…",
+          recordFail: "मत दर्ज नहीं हो सका",
+          loadFail: "लोड नहीं हो सका",
+          accepted: "स्वीकार किया",
+          rejected: "अस्वीकार किया",
+        },
+      };
+      const params = new URLSearchParams(location.search);
+      const token = (params.get("t") || params.get("token") || "").trim();
+      const root = document.getElementById("root");
+      const LANG_KEY = "hbc-sanyard-public-lang";
+      let lang = "en";
+      let lastData = null;
+      let lastError = "";
+
+      try {
+        lang = localStorage.getItem(LANG_KEY) === "hi" ? "hi" : "en";
+      } catch (_e) {
+        lang = "en";
+      }
+
+      function t(key) {
+        return (STRINGS[lang] || STRINGS.en)[key] || STRINGS.en[key] || key;
+      }
+
+      function esc(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function choiceLabel(choice) {
+        if (choice === "accept") return t("accepted");
+        if (choice === "reject") return t("rejected");
+        return "";
+      }
+
+      function applyLangChrome() {
+        document.documentElement.lang = lang === "hi" ? "hi" : "en";
+        const brand = document.getElementById("brandLine");
+        if (brand) brand.textContent = t("brand");
+        document.querySelectorAll(".lang-btn").forEach(function (btn) {
+          const on = btn.getAttribute("data-lang") === lang;
+          btn.classList.toggle("is-active", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+
+      function setLang(next) {
+        lang = next === "hi" ? "hi" : "en";
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_e) {}
+        applyLangChrome();
+        if (lastData) render(lastData);
+        else if (lastError) showError(lastError);
+      }
+
+      function showError(message) {
+        lastError = message;
+        lastData = null;
+        root.innerHTML = '<p class="msg err">' + esc(message) + "</p>";
+      }
+
+      async function load() {
+        applyLangChrome();
+        if (!token) {
+          showError(t("missingToken"));
+          return;
+        }
+        root.innerHTML = '<p class="loading">' + esc(t("loading")) + "</p>";
+        const res = await fetch("/api/rwa/public/votes/" + encodeURIComponent(token));
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          showError(data.error || t("invalidLink"));
+          return;
+        }
+        render(data);
+      }
+
+      function render(data) {
+        lastData = data;
+        lastError = "";
+        const meeting = data.meeting || {};
+        const vote = data.vote || {};
+        const ballot = data.ballot || {};
+        document.title = t("heading") + " " + (vote.resolutionNo || "") + " — Housing Colony Sanyard";
+        const heading = t("heading") + " " + esc(vote.resolutionNo || "");
+        const metaBits = [
+          meeting.meetingTypeLabel,
+          meeting.title,
+          meeting.meetingDate,
+          ballot.plotLabel ? t("plot") + " " + ballot.plotLabel : "",
+        ].filter(Boolean).join(" · ");
+
+        if (ballot.choice) {
+          root.innerHTML =
+            "<h1>" + heading + "</h1>" +
+            '<p class="meta">' + esc(metaBits) + "</p>" +
+            '<div class="resolution">' + esc(vote.resolutionText || "") + "</div>" +
+            '<div class="done-box"><strong>' + esc(choiceLabel(ballot.choice)) + "</strong>" +
+            "<p style=\"margin:0.4rem 0 0\">" + esc(t("recorded")) + "</p></div>" +
+            (vote.closed && vote.result
+              ? '<p class="meta" style="margin-top:0.85rem">' + esc(t("outcome")) + ': <strong>' + esc(vote.statusLabel) + "</strong>" +
+                (vote.votesFor != null ? " · " + esc(t("votesFor")) + " " + vote.votesFor + ", " + esc(t("votesAgainst")) + " " + vote.votesAgainst : "") +
+                "</p>"
+              : "");
+          return;
+        }
+
+        if (vote.closed) {
+          root.innerHTML =
+            "<h1>" + heading + "</h1>" +
+            '<p class="meta">' + esc(metaBits) + "</p>" +
+            '<div class="resolution">' + esc(vote.resolutionText || "") + "</div>" +
+            '<div class="closed-box">' + esc(t("closed")) + " " + esc(vote.statusLabel || "") + "</div>";
+          return;
+        }
+
+        root.innerHTML =
+          "<h1>" + heading + "</h1>" +
+          '<p class="meta">' + esc(metaBits) + "</p>" +
+          '<div class="resolution">' + esc(vote.resolutionText || "") + "</div>" +
+          (vote.note ? '<div class="note">' + esc(vote.note) + "</div>" : "") +
+          (vote.deadline ? '<p class="meta">' + esc(t("deadline")) + ": " + esc(String(vote.deadline).slice(0, 10)) + "</p>" : "") +
+          '<p class="meta">' + esc(t("instruction")) + "</p>" +
+          '<div class="btn-row">' +
+            '<button type="button" class="btn accept" id="acceptBtn">' + esc(t("accept")) + "</button>" +
+            '<button type="button" class="btn reject" id="rejectBtn">' + esc(t("reject")) + "</button>" +
+          "</div>" +
+          '<p class="msg" id="formMsg"></p>';
+
+        document.getElementById("acceptBtn").addEventListener("click", function () { submit("accept"); });
+        document.getElementById("rejectBtn").addEventListener("click", function () { submit("reject"); });
+      }
+
+      async function submit(choice) {
+        const acceptBtn = document.getElementById("acceptBtn");
+        const rejectBtn = document.getElementById("rejectBtn");
+        const msg = document.getElementById("formMsg");
+        if (acceptBtn) acceptBtn.disabled = true;
+        if (rejectBtn) rejectBtn.disabled = true;
+        if (msg) {
+          msg.className = "msg";
+          msg.textContent = t("recording");
+        }
+        try {
+          const res = await fetch("/api/rwa/public/votes/" + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ choice: choice }),
+          });
+          const data = await res.json().catch(function () { return {}; });
+          if (!res.ok) throw new Error(data.error || t("recordFail"));
+          render(data);
+        } catch (err) {
+          if (msg) {
+            msg.className = "msg err";
+            msg.textContent = err.message || t("recordFail");
+          }
+          if (acceptBtn) acceptBtn.disabled = false;
+          if (rejectBtn) rejectBtn.disabled = false;
+        }
+      }
+
+      document.querySelectorAll(".lang-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          setLang(btn.getAttribute("data-lang"));
+        });
+      });
+
+      load().catch(function (err) {
+        showError(err.message || t("loadFail"));
+      });
+    })();
+  </script>
+</body>
+</html>

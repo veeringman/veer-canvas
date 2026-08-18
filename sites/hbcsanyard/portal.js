@@ -31,6 +31,7 @@
     parkingOcr: null,
   };
   let rosterCache = [];
+  const notifyState = { pending: [], recent: [], items: [], chatUnread: 0, unreadCount: 0, timer: null };
   const MSG_EMOJI = ['😀', '😁', '😂', '😊', '😍', '🤔', '👍', '👏', '🙏', '❤️', '🎉', '✅', '❌', '🙂', '😅', '🙌', '💪', '🌹', '🏠', '☀️'];
   const MSG_ATTACH_MAX_BYTES = 5 * 1024 * 1024;
   const MSG_ATTACH_MAX_FILES = 3;
@@ -2324,7 +2325,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
     if (!isAuthed) {
       stopMsgPolling();
+      stopNotifyPolling();
       updateMessagesBadge(0);
+      updateNotifyBell(0);
       document.querySelectorAll('.admin-only, .superadmin-only').forEach((node) => {
         node.hidden = true;
       });
@@ -2446,6 +2449,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     loadHouseholdTenants().catch(() => {});
     refreshMsgThreads().catch(() => {});
     refreshProfileAuthbuddyCard().catch(() => {});
+    refreshNotificationInbox().catch(() => {});
+    startNotifyPolling();
   }
 
   function activePanelName() {
@@ -2471,7 +2476,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       if (infoDeepLink || hash === 'messages' || hash.startsWith('messages/') || hash === 'dues' || hash === 'concerns'
         || hash === 'profile' || hash === 'directory' || hash === 'parking' || hash.startsWith('parking?')
         || hash === 'info' || hash.startsWith('info/')
-        || hash === 'works' || hash === 'admin') {
+        || hash === 'works' || hash === 'admin'
+        || hash === 'alerts' || hash === 'notifications') {
         applyRouteHash();
       } else {
         ensurePanelVisibility(preferred);
@@ -2630,6 +2636,226 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (sectionLang.notices === 'hi') renderNoticesOverlay();
     syncBoardTabs();
     await loadColonyServices();
+    refreshNotificationInbox().catch(() => {});
+  }
+
+  function updateNotifyBell(pendingCount) {
+    const btn = el('notifyBellBtn');
+    const mark = el('notifyBellMark');
+    const n = Number(pendingCount) || 0;
+    if (btn) {
+      btn.classList.toggle('has-unread', n > 0);
+      btn.setAttribute('aria-label', n > 0
+        ? `Notifications, ${n} unresponded alert${n === 1 ? '' : 's'}`
+        : 'Notifications');
+    }
+    if (mark) {
+      mark.hidden = n < 1;
+      mark.textContent = '';
+    }
+  }
+
+  const NOTIFY_KIND_LABELS = {
+    notice: 'Notice',
+    concern: 'Mailbox',
+    dues: 'Dues',
+    treasury: 'Treasury',
+    no_dues: 'No Dues',
+    no_objection: 'No Objection',
+    parking: 'Parking',
+    adhoc: 'Gate',
+    staff: 'Staff',
+    message: 'Chat',
+  };
+
+  function notifyKindLabel(eventType) {
+    return NOTIFY_KIND_LABELS[eventType] || 'Alert';
+  }
+
+  function renderNotificationInbox(data) {
+    const body = el('notifyDialogBody');
+    const lead = el('notifyDialogLead');
+    const pending = data?.pending || [];
+    const recent = (data?.recent || []).slice(0, 6);
+    const items = data?.items || [];
+    const chatUnread = (state.msgThreads || []).reduce((n, thread) => n + (Number(thread.unread) || 0), 0);
+    const unreadCount = Number(data?.unreadCount);
+    notifyState.pending = pending;
+    notifyState.recent = recent;
+    notifyState.items = items;
+    notifyState.chatUnread = chatUnread;
+    notifyState.unreadCount = Number.isFinite(unreadCount)
+      ? unreadCount
+      : pending.length + items.filter((item) => !item.readAt).length;
+    updateNotifyBell(notifyState.unreadCount);
+    if (lead) {
+      lead.textContent = notifyState.unreadCount
+        ? `${notifyState.unreadCount} unresponded alert${notifyState.unreadCount === 1 ? '' : 's'} for this plot.`
+        : 'Alerts for this plot — notices, dues, mailbox, parking, and votes.';
+    }
+    if (!body) return;
+    if (!pending.length && !items.length && !recent.length && chatUnread < 1) {
+      body.innerHTML = '<p class="notify-empty">You are all caught up. Notices, dues, mailbox, parking, and votes will appear here.</p>';
+      return;
+    }
+    const pendingHtml = pending.length
+      ? `<div class="resolution-votes-list">${pending.map((item) => `
+          <article class="resolution-vote-card" data-ballot-id="${escapeHtml(item.ballotId)}" data-vote-id="${escapeHtml(item.voteId)}">
+            <p class="notify-alert-kind">Resolution vote</p>
+            <h4>Resolution ${escapeHtml(item.resolutionNo || '')}</h4>
+            <p class="muted">${escapeHtml(item.meetingTypeLabel || '')}${item.meetingTitle ? ' · ' + escapeHtml(item.meetingTitle) : ''}${item.meetingDate ? ' · ' + escapeHtml(formatIstDate(item.meetingDate) || item.meetingDate) : ''}</p>
+            <p class="vote-text">${escapeHtml(item.resolutionText || '')}</p>
+            ${item.deadline ? `<p class="muted">Deadline ${escapeHtml(formatIstDate(String(item.deadline).slice(0, 10)) || String(item.deadline).slice(0, 10))}</p>` : ''}
+            ${item.note ? `<p class="muted">${escapeHtml(item.note)}</p>` : ''}
+            <div class="btn-row">
+              <button type="button" class="btn primary compact" data-cast="accept">Accept</button>
+              <button type="button" class="btn ghost compact" data-cast="reject">Reject</button>
+            </div>
+          </article>`).join('')}</div>`
+      : '';
+    const chatHtml = chatUnread > 0
+      ? `<button type="button" class="notify-alert-card is-unread" data-notify-hash="messages">
+          <p class="notify-alert-kind">Chat</p>
+          <h4>Unread messages</h4>
+          <p class="muted">${chatUnread} new message${chatUnread === 1 ? '' : 's'} in Chat.</p>
+        </button>`
+      : '';
+    const alertsHtml = items.length
+      ? `${pending.length || chatUnread ? '<p class="muted">Alerts</p>' : ''}
+        <div class="notify-alerts-list">${items.map((item) => `
+          <button type="button" class="notify-alert-card${item.readAt ? '' : ' is-unread'}" data-notify-id="${escapeHtml(item.id)}" data-notify-url="${escapeHtml(item.url || '/#home')}">
+            <p class="notify-alert-kind">${escapeHtml(notifyKindLabel(item.eventType))}</p>
+            <h4>${escapeHtml(item.title || 'Alert')}</h4>
+            ${item.body ? `<p>${escapeHtml(item.body)}</p>` : ''}
+            ${item.createdAt ? `<p class="muted">${escapeHtml(formatIstDateTime(item.createdAt) || item.createdAt)}</p>` : ''}
+          </button>`).join('')}</div>`
+      : '';
+    const recentHtml = recent.length
+      ? `<p class="muted">Recent votes</p>
+        <div class="resolution-votes-list">${recent.map((item) => `
+          <article class="resolution-vote-card">
+            <h4>Resolution ${escapeHtml(item.resolutionNo || '')}</h4>
+            <p class="muted">${escapeHtml(item.meetingTitle || '')}${item.meetingDate ? ' · ' + escapeHtml(formatIstDate(item.meetingDate) || item.meetingDate) : ''}</p>
+            <p class="vote-recorded">${item.choice === 'accept' ? 'You accepted' : (item.choice === 'reject' ? 'You rejected' : escapeHtml(item.statusLabel || 'Recorded'))}${item.status && item.status !== 'open' ? ' · ' + escapeHtml(item.statusLabel) : ''}</p>
+          </article>`).join('')}</div>`
+      : '';
+    body.innerHTML = pendingHtml + chatHtml + alertsHtml + recentHtml;
+  }
+
+  async function refreshNotificationInbox() {
+    if (!state.session?.resident || isSuperAdmin()) {
+      notifyState.pending = [];
+      notifyState.recent = [];
+      notifyState.items = [];
+      notifyState.chatUnread = 0;
+      notifyState.unreadCount = 0;
+      updateNotifyBell(0);
+      const body = el('notifyDialogBody');
+      if (body && el('notifyDialog')?.open) {
+        body.innerHTML = '<p class="notify-empty">No alerts for this account.</p>';
+      }
+      return;
+    }
+    try {
+      const data = await api('/api/rwa/notifications');
+      renderNotificationInbox(data);
+      if (el('notifyDialog')?.open) {
+        await markNotificationsSeen();
+      }
+    } catch (_e) {
+      updateNotifyBell(notifyState.unreadCount || notifyState.pending.length);
+    }
+  }
+
+  async function markNotificationsSeen() {
+    if (!state.session?.resident || isSuperAdmin()) return;
+    if (!notifyState.items.some((item) => !item.readAt)) return;
+    try {
+      const data = await api('/api/rwa/notifications/read', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      notifyState.items = (data.items || notifyState.items).map((item) => ({
+        ...item,
+        readAt: item.readAt || 'seen',
+      }));
+      notifyState.unreadCount = Number(data.unreadCount) || notifyState.pending.length;
+      updateNotifyBell(notifyState.unreadCount);
+      if (el('notifyDialogLead') && !notifyState.unreadCount) {
+        el('notifyDialogLead').textContent = 'Alerts for this plot — notices, dues, mailbox, parking, and votes.';
+      }
+    } catch (_e) {
+      /* keep unread mark if mark-read fails */
+    }
+  }
+
+  function startNotifyPolling() {
+    stopNotifyPolling();
+    notifyState.timer = setInterval(() => {
+      if (!state.session?.resident) return;
+      refreshNotificationInbox().catch(() => {});
+    }, 60000);
+  }
+
+  function stopNotifyPolling() {
+    if (notifyState.timer) {
+      clearInterval(notifyState.timer);
+      notifyState.timer = null;
+    }
+  }
+
+  async function openNotificationsDialog() {
+    const dlg = el('notifyDialog');
+    const btn = el('notifyBellBtn');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    await refreshNotificationInbox();
+    dlg?.showModal();
+    await markNotificationsSeen();
+  }
+
+  function closeNotificationsDialog() {
+    const dlg = el('notifyDialog');
+    const btn = el('notifyBellBtn');
+    if (dlg?.open) dlg.close();
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openNotifyAlert(card) {
+    const hash = card.getAttribute('data-notify-hash');
+    const url = card.getAttribute('data-notify-url') || '';
+    closeNotificationsDialog();
+    if (hash) {
+      location.hash = hash;
+      applyRouteHash();
+      return;
+    }
+    const raw = String(url || '').trim();
+    if (!raw || raw === '/' || raw === '/#') {
+      location.hash = 'home';
+      applyRouteHash();
+      return;
+    }
+    if (raw.startsWith('/#') || raw.startsWith('#')) {
+      location.hash = raw.replace(/^\/?#/, '');
+      applyRouteHash();
+      return;
+    }
+    if (raw.startsWith('/') && !raw.startsWith('//')) {
+      location.assign(raw);
+      return;
+    }
+    location.hash = 'home';
+    applyRouteHash();
+  }
+
+  async function castMyResolutionVote(card, choice) {
+    const voteId = card.getAttribute('data-vote-id');
+    const ballotId = card.getAttribute('data-ballot-id');
+    await api('/api/rwa/my-votes', {
+      method: 'POST',
+      body: JSON.stringify({ voteId, ballotId, choice }),
+    });
+    await refreshNotificationInbox();
   }
 
   const boardState = { tab: 'notices' };
@@ -8592,7 +8818,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const rows = items.map((r) => `
       <tr>
         <td>${escapeHtml(r.no || '')}</td>
-        <td>${escapeHtml(r.text || '')}${r.votesFor != null ? `<br><span style="font-size:7pt;color:#5a6a80">For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0}</span>` : ''}${r.passed === false ? ' · <em>Not passed</em>' : ''}</td>
+        <td>${escapeHtml(r.text || '')}${r.votesFor != null ? `<br><span style="font-size:7pt;color:#5a6a80">For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0}</span>` : ''}${r.vote ? `<br><span style="font-size:7pt;color:#1a4f7a">${escapeHtml(r.vote.statusLabel || r.vote.status || '')}${r.vote.status === 'open' ? ` · ${r.vote.votesFor || 0} for / ${r.vote.votesAgainst || 0} against / ${r.vote.pendingCount || 0} pending` : ''}</span>` : ''}${r.passed === false && !r.vote ? ' · <em>Not passed</em>' : ''}</td>
         <td style="text-align:center">${r.passed === false ? 'No' : 'Yes'}</td>
       </tr>`);
     while (rows.length < 4) {
@@ -8751,7 +8977,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <span class="reg-date">${escapeHtml(formatIstDate(p.meetingDate))}</span>
           <span class="reg-title">${escapeHtml(p.title)}</span>
           <span class="reg-chair">${escapeHtml(p.chairPerson || '—')}</span>
-          <span class="reg-status">${proceedingsStatusBadge(p)}</span>
+          <span class="reg-status">${proceedingsStatusBadge(p)}${p.openVoteCount ? ' <span class="proceedings-badge is-draft">Voting</span>' : ''}</span>
         </button>
       `).join('')}`;
     if (statusLine) {
@@ -8763,6 +8989,185 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const body = el('proceedingsDetailBody');
     if (!body || !p) return;
     body.innerHTML = buildProceedingsMomHtml(p);
+    renderProceedingsVoteBar(p);
+  }
+
+  function proceedingsVoteSummary(vote) {
+    if (!vote) return '';
+    if (vote.status === 'open') {
+      return `Open · ${vote.votesFor || 0} accept · ${vote.votesAgainst || 0} reject · ${vote.pendingCount || 0} pending`;
+    }
+    if (vote.status === 'passed' || vote.status === 'rejected') {
+      return `${vote.statusLabel} · ${vote.votesFor || 0} accept · ${vote.votesAgainst || 0} reject of ${vote.eligibleCount || 0} invited`;
+    }
+    return vote.statusLabel || vote.status || '';
+  }
+
+  function renderProceedingsVoteBar(p) {
+    const bar = el('proceedingsVoteBar');
+    if (!bar) return;
+    const canManage = hasEntitlement('manage_proceedings');
+    bar.hidden = !canManage || !p;
+    if (!canManage || !p) {
+      bar.innerHTML = '';
+      return;
+    }
+    const resolutions = p.resolutions || [];
+    if (!resolutions.length) {
+      bar.innerHTML = '<h3>Resolution voting</h3><p class="muted">Add resolutions to this entry, save, then send a voting request.</p>';
+      return;
+    }
+    bar.innerHTML = `<h3>Resolution voting</h3>
+      <p class="muted">Send accept/reject requests by email and to the members area. One vote per plot; first response is recorded.</p>
+      ${resolutions.map((r) => {
+        const vote = r.vote || null;
+        const open = vote && vote.status === 'open';
+        return `<div class="proceedings-vote-item">
+          <p><strong>Resolution ${escapeHtml(r.no || '')}</strong> — ${escapeHtml((r.text || '').slice(0, 180))}${(r.text || '').length > 180 ? '…' : ''}</p>
+          <p class="proceedings-vote-meta">${vote ? escapeHtml(proceedingsVoteSummary(vote)) : 'Not circulated yet'}${vote?.deadline ? ` · deadline ${escapeHtml(formatIstDate(String(vote.deadline).slice(0, 10)) || String(vote.deadline).slice(0, 10))}` : ''}</p>
+          <div class="btn-row">
+            ${open
+              ? `<button type="button" class="btn secondary compact" data-vote-close="${escapeHtml(vote.id)}">Close &amp; tally</button>
+                 <button type="button" class="btn ghost compact" data-vote-withdraw="${escapeHtml(vote.id)}">Withdraw</button>`
+              : `<button type="button" class="btn primary compact" data-vote-send="${escapeHtml(r.id || '')}" data-vote-no="${escapeHtml(r.no || '')}">Send voting request</button>`}
+            ${vote ? `<button type="button" class="btn ghost compact" data-vote-tally="${escapeHtml(vote.id)}">Tally</button>` : ''}
+          </div>
+        </div>`;
+      }).join('')}`;
+  }
+
+  const proceedingsVoteState = { resolution: null, voters: [] };
+
+  function defaultVoteDeadline() {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function previewProceedingsVoteAudience() {
+    const p = proceedingsState.selected;
+    const status = el('proceedingsVotePreviewStatus');
+    const list = el('proceedingsVoteVoterList');
+    if (!p?.id) return;
+    const audience = el('proceedingsVoteAudience')?.value || 'members';
+    if (status) status.textContent = 'Loading who will be invited…';
+    try {
+      const data = await api(`/api/rwa/proceedings/${encodeURIComponent(p.id)}/vote-preview`, {
+        method: 'POST',
+        body: JSON.stringify({ audience }),
+      });
+      proceedingsVoteState.voters = data.voters || [];
+      if (status) {
+        status.textContent = `${data.count || 0} plot${data.count === 1 ? '' : 's'} · ${data.withEmail || 0} with email. Plots without email still vote in the members area.`;
+      }
+      if (list) {
+        const showPick = audience === 'attendees';
+        list.hidden = !showPick;
+        if (showPick) {
+          list.innerHTML = (data.voters || []).map((v) => `
+            <label class="check compact">
+              <input type="checkbox" class="pv-house" value="${escapeHtml(v.houseId)}" checked>
+              ${escapeHtml(v.plotLabel || v.houseId)} · ${escapeHtml(v.name || 'Member')}${v.hasEmail ? '' : ' · no email'}
+            </label>`).join('') || '<p class="muted">No matching attendees. Edit members present, or choose All members.</p>';
+        }
+      }
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Could not load audience';
+    }
+  }
+
+  async function openProceedingsVoteDialog(resolution) {
+    const p = proceedingsState.selected;
+    if (!p?.id || !resolution) return;
+    proceedingsVoteState.resolution = resolution;
+    const dlg = el('proceedingsVoteDialog');
+    if (el('proceedingsVoteResolutionText')) {
+      el('proceedingsVoteResolutionText').textContent = `Resolution ${resolution.no || ''}: ${resolution.text || ''}`;
+    }
+    if (el('proceedingsVoteAudience')) {
+      el('proceedingsVoteAudience').value = p.meetingType === 'ec' ? 'attendees' : 'members';
+    }
+    if (el('proceedingsVoteCriteria')) el('proceedingsVoteCriteria').value = 'simple_majority';
+    if (el('proceedingsVoteDeadline')) el('proceedingsVoteDeadline').value = defaultVoteDeadline();
+    if (el('proceedingsVoteNote')) el('proceedingsVoteNote').value = '';
+    if (el('proceedingsVoteStatus')) el('proceedingsVoteStatus').textContent = '';
+    await previewProceedingsVoteAudience();
+    dlg?.showModal();
+  }
+
+  async function submitProceedingsVoteForm(event) {
+    event.preventDefault();
+    const p = proceedingsState.selected;
+    const resolution = proceedingsVoteState.resolution;
+    const status = el('proceedingsVoteStatus');
+    const btn = el('proceedingsVoteSubmitBtn');
+    if (!p?.id || !resolution) return;
+    const audience = el('proceedingsVoteAudience')?.value || 'members';
+    const houseIds = audience === 'attendees'
+      ? [...(el('proceedingsVoteVoterList')?.querySelectorAll('.pv-house:checked') || [])].map((n) => n.value)
+      : [];
+    if (audience === 'attendees' && !houseIds.length) {
+      if (status) status.textContent = 'Select at least one attendee, or choose All members.';
+      return;
+    }
+    const payload = {
+      resolutionId: resolution.id || '',
+      resolutionNo: resolution.no || '',
+      audience,
+      criteria: el('proceedingsVoteCriteria')?.value || 'simple_majority',
+      deadline: el('proceedingsVoteDeadline')?.value || '',
+      note: el('proceedingsVoteNote')?.value.trim() || '',
+    };
+    if (houseIds.length) payload.houseIds = houseIds;
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Sending voting requests…';
+    try {
+      const data = await api(`/api/rwa/proceedings/${encodeURIComponent(p.id)}/votes`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (data.proceeding) {
+        proceedingsState.selected = data.proceeding;
+        renderProceedingsDetail(data.proceeding);
+      }
+      const bits = [
+        `Invited ${data.invited || 0}`,
+        `emailed ${data.emailed || 0}`,
+      ];
+      if (data.skippedNoEmail) bits.push(`${data.skippedNoEmail} without email`);
+      if (data.emailFailed) bits.push(`${data.emailFailed} email failed`);
+      if (status) status.textContent = bits.join(' · ') + '.';
+      el('proceedingsVoteDialog')?.close();
+    } catch (e) {
+      if (status) status.textContent = e.message || 'Could not send voting request';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function closeProceedingsVote(voteId, withdraw) {
+    const label = withdraw ? 'Withdraw this voting request?' : 'Close voting and apply the pass criteria now?';
+    if (!confirm(label)) return;
+    const data = await api(`/api/rwa/votes/${encodeURIComponent(voteId)}/close`, {
+      method: 'POST',
+      body: JSON.stringify({ withdraw: Boolean(withdraw) }),
+    });
+    if (data.proceeding) {
+      proceedingsState.selected = data.proceeding;
+      renderProceedingsDetail(data.proceeding);
+    }
+  }
+
+  async function showProceedingsVoteTally(voteId) {
+    const data = await api(`/api/rwa/votes/${encodeURIComponent(voteId)}`);
+    const vote = data.vote || {};
+    const lines = (vote.ballots || []).map((b) => {
+      const mark = b.choice === 'accept' ? 'Accept' : (b.choice === 'reject' ? 'Reject' : 'Pending');
+      return `${b.plotLabel || b.houseId} · ${b.name || ''} · ${mark}`;
+    });
+    window.alert(
+      `${vote.statusLabel || vote.status || 'Vote'}\n${proceedingsVoteSummary(vote)}\n\n${lines.join('\n') || 'No ballots'}`
+    );
   }
 
   function showProceedingsDetail(show) {
@@ -8772,6 +9177,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (shell) shell.hidden = show;
     if (detail) detail.hidden = !show;
     if (manage) manage.hidden = show || !hasEntitlement('manage_proceedings');
+    if (!show) {
+      const bar = el('proceedingsVoteBar');
+      if (bar) {
+        bar.hidden = true;
+        bar.innerHTML = '';
+      }
+    }
     scrollMainToTop();
   }
 
@@ -8788,6 +9200,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const row = document.createElement('div');
     row.className = 'proceedings-row works-row';
     row.innerHTML = `
+      <input type="hidden" class="pr-id" value="${escapeHtml(data.id || '')}">
       <label>No <input type="text" class="pr-no" maxlength="12" value="${escapeHtml(data.no || '')}"></label>
       <label class="span-2">Resolution <textarea class="pr-text" rows="2">${escapeHtml(data.text || '')}</textarea></label>
       <label>For <input type="number" class="pr-for" min="0" value="${data.votesFor ?? ''}"></label>
@@ -8814,6 +9227,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function collectProceedingsResolutions() {
     return [...(el('proceedingsResolutionsList')?.querySelectorAll('.proceedings-row') || [])].map((row, i) => ({
+      id: row.querySelector('.pr-id')?.value.trim() || '',
       no: row.querySelector('.pr-no')?.value.trim() || String(i + 1),
       text: row.querySelector('.pr-text')?.value.trim() || '',
       votesFor: row.querySelector('.pr-for')?.value || null,
@@ -12433,6 +12847,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       switchPanel(hash);
       return;
     }
+    if (hash === 'alerts' || hash === 'notifications') {
+      openNotificationsDialog().catch(() => {});
+      return;
+    }
     if (hash === 'home' || hash === 'home/services' || hash.startsWith('home/')) {
       switchPanel('home');
       applyBoardRouteHash();
@@ -13663,6 +14081,62 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (event.target.closest('.pa-remove')) event.target.closest('.proceedings-row')?.remove();
   });
   el('proceedingsCancelEditBtn')?.addEventListener('click', resetProceedingsForm);
+  el('proceedingsVoteBar')?.addEventListener('click', (event) => {
+    const send = event.target.closest('[data-vote-send]');
+    const closeBtn = event.target.closest('[data-vote-close]');
+    const withdraw = event.target.closest('[data-vote-withdraw]');
+    const tally = event.target.closest('[data-vote-tally]');
+    if (send) {
+      const rid = send.getAttribute('data-vote-send');
+      const rno = send.getAttribute('data-vote-no');
+      const resolution = (proceedingsState.selected?.resolutions || []).find((r) => r.id === rid || r.no === rno);
+      openProceedingsVoteDialog(resolution || { id: rid, no: rno, text: '' }).catch((e) => window.alert(e.message || 'Could not open'));
+      return;
+    }
+    if (closeBtn) {
+      closeProceedingsVote(closeBtn.getAttribute('data-vote-close'), false).catch((e) => window.alert(e.message || 'Close failed'));
+      return;
+    }
+    if (withdraw) {
+      closeProceedingsVote(withdraw.getAttribute('data-vote-withdraw'), true).catch((e) => window.alert(e.message || 'Withdraw failed'));
+      return;
+    }
+    if (tally) {
+      showProceedingsVoteTally(tally.getAttribute('data-vote-tally')).catch((e) => window.alert(e.message || 'Tally failed'));
+    }
+  });
+  el('proceedingsVoteAudience')?.addEventListener('change', () => previewProceedingsVoteAudience().catch(console.error));
+  el('proceedingsVoteForm')?.addEventListener('submit', submitProceedingsVoteForm);
+  el('proceedingsVoteCloseBtn')?.addEventListener('click', () => el('proceedingsVoteDialog')?.close());
+  el('proceedingsVoteCancelBtn')?.addEventListener('click', () => el('proceedingsVoteDialog')?.close());
+  el('notifyBellBtn')?.addEventListener('click', () => {
+    if (el('notifyDialog')?.open) {
+      closeNotificationsDialog();
+      return;
+    }
+    openNotificationsDialog().catch((e) => window.alert(e.message || 'Could not open notifications'));
+  });
+  el('notifyDialogCloseBtn')?.addEventListener('click', () => closeNotificationsDialog());
+  el('notifyDialog')?.addEventListener('close', () => {
+    const btn = el('notifyBellBtn');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+  el('notifyDialogBody')?.addEventListener('click', (event) => {
+    const alertCard = event.target.closest('[data-notify-url], [data-notify-hash]');
+    if (alertCard && !event.target.closest('[data-cast]')) {
+      openNotifyAlert(alertCard);
+      return;
+    }
+    const btn = event.target.closest('[data-cast]');
+    if (!btn) return;
+    const card = btn.closest('.resolution-vote-card');
+    if (!card) return;
+    btn.disabled = true;
+    castMyResolutionVote(card, btn.getAttribute('data-cast')).catch((e) => {
+      window.alert(e.message || 'Could not record vote');
+      btn.disabled = false;
+    });
+  });
 
   el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
   el('templatesRefreshBtn')?.addEventListener('click', () => loadTemplates().catch(console.error));

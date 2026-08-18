@@ -43,6 +43,7 @@ try:
     import rwa_push  # noqa: E402
     import rwa_templates  # noqa: E402
     import rwa_proceedings  # noqa: E402
+    import rwa_resolution_votes  # noqa: E402
     import rwa_campaigns  # noqa: E402
     import rwa_parking  # noqa: E402
     import rwa_tenants  # noqa: E402
@@ -63,6 +64,7 @@ except ImportError as exc:
     rwa_push = None  # type: ignore[assignment]
     rwa_templates = None  # type: ignore[assignment]
     rwa_proceedings = None  # type: ignore[assignment]
+    rwa_resolution_votes = None  # type: ignore[assignment]
     rwa_campaigns = None  # type: ignore[assignment]
     rwa_parking = None  # type: ignore[assignment]
     rwa_tenants = None  # type: ignore[assignment]
@@ -7755,6 +7757,25 @@ def api_rwa_public_quote(token: str):
         conn.close()
 
 
+@app.route("/api/rwa/public/votes/<token>", methods=["GET", "POST"])
+def api_rwa_public_vote(token: str):
+    """Public resolution ballot — unique per invited plot; first response is recorded."""
+    conn = _rwa_conn()
+    try:
+        if request.method == "GET":
+            data = rwa_resolution_votes.get_public_ballot(conn, token)
+            if not data:
+                return jsonify({"ok": False, "error": "Invalid or expired voting link"}), 404
+            return jsonify({"ok": True, **data})
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_resolution_votes.submit_public_ballot(conn, token, payload)
+        return jsonify({"ok": True, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/public/campaigns/<campaign_id>", methods=["GET"])
 def api_rwa_public_campaign(campaign_id: str):
     """Public campaign detail for landing-page drives (no auth)."""
@@ -9314,6 +9335,188 @@ def api_rwa_proceedings_item(proceeding_id: str):
         payload["id"] = proceeding_id
         proceeding = rwa_proceedings.upsert_meeting_proceeding(conn, payload, actor=sess["resident"])
         return jsonify({"ok": True, "proceeding": proceeding})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/proceedings/<proceeding_id>/votes", methods=["GET", "POST"])
+def api_rwa_proceedings_votes(proceeding_id: str):
+    """List or start circulation votes for a MOM resolution."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.is_ec_member(sess["resident"]):
+            return jsonify({"ok": False, "error": "EC Committee access required"}), 403
+        is_admin = rwa_entitlements.actor_has(sess["resident"], "manage_proceedings")
+        if request.method == "GET":
+            proceeding = rwa_proceedings.get_meeting_proceeding(conn, proceeding_id, as_admin=is_admin)
+            if not proceeding:
+                return jsonify({"ok": False, "error": "Not found"}), 404
+            votes = rwa_resolution_votes.list_votes_for_proceeding(conn, proceeding_id)
+            return jsonify({"ok": True, "votes": votes, **rwa_resolution_votes.vote_meta()})
+        if not is_admin:
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_resolution_votes.start_vote(
+            conn,
+            proceeding_id,
+            payload,
+            actor=sess["resident"],
+            site_root=SITE_ROOT,
+        )
+        proceeding = rwa_proceedings.get_meeting_proceeding(conn, proceeding_id, as_admin=True)
+        return jsonify({"ok": True, "proceeding": proceeding, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/proceedings/<proceeding_id>/vote-preview", methods=["GET", "POST"])
+def api_rwa_proceedings_vote_preview(proceeding_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_proceedings"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        proceeding = rwa_proceedings.get_meeting_proceeding(conn, proceeding_id, as_admin=True)
+        if not proceeding:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        payload = request.get_json(force=True, silent=True) or {}
+        audience = (payload.get("audience") or request.args.get("audience") or "members").strip()
+        raw_houses = payload.get("houseIds") or request.args.get("houseIds") or []
+        if isinstance(raw_houses, str):
+            raw_houses = [p.strip() for p in raw_houses.split(",") if p.strip()]
+        voters = rwa_resolution_votes.preview_audience(
+            conn,
+            proceeding,
+            audience=audience,
+            house_ids=raw_houses or None,
+        )
+        return jsonify({
+            "ok": True,
+            "audience": audience,
+            "count": len(voters),
+            "withEmail": sum(1 for v in voters if v.get("email")),
+            "voters": [
+                {
+                    "houseId": v["houseId"],
+                    "plotLabel": v.get("plotLabel") or v.get("plotNo") or v["houseId"],
+                    "name": v.get("name") or "",
+                    "hasEmail": bool(v.get("email")),
+                }
+                for v in voters
+            ],
+            **rwa_resolution_votes.vote_meta(),
+        })
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/my-votes", methods=["GET", "POST"])
+def api_rwa_my_votes():
+    """Pending resolution ballots for the signed-in plot (members area)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if request.method == "GET":
+            data = rwa_resolution_votes.list_my_ballots(conn, sess["resident"])
+            return jsonify({"ok": True, **data})
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_resolution_votes.cast_member_vote(conn, sess["resident"], payload)
+        return jsonify({"ok": True, **result})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notifications", methods=["GET"])
+def api_rwa_notifications():
+    """Inbox alerts + pending resolution votes for the signed-in plot."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        data = rwa_push.list_notifications(conn, sess["resident"])
+        return jsonify({"ok": True, **data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/notifications/read", methods=["POST"])
+def api_rwa_notifications_read():
+    """Mark inbox alerts as seen (votes stay pending until the plot responds)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        payload = request.get_json(force=True, silent=True) or {}
+        ids = payload.get("ids") if isinstance(payload.get("ids"), list) else None
+        inbox = rwa_push.mark_inbox_read(conn, sess["resident"], ids)
+        data = rwa_push.list_notifications(conn, sess["resident"])
+        data["items"] = inbox.get("items") or data.get("items") or []
+        data["inboxUnread"] = inbox.get("unreadCount") or 0
+        data["unreadCount"] = len(data.get("pending") or []) + int(data["inboxUnread"])
+        return jsonify({"ok": True, **data})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/votes/<vote_id>", methods=["GET"])
+def api_rwa_vote_item(vote_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.is_ec_member(sess["resident"]):
+            return jsonify({"ok": False, "error": "EC Committee access required"}), 403
+        as_admin = rwa_entitlements.actor_has(sess["resident"], "manage_proceedings")
+        vote = rwa_resolution_votes.get_vote(conn, vote_id, as_admin=as_admin)
+        if not vote:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        return jsonify({"ok": True, "vote": vote})
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/votes/<vote_id>/close", methods=["POST"])
+def api_rwa_vote_close(vote_id: str):
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        if not rwa_entitlements.actor_has(sess["resident"], "manage_proceedings"):
+            return jsonify({"ok": False, "error": "Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        vote = rwa_resolution_votes.close_vote(
+            conn,
+            vote_id,
+            actor=sess["resident"],
+            withdraw=bool(payload.get("withdraw")),
+        )
+        proceeding = rwa_proceedings.get_meeting_proceeding(
+            conn, vote.get("proceedingId") or "", as_admin=True
+        )
+        return jsonify({"ok": True, "vote": vote, "proceeding": proceeding})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

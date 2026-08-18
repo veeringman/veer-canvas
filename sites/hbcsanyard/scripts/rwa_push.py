@@ -10,9 +10,24 @@ import secrets
 import sqlite3
 from typing import Any
 
-from init_rwa_db import SUPERADMIN_HOUSE_ID, ensure_messages_and_push_tables, utc_now
+from init_rwa_db import (
+    SUPERADMIN_HOUSE_ID,
+    SYSTEM_HOUSE_IDS,
+    ensure_messages_and_push_tables,
+    utc_now,
+)
 
-PREF_KEYS = ("messages", "notices", "concerns", "dues", "treasury", "no_dues", "no_objection", "parking")
+PREF_KEYS = (
+    "messages",
+    "notices",
+    "concerns",
+    "dues",
+    "treasury",
+    "no_dues",
+    "no_objection",
+    "parking",
+    "resolutions",
+)
 EVENT_PREF = {
     "message": "messages",
     "notice": "notices",
@@ -22,8 +37,12 @@ EVENT_PREF = {
     "no_dues": "no_dues",
     "no_objection": "no_objection",
     "parking": "parking",
+    "resolution": "resolutions",
     "test": "messages",
 }
+# Chat has its own tab badge; resolution votes are first-class ballots.
+INBOX_SKIP_TYPES = frozenset({"message", "test", "resolution"})
+INBOX_KEEP_PER_HOUSE = 80
 
 
 def vapid_env_path(site_root: pathlib.Path) -> pathlib.Path:
@@ -160,8 +179,8 @@ def save_prefs(
     conn.execute(
         """
         INSERT INTO notification_prefs(
-          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, no_objection, parking, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          member_id, house_id, messages, notices, concerns, dues, treasury, no_dues, no_objection, parking, resolutions, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(member_id) DO UPDATE SET
           house_id = excluded.house_id,
           messages = excluded.messages,
@@ -172,6 +191,7 @@ def save_prefs(
           no_dues = excluded.no_dues,
           no_objection = excluded.no_objection,
           parking = excluded.parking,
+          resolutions = excluded.resolutions,
           updated_at = excluded.updated_at
         """,
         (
@@ -185,6 +205,7 @@ def save_prefs(
             vals["no_dues"],
             vals["no_objection"],
             vals["parking"],
+            vals["resolutions"],
             now,
         ),
     )
@@ -288,6 +309,239 @@ def _pref_allows(conn: sqlite3.Connection, member_id: str | None, house_id: str,
     return bool(prefs.get(pref_key, True))
 
 
+def _member_house_id(conn: sqlite3.Connection, member_id: str | None) -> str:
+    mid = str(member_id or "").strip()
+    if not mid:
+        return ""
+    try:
+        row = conn.execute(
+            "SELECT house_id FROM household_members WHERE id = ?",
+            (mid,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return ""
+    return str((row["house_id"] if row else "") or "").strip()
+
+
+def _entitlement_houses(conn: sqlite3.Connection, key: str) -> set[str]:
+    houses: set[str] = set()
+    if not key:
+        return houses
+    try:
+        import rwa_entitlements as entitlements
+    except ImportError:
+        entitlements = None
+    try:
+        grant_rows = conn.execute(
+            "SELECT house_id FROM resident_entitlements WHERE entitlement = ?",
+            (key,),
+        ).fetchall()
+        for r in grant_rows:
+            houses.add(r["house_id"])
+    except sqlite3.OperationalError:
+        return houses
+    if entitlements and key not in getattr(entitlements, "EXPLICIT_GRANT_ENTITLEMENTS", frozenset()):
+        for r in conn.execute(
+            """
+            SELECT house_id FROM residents
+            WHERE status = 'active' AND role = 'admin' AND house_id != ?
+            """,
+            (SUPERADMIN_HOUSE_ID,),
+        ).fetchall():
+            houses.add(r["house_id"])
+    return {h for h in houses if h and h not in SYSTEM_HOUSE_IDS}
+
+
+def _resolve_audience_houses(
+    conn: sqlite3.Connection,
+    audience: dict,
+    *,
+    exclude_member_id: str | None = None,
+) -> list[str]:
+    """Plot ids that should receive an in-app inbox row (even without a push subscription)."""
+    atype = (audience.get("type") or "all").strip()
+    houses: set[str] = set()
+    if atype == "all":
+        rows = conn.execute(
+            "SELECT house_id FROM residents WHERE status = 'active'"
+        ).fetchall()
+        houses = {r["house_id"] for r in rows}
+    elif atype == "houses":
+        houses = {
+            str(h).strip()
+            for h in (audience.get("houseIds") or [])
+            if str(h).strip()
+        }
+    elif atype == "members":
+        ids = [str(m).strip() for m in (audience.get("memberIds") or []) if str(m).strip()]
+        for mid in ids:
+            hid = _member_house_id(conn, mid)
+            if hid:
+                houses.add(hid)
+    elif atype == "entitlement":
+        houses = _entitlement_houses(conn, (audience.get("key") or "").strip())
+    houses -= SYSTEM_HOUSE_IDS
+    skip = _member_house_id(conn, exclude_member_id)
+    if skip:
+        houses.discard(skip)
+    return sorted(h for h in houses if h)
+
+
+def fanout_inbox(
+    conn: sqlite3.Connection,
+    *,
+    event_type: str,
+    pref_key: str,
+    title: str,
+    body: str,
+    url: str,
+    audience: dict,
+    exclude_member_id: str | None,
+    outbox_id: str,
+) -> int:
+    """Write one inbox row per audience plot. Skips chat / test / resolution ballots."""
+    et = (event_type or "").strip()
+    if et in INBOX_SKIP_TYPES:
+        return 0
+    ensure_messages_and_push_tables(conn)
+    houses = _resolve_audience_houses(conn, audience, exclude_member_id=exclude_member_id)
+    if not houses:
+        return 0
+    now = utc_now()
+    rows = [
+        (
+            f"ni_{secrets.token_hex(8)}",
+            hid,
+            et,
+            pref_key,
+            title,
+            body,
+            url,
+            outbox_id,
+            now,
+        )
+        for hid in houses
+    ]
+    conn.executemany(
+        """
+        INSERT INTO notification_inbox(
+          id, house_id, event_type, pref_key, title, body, url, outbox_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+    cutoff_offset = max(INBOX_KEEP_PER_HOUSE - 1, 0)
+    for hid in houses:
+        cutoff = conn.execute(
+            """
+            SELECT created_at FROM notification_inbox
+            WHERE house_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1 OFFSET ?
+            """,
+            (hid, cutoff_offset),
+        ).fetchone()
+        if cutoff:
+            conn.execute(
+                "DELETE FROM notification_inbox WHERE house_id = ? AND created_at < ?",
+                (hid, cutoff["created_at"]),
+            )
+    conn.commit()
+    return len(rows)
+
+
+def _inbox_item(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "eventType": row["event_type"],
+        "title": row["title"],
+        "body": row["body"] or "",
+        "url": row["url"] or "/",
+        "readAt": row["read_at"] or "",
+        "createdAt": row["created_at"] or "",
+    }
+
+
+def list_inbox(conn: sqlite3.Connection, actor: dict, *, limit: int = 40) -> dict[str, Any]:
+    ensure_messages_and_push_tables(conn)
+    house_id = str((actor or {}).get("houseId") or "").strip()
+    if not house_id or house_id in SYSTEM_HOUSE_IDS:
+        return {"items": [], "unreadCount": 0}
+    rows = conn.execute(
+        """
+        SELECT * FROM notification_inbox
+        WHERE house_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (house_id, max(1, min(int(limit), 80))),
+    ).fetchall()
+    unread = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM notification_inbox
+        WHERE house_id = ? AND read_at IS NULL
+        """,
+        (house_id,),
+    ).fetchone()["n"]
+    return {"items": [_inbox_item(r) for r in rows], "unreadCount": int(unread or 0)}
+
+
+def mark_inbox_read(
+    conn: sqlite3.Connection,
+    actor: dict,
+    ids: list[str] | None = None,
+) -> dict[str, Any]:
+    ensure_messages_and_push_tables(conn)
+    house_id = str((actor or {}).get("houseId") or "").strip()
+    if not house_id or house_id in SYSTEM_HOUSE_IDS:
+        return {"items": [], "unreadCount": 0}
+    now = utc_now()
+    clean_ids = [str(i).strip() for i in (ids or []) if str(i).strip()]
+    if clean_ids:
+        placeholders = ",".join("?" * len(clean_ids))
+        conn.execute(
+            f"""
+            UPDATE notification_inbox
+            SET read_at = ?
+            WHERE house_id = ? AND read_at IS NULL AND id IN ({placeholders})
+            """,
+            [now, house_id, *clean_ids],
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE notification_inbox
+            SET read_at = ?
+            WHERE house_id = ? AND read_at IS NULL
+            """,
+            (now, house_id),
+        )
+    conn.commit()
+    return list_inbox(conn, actor)
+
+
+def list_notifications(conn: sqlite3.Connection, actor: dict) -> dict[str, Any]:
+    """Pending resolution votes + inbox alerts for the signed-in plot."""
+    inbox = list_inbox(conn, actor)
+    votes: dict[str, Any] = {"pending": [], "recent": []}
+    try:
+        import rwa_resolution_votes
+
+        votes = rwa_resolution_votes.list_my_ballots(conn, actor)
+    except Exception:
+        pass
+    pending = votes.get("pending") or []
+    recent = votes.get("recent") or []
+    unread = len(pending) + int(inbox.get("unreadCount") or 0)
+    return {
+        "pending": pending,
+        "recent": recent,
+        "items": inbox.get("items") or [],
+        "unreadCount": unread,
+        "inboxUnread": inbox.get("unreadCount") or 0,
+    }
+
+
 def _resolve_subscription_rows(
     conn: sqlite3.Connection,
     audience: dict,
@@ -332,31 +586,7 @@ def _resolve_subscription_rows(
             ).fetchall()
         )
     elif atype == "entitlement":
-        key = (audience.get("key") or "").strip()
-        if not key:
-            return []
-        try:
-            import rwa_entitlements as entitlements
-        except ImportError:
-            return []
-        # Collect house_ids that have the entitlement (EC admin implicit + grants)
-        houses = set()
-        grant_rows = conn.execute(
-            "SELECT house_id FROM resident_entitlements WHERE entitlement = ?",
-            (key,),
-        ).fetchall()
-        for r in grant_rows:
-            houses.add(r["house_id"])
-        # EC admins get implicit entitlements except explicit-only ones
-        if key not in getattr(entitlements, "EXPLICIT_GRANT_ENTITLEMENTS", frozenset()):
-            for r in conn.execute(
-                """
-                SELECT house_id FROM residents
-                WHERE status = 'active' AND role = 'admin' AND house_id != ?
-                """,
-                (SUPERADMIN_HOUSE_ID,),
-            ).fetchall():
-                houses.add(r["house_id"])
+        houses = _entitlement_houses(conn, (audience.get("key") or "").strip())
         if not houses:
             return []
         placeholders = ",".join("?" * len(houses))
@@ -457,6 +687,21 @@ def enqueue_push(
         ),
     )
     conn.commit()
+
+    try:
+        fanout_inbox(
+            conn,
+            event_type=et,
+            pref_key=pref_key,
+            title=title,
+            body=body,
+            url=url,
+            audience=audience,
+            exclude_member_id=exclude_member_id,
+            outbox_id=outbox_id,
+        )
+    except Exception:
+        pass
 
     if not send_now:
         return {"id": outbox_id, "status": "queued", "sent": 0}

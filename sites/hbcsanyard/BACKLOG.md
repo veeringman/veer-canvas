@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-17
+Last updated: 2026-08-18
 
 ---
 
@@ -28,6 +28,7 @@ Prefer A4, RWA letterhead styling consistent with `documents/` print pads.
 ## Colony life & operations
 
 - [ ] **Maintenance vote / consent board** — EC posts work + cost; one vote per plot (Approve / Object / Abstain); link to Works & Events
+- [x] **MOM resolution circulation vote** — from Proceedings, send accept/reject to all members or attendees; email public URI; members area; Home Screen alerts; first response recorded; pass by chosen majority
 - [x] **Household staff pass** — signed-in plot issues a selfie pass (maid / cook / gardener / driver / caretaker) tied to the plot; gate sees photo + name + plot
 - [ ] **Visitor / guest pass QR** — timed QR for guests/delivery; plot + validity window
 - [ ] **Plate OCR (open-world detector)** — EC can enable phone Tesseract, server Tesseract, native Rust (`data/bin/plate-ocr`), live auto-scan, and lookalike match independently under Pass settings. A YOLO/ONNX detector is only needed if the gate must read *unregistered* visitor plates from a messy full-car photo.
@@ -158,6 +159,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - **Quote invites hide estimated cost** — vendors enter their own amount; estimate stays on the EC works record only
 - **Quote invite email** — fixed literal `\n` before Details section (2026-08-17)
 - **Notification branding** — emails, share cards, and parking pass mail use “Housing Colony Sanyard” instead of “HBC Sanyard” (2026-08-17)
+- **MOM resolution voting** — circulate accept/reject from Proceedings; email + members area + Home Screen alerts; one vote per plot (2026-08-18)
 - **Matters tab** — app header renamed from “Concerns” to “Matters” (2026-08-17)
 - **Print pad footer fix** — shared `print-pad-common.css` caps central writing area (not header/footer) so full sheet fits printable A4 (2026-08-17)
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)

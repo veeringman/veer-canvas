@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import hashlib
 import sqlite3
 from typing import Any
 
@@ -87,7 +88,11 @@ def _parse_resolutions(raw) -> list[dict]:
         if not text:
             continue
         no = str(item.get("no") or item.get("number") or i).strip()[:12]
+        rid = str(item.get("id") or "").strip()[:40]
+        if not rid or not re.match(r"^res_[a-zA-Z0-9]+$", rid):
+            rid = "res_" + hashlib.sha256(f"{no}:{text}".encode("utf-8")).hexdigest()[:10]
         out.append({
+            "id": rid,
             "no": no,
             "text": text,
             "passed": bool(item.get("passed", True)),
@@ -250,7 +255,14 @@ def list_meeting_proceedings(
         """,
         params,
     ).fetchall()
-    return [_proceeding_public(r) for r in rows]
+    out = [_proceeding_public(r) for r in rows]
+    try:
+        import rwa_resolution_votes as _votes
+
+        _votes.attach_votes(conn, out)
+    except Exception:
+        pass
+    return out
 
 
 def get_meeting_proceeding(
@@ -270,7 +282,14 @@ def get_meeting_proceeding(
         return None
     if not as_admin and (row["status"] or "") != "published":
         return None
-    return _proceeding_public(row)
+    proceeding = _proceeding_public(row)
+    try:
+        import rwa_resolution_votes as _votes
+
+        _votes.attach_votes(conn, [proceeding])
+    except Exception:
+        pass
+    return proceeding
 
 
 def upsert_meeting_proceeding(
@@ -430,6 +449,12 @@ def delete_meeting_proceeding(conn: sqlite3.Connection, proceeding_id: str) -> N
     pid = (proceeding_id or "").strip()
     if not pid:
         raise ValueError("id required")
+    try:
+        import rwa_resolution_votes as _votes
+
+        _votes.delete_votes_for_proceeding(conn, pid)
+    except Exception:
+        pass
     cur = conn.execute("DELETE FROM meeting_proceedings WHERE id = ?", (pid,))
     if cur.rowcount < 1:
         raise ValueError("Proceeding not found")

@@ -612,6 +612,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_colony_works_table(conn)
     ensure_work_quote_tables(conn)
     ensure_meeting_proceedings_table(conn)
+    ensure_resolution_votes_tables(conn)
     ensure_entitlements_schema(conn)
     ensure_report_templates_table(conn)
     ensure_bilingual_content_columns(conn)
@@ -1816,6 +1817,70 @@ def ensure_meeting_proceedings_table(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+    ensure_resolution_votes_tables(conn)
+
+
+def ensure_resolution_votes_tables(conn: sqlite3.Connection) -> None:
+    """Circulation voting on MOM resolutions (email + members area + push)."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS resolution_votes (
+          id TEXT PRIMARY KEY,
+          proceeding_id TEXT NOT NULL,
+          resolution_id TEXT NOT NULL,
+          resolution_no TEXT NOT NULL,
+          resolution_text TEXT NOT NULL,
+          audience TEXT NOT NULL
+            CHECK(audience IN ('members','attendees')),
+          criteria TEXT NOT NULL DEFAULT 'simple_majority'
+            CHECK(criteria IN (
+              'simple_majority',
+              'two_thirds_cast',
+              'two_thirds_eligible',
+              'three_fifths_cast'
+            )),
+          status TEXT NOT NULL DEFAULT 'open'
+            CHECK(status IN ('open','passed','rejected','withdrawn')),
+          deadline TEXT,
+          note TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          closed_at TEXT,
+          closed_by TEXT,
+          votes_for INTEGER NOT NULL DEFAULT 0,
+          votes_against INTEGER NOT NULL DEFAULT 0,
+          eligible_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_res_votes_proceeding
+          ON resolution_votes(proceeding_id, status);
+        CREATE INDEX IF NOT EXISTS idx_res_votes_resolution
+          ON resolution_votes(resolution_id, status);
+
+        CREATE TABLE IF NOT EXISTS resolution_vote_ballots (
+          id TEXT PRIMARY KEY,
+          vote_id TEXT NOT NULL,
+          house_id TEXT NOT NULL,
+          member_id TEXT,
+          name TEXT,
+          email TEXT,
+          plot_label TEXT,
+          public_token TEXT NOT NULL UNIQUE,
+          choice TEXT
+            CHECK(choice IS NULL OR choice IN ('accept','reject')),
+          voted_at TEXT,
+          source TEXT,
+          email_sent_at TEXT,
+          email_error TEXT,
+          created_at TEXT NOT NULL,
+          UNIQUE(vote_id, house_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_res_ballots_vote
+          ON resolution_vote_ballots(vote_id);
+        CREATE INDEX IF NOT EXISTS idx_res_ballots_house
+          ON resolution_vote_ballots(house_id, vote_id);
+        """
+    )
+    conn.commit()
 
 
 def ensure_grievances_table(conn: sqlite3.Connection) -> None:
@@ -2425,6 +2490,23 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_push_outbox_status
           ON push_outbox(status, created_at DESC);
 
+        CREATE TABLE IF NOT EXISTS notification_inbox (
+          id TEXT PRIMARY KEY,
+          house_id TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          pref_key TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL DEFAULT '',
+          url TEXT,
+          outbox_id TEXT,
+          read_at TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_notification_inbox_house
+          ON notification_inbox(house_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notification_inbox_unread
+          ON notification_inbox(house_id, read_at);
+
         CREATE TABLE IF NOT EXISTS msg_likes (
           message_id TEXT NOT NULL,
           member_id TEXT NOT NULL,
@@ -2444,7 +2526,7 @@ def ensure_messages_and_push_tables(conn: sqlite3.Connection) -> None:
         (COLONY_THREAD_ID, now, now),
     )
     pref_cols = {row[1] for row in conn.execute("PRAGMA table_info(notification_prefs)").fetchall()}
-    for col in ("treasury", "no_dues", "no_objection", "parking"):
+    for col in ("treasury", "no_dues", "no_objection", "parking", "resolutions"):
         if pref_cols and col not in pref_cols:
             conn.execute(
                 f"ALTER TABLE notification_prefs ADD COLUMN {col} INTEGER NOT NULL DEFAULT 1"
