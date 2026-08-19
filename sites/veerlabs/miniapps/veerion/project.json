@@ -48,7 +48,7 @@
   ],
   "enabled": true,
   "logoSize": "sm",
-  "sortOrder": 160,
+  "sortOrder": 170,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veerion",
   "summaryFormat": "auto",

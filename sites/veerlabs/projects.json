@@ -4,7 +4,7 @@
     "name": "AuthBuddy",
     "subtitle": "Rust",
     "summary": "An Identity provider and OAuth2/OIDC server that combines form login, MFA, passkeys, and standards-compliant federation in a single, extensible service.",
-    "logo": "miniapps/authbuddy/assets/authbuddy_logo_bluegreen.png",
+    "logo": "miniapps/authbuddy/assets/logo.png",
     "logoAlt": "AuthBuddy logo",
     "status": [],
     "tags": [],
@@ -55,7 +55,8 @@
     "summaryAlign": "",
     "summarySize": "",
     "reimport": false,
-    "logoHeight": 54
+    "logoHeight": 54,
+    "requireAuth": false
   },
   {
     "slug": "edgefabric",
@@ -115,11 +116,11 @@
   },
   {
     "slug": "veersetu",
-    "name": "veersetu",
+    "name": "VeerSetu",
     "subtitle": "Rust",
     "summary": "Zero-trust edge fabric for secure remote access, service publishing, and private networking.",
-    "logo": "miniapps/veersetu/assets/veersetu_logo.png",
-    "logoAlt": "veersetu logo",
+    "logo": "miniapps/veersetu/assets/logo.svg",
+    "logoAlt": "VeerSetu logo",
     "status": [],
     "tags": [],
     "details": [
@@ -169,7 +170,7 @@
     "summarySize": "",
     "reimport": false,
     "requireAuth": false,
-    "logoHeight": 70
+    "logoHeight": 64
   },
   {
     "slug": "veeros",
@@ -731,6 +732,53 @@
     "logoWidth": 50
   },
   {
+    "slug": "quantumpay",
+    "name": "QuantumPay",
+    "subtitle": "Rust",
+    "summary": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>",
+    "logo": "miniapps/quantumpay/assets/quantumpay-logo.png",
+    "logoAlt": "QuantumPay logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>"
+      },
+      {
+        "title": "Documentation",
+        "body": "The architecture is specified in [`docs/`](docs/README.md). Start here:\n\n| | |\n| --- | --- |\n| [Vision](docs/vision.md) | Why this product exists |\n| [Architecture](docs/architecture.md) | Modular monolith, hexagon, runtime |\n| [Payment lifecycle](docs/payment-lifecycle.md) | Intent/attempt state machines, including `UNKNOWN` |\n| [Security](docs/security.md) | Controls that are part of the runtime |\n| [Compliance](docs/compliance.md) | The regulatory fence |\n| [Legal drafts](docs/legal/README.md) | Society dues terms skeletons (not legal advice) |\n| [UPI / PhonePe / Razorpay](docs/upi-phonepe-razorpay.md) | Who does UPI vs settlement; TPAPs vs merchant |\n| [Society Razorpay KYC](docs/legal/razorpay-society-kyc.md) | Prep list; society is merchant of record |\n| [Test deploy (.78)](docs/deploy-test.md) | LAN test environment |\n| [Local Postgres](docs/local.md) | Docker Compose on a laptop |\n| [Roadmap](docs/roadmap.md) | What is built when |\n| [ADRs](docs/adr/README.md) | Why decisions were made |"
+      },
+      {
+        "title": "Design in one page",
+        "body": "1. **Provider agnostic** \u2014 adapters behind a port; the core never speaks a PSP dialect.\n2. **Money-neutral** \u2014 orchestration facts, not custody of funds.\n3. **Deterministic** \u2014 append-only events and ledger; status is a projection.\n4. **Idempotent** \u2014 retries must not create money movement.\n5. **Event-driven** \u2014 HTTP responses are not the final financial state.\n6. **Observable** \u2014 a payment is reconstructable end to end.\n7. **Secure by default** \u2014 fail closed on auth, KMS, and webhook verify.\n8. **Independently complete** \u2014 no sibling platform required to ship a payment."
+      },
+      {
+        "title": "What QuantumPay is not (Phase 1)",
+        "body": "Not a payment aggregator that handles funds, not an acquiring bank, not a UPI PSP, not an escrow, not a rail.\n\nProduction use in India requires independent legal, regulatory, contractual, security, banking, and provider review."
+      },
+      {
+        "title": "Status",
+        "body": "**Architecture and a running test API.** Implementation is a Cargo workspace. Test host: [`docs/deploy-test.md`](docs/deploy-test.md) (`192.168.29.78:18980`). No production payment traffic.\n\nPlanned stack: Rust, Tokio, Axum, PostgreSQL, Redis, OpenTelemetry, Kubernetes."
+      },
+      {
+        "title": "License",
+        "body": "License to be determined."
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/QuantumPay"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 130,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/QuantumPay"
+  },
+  {
     "slug": "veer-dharam",
     "name": "Veer Dharam",
     "subtitle": "Veer \u0927\u0930\u094d\u092e is the AI Trust Operating System that gives every piece of data a living identit...",
@@ -790,7 +838,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 130,
+    "sortOrder": 140,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-dharam",
     "summaryFormat": "auto",
@@ -855,7 +903,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 140,
+    "sortOrder": 150,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-artha",
     "summaryFormat": "auto",
@@ -915,7 +963,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 150,
+    "sortOrder": 160,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veer-canvas",
     "summaryFormat": "auto",
@@ -974,7 +1022,7 @@
     ],
     "enabled": true,
     "logoSize": "sm",
-    "sortOrder": 160,
+    "sortOrder": 170,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerion",
     "summaryFormat": "auto",
@@ -1042,7 +1090,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 170,
+    "sortOrder": 180,
     "private": true,
     "repoUrl": "https://github.com/veeringman/VeerGenesis"
   },
@@ -1069,7 +1117,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 180,
+    "sortOrder": 190,
     "private": false,
     "repoUrl": "https://github.com/veeringman/VeerParvat"
   },
@@ -1128,7 +1176,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 190,
+    "sortOrder": 200,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-savora",
     "summaryFormat": "auto",
@@ -1184,7 +1232,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 200,
+    "sortOrder": 210,
     "private": true,
     "repoUrl": "https://github.com/veeringman/matteros"
   },
@@ -1248,7 +1296,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 210,
+    "sortOrder": 220,
     "private": true,
     "repoUrl": "https://github.com/veeringman/woodyveer",
     "summaryFormat": "auto",
@@ -1306,7 +1354,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 220,
+    "sortOrder": 230,
     "private": true,
     "repoUrl": "https://github.com/veeringman/jee_prep_webapp",
     "summaryFormat": "auto",
@@ -1315,12 +1363,12 @@
     "reimport": false
   },
   {
-    "slug": "veertrust",
-    "name": "veertrust",
-    "subtitle": "Rust",
-    "summary": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.",
-    "logo": "miniapps/veertrust/assets/veertrust_ztn.png",
-    "logoAlt": "veertrust logo",
+    "slug": "hbcsanyard",
+    "name": "hbcsanyard",
+    "subtitle": "JavaScript",
+    "summary": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA).",
+    "logo": "miniapps/hbcsanyard/assets/apple-touch-icon.png",
+    "logoAlt": "hbcsanyard logo",
     "status": [
       "Draft"
     ],
@@ -1328,38 +1376,132 @@
     "details": [
       {
         "title": "Project Overview",
-        "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics."
+        "body": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA)."
       },
       {
-        "title": "VeerTrust - Zero Trust Architecture for Veer Edge",
-        "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.\n\n---"
+        "title": "HBCS Sanyard RWA",
+        "body": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA).\n\n| | |\n|--|--|\n| **Site id** | `hbcsanyard` |\n| **Domain** | `hbcsanyard.veerlabs.solutions` |\n| **Database** | SQLite `data/rwa.db` |\n| **Managed by** | [VeerCanvas](https://github.com/veeringman/veer-canvas) |\n| **App repo** | `veeringman/hbcsanyard` (companion) |"
       },
       {
-        "title": "\ud83e\udde9 Architecture Diagram",
-        "body": "![ZTN Diagram](./docs/veertrust_ztn.png)\n\n> _The above diagram represents device interaction with Edge Gateway, mobile apps, cloud services, and secure policy enforcement in a Zero Trust model._\n\n---"
+        "title": "Surfaces",
+        "body": "| URL | Audience | Purpose |\n|-----|----------|---------|\n| `/` | Residents + EC | Resident portal (OTP login, notices, dues, directory, profile) |\n| `/admin/` | Authors / EC | **VeerCanvas CMS** \u2014 content authoring & publish (not the resident app) |\n\nEC members with `role=admin` also see an **EC desk** tab inside the portal for notices, ledger import, and role promotion. That is separate from `/admin` CMS."
       },
       {
-        "title": "1. **Devices**",
-        "body": "- Includes IoT sensors, mobile phones, user devices\n- **Functions**:\n  - Authenticate via JWT or device certificates\n  - TPM-backed attestation\n  - Secure telemetry/data streaming\n- **Protocols**: `mTLS`, `OAuth2`, `JWT`, `TPM attestation`"
+        "title": "Roles",
+        "body": "- **admin** (Executive Committee) \u2014 publish notices, import PDF ledger, view full dues, promote members\n- **resident** \u2014 view notices, own dues, directory, edit own profile\n\nLogin: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. Sessions last until **Sign out**.\n\n**AuthBuddy (optional):** after email verification, residents may link AuthBuddy / BuddyAuthenticator for alternate sign-in. **One factor only** for now (`mfa_required=false` on blueprint `hbcsanyard-password-mfa`). Same email as an existing AuthBuddy account (e.g. VeerLabs) is signed in and linked \u2014 not registered twice. Future public domain: `housingcolonysanyard.in`."
       },
       {
-        "title": "2. **Edge Gateway**",
-        "body": "Core component enforcing Zero Trust principles at the edge\n\n- **Modules**:\n  - `VeerAuth Agent` \u2013 Manages workload/device identities\n  - `VeerPolicy` \u2013 Enforces RBAC/ABAC policies\n  - `VeerAttest` \u2013 Performs remote attestation\n- **Protocols**: `mTLS`, `QUIC`, `gRPC`, `SPIFFE IDs`"
+        "title": "Database + PDF import",
+        "body": "```bash"
       },
       {
-        "title": "3. **Mobile Apps / Web Consoles**",
-        "body": "- User access layer for managing and interacting with edge services\n- **Protocols**: `HTTPS`, `OAuth2`, `WebTransport`, `gRPC`"
+        "title": "From iCloud / any path",
+        "body": ".venv/bin/python sites/hbcsanyard/scripts/import_ledger_pdf.py \\\n  \"/Users/vijay/Library/Mobile Documents/com~apple~CloudDocs/HIMUDA HOUSING COLONY SANYARD LIST.pdf\""
       },
       {
         "title": "Repository",
-        "body": "https://github.com/veeringman/veertrust"
+        "body": "https://github.com/veeringman/hbcsanyard"
       }
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 230,
+    "sortOrder": 240,
     "private": true,
-    "repoUrl": "https://github.com/veeringman/veertrust"
+    "repoUrl": "https://github.com/veeringman/hbcsanyard"
+  },
+  {
+    "slug": "cityofmandi",
+    "name": "cityofmandi",
+    "subtitle": "HTML",
+    "summary": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website.",
+    "logo": "miniapps/cityofmandi/assets/apple-touch-icon.png",
+    "logoAlt": "cityofmandi logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website."
+      },
+      {
+        "title": "City of Mandi",
+        "body": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website.\n\n| | |\n|--|--|\n| **Site id** | `cityofmandi` |\n| **Live host** | `cityofmandi.com` (also `cityofmandi.veerlabs.solutions`) |\n| **Public domain** | `cityofmandi.com` |\n| **CMS** | `/cms/` (VeerCanvas authoring) |\n| **Portal desk** | `/admin/` (hub operators \u2014 features, services, business pages) |\n| **Business pages** | `/b/{slug}` now \u00b7 `{slug}.cityofmandi.com` after the domain |\n| **Admin service** | `veercanvas-admin-cityofmandi` on port **8085** |"
+      },
+      {
+        "title": "Surfaces",
+        "body": "| URL | Who | Purpose |\n|-----|-----|---------|\n| `/` | Public | City hub |\n| `/join` | Publishers | Register or sign in |\n| `/publish` | Publishers | Submit news, ads, services, businesses, or a custom kind |\n| `/admin/` | Hub operators | Moderation, features, offerings, hosted pages |\n| `/cms/` | Authors | VeerCanvas CMS |\n| `/b/veerlabs` | Public | Example hosted business page |\n\nSame first-boot CMS/operator login: username `admin`. Change it after sign-in."
+      },
+      {
+        "title": "Publish flow",
+        "body": "Anyone can register at `/join` and submit a listing at `/publish`. Kinds: news, ad, service, business, place, event, or a custom type. Submissions stay **pending** until an operator approves them at `/admin/`. Approved hosted businesses also land in `businesses.json` as `/b/{slug}`."
+      },
+      {
+        "title": "Business monetization",
+        "body": "Plans in the portal desk:\n\n- **Listed** \u2014 card on the hub\n- **Featured** \u2014 highlighted card\n- **Hosted** \u2014 own page at `/b/{slug}`, later `{slug}.cityofmandi.com` (see `wildcard.cityofmandi.com.http.conf`)"
+      },
+      {
+        "title": "Deploy",
+        "body": "```bash\nSITE_ID=cityofmandi EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh\n```"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/cityofmandi"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 250,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/cityofmandi"
+  },
+  {
+    "slug": "wiseears",
+    "name": "wiseears",
+    "subtitle": "AI-powered Conversation Intelligence Platform that records, understands, remembers, and pr...",
+    "summary": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/wiseears.png\"> <img alt=\"WiseEars\" src=\"assets/wiseears.png\" width=\"220\"> </picture> </p>",
+    "logo": "miniapps/wiseears/assets/wiseears-logo.png",
+    "logoAlt": "wiseears logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/wiseears.png\"> <img alt=\"WiseEars\" src=\"assets/wiseears.png\" width=\"220\"> </picture> </p>"
+      },
+      {
+        "title": "Vision",
+        "body": "Every meaningful conversation contains knowledge.\n\nUnfortunately, most of that knowledge is forgotten, scattered across recordings, notes, emails, chat messages, and documents.\n\nWiseEars changes that.\n\nInstead of treating conversations as isolated recordings, WiseEars continuously transforms them into connected knowledge. Every meeting, call, lecture, and discussion contributes to an evolving understanding of people, projects, decisions, tasks, and ideas.\n\nThe result is a searchable, intelligent memory that grows richer over time.\n\n---"
+      },
+      {
+        "title": "Core Principles",
+        "body": "* **Capture** \u2014 Record conversations with high-quality audio today and video in future releases.\n* **Understand** \u2014 Identify speakers, topics, decisions, questions, risks, commitments, and action items.\n* **Remember** \u2014 Build a persistent, searchable knowledge graph across conversations.\n* **Connect** \u2014 Link people, projects, documents, and discussions across weeks, months, and years.\n* **Predict** \u2014 Surface unresolved items, upcoming risks, and likely next actions.\n* **Protect** \u2014 Privacy-first architecture with encryption, user control, and enterprise deployment options.\n\n---"
+      },
+      {
+        "title": "Smart Capture",
+        "body": "* High-quality audio recording\n* Future-ready video recording\n* Live transcription\n* Speaker identification\n* Multi-language support\n* Offline-first recording"
+      },
+      {
+        "title": "Conversation Intelligence",
+        "body": "* Automatic summaries\n* Executive summaries\n* Decision detection\n* Action item extraction\n* Deadline tracking\n* Question and answer detection\n* Risk identification\n* Follow-up recommendations"
+      },
+      {
+        "title": "Chronicle",
+        "body": "Every conversation becomes part of a living history.\n\n* Episodes\n* Series\n* Projects\n* Teams\n* Organizations\n* Personal knowledge\n\nNothing important is ever lost."
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/wiseears"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 260,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/wiseears"
   },
   {
     "slug": "edgevault",
@@ -1416,7 +1558,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 240,
+    "sortOrder": 270,
     "private": true,
     "repoUrl": "https://github.com/veeringman/edgeVault",
     "summaryFormat": "auto",
@@ -1424,6 +1566,53 @@
     "summarySize": "",
     "reimport": false,
     "logoHeight": 40
+  },
+  {
+    "slug": "veertrust",
+    "name": "veertrust",
+    "subtitle": "Rust",
+    "summary": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.",
+    "logo": "miniapps/veertrust/assets/veertrust_ztn.png",
+    "logoAlt": "veertrust logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics."
+      },
+      {
+        "title": "VeerTrust - Zero Trust Architecture for Veer Edge",
+        "body": "This document outlines VeerTrust , the full Zero Trust Network (ZTN) architecture for the **Veer Edge Platform**, including its core components, protocols, interactions, and design dynamics.\n\n---"
+      },
+      {
+        "title": "\ud83e\udde9 Architecture Diagram",
+        "body": "![ZTN Diagram](./docs/veertrust_ztn.png)\n\n> _The above diagram represents device interaction with Edge Gateway, mobile apps, cloud services, and secure policy enforcement in a Zero Trust model._\n\n---"
+      },
+      {
+        "title": "1. **Devices**",
+        "body": "- Includes IoT sensors, mobile phones, user devices\n- **Functions**:\n  - Authenticate via JWT or device certificates\n  - TPM-backed attestation\n  - Secure telemetry/data streaming\n- **Protocols**: `mTLS`, `OAuth2`, `JWT`, `TPM attestation`"
+      },
+      {
+        "title": "2. **Edge Gateway**",
+        "body": "Core component enforcing Zero Trust principles at the edge\n\n- **Modules**:\n  - `VeerAuth Agent` \u2013 Manages workload/device identities\n  - `VeerPolicy` \u2013 Enforces RBAC/ABAC policies\n  - `VeerAttest` \u2013 Performs remote attestation\n- **Protocols**: `mTLS`, `QUIC`, `gRPC`, `SPIFFE IDs`"
+      },
+      {
+        "title": "3. **Mobile Apps / Web Consoles**",
+        "body": "- User access layer for managing and interacting with edge services\n- **Protocols**: `HTTPS`, `OAuth2`, `WebTransport`, `gRPC`"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/veertrust"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 280,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/veertrust"
   },
   {
     "slug": "veeredge",
@@ -1468,9 +1657,56 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 250,
+    "sortOrder": 290,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerEdge"
+  },
+  {
+    "slug": "rk3588-sbc",
+    "name": "RK3588-SBC",
+    "subtitle": "Shell",
+    "summary": "Open hardware single-board computer based on Rockchip **RK3588**.",
+    "logo": "assets/default-project-logo.svg",
+    "logoAlt": "RK3588-SBC logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "Open hardware single-board computer based on Rockchip **RK3588**."
+      },
+      {
+        "title": "RK3588-SBC",
+        "body": "Open hardware single-board computer based on Rockchip **RK3588**.\n\n| Spec | Target |\n|------|--------|\n| SoC | RK3588 (4\u00d7 Cortex-A76 + 4\u00d7 Cortex-A55, Mali-G610 MP4, 6 TOPS NPU) |\n| Memory | 8 GB LPDDR4X-4266 (4\u00d7 16-bit devices) |\n| Storage | 64 GB eMMC 5.1 + M.2 2280 NVMe (PCIe 3.0 \u00d74) |\n| Display | HDMI 2.1 (8K30 / 4K120) + MIPI DSI |\n| Camera | 2\u00d7 MIPI CSI |\n| USB | 1\u00d7 USB 3.1 Type-C (DP Alt Mode optional), 2\u00d7 USB 3.0 Type-A, 2\u00d7 USB 2.0 |\n| Network | 1\u00d7 Gigabit Ethernet (RTL8211F) |\n| Wireless | Optional M.2 E-key Wi-Fi 6 / BT module |\n| GPIO | 40-pin Raspberry Pi\u2013compatible header |\n| Power | USB-C PD 12 V / DC barrel 12 V |\n| Board size | 100 \u00d7 72 mm (\u2248 4-layer carrier + 8-layer core routing density) |\n| PCB | 8-layer impedance-controlled, ENIG |"
+      },
+      {
+        "title": "Project layout",
+        "body": "```\ndocs/           Architecture, power tree, stackup, BOM, layout rules\nhardware/kicad/ KiCad schematics, PCB, libraries, fab outputs\nmechanical/     Enclosure / heatsink STEP + drawings\nfirmware/       U-Boot / kernel notes, device-tree stubs\nscripts/        BOM export, DRC helpers\n```"
+      },
+      {
+        "title": "Design approach",
+        "body": "1. **Follow Rockchip reference templates** for RK3588 + LPDDR4X + RK806 (NDA package required).\n2. Keep SoC, DRAM, and PMIC in a tight core cluster; copy Rockchip DDR placement relative positions.\n3. Route high-speed interfaces with controlled impedance and length matching before low-speed GPIO.\n4. Use an 8-layer stackup (TOP\u2013GND\u2013SIG\u2013PWR\u2013GND\u2013SIG\u2013GND\u2013BOT) unless HDI is required for fan-out."
+      },
+      {
+        "title": "Prerequisites",
+        "body": "- Rockchip RK3588 hardware design package (schematic templates, PCB guidelines whitepaper, DDR SI files) under NDA\n- KiCad 8+ (or Altium if preferred)\n- PDN / SI tools for DDR4266 and PCIe / HDMI validation (optional but recommended)"
+      },
+      {
+        "title": "Status",
+        "body": "See [docs/architecture/OVERVIEW.md](docs/architecture/OVERVIEW.md) and the build checklist in [docs/pcb/LAYOUT_RULES.md](docs/pcb/LAYOUT_RULES.md)."
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/RK3588-SBC"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 300,
+    "private": false,
+    "repoUrl": "https://github.com/veeringman/RK3588-SBC"
   },
   {
     "slug": "quantum-waulta",
@@ -1519,7 +1755,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 260,
+    "sortOrder": 310,
     "private": false,
     "repoUrl": "https://github.com/veeringman/quantum-waulta"
   },
@@ -1566,7 +1802,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 270,
+    "sortOrder": 320,
     "private": true,
     "repoUrl": "https://github.com/veeringman/synthfoundary"
   },
@@ -1613,7 +1849,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 280,
+    "sortOrder": 330,
     "private": false,
     "repoUrl": "https://github.com/veeringman/tools"
   },
@@ -1660,7 +1896,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 290,
+    "sortOrder": 340,
     "private": false,
     "repoUrl": "https://github.com/veeringman/overwatch"
   },
@@ -1711,7 +1947,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 300,
+    "sortOrder": 350,
     "private": true,
     "repoUrl": "https://github.com/veeringman/SeekPeek"
   },
@@ -1742,7 +1978,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 310,
+    "sortOrder": 360,
     "private": true,
     "repoUrl": "https://github.com/veeringman/QuantumArc"
   },
@@ -1773,7 +2009,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 320,
+    "sortOrder": 370,
     "private": true,
     "repoUrl": "https://github.com/veeringman/Shieldon"
   },
@@ -1820,7 +2056,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 330,
+    "sortOrder": 380,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroPolitics"
   },
@@ -1867,7 +2103,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 340,
+    "sortOrder": 390,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroServices"
   },
@@ -1918,7 +2154,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 350,
+    "sortOrder": 400,
     "private": true,
     "repoUrl": "https://github.com/veeringman/TreasurySettlement"
   },
@@ -1973,7 +2209,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 360,
+    "sortOrder": 410,
     "private": true,
     "repoUrl": "https://github.com/veeringman/FortressDigital"
   },
@@ -2024,7 +2260,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 370,
+    "sortOrder": 420,
     "private": false,
     "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
   },
@@ -2047,7 +2283,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 380,
+    "sortOrder": 430,
     "private": true,
     "repoUrl": "https://github.com/veeringman/async_forge"
   },
@@ -2094,7 +2330,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 390,
+    "sortOrder": 440,
     "private": true,
     "repoUrl": "https://github.com/veeringman/brain_blocks"
   },
@@ -2121,7 +2357,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 400,
+    "sortOrder": 450,
     "private": true,
     "repoUrl": "https://github.com/veeringman/demo-workspaces"
   },
@@ -2148,7 +2384,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 410,
+    "sortOrder": 460,
     "private": true,
     "repoUrl": "https://github.com/veeringman/fd_demo_integ"
   },
@@ -2195,7 +2431,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 420,
+    "sortOrder": 470,
     "private": true,
     "repoUrl": "https://github.com/veeringman/future"
   },
@@ -2242,7 +2478,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 430,
+    "sortOrder": 480,
     "private": true,
     "repoUrl": "https://github.com/veeringman/green_thread"
   },
@@ -2289,7 +2525,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 440,
+    "sortOrder": 490,
     "private": true,
     "repoUrl": "https://github.com/veeringman/quakeguard"
   },
@@ -2336,7 +2572,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 450,
+    "sortOrder": 500,
     "private": false,
     "repoUrl": "https://github.com/veeringman/lanpeek"
   },
@@ -2383,7 +2619,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 460,
+    "sortOrder": 510,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proof-cortex"
   },
@@ -2422,7 +2658,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 470,
+    "sortOrder": 520,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proofcortex-core"
   },
@@ -2473,7 +2709,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 480,
+    "sortOrder": 530,
     "private": true,
     "repoUrl": "https://github.com/veeringman/sentientos"
   },
@@ -2504,7 +2740,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 490,
+    "sortOrder": 540,
     "private": false,
     "repoUrl": "https://github.com/veeringman/sharma"
   },
@@ -2535,7 +2771,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 500,
+    "sortOrder": 550,
     "private": true,
     "repoUrl": "https://github.com/veeringman/tie_http"
   },
@@ -2582,7 +2818,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 510,
+    "sortOrder": 560,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veeringman"
   }

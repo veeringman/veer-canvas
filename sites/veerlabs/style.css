@@ -1117,6 +1117,23 @@ body {
   color: var(--muted);
 }
 
+.auth-form .optional {
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.auth-name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .auth-name-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .auth-form input[type="text"],
 .auth-form input[type="email"],
 .auth-form input[type="password"],

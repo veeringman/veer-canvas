@@ -18,6 +18,8 @@
     "agentBaseUrl": "",
     "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
     "clientId": "veerlabs-web",
-    "gateAllLearnMore": true
+    "gateAllLearnMore": true,
+    "requiredGrant": "project:view",
+    "internalGrant": "project:internal"
   }
 }

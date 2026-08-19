@@ -8,6 +8,8 @@
     idpPublicUrl: 'https://authbuddy.veerlabs.solutions',
     clientId: 'veerlabs-web',
     gateAllLearnMore: true,
+    requiredGrant: 'project:view',
+    internalGrant: 'project:internal',
   };
 
   let config = Object.assign({}, DEFAULTS);
@@ -21,6 +23,8 @@
       idpPublicUrl: auth.idpPublicUrl || auth.idpBaseUrl || DEFAULTS.idpPublicUrl,
       clientId: auth.clientId || DEFAULTS.clientId,
       gateAllLearnMore: auth.gateAllLearnMore !== false,
+      requiredGrant: auth.requiredGrant || DEFAULTS.requiredGrant,
+      internalGrant: auth.internalGrant || DEFAULTS.internalGrant,
     });
   }
 
@@ -124,19 +128,78 @@
     return project && (project.requireAuth === true || project.requireAuth === 'true');
   }
 
+  function accessDeniedUrl(slug, grant) {
+    const page = new URL('access.html', global.location.href);
+    if (slug) page.searchParams.set('project', slug);
+    if (grant) page.searchParams.set('grant', grant);
+    return page.toString();
+  }
+
+  function splitGrant(grant) {
+    const raw = String(grant || '').trim();
+    const idx = raw.lastIndexOf(':');
+    if (idx < 1) return { resource: 'project', action: 'view', needed: 'project:view' };
+    return {
+      resource: raw.slice(0, idx),
+      action: raw.slice(idx + 1),
+      needed: raw,
+    };
+  }
+
+  function requiredGrantFor(project) {
+    if (project && project.requireGrant) return String(project.requireGrant).trim();
+    if (project && (project.internal === true || project.internal === 'true')) {
+      return config.internalGrant || 'project:internal';
+    }
+    return config.requiredGrant || 'project:view';
+  }
+
+  function sessionHasGrant(session, needed) {
+    const grants = (session && session.session && session.session.grants) || [];
+    const parts = splitGrant(needed);
+    return grants.includes(parts.needed)
+      || grants.includes(parts.resource + ':*')
+      || grants.includes('*:*');
+  }
+
+  async function authorizeGrant(grant) {
+    const parts = splitGrant(grant);
+    try {
+      const data = await fetchJson(
+        '/agent/v1/authorize?resource=' + encodeURIComponent(parts.resource)
+          + '&action=' + encodeURIComponent(parts.action)
+      );
+      return Boolean(data && data.allowed);
+    } catch (err) {
+      if (err && err.status === 401) return false;
+      if (err && err.status === 403) return false;
+      if (err && err.status === 404) {
+        const session = await getSession();
+        return isAuthenticated(session) && sessionHasGrant(session, parts.needed);
+      }
+      const session = await getSession();
+      return isAuthenticated(session) && sessionHasGrant(session, parts.needed);
+    }
+  }
+
   async function ensureProjectAccess(slug, project, returnToOverride) {
     if (project && !projectRequiresAuth(project)) return true;
     const session = await getSession(true);
-    if (isAuthenticated(session)) return true;
-    let returnTo = returnToOverride || global.location.href;
-    try {
-      // Prefer absolute same-origin destinations (Learn more → project.html).
-      returnTo = new URL(returnTo, global.location.href).href;
-    } catch (_e) { /* keep as-is */ }
-    const authPage = new URL('auth.html', global.location.href);
-    authPage.searchParams.set('return_to', returnTo);
-    if (slug) authPage.searchParams.set('project', slug);
-    global.location.href = authPage.toString();
+    if (!isAuthenticated(session)) {
+      let returnTo = returnToOverride || global.location.href;
+      try {
+        returnTo = new URL(returnTo, global.location.href).href;
+      } catch (_e) { /* keep as-is */ }
+      const authPage = new URL('auth.html', global.location.href);
+      authPage.searchParams.set('return_to', returnTo);
+      if (slug) authPage.searchParams.set('project', slug);
+      global.location.href = authPage.toString();
+      return false;
+    }
+    const grant = requiredGrantFor(project);
+    const allowed = await authorizeGrant(grant);
+    if (allowed) return true;
+    global.location.href = accessDeniedUrl(slug, grant);
     return false;
   }
 
@@ -282,6 +345,8 @@
     registerUrl,
     logout,
     projectRequiresAuth,
+    requiredGrantFor,
+    authorizeGrant,
     ensureProjectAccess,
     mountTopbarAuth,
     idpPost,

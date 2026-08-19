@@ -1,0 +1,47 @@
+{
+  "slug": "quantumpay",
+  "name": "QuantumPay",
+  "subtitle": "Rust",
+  "summary": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>",
+  "logo": "miniapps/quantumpay/assets/quantumpay-logo.png",
+  "logoAlt": "QuantumPay logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>"
+    },
+    {
+      "title": "Documentation",
+      "body": "The architecture is specified in [`docs/`](docs/README.md). Start here:\n\n| | |\n| --- | --- |\n| [Vision](docs/vision.md) | Why this product exists |\n| [Architecture](docs/architecture.md) | Modular monolith, hexagon, runtime |\n| [Payment lifecycle](docs/payment-lifecycle.md) | Intent/attempt state machines, including `UNKNOWN` |\n| [Security](docs/security.md) | Controls that are part of the runtime |\n| [Compliance](docs/compliance.md) | The regulatory fence |\n| [Legal drafts](docs/legal/README.md) | Society dues terms skeletons (not legal advice) |\n| [UPI / PhonePe / Razorpay](docs/upi-phonepe-razorpay.md) | Who does UPI vs settlement; TPAPs vs merchant |\n| [Society Razorpay KYC](docs/legal/razorpay-society-kyc.md) | Prep list; society is merchant of record |\n| [Test deploy (.78)](docs/deploy-test.md) | LAN test environment |\n| [Local Postgres](docs/local.md) | Docker Compose on a laptop |\n| [Roadmap](docs/roadmap.md) | What is built when |\n| [ADRs](docs/adr/README.md) | Why decisions were made |"
+    },
+    {
+      "title": "Design in one page",
+      "body": "1. **Provider agnostic** \u2014 adapters behind a port; the core never speaks a PSP dialect.\n2. **Money-neutral** \u2014 orchestration facts, not custody of funds.\n3. **Deterministic** \u2014 append-only events and ledger; status is a projection.\n4. **Idempotent** \u2014 retries must not create money movement.\n5. **Event-driven** \u2014 HTTP responses are not the final financial state.\n6. **Observable** \u2014 a payment is reconstructable end to end.\n7. **Secure by default** \u2014 fail closed on auth, KMS, and webhook verify.\n8. **Independently complete** \u2014 no sibling platform required to ship a payment."
+    },
+    {
+      "title": "What QuantumPay is not (Phase 1)",
+      "body": "Not a payment aggregator that handles funds, not an acquiring bank, not a UPI PSP, not an escrow, not a rail.\n\nProduction use in India requires independent legal, regulatory, contractual, security, banking, and provider review."
+    },
+    {
+      "title": "Status",
+      "body": "**Architecture and a running test API.** Implementation is a Cargo workspace. Test host: [`docs/deploy-test.md`](docs/deploy-test.md) (`192.168.29.78:18980`). No production payment traffic.\n\nPlanned stack: Rust, Tokio, Axum, PostgreSQL, Redis, OpenTelemetry, Kubernetes."
+    },
+    {
+      "title": "License",
+      "body": "License to be determined."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/QuantumPay"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 130,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/QuantumPay"
+}

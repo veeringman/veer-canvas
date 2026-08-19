@@ -607,10 +607,10 @@
     const path = mfaKind === 'hotp' ? '/auth/mfa/hotp/verify' : '/auth/mfa/totp/verify';
     let data;
     try {
-      data = await window.VeerAuth.idpPost(path, { code });
+      data = await window.VeerAuth.idpPost(path, { code, client_id: clientId() });
     } catch (_err) {
       const alt = mfaKind === 'hotp' ? '/auth/mfa/totp/verify' : '/auth/mfa/hotp/verify';
-      data = await window.VeerAuth.idpPost(alt, { code });
+      data = await window.VeerAuth.idpPost(alt, { code, client_id: clientId() });
     }
     if (!data.success) {
       setError(data.message || 'Invalid code');
@@ -634,7 +634,7 @@
       try {
         const data = await window.VeerAuth.idpPost(
           method === 'hotp' ? '/auth/mfa/hotp/verify' : '/auth/mfa/totp/verify',
-          { code }
+          { code, client_id: clientId() }
         );
         if (data.success) {
           if (data.session_id) window.VeerAuth.saveSessionId(data.session_id);
@@ -877,7 +877,12 @@
       const type = fd.get('regType') || 'password';
       const username = String(fd.get('username') || '').trim();
       const email = String(fd.get('email') || '').trim();
+      const given_name = String(fd.get('given_name') || '').trim();
+      const family_name = String(fd.get('family_name') || '').trim();
       enrollUsername = username;
+      const profileNames = {};
+      if (given_name) profileNames.given_name = given_name;
+      if (family_name) profileNames.family_name = family_name;
       try {
         if (policy && policy.password_required && type === 'passwordless') {
           setError('Passwordless registration is disabled for this site.');
@@ -889,6 +894,7 @@
             email,
             passwordless: true,
             client_id: clientId(),
+            ...profileNames,
           });
           await afterAuthOk(reg.message || 'Enroll an authenticator before accessing protected pages.', true);
           return;
@@ -912,6 +918,7 @@
           email,
           password,
           client_id: clientId(),
+          ...profileNames,
         });
         const forced = reg.requires_mfa || reg.enrollment_required || (policy && policy.mfa_required);
         await afterAuthOk(reg.message || 'Account created. Complete second-factor setup.', forced);

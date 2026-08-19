@@ -1,0 +1,47 @@
+{
+  "slug": "hbcsanyard",
+  "name": "hbcsanyard",
+  "subtitle": "JavaScript",
+  "summary": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA).",
+  "logo": "miniapps/hbcsanyard/assets/apple-touch-icon.png",
+  "logoAlt": "hbcsanyard logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA)."
+    },
+    {
+      "title": "HBCS Sanyard RWA",
+      "body": "Residents Welfare Association \u2014 **Himuda Housing Colony Sanyard, Mandi** (HIMUDA).\n\n| | |\n|--|--|\n| **Site id** | `hbcsanyard` |\n| **Domain** | `hbcsanyard.veerlabs.solutions` |\n| **Database** | SQLite `data/rwa.db` |\n| **Managed by** | [VeerCanvas](https://github.com/veeringman/veer-canvas) |\n| **App repo** | `veeringman/hbcsanyard` (companion) |"
+    },
+    {
+      "title": "Surfaces",
+      "body": "| URL | Audience | Purpose |\n|-----|----------|---------|\n| `/` | Residents + EC | Resident portal (OTP login, notices, dues, directory, profile) |\n| `/admin/` | Authors / EC | **VeerCanvas CMS** \u2014 content authoring & publish (not the resident app) |\n\nEC members with `role=admin` also see an **EC desk** tab inside the portal for notices, ledger import, and role promotion. That is separate from `/admin` CMS."
+    },
+    {
+      "title": "Roles",
+      "body": "- **admin** (Executive Committee) \u2014 publish notices, import PDF ledger, view full dues, promote members\n- **resident** \u2014 view notices, own dues, directory, edit own profile\n\nLogin: **plot / house number** + **email OTP** via Gmail SMTP (`housingcolonysanyard@gmail.com`). Without App Password configured, API returns `devCode`. Sessions last until **Sign out**.\n\n**AuthBuddy (optional):** after email verification, residents may link AuthBuddy / BuddyAuthenticator for alternate sign-in. **One factor only** for now (`mfa_required=false` on blueprint `hbcsanyard-password-mfa`). Same email as an existing AuthBuddy account (e.g. VeerLabs) is signed in and linked \u2014 not registered twice. Future public domain: `housingcolonysanyard.in`."
+    },
+    {
+      "title": "Database + PDF import",
+      "body": "```bash"
+    },
+    {
+      "title": "From iCloud / any path",
+      "body": ".venv/bin/python sites/hbcsanyard/scripts/import_ledger_pdf.py \\\n  \"/Users/vijay/Library/Mobile Documents/com~apple~CloudDocs/HIMUDA HOUSING COLONY SANYARD LIST.pdf\""
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/hbcsanyard"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 240,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/hbcsanyard"
+}

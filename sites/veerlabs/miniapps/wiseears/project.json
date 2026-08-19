@@ -1,0 +1,47 @@
+{
+  "slug": "wiseears",
+  "name": "wiseears",
+  "subtitle": "AI-powered Conversation Intelligence Platform that records, understands, remembers, and pr...",
+  "summary": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/wiseears.png\"> <img alt=\"WiseEars\" src=\"assets/wiseears.png\" width=\"220\"> </picture> </p>",
+  "logo": "miniapps/wiseears/assets/wiseears-logo.png",
+  "logoAlt": "wiseears logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "<p align=\"left\"> <picture> <source media=\"(prefers-color-scheme: dark)\" srcset=\"assets/wiseears.png\"> <img alt=\"WiseEars\" src=\"assets/wiseears.png\" width=\"220\"> </picture> </p>"
+    },
+    {
+      "title": "Vision",
+      "body": "Every meaningful conversation contains knowledge.\n\nUnfortunately, most of that knowledge is forgotten, scattered across recordings, notes, emails, chat messages, and documents.\n\nWiseEars changes that.\n\nInstead of treating conversations as isolated recordings, WiseEars continuously transforms them into connected knowledge. Every meeting, call, lecture, and discussion contributes to an evolving understanding of people, projects, decisions, tasks, and ideas.\n\nThe result is a searchable, intelligent memory that grows richer over time.\n\n---"
+    },
+    {
+      "title": "Core Principles",
+      "body": "* **Capture** \u2014 Record conversations with high-quality audio today and video in future releases.\n* **Understand** \u2014 Identify speakers, topics, decisions, questions, risks, commitments, and action items.\n* **Remember** \u2014 Build a persistent, searchable knowledge graph across conversations.\n* **Connect** \u2014 Link people, projects, documents, and discussions across weeks, months, and years.\n* **Predict** \u2014 Surface unresolved items, upcoming risks, and likely next actions.\n* **Protect** \u2014 Privacy-first architecture with encryption, user control, and enterprise deployment options.\n\n---"
+    },
+    {
+      "title": "Smart Capture",
+      "body": "* High-quality audio recording\n* Future-ready video recording\n* Live transcription\n* Speaker identification\n* Multi-language support\n* Offline-first recording"
+    },
+    {
+      "title": "Conversation Intelligence",
+      "body": "* Automatic summaries\n* Executive summaries\n* Decision detection\n* Action item extraction\n* Deadline tracking\n* Question and answer detection\n* Risk identification\n* Follow-up recommendations"
+    },
+    {
+      "title": "Chronicle",
+      "body": "Every conversation becomes part of a living history.\n\n* Episodes\n* Series\n* Projects\n* Teams\n* Organizations\n* Personal knowledge\n\nNothing important is ever lost."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/wiseears"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 260,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/wiseears"
+}

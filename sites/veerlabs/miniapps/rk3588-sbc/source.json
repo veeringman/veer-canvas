@@ -1,0 +1,9 @@
+{
+  "slug": "rk3588-sbc",
+  "repo": "https://github.com/veeringman/RK3588-SBC",
+  "default_branch": "main",
+  "language": "Shell",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

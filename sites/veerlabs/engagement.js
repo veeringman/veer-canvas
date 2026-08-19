@@ -340,19 +340,11 @@
         const match = href.match(/[?&]project=([^&]+)/);
         const slug = match ? decodeURIComponent(match[1]) : ((link.closest('[data-slug]') || {}).dataset || {}).slug || '';
 
-        // Prefer AuthBuddy Agent session over legacy visitor tokens.
+        // Prefer AuthBuddy Agent session + grants over legacy visitor tokens.
         if (window.VeerAuth && typeof window.VeerAuth.ensureProjectAccess === 'function') {
-          try {
-            const session = await window.VeerAuth.getSession(true);
-            if (window.VeerAuth.isAuthenticated(session)) {
-              window.location.href = href;
-              return;
-            }
-          } catch (_e) { /* fall through to auth hub */ }
-          const authPage = new URL('auth.html', window.location.href);
-          authPage.searchParams.set('return_to', new URL(href, window.location.href).toString());
-          if (slug) authPage.searchParams.set('project', slug);
-          window.location.href = authPage.toString();
+          const dest = new URL(href, window.location.href).toString();
+          const ok = await window.VeerAuth.ensureProjectAccess(slug, { requireAuth: true }, dest);
+          if (ok) window.location.href = dest;
           return;
         }
 

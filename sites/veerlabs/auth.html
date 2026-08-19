@@ -6,11 +6,11 @@
   <title>Sign in — VeerLabs Solutions</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260804pol1">
+  <link rel="stylesheet" href="style.css?v=20260819name1">
   <script src="site-utils.js?v=20260724engage1" defer></script>
   <script src="site-meta.js?v=20260804pol1" defer></script>
-  <script src="auth.js?v=20260811pqc1" defer></script>
-  <script src="auth-page.js?v=20260811pqc1" defer></script>
+  <script src="auth.js?v=20260819acl1" defer></script>
+  <script src="auth-page.js?v=20260819name1" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -91,6 +91,14 @@
             <div class="auth-method-pills" id="methodPills" aria-label="Available methods"></div>
             <label>Username<input name="username" required autocomplete="username"/></label>
             <label>Email<input name="email" type="email" required autocomplete="email"/></label>
+            <div class="auth-name-row">
+              <label>First name <span class="optional">(optional)</span>
+                <input name="given_name" autocomplete="given-name" placeholder="First name"/>
+              </label>
+              <label>Last name <span class="optional">(optional)</span>
+                <input name="family_name" autocomplete="family-name" placeholder="Last name"/>
+              </label>
+            </div>
 
             <fieldset class="auth-fieldset" id="regTypeFieldset">
               <legend>Account type</legend>

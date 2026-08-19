@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access required — VeerLabs Solutions</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20260819acl1">
+  <script src="site-utils.js?v=20260805logo1" defer></script>
+  <script src="site-meta.js?v=20260804pol1" defer></script>
+  <script src="auth.js?v=20260819acl1" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-topbar">
+      <a class="brand-lockup" href="index.html" aria-label="VeerLabs Solutions home">
+        <img class="brand-mark" src="assets/veer-canvas-icon.svg" alt="" width="40" height="40">
+        <div>
+          <span class="brand-name">VeerLabs</span>
+          <span class="brand-tag">Solutions</span>
+        </div>
+      </a>
+    </header>
+
+    <main class="dashboard-container auth-page">
+      <header class="dashboard-hero auth-hero">
+        <p class="eyebrow">Authorization</p>
+        <h1>This page is restricted</h1>
+        <p class="page-subtitle" id="accessCopy">You are signed in, but this account does not have a VeerLabs clearance for project documentation. Ask an administrator to assign the Member, Staff, or Admin badge.</p>
+      </header>
+      <p class="err-actions" style="display:flex;gap:1rem;flex-wrap:wrap">
+        <a class="btn primary" href="index.html">Back to catalog</a>
+        <a class="btn ghost" href="auth.html">Switch account</a>
+      </p>
+    </main>
+  </div>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const grant = params.get('grant');
+      const copy = document.getElementById('accessCopy');
+      if (copy && grant) {
+        copy.textContent = 'You are signed in, but this account is missing grant ' + grant
+          + '. Ask an administrator to assign the Member, Staff, or Admin badge in the VeerLabs trust circle.';
+      }
+    })();
+  </script>
+</body>
+</html>

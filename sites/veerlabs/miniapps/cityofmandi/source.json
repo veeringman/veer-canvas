@@ -1,0 +1,18 @@
+{
+  "slug": "cityofmandi",
+  "repo": "https://github.com/veeringman/cityofmandi",
+  "default_branch": "main",
+  "language": "HTML",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/apple-touch-icon.png?token=AHGYFSLZS7EBRG3T2C663WLKQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/favicon-32.png?token=AHGYFSPVBMPX76DD2O4MPYLKQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/favicon-64.png?token=AHGYFSL5IO5YFVFCAOTSAM3KQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/favicon.svg?token=AHGYFSKLBWG4ZBBH7KXQRYDKQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/veer-canvas-icon.svg?token=AHGYFSPMEQYGQYWBGECDDLTKQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/veerlabs-logo-mark-64.png?token=AHGYFSOQZNRF6NXLWLGATFDKQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/veerlabs-logo-mark-64.webp?token=AHGYFSOETRND5QQKJPIVJA3KQVTUVAA",
+    "https://raw.githubusercontent.com/veeringman/cityofmandi/main/assets/veerlabs-logo-mark.webp?token=AHGYFSIS2I27XAMMJNXN63TKQVTUVAA"
+  ],
+  "readme_logo_url": null
+}

@@ -3,7 +3,7 @@
   "name": "AuthBuddy",
   "subtitle": "Rust",
   "summary": "An Identity provider and OAuth2/OIDC server that combines form login, MFA, passkeys, and standards-compliant federation in a single, extensible service.",
-  "logo": "miniapps/authbuddy/assets/authbuddy_logo_bluegreen.png",
+  "logo": "miniapps/authbuddy/assets/logo.png",
   "logoAlt": "AuthBuddy logo",
   "status": [],
   "tags": [],
@@ -54,5 +54,6 @@
   "summaryAlign": "",
   "summarySize": "",
   "reimport": false,
-  "logoHeight": 54
+  "logoHeight": 54,
+  "requireAuth": false
 }

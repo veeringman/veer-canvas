@@ -1,0 +1,11 @@
+{
+  "slug": "wiseears",
+  "repo": "https://github.com/veeringman/wiseears",
+  "default_branch": "main",
+  "language": null,
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/wiseears/main/assets/wiseears-logo.png?token=AHGYFSKRD6DIYTBJVLEDTK3KONUGZAA"
+  ],
+  "readme_logo_url": null
+}

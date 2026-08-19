@@ -1,10 +1,10 @@
 {
   "slug": "veersetu",
-  "name": "veersetu",
+  "name": "VeerSetu",
   "subtitle": "Rust",
   "summary": "Zero-trust edge fabric for secure remote access, service publishing, and private networking.",
-  "logo": "miniapps/veersetu/assets/veersetu_logo.png",
-  "logoAlt": "veersetu logo",
+  "logo": "miniapps/veersetu/assets/logo.svg",
+  "logoAlt": "VeerSetu logo",
   "status": [],
   "tags": [],
   "details": [
@@ -54,5 +54,5 @@
   "summarySize": "",
   "reimport": false,
   "requireAuth": false,
-  "logoHeight": 70
+  "logoHeight": 64
 }

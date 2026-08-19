@@ -1,0 +1,11 @@
+{
+  "slug": "quantumpay",
+  "repo": "https://github.com/veeringman/QuantumPay",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [
+    "https://raw.githubusercontent.com/veeringman/QuantumPay/main/assets/quantumpay-logo.png?token=AHGYFSP6NBMB4ZYR45OQVA3KQVTUPAA"
+  ],
+  "readme_logo_url": null
+}

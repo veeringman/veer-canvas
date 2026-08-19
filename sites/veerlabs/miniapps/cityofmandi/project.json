@@ -1,0 +1,47 @@
+{
+  "slug": "cityofmandi",
+  "name": "cityofmandi",
+  "subtitle": "HTML",
+  "summary": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website.",
+  "logo": "miniapps/cityofmandi/assets/apple-touch-icon.png",
+  "logoAlt": "cityofmandi logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website."
+    },
+    {
+      "title": "City of Mandi",
+      "body": "Independent civic hub for **Mandi, Himachal Pradesh**. Not a Municipal Corporation, District Administration, or HIMUDA website.\n\n| | |\n|--|--|\n| **Site id** | `cityofmandi` |\n| **Live host** | `cityofmandi.com` (also `cityofmandi.veerlabs.solutions`) |\n| **Public domain** | `cityofmandi.com` |\n| **CMS** | `/cms/` (VeerCanvas authoring) |\n| **Portal desk** | `/admin/` (hub operators \u2014 features, services, business pages) |\n| **Business pages** | `/b/{slug}` now \u00b7 `{slug}.cityofmandi.com` after the domain |\n| **Admin service** | `veercanvas-admin-cityofmandi` on port **8085** |"
+    },
+    {
+      "title": "Surfaces",
+      "body": "| URL | Who | Purpose |\n|-----|-----|---------|\n| `/` | Public | City hub |\n| `/join` | Publishers | Register or sign in |\n| `/publish` | Publishers | Submit news, ads, services, businesses, or a custom kind |\n| `/admin/` | Hub operators | Moderation, features, offerings, hosted pages |\n| `/cms/` | Authors | VeerCanvas CMS |\n| `/b/veerlabs` | Public | Example hosted business page |\n\nSame first-boot CMS/operator login: username `admin`. Change it after sign-in."
+    },
+    {
+      "title": "Publish flow",
+      "body": "Anyone can register at `/join` and submit a listing at `/publish`. Kinds: news, ad, service, business, place, event, or a custom type. Submissions stay **pending** until an operator approves them at `/admin/`. Approved hosted businesses also land in `businesses.json` as `/b/{slug}`."
+    },
+    {
+      "title": "Business monetization",
+      "body": "Plans in the portal desk:\n\n- **Listed** \u2014 card on the hub\n- **Featured** \u2014 highlighted card\n- **Hosted** \u2014 own page at `/b/{slug}`, later `{slug}.cityofmandi.com` (see `wildcard.cityofmandi.com.http.conf`)"
+    },
+    {
+      "title": "Deploy",
+      "body": "```bash\nSITE_ID=cityofmandi EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh\n```"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/cityofmandi"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 250,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/cityofmandi"
+}

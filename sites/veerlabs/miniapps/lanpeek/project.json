@@ -41,7 +41,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 450,
+  "sortOrder": 500,
   "private": false,
   "repoUrl": "https://github.com/veeringman/lanpeek"
 }

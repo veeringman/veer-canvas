@@ -34,7 +34,9 @@
     "agentBaseUrl": "",
     "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
     "gateAllLearnMore": true,
-    "note": "Public site reaches AuthBuddy via EC2 nginx → local authbuddy.service on 127.0.0.1:18080"
+    "requiredGrant": "project:view",
+    "internalGrant": "project:internal",
+    "note": "Public site reaches AuthBuddy via EC2 nginx → local authbuddy.service on 127.0.0.1:18080. Learn more requires grant project:view (Member/Staff/Admin badge)."
   },
   "ops": false,
   "createdAt": "2026-07-25T17:12:50Z",

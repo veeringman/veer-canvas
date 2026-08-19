@@ -1,0 +1,47 @@
+{
+  "slug": "rk3588-sbc",
+  "name": "RK3588-SBC",
+  "subtitle": "Shell",
+  "summary": "Open hardware single-board computer based on Rockchip **RK3588**.",
+  "logo": "assets/default-project-logo.svg",
+  "logoAlt": "RK3588-SBC logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "Open hardware single-board computer based on Rockchip **RK3588**."
+    },
+    {
+      "title": "RK3588-SBC",
+      "body": "Open hardware single-board computer based on Rockchip **RK3588**.\n\n| Spec | Target |\n|------|--------|\n| SoC | RK3588 (4\u00d7 Cortex-A76 + 4\u00d7 Cortex-A55, Mali-G610 MP4, 6 TOPS NPU) |\n| Memory | 8 GB LPDDR4X-4266 (4\u00d7 16-bit devices) |\n| Storage | 64 GB eMMC 5.1 + M.2 2280 NVMe (PCIe 3.0 \u00d74) |\n| Display | HDMI 2.1 (8K30 / 4K120) + MIPI DSI |\n| Camera | 2\u00d7 MIPI CSI |\n| USB | 1\u00d7 USB 3.1 Type-C (DP Alt Mode optional), 2\u00d7 USB 3.0 Type-A, 2\u00d7 USB 2.0 |\n| Network | 1\u00d7 Gigabit Ethernet (RTL8211F) |\n| Wireless | Optional M.2 E-key Wi-Fi 6 / BT module |\n| GPIO | 40-pin Raspberry Pi\u2013compatible header |\n| Power | USB-C PD 12 V / DC barrel 12 V |\n| Board size | 100 \u00d7 72 mm (\u2248 4-layer carrier + 8-layer core routing density) |\n| PCB | 8-layer impedance-controlled, ENIG |"
+    },
+    {
+      "title": "Project layout",
+      "body": "```\ndocs/           Architecture, power tree, stackup, BOM, layout rules\nhardware/kicad/ KiCad schematics, PCB, libraries, fab outputs\nmechanical/     Enclosure / heatsink STEP + drawings\nfirmware/       U-Boot / kernel notes, device-tree stubs\nscripts/        BOM export, DRC helpers\n```"
+    },
+    {
+      "title": "Design approach",
+      "body": "1. **Follow Rockchip reference templates** for RK3588 + LPDDR4X + RK806 (NDA package required).\n2. Keep SoC, DRAM, and PMIC in a tight core cluster; copy Rockchip DDR placement relative positions.\n3. Route high-speed interfaces with controlled impedance and length matching before low-speed GPIO.\n4. Use an 8-layer stackup (TOP\u2013GND\u2013SIG\u2013PWR\u2013GND\u2013SIG\u2013GND\u2013BOT) unless HDI is required for fan-out."
+    },
+    {
+      "title": "Prerequisites",
+      "body": "- Rockchip RK3588 hardware design package (schematic templates, PCB guidelines whitepaper, DDR SI files) under NDA\n- KiCad 8+ (or Altium if preferred)\n- PDN / SI tools for DDR4266 and PCIe / HDMI validation (optional but recommended)"
+    },
+    {
+      "title": "Status",
+      "body": "See [docs/architecture/OVERVIEW.md](docs/architecture/OVERVIEW.md) and the build checklist in [docs/pcb/LAYOUT_RULES.md](docs/pcb/LAYOUT_RULES.md)."
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/RK3588-SBC"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 300,
+  "private": false,
+  "repoUrl": "https://github.com/veeringman/RK3588-SBC"
+}

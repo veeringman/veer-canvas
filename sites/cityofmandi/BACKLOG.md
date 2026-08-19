@@ -127,6 +127,6 @@ Unofficial civic hub. Do not impersonate government, MC Mandi, or HIMUDA.
 | 2026-08-17 | Card header: I ❤ My Mandi / मेरा ❤ मंडी |
 | 2026-08-17 | Compact glass board chip: next icon on card, teal theme |
 | 2026-08-17 | Home-screen app name CityOfMandi; teal opaque icon (no white corners) |
-| 2026-08-17 | Deployed compact board card, CityOfMandi PWA, responsive heart |
+| 2026-08-19 | Hero lead: The Great Smart |
 
 **Deploy:** `SITE_ID=cityofmandi EC2_KEY=~/Downloads/VeerSetuHost.pem ./deploy/remote-deploy.sh`

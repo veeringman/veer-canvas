@@ -14,7 +14,7 @@ Official sample VeerCanvas site: public project catalog for VeerLabs Solutions.
 - Public tile grid + project detail pages
 - Content CMS at `/admin/` (projects, import, publish, branding)
 - `engagement.js` — likes/comments, contact modal, visit beacon
-- **AuthBuddy Agent** — Sign in / Register; Learn More → `project.html` gated when `auth.gateAllLearnMore` is true
+- **AuthBuddy Agent** — Sign in / Register; Learn More → `project.html` gated when `auth.gateAllLearnMore` is true **and** the session has grant `project:view` (Member / Staff / Admin badge). Unsigned users go to `auth.html`; signed-in users without a clearance go to `access.html`.
 - **Custom error pages** — `/errors/{403,404,500,502,503,504}.html` (no nginx default banners)
 
 ## AuthBuddy via VeerSetu (important)
@@ -58,9 +58,10 @@ Session id from `/auth/login` is stored in `localStorage` and sent as `Authoriza
 | Register | Password required; passwordless hidden while policy says so; MFA enroll forced before RP access |
 | Login | Adaptive: `POST /auth/login/options` then password and/or OTP / passkey |
 | Gate | MFA-pending sessions → `/agent/v1/session` returns `authenticated: false`; Learn more stays gated |
-| Files | `auth.js`, `auth-page.js`, `auth.html`, `style.css`, `site-meta.js` |
+| Authorization | `/agent/v1/authorize?resource=project&action=view` — deny unless badge grants `project:view` |
+| Files | `auth.js`, `auth-page.js`, `auth.html`, `access.html`, `style.css`, `site-meta.js` |
 
-IdP policy seed: AuthBuddy `scripts/seed-veerlabs-policy.sh` · [VEERLABS_POLICY.md](../../../AuthBuddy/docs/agent/VEERLABS_POLICY.md) (sibling repo).
+IdP policy seed: AuthBuddy `scripts/seed-veerlabs-policy.sh` · [VEERLABS_POLICY.md](../../../AuthBuddy/docs/agent/VEERLABS_POLICY.md) (sibling repo). Rebuild/restart AuthBuddy, seed grants/badges, then assign a **Member** clearance before deploying this site — otherwise signed-in users will hit `access.html`.
 
 ## Error pages
 
