@@ -10,11 +10,11 @@
   <meta name="theme-color" content="#15233f">
   <link rel="icon" href="assets/favicon-192.png" type="image/png" sizes="192x192">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260818theme2">
+  <link rel="stylesheet" href="portal.css?v=20260819ab6">
   <script src="site-utils.js?v=20260812domain1" defer></script>
   <script src="site-meta.js?v=20260812domain1" defer></script>
-  <script src="auth.js?v=20260817pw2" defer></script>
-  <script src="auth-page.js?v=20260818theme1" defer></script>
+  <script src="auth.js?v=20260819ab6" defer></script>
+  <script src="auth-page.js?v=20260819ab1" defer></script>
 </head>
 <body>
   <main class="shell landing-shell">
@@ -52,6 +52,9 @@
       <p class="auth-card-mark">
         <img src="assets/authbuddy/authbuddy-mark-64.png?v=20260812ab1" width="22" height="22" alt="" decoding="async">
         AuthBuddy
+      </p>
+      <p class="gate-authbuddy-about">
+        <button type="button" class="authbuddy-help-link" data-open-authbuddy-help>What is AuthBuddy?</button>
       </p>
       <div id="methodPills"></div>
       <p class="muted" id="policyNotes"></p>
@@ -182,5 +185,34 @@
       </div>
     </section>
   </main>
+  <dialog id="authbuddyHelpDialog" class="notify-dialog authbuddy-help-dialog" aria-labelledby="authbuddyHelpTitle">
+    <header class="dialog-head">
+      <div>
+        <h3 id="authbuddyHelpTitle">What is AuthBuddy?</h3>
+        <p class="muted">Optional faster sign-in for this colony — from VeerLabs.</p>
+      </div>
+      <button type="button" class="btn ghost compact dialog-close" data-close-authbuddy-help aria-label="Close">✕</button>
+    </header>
+    <div class="notify-dialog-body authbuddy-help-body">
+      <p>AuthBuddy is the colony’s secure sign-in. After your plot member is linked, you can open the portal with a password, Face ID, authenticator code, or phone approve — without waiting for an email passcode.</p>
+      <p><strong>How to use it</strong></p>
+      <ol>
+        <li>Use the same email as this plot member.</li>
+        <li>Sign in here, then return to the colony portal.</li>
+      </ol>
+      <p><strong>Get BuddyAuthenticator</strong></p>
+      <ul>
+        <li><strong>Web App (PWA):</strong>
+          <a data-authbuddy-pwa-href href="https://authbuddy.veerlabs.solutions/authenticator/" target="_blank" rel="noopener">Open the web app</a>
+          and Add to Home Screen.</li>
+        <li><strong>Android:</strong> latest <code>.apk</code> on
+          <a data-authbuddy-apk-href href="https://drive.google.com/drive/folders/1ywOGks8jBiIUDrV9pmi2NGDD_I0O06Ep?usp=share_link" target="_blank" rel="noopener">Google Drive</a>.</li>
+        <li><strong>iOS:</strong> Web App (PWA), or Google / Microsoft Authenticator for TOTP only.
+          Native iOS sideload is for expert users — contact admin.</li>
+      </ul>
+      <p class="muted">QR / number match, HOTP, and Hybrid PQC need BuddyAuthenticator. Password and passkey work in the browser without the app.</p>
+      <div data-authbuddy-manual-host></div>
+    </div>
+  </dialog>
 </body>
 </html>

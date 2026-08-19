@@ -11117,23 +11117,22 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         </p>
         <p style="margin:0 0 0.35rem;font-weight:600;color:var(--navy)">Prerequisite — authenticator app</p>
         <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.95rem">
-          Install <strong>BuddyAuthenticator</strong> on iPhone or Android <em>before</em> (or while) linking
-          for authenticator codes, QR scan, on-phone approve, and Hybrid PQC.
-          Ask your society / VeerLabs admin if you do not have the install link yet.
+          Install <strong>BuddyAuthenticator</strong> before (or while) linking for authenticator codes, QR / number match, and Hybrid PQC.
         </p>
         <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.92rem">
-          <strong>iOS alternative (TOTP codes only):</strong> if BuddyAuthenticator is not available yet,
-          you can install <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong>
-          from the App Store and enroll a TOTP account when AuthBuddy shows the QR / secret.
-          That path supports <em>rotating codes only</em> — not QR login approve, passkey helper flows, or Hybrid PQC.
-          Password and passkey can still work in the browser without those apps.
+          <strong>Web App (PWA):</strong> <a href="https://authbuddy.veerlabs.solutions/authenticator/" target="_blank" rel="noopener">Open the web app</a> and Add to Home Screen.
+          <strong>Android:</strong> latest <code>.apk</code> on <a href="https://drive.google.com/drive/folders/1ywOGks8jBiIUDrV9pmi2NGDD_I0O06Ep?usp=share_link" data-authbuddy-apk-href target="_blank" rel="noopener">Google Drive</a>.
+        </p>
+        <p class="muted" style="margin:0 0 0.85rem;line-height:1.45;font-size:0.92rem">
+          <strong>iOS:</strong> use the Web App (PWA), or <strong>Google Authenticator</strong> / <strong>Microsoft Authenticator</strong> from the App Store for TOTP codes only
+          (not QR / number match, HOTP, or Hybrid PQC). Native iOS app is sideloaded for expert / inquisitive users — contact the society or VeerLabs admin.
         </p>
         <p style="margin:0 0 0.35rem;font-weight:600;color:var(--navy)">What you can use (one method is enough)</p>
         <ul style="margin:0 0 0.85rem;padding-left:1.15rem;line-height:1.5;font-size:0.95rem">
           <li><strong>Password</strong> — AuthBuddy account password in the browser.</li>
           <li><strong>Passkey</strong> — Face ID / fingerprint / device unlock (phishing-resistant).</li>
           <li><strong>Authenticator codes (TOTP / HOTP)</strong> — rotating codes in BuddyAuthenticator, or on iOS in Google/Microsoft Authenticator (TOTP only).</li>
-          <li><strong>QR / Approve on phone</strong> — scan or approve a login from BuddyAuthenticator.</li>
+          <li><strong>QR / number match</strong> — scan the login QR or match the two-digit number in BuddyAuthenticator → Approvals.</li>
           <li><strong>Hybrid PQC</strong> — stronger post-quantum-ready keys for advanced setups (via the app).</li>
         </ul>
         <p class="muted" style="margin:0 0 1rem;line-height:1.45;font-size:0.92rem">
@@ -11141,6 +11140,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           New to AuthBuddy? Create an account with this plot member’s email, then we link it.
           For HBC Sanyard only <strong>one factor</strong> is required right now. Skip anytime; nothing colony-side changes if you choose Not now.
         </p>
+        <div data-authbuddy-manual-host style="margin:0 0 1rem"></div>
         <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap">
           <button type="button" class="btn primary" id="authbuddyLinkNowBtn">I already have AuthBuddy</button>
           <button type="button" class="btn secondary" id="authbuddyRegisterBtn">Create AuthBuddy account</button>
@@ -11148,6 +11148,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         </p>
       </div>`;
     document.body.appendChild(modal);
+    if (window.VeerAuth && typeof window.VeerAuth.bindAuthbuddyHelp === 'function') {
+      window.VeerAuth.bindAuthbuddyHelp();
+    }
 
     const close = () => { modal.remove(); };
     el('authbuddyLinkDismissBtn')?.addEventListener('click', () => {

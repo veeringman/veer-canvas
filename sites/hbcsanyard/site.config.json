@@ -31,6 +31,7 @@
     "clientId": "hbcsanyard-web",
     "gateAllLearnMore": false,
     "publicOrigin": "https://housingcolonysanyard.in",
+    "buddyAuthenticatorApkUrl": "https://drive.google.com/drive/folders/1ywOGks8jBiIUDrV9pmi2NGDD_I0O06Ep?usp=share_link",
     "allowedOrigins": [
       "https://housingcolonysanyard.in",
       "https://www.housingcolonysanyard.in",

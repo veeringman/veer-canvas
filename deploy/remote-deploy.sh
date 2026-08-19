@@ -141,8 +141,10 @@ if cfg_path.exists():
     try:
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
         cfg_auth = cfg.get("auth") if isinstance(cfg, dict) else None
+        if not isinstance(cfg_auth, dict):
+            cfg_auth = cfg.get("authbuddy") if isinstance(cfg, dict) else None
         if isinstance(cfg_auth, dict):
-            for k in ("idpPublicUrl", "clientId", "gateAllLearnMore", "agentBaseUrl"):
+            for k in ("idpPublicUrl", "clientId", "gateAllLearnMore", "agentBaseUrl", "requiredGrant", "internalGrant", "buddyAuthenticatorApkUrl"):
                 if k in cfg_auth and cfg_auth[k] not in (None, ""):
                     auth[k] = cfg_auth[k]
     except json.JSONDecodeError:

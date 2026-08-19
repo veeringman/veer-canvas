@@ -22,10 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260818inbox1">
+  <link rel="stylesheet" href="portal.css?v=20260819ab6">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
-  <script src="auth.js?v=20260817face2" defer></script>
-  <script src="portal.js?v=20260818inbox1" defer></script>
+  <script src="auth.js?v=20260819ab6" defer></script>
+  <script src="portal.js?v=20260819ab6" defer></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -234,6 +234,9 @@
       <div id="plotLoginPane">
         <h2>Residents</h2>
         <p class="muted" id="gateIntroCopy">Enter your house / plot number. If AuthBuddy is linked for your member, that will be offered first — email passcodes are only sent when you choose them.</p>
+        <p class="gate-authbuddy-about">
+          <button type="button" class="authbuddy-help-link" data-open-authbuddy-help>What is AuthBuddy?</button>
+        </p>
         <form id="otpRequestForm" class="stack" method="post" action="#" onsubmit="return false;">
           <label>
             House / plot number
@@ -278,6 +281,9 @@
               <span>Continue with AuthBuddy</span>
             </button>
             <p class="muted gate-auth-note" id="authbuddyGateHint">Password, passkey, authenticator code, or QR approve — one factor is enough.</p>
+            <p class="gate-authbuddy-about">
+              <button type="button" class="authbuddy-help-link" data-open-authbuddy-help>How to set up AuthBuddy</button>
+            </p>
             <button type="button" class="btn ghost" id="useEmailPasscodeBtn">Use email passcode instead</button>
           </div>
           <div id="emailPasscodePrimaryBlock" class="stack" hidden>
@@ -2130,17 +2136,20 @@
             <details class="profile-authbuddy-help" id="profileAuthbuddyHelp">
               <summary>How it works &amp; app setup</summary>
               <div class="profile-authbuddy-help-body">
-                <p><strong>Prerequisite:</strong> install <strong>BuddyAuthenticator</strong> on iPhone or Android for codes, QR approve, and Hybrid PQC. Ask your society / VeerLabs admin for the install link if needed.</p>
-                <p><strong>iOS alternative (TOTP only):</strong> Google Authenticator or Microsoft Authenticator from the App Store — rotating codes only (not QR approve or Hybrid PQC). Password and passkey still work in the browser.</p>
+                <p><strong>Prerequisite:</strong> BuddyAuthenticator on your phone for codes, QR approve, and Hybrid PQC.</p>
+                <p><strong>Web App (PWA):</strong> open <a href="https://authbuddy.veerlabs.solutions/authenticator/" target="_blank" rel="noopener">authbuddy.veerlabs.solutions/authenticator</a> and Add to Home Screen.</p>
+                <p><strong>Android:</strong> download the latest <code>.apk</code> from <a href="https://drive.google.com/drive/folders/1ywOGks8jBiIUDrV9pmi2NGDD_I0O06Ep?usp=share_link" data-authbuddy-apk-href target="_blank" rel="noopener">Google Drive</a>.</p>
+                <p><strong>iOS:</strong> use the Web App (PWA), or Google Authenticator / Microsoft Authenticator for TOTP codes only. Native iOS app is sideloaded for expert / inquisitive users — contact the society or VeerLabs admin.</p>
                 <p class="profile-authbuddy-methods-label">Methods (one is enough for HBC Sanyard)</p>
                 <ul class="profile-authbuddy-methods">
                   <li>Password</li>
                   <li>Passkey (Face ID / fingerprint)</li>
                   <li>Authenticator codes (TOTP / HOTP)</li>
-                  <li>QR / Approve on phone (BuddyAuthenticator)</li>
+                  <li>QR / number match (BuddyAuthenticator Approvals)</li>
                   <li>Hybrid PQC (advanced, via BuddyAuthenticator)</li>
                 </ul>
                 <p>Same email as VeerLabs AuthBuddy links this household member — no second account.</p>
+                <div data-authbuddy-manual-host></div>
               </div>
             </details>
             <div class="btn-row profile-authbuddy-actions" id="profileAuthbuddyActions">
@@ -3489,5 +3498,38 @@
       </span>
     </footer>
   </div>
+
+  <!-- Outside #appView: that panel is display:none until signed in, which hides showModal(). -->
+  <dialog id="authbuddyHelpDialog" class="notify-dialog authbuddy-help-dialog" aria-labelledby="authbuddyHelpTitle">
+    <header class="dialog-head">
+      <div>
+        <h3 id="authbuddyHelpTitle">What is AuthBuddy?</h3>
+        <p class="muted">Optional faster sign-in for this colony — from VeerLabs.</p>
+      </div>
+      <button type="button" class="btn ghost compact dialog-close" data-close-authbuddy-help aria-label="Close">✕</button>
+    </header>
+    <div class="notify-dialog-body authbuddy-help-body">
+      <p>AuthBuddy is the colony’s secure sign-in. After your plot member is linked, you can open the portal with a password, Face ID, authenticator code, or phone approve — without waiting for an email passcode. Email passcode still works anytime.</p>
+      <p><strong>How to use it</strong></p>
+      <ol>
+        <li>Sign in once with your plot number and email passcode.</li>
+        <li>Link AuthBuddy using the <strong>same email</strong> as this household member.</li>
+        <li>Next visits: enter your plot, then Continue with AuthBuddy.</li>
+      </ol>
+      <p><strong>Get BuddyAuthenticator</strong></p>
+      <ul>
+        <li><strong>Web App (PWA) — all phones:</strong> open
+          <a data-authbuddy-pwa-href href="https://authbuddy.veerlabs.solutions/authenticator/" target="_blank" rel="noopener">authbuddy.veerlabs.solutions/authenticator</a>
+          and Add to Home Screen.</li>
+        <li><strong>Android app:</strong> download the latest <code>.apk</code> from
+          <a data-authbuddy-apk-href href="https://drive.google.com/drive/folders/1ywOGks8jBiIUDrV9pmi2NGDD_I0O06Ep?usp=share_link" target="_blank" rel="noopener">Google Drive</a>
+          (sideload — allow install from this source if Android asks).</li>
+        <li><strong>iOS:</strong> use the Web App (PWA), or Google Authenticator / Microsoft Authenticator for <em>TOTP codes only</em>.
+          Native iOS app is sideloaded for expert / inquisitive users — contact the society or VeerLabs admin.</li>
+      </ul>
+      <p class="muted">QR / number match, HOTP, and Hybrid PQC need BuddyAuthenticator (Web App / PWA or native). Password and passkey work in the browser without the app.</p>
+      <div data-authbuddy-manual-host></div>
+    </div>
+  </dialog>
 </body>
 </html>
