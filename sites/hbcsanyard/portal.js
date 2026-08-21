@@ -1530,6 +1530,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     document.querySelectorAll(`[data-author-pane="${formKey}"]`).forEach((pane) => {
       pane.hidden = pane.getAttribute('data-lang') !== next;
     });
+    document.querySelectorAll('.mhws-composer-lang-btn').forEach((btn) => {
+      const on = btn.getAttribute('data-compose-lang') === next;
+      btn.classList.toggle('is-active', on);
+    });
     if (next === 'hi') {
       autofillAuthorFromEnglish(formKey).catch(() => {});
     }
@@ -1542,6 +1546,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     } else if (formKey === 'grievance') {
       pairs.push(['grievanceSubject', 'grievanceSubjectHi'], ['grievanceBody', 'grievanceBodyHi']);
     } else if (formKey === 'info') {
+      syncInfoComposerInputs();
       pairs.push(
         ['infoTitleInput', 'infoTitleHiInput'],
         ['infoSummaryInput', 'infoSummaryHiInput'],
@@ -1570,7 +1575,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (!need.length) return;
     const translated = await translateTexts(need.map((n) => n.text), { source: 'en', target: 'hi' });
     need.forEach((n, i) => {
-      if (translated[i] && !String(n.hiEl.value || '').trim()) n.hiEl.value = translated[i];
+      if (translated[i] && !String(n.hiEl.value || '').trim()) {
+        n.hiEl.value = translated[i];
+        if (n.hiEl.id === 'infoHtmlHiInput' && infoComposeHi) {
+          infoComposeHi.setHTML(translated[i]);
+        }
+      }
     });
   }
 
@@ -6042,10 +6052,103 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   let infoCategoriesCache = [];
   let infoFoldersCache = [];
   let infoDocsCache = [];
+  let infoComposeEn = null;
+  let infoComposeHi = null;
+  let infoComposeLayout = null;
   let infoDeepLink = null;
   let infoAccessCandidatesCache = null;
   let infoFolderAccessEditId = '';
   const PENDING_INFO_KEY = 'hbc_pending_info';
+
+  function whenComposerReady() {
+    if (window.MhwsComposer) return Promise.resolve(window.MhwsComposer);
+    return new Promise((resolve) => {
+      const done = () => resolve(window.MhwsComposer || null);
+      window.addEventListener('mhws-composer-ready', done, { once: true });
+      window.setTimeout(done, 5000);
+    });
+  }
+
+  function syncInfoComposerInputs() {
+    if (infoComposeEn && el('infoHtmlInput')) el('infoHtmlInput').value = infoComposeEn.getHTML();
+    if (infoComposeHi && el('infoHtmlHiInput')) el('infoHtmlHiInput').value = infoComposeHi.getHTML();
+  }
+
+  function infoComposerHtml(lang) {
+    const session = lang === 'hi' ? infoComposeHi : infoComposeEn;
+    if (session) return session.isEmpty() ? '' : session.getHTML();
+    return String(el(lang === 'hi' ? 'infoHtmlHiInput' : 'infoHtmlInput')?.value || '').trim();
+  }
+
+  let infoComposeMountPromise = null;
+
+  async function mountInfoComposers() {
+    if (infoComposeEn && infoComposeHi && infoComposeLayout) return;
+    if (infoComposeMountPromise) return infoComposeMountPromise;
+    infoComposeMountPromise = (async () => {
+      const C = await whenComposerReady();
+      if (!C) return;
+      const shell = el('infoHtmlPane');
+      if (shell && !infoComposeLayout) {
+        infoComposeLayout = C.attachLayout(shell, {
+          storageKey: 'mhws-composer-layout-info',
+          langForm: 'info',
+          applySaved: false,
+        });
+      }
+      if (!infoComposeEn && el('infoComposeEditorEn') && el('infoComposeToolbarEn')) {
+        infoComposeEn = C.mount({
+          host: el('infoComposeEditorEn'),
+          toolbar: el('infoComposeToolbarEn'),
+          imageInput: el('infoComposeImageEn'),
+          textarea: el('infoHtmlInput'),
+        });
+      }
+      if (!infoComposeHi && el('infoComposeEditorHi') && el('infoComposeToolbarHi')) {
+        infoComposeHi = C.mount({
+          host: el('infoComposeEditorHi'),
+          toolbar: el('infoComposeToolbarHi'),
+          imageInput: el('infoComposeImageHi'),
+          textarea: el('infoHtmlHiInput'),
+        });
+      }
+    })();
+    try {
+      await infoComposeMountPromise;
+    } finally {
+      infoComposeMountPromise = null;
+    }
+  }
+
+  async function fetchInfoDocHtml(docId, lang) {
+    const extra = lang === 'hi' ? { lang: 'hi' } : {};
+    const url = authDocUrl(`/api/rwa/info-centre/${encodeURIComponent(docId)}/file`, extra);
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) return '';
+    const html = await res.text();
+    return window.MhwsComposer?.extractBody ? window.MhwsComposer.extractBody(html) : html;
+  }
+
+  async function loadInfoHtmlIntoComposer(doc) {
+    await mountInfoComposers();
+    if (!doc || doc.docType !== 'html') {
+      infoComposeEn?.setHTML('<p></p>');
+      infoComposeHi?.setHTML('<p></p>');
+      syncInfoComposerInputs();
+      return;
+    }
+    try {
+      infoComposeEn?.setHTML((await fetchInfoDocHtml(doc.id, 'en')) || '<p></p>');
+      if (doc.hasHtmlHi) {
+        infoComposeHi?.setHTML((await fetchInfoDocHtml(doc.id, 'hi')) || '<p></p>');
+      } else {
+        infoComposeHi?.setHTML('<p></p>');
+      }
+    } catch (_err) {
+      /* keep whatever is in the editor */
+    }
+    syncInfoComposerInputs();
+  }
 
   function rememberPendingInfo(link) {
     if (!link || !link.type || !link.id) return;
@@ -6442,6 +6545,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('infoLinkPane')) el('infoLinkPane').hidden = source !== 'link';
     if (el('infoFileInput')) el('infoFileInput').required = false;
     if (el('infoLinkInput')) el('infoLinkInput').required = false;
+    if (source === 'html') {
+      mountInfoComposers()
+        .then(() => infoComposeLayout?.applySaved())
+        .catch(() => {});
+    } else {
+      infoComposeLayout?.setLayout('original', { skipPersist: true });
+    }
   }
 
   function resetInfoForm() {
@@ -6463,6 +6573,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('infoTitleHiInput')) el('infoTitleHiInput').value = '';
     if (el('infoSummaryHiInput')) el('infoSummaryHiInput').value = '';
     if (el('infoHtmlHiInput')) el('infoHtmlHiInput').value = '';
+    if (el('infoHtmlInput')) el('infoHtmlInput').value = '';
+    infoComposeEn?.setHTML('<p></p>');
+    infoComposeHi?.setHTML('<p></p>');
     if (el('infoLinkInput')) el('infoLinkInput').value = '';
     setAuthorFormLang('info', 'en');
     syncInfoSourcePanes();
@@ -6493,6 +6606,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('infoLinkInput')) el('infoLinkInput').value = doc.externalUrl || '';
     if (el('infoHtmlInput') && doc.docType !== 'html') el('infoHtmlInput').value = '';
     if (el('infoHtmlHiInput') && doc.docType !== 'html') el('infoHtmlHiInput').value = '';
+    if (doc.docType === 'html') {
+      loadInfoHtmlIntoComposer(doc).catch(() => {});
+    } else {
+      infoComposeEn?.setHTML('<p></p>');
+      infoComposeHi?.setHTML('<p></p>');
+    }
     setAuthorFormLang('info', 'en');
     if (el('infoFormTitle')) el('infoFormTitle').textContent = 'Update document';
     if (el('infoSaveBtn')) el('infoSaveBtn').textContent = 'Save changes';
@@ -6503,7 +6622,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       } else if (doc.fileMissing) {
         el('infoFormStatus').textContent = 'File missing on server — choose the file again and Save to restore it.';
       } else if (doc.docType === 'html') {
-        el('infoFormStatus').textContent = 'Editing HTML document — switch EN/हिं for bilingual content. Leave HTML blank to keep existing.';
+        el('infoFormStatus').textContent = 'Editing document — switch EN/हिं for bilingual content. Leave the page blank to keep existing.';
       } else if (doc.docType === 'link') {
         el('infoFormStatus').textContent = `Editing web link — ${doc.externalUrl || 'no URL yet'}.`;
       } else {
@@ -6874,15 +6993,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         allowedMemberIds,
       };
       if (source === 'html') {
-        const htmlBody = String(el('infoHtmlInput')?.value || '').trim();
+        const htmlBody = infoComposerHtml('en');
         if (!htmlBody && !editId) {
-          if (statusLine) statusLine.textContent = 'Write HTML content, or switch to file upload / web link.';
+          if (statusLine) statusLine.textContent = 'Write the document, or switch to file upload / web link.';
           return;
         }
         const payload = { ...commonFields, docType: 'html' };
         if (htmlBody) payload.htmlBody = htmlBody;
-        const htmlBodyHi = String(el('infoHtmlHiInput')?.value || '').trim();
-        if (htmlBodyHi || el('infoHtmlHiInput')?.value === '') {
+        const htmlBodyHi = infoComposerHtml('hi');
+        if (htmlBodyHi || el('infoHtmlHiInput')?.value === '' || (infoComposeHi && infoComposeHi.isEmpty())) {
           if (htmlBodyHi || editId) payload.htmlBodyHi = htmlBodyHi;
         }
         if (editId) {
@@ -10636,6 +10755,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (name === 'observability' && !isSuperAdmin()) name = 'home';
     if (name === 'dues' && isSuperAdmin()) name = 'home';
     if (name !== 'messages') stopMsgPolling();
+    window.MhwsComposer?.collapseAll?.();
     document.querySelectorAll('.tab').forEach((t) => {
       const isTab = t.dataset.panel === name;
       t.classList.toggle('is-active', isTab);
@@ -14142,16 +14262,29 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   });
 
   el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
+  bindComposeUi();
   el('templatesRefreshBtn')?.addEventListener('click', () => loadTemplates().catch(console.error));
   el('templatesCategoryFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
   el('templatesStatusFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
   el('templatesForm')?.addEventListener('submit', saveTemplate);
   el('templatesResetBtn')?.addEventListener('click', () => resetTemplatesForm());
   el('templatesPaperSizeInput')?.addEventListener('change', syncTemplatesCustomSizeFields);
+  el('templateMailForm')?.addEventListener('submit', (event) => {
+    submitTemplateMail(event).catch((e) => {
+      if (el('templateMailStatus')) el('templateMailStatus').textContent = e.message || 'Mail failed';
+    });
+  });
+  el('templateMailCloseBtn')?.addEventListener('click', () => closeTemplateMailDialog());
+  el('templateMailCancelBtn')?.addEventListener('click', () => closeTemplateMailDialog());
+  el('templateMailDialog')?.addEventListener('click', (event) => {
+    if (event.target === el('templateMailDialog')) closeTemplateMailDialog();
+  });
   el('templatesList')?.addEventListener('click', (event) => {
     const openBtn = event.target.closest('[data-tpl-open]');
     const downloadBtn = event.target.closest('[data-tpl-download]');
     const printBtn = event.target.closest('[data-tpl-print]');
+    const mailBtn = event.target.closest('[data-tpl-mail]');
+    const mailCatBtn = event.target.closest('[data-tpl-mail-category]');
     const editBtn = event.target.closest('[data-tpl-edit]');
     const delBtn = event.target.closest('[data-tpl-delete]');
     if (openBtn) {
@@ -14172,6 +14305,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Print failed';
         else window.alert(e.message || 'Print failed');
       });
+      return;
+    }
+    if (mailBtn) {
+      openTemplateMailDialog({ templateId: mailBtn.getAttribute('data-tpl-mail') });
+      return;
+    }
+    if (mailCatBtn) {
+      openTemplateMailDialog({ category: mailCatBtn.getAttribute('data-tpl-mail-category') });
       return;
     }
     if (editBtn) {
@@ -14515,6 +14656,16 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   let templatesCache = [];
   let templatesCategories = [];
+  let templatesStarters = [];
+  let composeSession = null;
+  let composeDirty = false;
+  let composePreviewUrl = '';
+  const COMPOSE_LAYOUT_KEY = 'mhws-composer-layout';
+  const COMPOSE_LAYOUTS = {
+    original: 'Original layout',
+    panel: 'Panel mode',
+    window: 'Full window',
+  };
   let templatesOptionDefaults = {
     paperSize: 'A4',
     orientation: 'portrait',
@@ -14529,6 +14680,186 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       gold: '#c9a227',
     },
   };
+
+  function fillComposeStarterSelect() {
+    const select = el('tplStarterSelect');
+    if (!select) return;
+    const prev = select.value;
+    const opts = ['<option value="">Choose a starter…</option>']
+      .concat((templatesStarters || []).map((s) => {
+        const label = s.title || s.id;
+        return `<option value="${escapeHtml(s.id)}">${escapeHtml(label)}</option>`;
+      }));
+    select.innerHTML = opts.join('');
+    if (prev && [...select.options].some((o) => o.value === prev)) select.value = prev;
+  }
+
+  async function mountComposeEditor() {
+    const C = await whenComposerReady();
+    if (!C) return null;
+    const shell = el('tplComposeShell');
+    const host = el('tplComposeEditor');
+    const toolbar = el('tplComposeToolbar');
+    if (!host || !toolbar) return null;
+    if (shell && !shell.dataset.layoutBound) {
+      C.attachLayout(shell, { storageKey: 'mhws-composer-layout-templates' });
+    }
+    if (!composeSession) {
+      composeSession = C.mount({
+        host,
+        toolbar,
+        imageInput: el('tplComposeImageInput'),
+        onDirty: () => { composeDirty = true; },
+      });
+    }
+    return composeSession;
+  }
+
+  function currentComposeStarter() {
+    const id = el('tplStarterSelect')?.value || '';
+    return (templatesStarters || []).find((s) => s.id === id) || null;
+  }
+
+  function applyComposeStarter(starter, { force } = {}) {
+    if (!starter || !composeSession) return;
+    if (composeDirty && !force && !window.confirm('Replace the current draft with this starter?')) {
+      return;
+    }
+    composeSession.applyStarter(starter);
+    if (el('tplComposeTitle') && (!el('tplComposeTitle').value || force)) {
+      el('tplComposeTitle').value = starter.suggestedTitle || starter.title || '';
+    }
+    if (el('tplComposeCategory') && starter.category) {
+      el('tplComposeCategory').value = starter.category;
+    }
+    if (el('tplStarterHint') && starter.description) {
+      el('tplStarterHint').textContent = starter.description;
+    }
+    composeDirty = false;
+  }
+
+  function wrapComposePreviewHtml(title, bodyHtml) {
+    const heading = escapeHtml((title || 'Document').trim() || 'Document');
+    return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>${heading}</title>
+<style>
+@page { size: A4 portrait; margin: 16mm; }
+body { margin: 0; color: #12233f; font: 11pt/1.45 Georgia, serif; }
+.org { text-align: center; border-bottom: 1.4pt solid #0b2a56; padding: 0 0 8pt; margin: 0 0 14pt; }
+.org img { width: 18mm; height: auto; }
+.org h1 { margin: 4pt 0 0; font-size: 15pt; letter-spacing: 0.04em; text-transform: uppercase; color: #0b2a56; }
+.org .sub { margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }
+.org .meta { margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }
+.body { min-height: 180mm; }
+.body p { margin: 0 0 8pt; }
+.body table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+.body th, .body td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
+.body th { background: #eef2f8; }
+.body img { max-width: 100%; height: auto; }
+.foot { margin-top: 16pt; padding-top: 6pt; border-top: 0.7pt solid rgba(11,42,86,0.35); font-size: 8pt; color: #5a6a80; text-align: center; }
+</style></head><body>
+<header class="org">
+<img src="/assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
+<h1>Mandi Housing Welfare Society</h1>
+<p class="sub">Himuda Housing Colony Sanyard</p>
+<p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
+housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
+</header>
+<main class="body">${bodyHtml || '<p></p>'}</main>
+<footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+</body></html>`;
+  }
+
+  function previewComposeDocument() {
+    if (!composeSession) return;
+    const title = String(el('tplComposeTitle')?.value || '').trim() || 'Document';
+    const html = wrapComposePreviewHtml(title, composeSession.getHTML());
+    if (composePreviewUrl) URL.revokeObjectURL(composePreviewUrl);
+    composePreviewUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const dialog = el('docViewerDialog');
+    if (dialog) document.body.appendChild(dialog);
+    showDocViewerSource(composePreviewUrl, {
+      title,
+      filename: `${title}.html`,
+      mime: 'text/html',
+      isBlob: true,
+    });
+  }
+
+  function clearComposeDocument() {
+    if (composeDirty && !window.confirm('Clear the current draft?')) return;
+    if (el('tplComposeEditId')) el('tplComposeEditId').value = '';
+    if (el('tplStarterSelect')) el('tplStarterSelect').value = '';
+    if (el('tplComposeTitle')) el('tplComposeTitle').value = '';
+    composeSession?.setHTML('<p></p>');
+    composeDirty = false;
+    if (el('tplComposeStatus')) el('tplComposeStatus').textContent = '';
+    if (el('tplStarterHint')) {
+      el('tplStarterHint').textContent = 'Resolution, forwarding letter, notice, MOM, circular, agenda, office note — add more starters in the catalogue without changing the editor.';
+    }
+  }
+
+  async function saveComposeDocument(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('tplComposeStatus');
+    const saveBtn = el('tplComposeSaveBtn');
+    const title = String(el('tplComposeTitle')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title required.';
+      return;
+    }
+    if (!composeSession || composeSession.isEmpty()) {
+      if (statusLine) statusLine.textContent = 'Write the document, or pick a starter.';
+      return;
+    }
+    const starter = currentComposeStarter();
+    const editId = String(el('tplComposeEditId')?.value || '').trim();
+    const payload = {
+      title,
+      category: el('tplComposeCategory')?.value || starter?.category || 'correspondence',
+      status: el('tplComposeStatus')?.value || 'published',
+      tags: (starter?.tags || ['compose']).join(', '),
+      htmlBody: composeSession.getHTML(),
+    };
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      const doc = editId
+        ? (await api(`/api/rwa/templates/${encodeURIComponent(editId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })).template
+        : (await api('/api/rwa/templates', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })).template;
+      composeDirty = false;
+      await loadTemplates();
+      if (statusLine) statusLine.textContent = `Saved “${doc?.title || title}”. Open it from the library to print or mail.`;
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function bindComposeUi() {
+    if (el('templatesComposeForm')?.dataset.bound === '1') return;
+    if (el('templatesComposeForm')) el('templatesComposeForm').dataset.bound = '1';
+    el('templatesComposeForm')?.addEventListener('submit', (event) => {
+      saveComposeDocument(event).catch((e) => {
+        if (el('tplComposeStatus')) el('tplComposeStatus').textContent = e.message || 'Save failed';
+      });
+    });
+    el('tplStarterSelect')?.addEventListener('change', () => {
+      const starter = currentComposeStarter();
+      if (starter) applyComposeStarter(starter);
+    });
+    el('tplComposePreviewBtn')?.addEventListener('click', () => previewComposeDocument());
+    el('tplComposeClearBtn')?.addEventListener('click', () => clearComposeDocument());
+    el('tplComposeTitle')?.addEventListener('input', () => { composeDirty = true; });
+  }
 
   function syncTemplatesCustomSizeFields() {
     const custom = el('templatesPaperSizeInput')?.value === 'CUSTOM';
@@ -14581,6 +14912,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         { id: 'letterhead', label: 'Letterhead' },
         { id: 'envelope', label: 'Envelope' },
         { id: 'receipt', label: 'Cash receipt' },
+        { id: 'correspondence', label: 'Letters & resolutions' },
+        { id: 'notice', label: 'Notice' },
         { id: 'form', label: 'Form' },
         { id: 'certificate', label: 'Certificate' },
         { id: 'chart', label: 'Chart / roster' },
@@ -14601,6 +14934,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       el('templatesCategoryFilter').innerHTML = `<option value="">All categories</option>${opts}`;
       if (prev && [...el('templatesCategoryFilter').options].some((o) => o.value === prev)) {
         el('templatesCategoryFilter').value = prev;
+      }
+    }
+    if (el('tplComposeCategory')) {
+      const prev = el('tplComposeCategory').value;
+      el('tplComposeCategory').innerHTML = opts;
+      if (prev && [...el('tplComposeCategory').options].some((o) => o.value === prev)) {
+        el('tplComposeCategory').value = prev;
+      } else if ([...el('tplComposeCategory').options].some((o) => o.value === 'correspondence')) {
+        el('tplComposeCategory').value = 'correspondence';
       }
     }
   }
@@ -14642,6 +14984,33 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     el('templatesForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  function templateLooksOffice(doc) {
+    const name = `${doc?.originalName || ''} ${doc?.filename || ''} ${doc?.staticPath || ''}`.toLowerCase();
+    const mime = String(doc?.mimeType || '').toLowerCase();
+    return name.includes('.docx') || name.includes('.doc')
+      || mime.includes('msword') || mime.includes('wordprocessingml');
+  }
+
+  function groupedTemplates(list) {
+    const order = (templatesCategories || []).map((c) => c.id);
+    const groups = new Map();
+    for (const doc of list || []) {
+      const id = doc.category || 'other';
+      if (!groups.has(id)) {
+        groups.set(id, { id, label: doc.categoryLabel || id, items: [] });
+      }
+      groups.get(id).items.push(doc);
+    }
+    const ordered = [];
+    for (const id of order) {
+      if (groups.has(id)) ordered.push(groups.get(id));
+    }
+    for (const [id, group] of groups) {
+      if (!order.includes(id)) ordered.push(group);
+    }
+    return ordered;
+  }
+
   function renderTemplatesList() {
     const mount = el('templatesList');
     if (!mount) return;
@@ -14649,7 +15018,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       mount.innerHTML = '<p class="muted">No templates yet. Upload a letterhead, receipt pad, or form below.</p>';
       return;
     }
-    mount.innerHTML = templatesCache.map((doc) => {
+    mount.innerHTML = groupedTemplates(templatesCache).map((group) => {
+      const cards = group.items.map((doc) => {
       const tags = (doc.tags || []).map((t) => `<span class="info-doc-badge">${escapeHtml(t)}</span>`).join(' ');
       const updated = doc.updatedAt
         ? new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -14688,12 +15058,26 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
               <div class="btn-row info-doc-card-actions-inline">
                 <button type="button" class="btn ghost compact" data-tpl-download="${escapeHtml(doc.id)}">Download</button>
                 <button type="button" class="btn ghost compact" data-tpl-print="${escapeHtml(doc.id)}">Print</button>
+                <button type="button" class="btn ghost compact" data-tpl-mail="${escapeHtml(doc.id)}">Mail</button>
                 <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
                 <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
               </div>
             </details>
           </div>
         </article>`;
+      }).join('');
+      const count = group.items.length;
+      return `
+        <section class="tpl-category-block">
+          <div class="tpl-category-head">
+            <div>
+              <h4>${escapeHtml(group.label)}</h4>
+              <p class="muted">${count} template${count === 1 ? '' : 's'}</p>
+            </div>
+            <button type="button" class="btn ghost compact" data-tpl-mail-category="${escapeHtml(group.id)}">Mail</button>
+          </div>
+          <div class="info-doc-list is-cards">${cards}</div>
+        </section>`;
     }).join('');
   }
 
@@ -14710,6 +15094,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       templatesOptionDefaults = data.optionPresets.defaults;
     }
     templatesCache = data.templates || [];
+    templatesStarters = Array.isArray(data.starters) ? data.starters : templatesStarters;
+    fillComposeStarterSelect();
+    mountComposeEditor().catch(() => {});
     renderTemplatesList();
     if (el('templatesStatus') && !el('templatesEditId')?.value) {
       el('templatesStatus').textContent = `${templatesCache.length} template${templatesCache.length === 1 ? '' : 's'}`;
@@ -14777,6 +15164,95 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       canPrint: true,
       printAfterOpen: Boolean(printAfter),
     });
+  }
+
+  function closeTemplateMailDialog() {
+    const dialog = el('templateMailDialog');
+    if (dialog && typeof dialog.close === 'function' && dialog.open) {
+      dialog.close();
+      return;
+    }
+    if (dialog) dialog.hidden = true;
+  }
+
+  function openTemplateMailDialog({ templateId = '', category = '' } = {}) {
+    const dialog = el('templateMailDialog');
+    if (!dialog) return;
+    if (dialog.parentElement !== document.body) document.body.appendChild(dialog);
+    const tid = String(templateId || '').trim();
+    const cat = String(category || '').trim();
+    if (el('templateMailTemplateId')) el('templateMailTemplateId').value = tid;
+    if (el('templateMailCategory')) el('templateMailCategory').value = cat;
+    const doc = tid ? templatesCache.find((t) => t.id === tid) : null;
+    const group = cat ? groupedTemplates(templatesCache).find((g) => g.id === cat) : null;
+    if (el('templateMailTitle')) {
+      el('templateMailTitle').textContent = tid ? 'Mail template' : 'Mail category files';
+    }
+    if (el('templateMailLead')) {
+      const office = tid && templateLooksOffice(doc);
+      el('templateMailLead').textContent = tid
+        ? (office
+          ? `Send the original Word file for “${doc?.title || 'this template'}”.`
+          : `Send a print-formatted PDF of “${doc?.title || 'this template'}”.`)
+        : `Send all ${group?.items?.length || 0} file${(group?.items?.length || 0) === 1 ? '' : 's'} in ${group?.label || cat} (PDF for print pads, original Word for .doc/.docx).`;
+    }
+    if (el('templateMailSubject')) {
+      el('templateMailSubject').value = tid
+        ? `MHWS template — ${doc?.title || 'colony pad'}`
+        : `MHWS templates — ${group?.label || cat}`;
+    }
+    if (el('templateMailMessage')) el('templateMailMessage').value = '';
+    if (el('templateMailStatus')) el('templateMailStatus').textContent = '';
+    if (el('templateMailSubmitBtn')) el('templateMailSubmitBtn').disabled = false;
+    try {
+      if (typeof dialog.showModal === 'function') {
+        if (!dialog.open) dialog.showModal();
+        el('templateMailTo')?.focus();
+        return;
+      }
+    } catch (_e) { /* ignore */ }
+    dialog.hidden = false;
+    el('templateMailTo')?.focus();
+  }
+
+  async function submitTemplateMail(event) {
+    event.preventDefault();
+    const to = String(el('templateMailTo')?.value || '').trim();
+    const statusLine = el('templateMailStatus');
+    const btn = el('templateMailSubmitBtn');
+    const templateId = String(el('templateMailTemplateId')?.value || '').trim();
+    const category = String(el('templateMailCategory')?.value || '').trim();
+    if (!to) {
+      if (statusLine) statusLine.textContent = 'Enter at least one email address.';
+      return;
+    }
+    const path = templateId
+      ? `/api/rwa/templates/${encodeURIComponent(templateId)}/mail`
+      : `/api/rwa/templates/category/${encodeURIComponent(category)}/mail`;
+    if (!templateId && !category) {
+      if (statusLine) statusLine.textContent = 'Choose a template or category.';
+      return;
+    }
+    const body = {
+      to,
+      subject: String(el('templateMailSubject')?.value || '').trim(),
+      message: String(el('templateMailMessage')?.value || '').trim(),
+    };
+    if (!templateId) body.status = el('templatesStatusFilter')?.value || 'all';
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Formatting PDF and sending…';
+    try {
+      const data = await api(path, { method: 'POST', body: JSON.stringify(body) });
+      const n = data.count || 1;
+      const sent = (data.to || []).join(', ');
+      if (statusLine) statusLine.textContent = `Sent ${n} file${n === 1 ? '' : 's'} to ${sent}.`;
+      if (el('templatesStatus')) el('templatesStatus').textContent = `Mailed ${n} file${n === 1 ? '' : 's'} to ${sent}.`;
+      window.setTimeout(() => closeTemplateMailDialog(), 900);
+    } catch (err) {
+      if (statusLine) statusLine.textContent = err.message || 'Mail failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   async function downloadTemplate(id) {
@@ -15845,7 +16321,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function fillOpsSettingsForm(ops = {}) {
     if (el('opsAlertTo')) el('opsAlertTo').value = ops.alertTo || '';
     if (el('opsVitalsEnabled')) el('opsVitalsEnabled').checked = ops.vitalsEnabled !== false;
-    if (el('opsBackupRetainDays')) el('opsBackupRetainDays').value = ops.backupRetainDays ?? 7;
+    if (el('opsBackupRetainDays')) el('opsBackupRetainDays').value = ops.backupRetainDays ?? 3;
     if (el('opsBackupDiskMinPct')) el('opsBackupDiskMinPct').value = ops.backupDiskMinPct ?? 15;
     if (el('opsAccessEventsDays')) el('opsAccessEventsDays').value = ops.accessEventsDays ?? 90;
     if (el('opsDiskWarnPct')) el('opsDiskWarnPct').value = ops.diskWarnPct ?? 20;
@@ -15871,7 +16347,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return {
       alertTo: el('opsAlertTo')?.value.trim() || '',
       vitalsEnabled: Boolean(el('opsVitalsEnabled')?.checked),
-      backupRetainDays: Number(el('opsBackupRetainDays')?.value || 7),
+      backupRetainDays: Number(el('opsBackupRetainDays')?.value || 3),
       backupDiskMinPct: Number(el('opsBackupDiskMinPct')?.value || 15),
       accessEventsDays: Number(el('opsAccessEventsDays')?.value || 90),
       diskWarnPct: Number(el('opsDiskWarnPct')?.value || 20),

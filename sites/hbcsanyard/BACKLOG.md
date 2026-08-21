@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-18
+Last updated: 2026-08-21
 
 ---
 
@@ -99,7 +99,7 @@ Secrets stay off git (`data/apple-wallet.env`, `data/google-wallet.env`, `.p12`,
 
 ## Ops / reliability
 
-- [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (7-day retention default). See `deploy/OPS-BACKUP.md`
+- [x] **Scheduled data backups** — Phase 1 on-box: daily `sqlite3 .backup` + uploads/`smtp.env`/configs under `/var/backups/veercanvas/<site>/` (3-day retention default). See `deploy/OPS-BACKUP.md`
 - [x] **Google Drive upload** — Phase 2 wired (`deploy/ops/sync-to-drive.*` + Super admin settings); enable with `data/drive-sa.json` + folder share (see OPS-BACKUP.md)
 - [ ] **Backup restore drill** — documented restore path + dry-run from Drive to staging *(on-box restore steps in OPS-BACKUP.md)*
 - [x] **Log / event stream rollover** — journald 100M/7d + nginx logrotate 14d + backup log rotate
@@ -154,8 +154,10 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Colony mailbox (concerns)
 - Directory, profile, household members (owner + delegates, view-only)
 - Info Centre, Works & Events
+- **Shared document composer** — Templates Compose and Info Centre HTML pages use the same editor (icons, panel / full-window / original layout) (2026-08-21)
 - EC desk, observability (super admin)
 - Print letterhead / EC committee pads (`documents/`)
+- **Mail template PDFs** — EC Templates: Mail PDF per pad and per category, sent to one or more addresses (2026-08-21)
 - **Quote invites hide estimated cost** — vendors enter their own amount; estimate stays on the EC works record only
 - **Quote invite email** — fixed literal `\n` before Details section (2026-08-17)
 - **Notification branding** — emails, share cards, and parking pass mail use “Housing Colony Sanyard” instead of “HBC Sanyard” (2026-08-17)

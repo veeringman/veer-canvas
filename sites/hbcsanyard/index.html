@@ -22,10 +22,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260819ab6">
+  <link rel="stylesheet" href="portal.css?v=20260822mob1">
+  <link rel="stylesheet" href="composer/composer.css?v=20260822mob1">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260819ab6" defer></script>
+  <script src="portal.js?v=20260821cmp5" defer></script>
+  <script type="module" src="composer/boot.js?v=20260822tbl2"></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -1024,7 +1026,7 @@
               <button type="button" class="lang-btn" data-author-lang="hi" aria-pressed="false">हिं</button>
             </div>
           </div>
-          <p class="muted">Upload PDF / Word / Excel / images, or write an HTML page for members. Put related items in the same folder (e.g. Society Registration). Every saved upload or authored HTML joins the AI Assistant knowledge on the next question (published for members; drafts for Info managers). Hindi applies to titles/summaries and in-portal HTML only.</p>
+          <p class="muted">Upload PDF / Word / Excel / images, or write a document in the shared composer. Put related items in the same folder (e.g. Society Registration). Every saved upload or authored page joins the AI Assistant knowledge on the next question (published for members; drafts for Info managers). Hindi applies to titles/summaries and in-portal documents only.</p>
           <form id="infoDocForm" class="stack">
             <input type="hidden" id="infoEditId" value="">
             <div class="settings-grid">
@@ -1078,7 +1080,7 @@
               </label>
               <label class="check">
                 <input type="radio" name="infoSource" value="html">
-                <span>Create HTML content in the portal</span>
+                <span>Write a document in the composer</span>
               </label>
               <label class="check">
                 <input type="radio" name="infoSource" value="link">
@@ -1093,13 +1095,19 @@
               </label>
             </div>
 
-            <div id="infoHtmlPane" hidden>
-              <label data-author-pane="info" data-lang="en">HTML body (English)
-                <textarea id="infoHtmlInput" rows="10" placeholder="Write content here. Use headings, paragraphs, lists, and links. A page title wrapper is added automatically."></textarea>
-              </label>
-              <label data-author-pane="info" data-lang="hi" hidden>HTML body (Hindi)
-                <textarea id="infoHtmlHiInput" rows="10" placeholder="हिंदी में HTML सामग्री लिखें…"></textarea>
-              </label>
+            <div id="infoHtmlPane" class="mhws-composer-shell" hidden>
+              <div data-author-pane="info" data-lang="en">
+                <div id="infoComposeToolbarEn"></div>
+                <input type="file" id="infoComposeImageEn" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                <div id="infoComposeEditorEn" class="mhws-composer-paper" data-placeholder="Write the page here…"></div>
+                <textarea id="infoHtmlInput" class="sr-only" rows="4" tabindex="-1" aria-hidden="true"></textarea>
+              </div>
+              <div data-author-pane="info" data-lang="hi" hidden>
+                <div id="infoComposeToolbarHi"></div>
+                <input type="file" id="infoComposeImageHi" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                <div id="infoComposeEditorHi" class="mhws-composer-paper" data-placeholder="यहाँ पृष्ठ लिखें…"></div>
+                <textarea id="infoHtmlHiInput" class="sr-only" rows="4" tabindex="-1" aria-hidden="true"></textarea>
+              </div>
             </div>
 
             <div id="infoLinkPane" hidden>
@@ -2768,7 +2776,7 @@
           <div class="roster-toolbar">
             <div>
               <h3>Templates</h3>
-              <p class="muted">Printable letterheads, envelopes, cash receipts, and forms for EC / press use. Upload files with title, category, and tags.</p>
+              <p class="muted">Print pads, a document library, or <strong>Compose</strong> a letter, resolution, notice, or MOM online — choose a starter, edit, then save / print / mail.</p>
             </div>
             <button type="button" class="btn ghost compact" id="templatesRefreshBtn">Refresh</button>
           </div>
@@ -2788,7 +2796,45 @@
             </label>
           </div>
           <div id="templatesList" class="info-doc-list is-cards"></div>
-          <details class="templates-editor" id="templatesEditor" open>
+          <details class="templates-editor" id="templatesCompose" open>
+            <summary class="templates-editor-summary">
+              <strong>Compose document</strong>
+              <span class="muted"> — pick a starter, then refine in the editor</span>
+            </summary>
+            <div id="tplComposeShell" class="mhws-composer-shell" data-layout="original">
+              <form id="templatesComposeForm" class="templates-compose-meta">
+                <input type="hidden" id="tplComposeEditId" value="">
+                <div class="mhws-composer-meta">
+                  <select id="tplStarterSelect" title="Document type" aria-label="Document type">
+                    <option value="">Starter…</option>
+                  </select>
+                  <input type="text" id="tplComposeTitle" maxlength="160" required placeholder="Document title" autocomplete="off" aria-label="Title">
+                  <select id="tplComposeCategory" title="Save as category" aria-label="Category"></select>
+                  <select id="tplComposeStatus" title="Status" aria-label="Status">
+                    <option value="draft">Draft</option>
+                    <option value="published" selected>Published</option>
+                  </select>
+                  <div class="mhws-composer-actions">
+                    <button type="submit" class="mhws-composer-btn is-accent" id="tplComposeSaveBtn" title="Save to library" aria-label="Save to library">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11H5z"/><path d="M8 5v5h8V5"/><path d="M8 19v-6h8v6"/></svg>
+                    </button>
+                    <button type="button" class="mhws-composer-btn" id="tplComposePreviewBtn" title="Preview / print" aria-label="Preview / print">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    </button>
+                    <button type="button" class="mhws-composer-btn" id="tplComposeClearBtn" title="Clear" aria-label="Clear">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l.8 12h8.4L17 7"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <p class="sr-only" id="tplStarterHint">Resolution, forwarding letter, notice, MOM, circular, agenda, office note.</p>
+                <div id="tplComposeToolbar"></div>
+                <input type="file" id="tplComposeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                <div id="tplComposeEditor" class="mhws-composer-paper" data-placeholder="Choose a document type, then write…"></div>
+                <p class="mhws-composer-status" id="tplComposeStatus"></p>
+              </form>
+            </div>
+          </details>
+          <details class="templates-editor" id="templatesEditor">
             <summary class="templates-editor-summary">
               <strong>Add / edit template</strong>
               <span class="muted"> — metadata, print options, upload</span>
@@ -2863,6 +2909,33 @@
             <p class="muted" id="templatesStatus"></p>
             </form>
           </details>
+          <dialog id="templateMailDialog" class="ledger-dialog" aria-labelledby="templateMailTitle">
+            <form id="templateMailForm" class="stack" method="dialog">
+              <header class="panel-head">
+                <div>
+              <h3 id="templateMailTitle">Mail template</h3>
+              <p class="muted" id="templateMailLead">Send the file to one or more email addresses. Print pads go as PDF; Word files stay .doc/.docx.</p>
+                </div>
+                <button type="button" class="btn ghost compact dialog-close" id="templateMailCloseBtn" aria-label="Close">✕</button>
+              </header>
+              <input type="hidden" id="templateMailTemplateId" value="">
+              <input type="hidden" id="templateMailCategory" value="">
+              <label>Email address(es)
+                <textarea id="templateMailTo" rows="2" required placeholder="one per line, or comma-separated" autocomplete="email"></textarea>
+              </label>
+              <label>Subject
+                <input type="text" id="templateMailSubject" maxlength="160" placeholder="MHWS template — …">
+              </label>
+              <label>Note (optional)
+                <textarea id="templateMailMessage" rows="2" maxlength="800" placeholder="Shown in the email body above the PDF attachment"></textarea>
+              </label>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="templateMailSubmitBtn">Send</button>
+                <button type="button" class="btn ghost" id="templateMailCancelBtn">Cancel</button>
+              </div>
+              <p class="muted" id="templateMailStatus"></p>
+            </form>
+          </dialog>
         </div>
 
         <details class="sensitive-ops" id="sensitiveOpsBlock" data-entitlement="sensitive_ops" hidden>
@@ -2979,7 +3052,7 @@
               <div class="settings-grid">
                 <label>Alert email <input type="email" id="opsAlertTo" placeholder="defaults to From address"></label>
                 <label class="check"><input type="checkbox" id="opsVitalsEnabled" checked> Enable vitals monitoring (15 min)</label>
-                <label>Backup retention on disk (days) <input type="number" id="opsBackupRetainDays" min="3" max="90" value="7"></label>
+                <label>Backup retention on disk (days) <input type="number" id="opsBackupRetainDays" min="3" max="90" value="3"></label>
                 <label>Backup min disk free % <input type="number" id="opsBackupDiskMinPct" min="5" max="50" value="15"></label>
                 <label>Event history (days) <input type="number" id="opsAccessEventsDays" min="30" max="365" value="90"></label>
                 <label>Disk warn / crit % free <span class="inline-pair"><input type="number" id="opsDiskWarnPct" min="5" max="40" value="20"> <input type="number" id="opsDiskCritPct" min="3" max="25" value="10"></span></label>
@@ -3118,6 +3191,8 @@
         </div>
       </div>
     </dialog>
+
+    <button type="button" id="mhwsComposeBackdrop" class="mhws-composer-backdrop" hidden aria-label="Restore original composer layout"></button>
 
     <dialog id="docViewerDialog" class="doc-viewer-dialog" aria-labelledby="docViewerTitle">
       <div class="doc-viewer-shell">

@@ -6866,6 +6866,7 @@ def api_rwa_print_templates():
                 "templates": docs,
                 "categories": rwa_templates.categories(),
                 "optionPresets": rwa_templates.option_presets(),
+                "starters": rwa_templates.document_starters(),
             })
 
         upload = request.files.get("file") or request.files.get("document")
@@ -7006,6 +7007,59 @@ def api_rwa_print_template_file(template_id: str):
             download_name=doc.get("originalName") or path.name,
             max_age=0,
         )
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/<template_id>/mail", methods=["POST"])
+def api_rwa_print_template_mail(template_id: str):
+    """Email a print-formatted PDF of one template."""
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_templates.mail_templates_pdf(
+            conn,
+            SITE_ROOT,
+            to_raw=payload.get("to") or payload.get("emails"),
+            template_id=template_id,
+            subject=payload.get("subject"),
+            message=payload.get("message") or payload.get("note"),
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc) or "Mail failed"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/category/<category>/mail", methods=["POST"])
+def api_rwa_print_template_category_mail(category: str):
+    """Email print-formatted PDFs for every template in a category."""
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        payload = request.get_json(force=True, silent=True) or {}
+        result = rwa_templates.mail_templates_pdf(
+            conn,
+            SITE_ROOT,
+            to_raw=payload.get("to") or payload.get("emails"),
+            category=category,
+            subject=payload.get("subject"),
+            message=payload.get("message") or payload.get("note"),
+            status=payload.get("status") or "all",
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc) or "Mail failed"}), 500
     finally:
         conn.close()
 

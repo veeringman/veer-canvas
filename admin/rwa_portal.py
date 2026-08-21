@@ -89,6 +89,11 @@ from init_rwa_db import (  # noqa: E402
 import rwa_household as household  # noqa: E402
 import rwa_entitlements as entitlements  # noqa: E402
 import rwa_media  # noqa: E402
+try:
+    from rwa_templates import parse_doc_margins_mm  # noqa: E402
+except Exception:  # pragma: no cover
+    def parse_doc_margins_mm(html: str) -> dict:
+        return {"top": 16.0, "right": 16.0, "bottom": 16.0, "left": 16.0}
 
 OTP_TTL_SECONDS = int(os.environ.get("RWA_OTP_TTL", "600"))
 # Persist until Sign out (default ~10 years). Override with RWA_SESSION_TTL seconds.
@@ -211,7 +216,7 @@ _OPS_ENV_KEYS = (
 _OPS_DEFAULTS: dict[str, object] = {
     "alertTo": "",
     "vitalsEnabled": True,
-    "backupRetainDays": 7,
+    "backupRetainDays": 3,
     "backupDiskMinPct": 15,
     "accessEventsDays": 90,
     "diskWarnPct": 20,
@@ -299,7 +304,7 @@ def _ops_settings_to_env(ops: dict) -> dict[str, str]:
     return {
         "BACKUP_ALERT_TO": str(ops.get("alertTo") or "").strip(),
         "OPS_VITALS_ENABLED": "1" if enabled else "0",
-        "BACKUP_RETAIN_DAYS": _int("backupRetainDays", 7),
+        "BACKUP_RETAIN_DAYS": _int("backupRetainDays", 3),
         "DISK_MIN_PCT": _int("backupDiskMinPct", 15),
         "ACCESS_EVENTS_DAYS": _int("accessEventsDays", 90),
         "DISK_WARN_PCT": _int("diskWarnPct", 20),
@@ -962,6 +967,46 @@ def send_otp_email(email: str | None, code: str, house_id: str, site_root: pathl
         return {"channel": "email", "from": cfg["from"]}
     except Exception as exc:  # noqa: BLE001
         return {"channel": "dev", "devCode": True, "error": str(exc)}
+
+
+def send_site_email(
+    *,
+    site_root: pathlib.Path | None,
+    to_addrs: list[str],
+    subject: str,
+    text_body: str,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> dict:
+    """Send a colony email, optionally with file attachments (filename, bytes, mime)."""
+    cfg = load_smtp_config(site_root)
+    recipients = [str(a or "").strip() for a in (to_addrs or []) if str(a or "").strip()]
+    if not recipients:
+        raise ValueError("At least one recipient email is required")
+    if not cfg.get("configured"):
+        raise ValueError("SMTP is not configured. Set RWA_SMTP_PASS in data/smtp.env")
+    msg = EmailMessage()
+    msg["Subject"] = (subject or "Housing Colony Sanyard").strip()[:180]
+    msg["From"] = f"Housing Colony Sanyard RWA <{cfg['from']}>"
+    msg["To"] = ", ".join(recipients)
+    msg["Reply-To"] = cfg["from"]
+    msg.set_content(text_body or "")
+    add_branded_html_alternative(msg, text_body=text_body or "", site_root=site_root)
+    for name, blob, mime in attachments or []:
+        filename = re.sub(r"[^\w.\-]+", "_", (name or "attachment").strip())[:120] or "attachment"
+        data = blob or b""
+        mime = (mime or "application/octet-stream").split(";")[0].strip().lower()
+        if "/" in mime:
+            maintype, subtype = mime.split("/", 1)
+        else:
+            maintype, subtype = "application", "octet-stream"
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+    with smtplib.SMTP(cfg["host"], cfg["port"], timeout=45) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(cfg["user"], cfg["password"])
+        smtp.send_message(msg)
+    return {"ok": True, "channel": "email", "from": cfg["from"], "to": recipients}
 
 
 def create_otp(
@@ -3690,6 +3735,11 @@ def _wrap_html_document(title: str, body_html: str) -> str:
             if not inner or inner.casefold() == title.strip().casefold():
                 extracted = extracted[m.end() :]
     body = _normalize_authored_html(extracted)
+    margins = parse_doc_margins_mm(extracted or body_html or "")
+    content_pad = (
+        f'{margins["top"]:g}mm {margins["right"]:g}mm '
+        f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
+    )
     return (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n<head>\n'
@@ -3713,8 +3763,8 @@ def _wrap_html_document(title: str, body_html: str) -> str:
         "letter-spacing:.08em;text-transform:uppercase;opacity:.78;text-align:left;}\n"
         ".mast h1{margin:0;font:700 1.55rem/1.25 'Segoe UI',system-ui,-apple-system,sans-serif;"
         "letter-spacing:-.01em;text-align:left;}\n"
-        ".content{padding:1.35rem 1.4rem 1.75rem;text-align:left;}\n"
-        "@media (min-width:720px){.mast,.content{padding-left:1.85rem;padding-right:1.85rem;}"
+        ".content{padding:" + content_pad + ";text-align:left;}\n"
+        "@media (min-width:720px){.mast{padding-left:1.85rem;padding-right:1.85rem;}"
         ".mast h1{font-size:1.85rem;}}\n"
         ".content > :first-child{margin-top:0;}\n"
         ".content > :last-child{margin-bottom:0;}\n"
@@ -6568,6 +6618,8 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^PATCH /api/rwa/templates/[^/]+$"), "Update printable template"),
     (re.compile(r"^DELETE /api/rwa/templates/[^/]+$"), "Delete printable template"),
     (re.compile(r"^GET /api/rwa/templates/[^/]+/file$"), "Open printable template"),
+    (re.compile(r"^POST /api/rwa/templates/[^/]+/mail$"), "Email printable template PDF"),
+    (re.compile(r"^POST /api/rwa/templates/category/[^/]+/mail$"), "Email printable template category PDFs"),
     (re.compile(r"^GET /api/rwa/works$"), "Browse Works & Events"),
     (re.compile(r"^POST /api/rwa/works$"), "Create Works & Events item"),
     (re.compile(r"^PATCH /api/rwa/works/[^/]+$"), "Update Works & Events item"),

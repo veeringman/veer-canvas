@@ -8,11 +8,14 @@ Storage:
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import secrets
 import shutil
 import sqlite3
+import subprocess
+import tempfile
 from typing import Any
 
 from init_rwa_db import utc_now
@@ -21,6 +24,8 @@ TEMPLATE_CATEGORIES: list[tuple[str, str]] = [
     ("letterhead", "Letterhead"),
     ("envelope", "Envelope"),
     ("receipt", "Cash receipt"),
+    ("correspondence", "Letters & resolutions"),
+    ("notice", "Notice"),
     ("form", "Form"),
     ("certificate", "Certificate"),
     ("chart", "Chart / roster"),
@@ -328,6 +333,123 @@ def categories() -> list[dict[str, str]]:
     return [{"id": k, "label": lab} for k, lab in TEMPLATE_CATEGORIES]
 
 
+def document_starters() -> list[dict[str, Any]]:
+    from rwa_template_starters import list_document_starters
+
+    return list_document_starters()
+
+
+_COMPOSE_BLOCK_RE = re.compile(
+    r"<(script|iframe|object|embed|link|meta)(\s[^>]*)?>[\s\S]*?</\1\s*>",
+    re.I,
+)
+_COMPOSE_VOID_RE = re.compile(
+    r"<(script|iframe|object|embed|link|meta)(\s[^>]*)?/?>",
+    re.I,
+)
+_COMPOSE_ONATTR_RE = re.compile(r"\son[a-z]+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
+_MHWS_MARGINS_RE = re.compile(
+    r"<!--\s*mhws-margins:([\d.]+),([\d.]+),([\d.]+),([\d.]+)\s*-->",
+    re.I,
+)
+
+
+def parse_doc_margins_mm(html: str) -> dict[str, float]:
+    """Page margins saved by the composer: top, right, bottom, left in mm."""
+    out = {"top": 16.0, "right": 16.0, "bottom": 16.0, "left": 16.0}
+    match = _MHWS_MARGINS_RE.search(html or "")
+    if not match:
+        return out
+    for i, key in enumerate(("top", "right", "bottom", "left"), start=1):
+        try:
+            val = float(match.group(i))
+        except ValueError:
+            continue
+        if 0 <= val <= 50:
+            out[key] = val
+    return out
+
+
+def sanitize_compose_html(raw: str) -> str:
+    html = str(raw or "")
+    html = _COMPOSE_BLOCK_RE.sub("", html)
+    html = _COMPOSE_VOID_RE.sub("", html)
+    html = _COMPOSE_ONATTR_RE.sub("", html)
+    html = html.replace("javascript:", "")
+    text = re.sub(r"<[^>]+>", " ", html)
+    if not re.sub(r"\s+", "", text) and "<" not in (raw or ""):
+        html = f"<p>{_html_escape(str(raw or '').strip())}</p>" if str(raw or "").strip() else "<p></p>"
+    return html.strip() or "<p></p>"
+
+
+def wrap_composed_document(*, title: str, body_html: str) -> str:
+    heading = _html_escape((title or "Document").strip() or "Document")
+    margins = parse_doc_margins_mm(body_html)
+    body = sanitize_compose_html(body_html)
+    page_margin = (
+        f'{margins["top"]:g}mm {margins["right"]:g}mm '
+        f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{heading}</title>
+  <style>
+    @page {{ size: A4 portrait; margin: {page_margin}; }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: #12233f;
+      font: 11pt/1.45 "Source Sans 3", "Segoe UI", Georgia, serif;
+    }}
+    .org {{
+      text-align: center;
+      border-bottom: 1.4pt solid #0b2a56;
+      padding: 0 0 8pt;
+      margin: 0 0 14pt;
+    }}
+    .org img {{ width: 18mm; height: auto; }}
+    .org h1 {{
+      margin: 4pt 0 0;
+      font-size: 15pt;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #0b2a56;
+    }}
+    .org .sub {{ margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }}
+    .org .meta {{ margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }}
+    .body {{ min-height: 180mm; }}
+    .body p {{ margin: 0 0 8pt; }}
+    .body table {{ border-collapse: collapse; width: 100%; margin: 8pt 0; }}
+    .body th, .body td {{ border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }}
+    .body th {{ background: #eef2f8; }}
+    .body img {{ max-width: 100%; height: auto; }}
+    .foot {{
+      margin-top: 16pt;
+      padding-top: 6pt;
+      border-top: 0.7pt solid rgba(11,42,86,0.35);
+      font-size: 8pt;
+      color: #5a6a80;
+      text-align: center;
+    }}
+  </style>
+</head>
+<body>
+  <header class="org">
+    <img src="/assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
+    <h1>Mandi Housing Welfare Society</h1>
+    <p class="sub">Himuda Housing Colony Sanyard</p>
+    <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
+      housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
+  </header>
+  <main class="body">{body}</main>
+  <footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+</body>
+</html>
+""".strip()
+
+
 def _category(raw: str | None) -> str:
     key = (raw or "other").strip().lower()
     allowed = {c[0] for c in TEMPLATE_CATEGORIES}
@@ -565,6 +687,10 @@ def upsert_template(
         mime_type = TEMPLATE_EXT_MIME.get(path.suffix.lower(), "application/octet-stream")
         size_bytes = path.stat().st_size
 
+    html_in = None
+    if any(k in payload for k in ("htmlBody", "bodyHtml", "html_body")):
+        html_in = payload.get("htmlBody", payload.get("bodyHtml", payload.get("html_body")))
+
     if file_storage is not None and getattr(file_storage, "filename", None):
         orig = pathlib.Path(str(file_storage.filename)).name
         ext = pathlib.Path(orig).suffix.lower()
@@ -600,6 +726,38 @@ def upsert_template(
         filename = store_name
         original_name = orig
         mime_type = TEMPLATE_EXT_MIME[ext]
+        size_bytes = len(data)
+        static_path = None
+
+    elif html_in is not None:
+        wrapped = wrap_composed_document(title=title, body_html=str(html_in or ""))
+        data = wrapped.encode("utf-8")
+        if len(data) > TEMPLATE_MAX_BYTES:
+            raise ValueError("Document too large (max 20 MB)")
+        store_name = "doc.html"
+        dest_dir = template_item_dir(site_root, tid)
+        target = dest_dir / store_name
+        tmp = dest_dir / f".{store_name}.{secrets.token_hex(4)}.tmp"
+        try:
+            tmp.write_bytes(data)
+            tmp.replace(target)
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+        for old in list(dest_dir.iterdir()):
+            if old.is_file() and old.name != store_name and not old.name.startswith("."):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        safe_title = re.sub(r"[^\w.\-]+", "_", title)[:60].strip("._") or "document"
+        doc_type = "file"
+        filename = store_name
+        original_name = f"{safe_title}.html"
+        mime_type = "text/html"
         size_bytes = len(data)
         static_path = None
 
@@ -697,32 +855,26 @@ def _html_escape(text: Any) -> str:
     )
 
 
-def _runtime_options_css(
+def _sheet_metrics(
     options: dict[str, Any],
     *,
     landscape: bool | None = None,
     envelope: bool = False,
-) -> str:
-    colors = options.get("colors") or {}
+) -> dict[str, Any]:
+    """Page box for a template: width, height, and @page size (A4 / A5 / custom / envelope)."""
     paper = options.get("paperSize") or "A4"
-    bg = options.get("background") or "watermark"
     orient = "landscape" if landscape else (options.get("orientation") or "portrait")
     if orient not in ORIENTATIONS:
         orient = "portrait"
-    heading = colors.get("heading") or "#0b2a56"
-    body = colors.get("body") or "#12233f"
-    muted = colors.get("muted") or "#5a6a80"
-    accent = colors.get("accent") or "#1a6b3a"
-    gold = colors.get("gold") or "#c9a227"
     dims = {
         "A4": ("210mm", "297mm"),
         "A5": ("148mm", "210mm"),
         "A6": ("105mm", "148mm"),
         "Letter": ("8.5in", "11in"),
     }.get(paper, ("210mm", "297mm"))
-    sheet_w, sheet_min_h = dims
+    sheet_w, sheet_h = dims
     if orient == "landscape":
-        sheet_w, sheet_min_h = sheet_min_h, sheet_w
+        sheet_w, sheet_h = sheet_h, sheet_w
     page_size = f"{paper if paper != 'Letter' else 'letter'} {orient}"
     env_scale = 1.0
     fit_x, fit_y = 1.0, 1.0
@@ -753,8 +905,190 @@ def _runtime_options_css(
         face_w, face_h = max(w_mm, h_mm), min(w_mm, h_mm)
         fit_x, fit_y = _envelope_scale(face_w, face_h)
         env_scale = min(fit_x, fit_y)
-        sheet_w, sheet_min_h = f"{face_w:g}mm", f"{face_h:g}mm"
-        page_size = f"{sheet_w} {sheet_min_h}"
+        sheet_w, sheet_h = f"{face_w:g}mm", f"{face_h:g}mm"
+        page_size = f"{sheet_w} {sheet_h}"
+    return {
+        "sheet_w": sheet_w,
+        "sheet_h": sheet_h,
+        "page_size": page_size,
+        "orient": orient,
+        "env_scale": env_scale,
+        "fit_x": fit_x,
+        "fit_y": fit_y,
+    }
+
+
+def _pdf_page_layout_css(
+    options: dict[str, Any],
+    *,
+    envelope: bool = False,
+    mom: bool = False,
+    receipt: bool = False,
+) -> str:
+    """Force the mailed PDF onto the chosen paper and pin the footer to the page bottom.
+
+    Pad CSS relies on flex `margin-top: auto` / `flex: 1` to push the footer down.
+    WeasyPrint (and some print stylesheets) collapse that, so the footer sits under
+    the header. Absolute positioning against the real page box honours A4/A5/etc.
+    """
+    metrics = _sheet_metrics(options, landscape=True if envelope else None, envelope=envelope)
+    w, h = metrics["sheet_w"], metrics["sheet_h"]
+    page_size = f"{w} {h}"
+    if receipt:
+        return f"""
+<style id="tpl-pdf-page">
+  @page {{ size: {page_size}; margin: 0; }}
+</style>
+""".strip()
+    if envelope:
+        return f"""
+<style id="tpl-pdf-page">
+  @page {{ size: {page_size}; margin: 0; }}
+  html, body {{
+    width: {w} !important;
+    height: {h} !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }}
+  .screen-hint {{ display: none !important; }}
+  .sheet {{
+    position: relative !important;
+    width: {w} !important;
+    height: {h} !important;
+    min-height: {h} !important;
+    max-height: {h} !important;
+    margin: 0 !important;
+  }}
+  .pad {{ position: static !important; }}
+  .foot, footer.foot {{
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }}
+</style>
+""".strip()
+    if mom:
+        return f"""
+<style id="tpl-pdf-page">
+  @page {{ size: {page_size}; margin: 10mm; }}
+  .screen-hint {{ display: none !important; }}
+  .sheet {{
+    position: relative !important;
+  }}
+  .foot-bar {{
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    margin-top: 0 !important;
+  }}
+</style>
+""".strip()
+    return f"""
+<style id="tpl-pdf-page">
+  @page {{ size: {page_size}; margin: 0; }}
+  html, body,
+  html.pad-a4-full, html.pad-a4-full body {{
+    width: {w} !important;
+    height: {h} !important;
+    min-height: {h} !important;
+    max-height: {h} !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }}
+  .screen-hint, .layout-picker {{ display: none !important; }}
+  .sheet,
+  html.pad-a4-full .sheet {{
+    position: relative !important;
+    width: {w} !important;
+    height: {h} !important;
+    min-height: {h} !important;
+    max-height: {h} !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }}
+  html.pad-a4-full .pad {{
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    padding-bottom: 34mm !important;
+    overflow: visible !important;
+  }}
+  html.pad-a4-full .body-area,
+  html.pad-a4-full .body-spacer {{
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+  }}
+  .foot, footer.foot, .foot-bar {{
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    flex: none !important;
+  }}
+  html.pad-a4-full .foot .contacts {{
+    padding-left: 12mm;
+    padding-right: 12mm;
+  }}
+  html.pad-a4-full .foot .slogan-bar,
+  html.pad-a4-blank .slogan-bar {{
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }}
+  html.pad-a4-blank .slogan-bar {{
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+  }}
+</style>
+""".strip()
+
+
+def _inject_pdf_page_css(html: str, options: dict[str, Any] | None = None) -> str:
+    opts = normalize_options(options)
+    envelope = bool(re.search(r"envelope-pad", html, re.I))
+    mom = bool(re.search(r"pad-mom", html, re.I))
+    receipt = bool(re.search(r"pad-receipt", html, re.I))
+    css = _pdf_page_layout_css(opts, envelope=envelope, mom=mom, receipt=receipt)
+    if "</head>" in html:
+        return html.replace("</head>", f"{css}\n</head>", 1)
+    return css + html
+
+
+def _runtime_options_css(
+    options: dict[str, Any],
+    *,
+    landscape: bool | None = None,
+    envelope: bool = False,
+) -> str:
+    colors = options.get("colors") or {}
+    bg = options.get("background") or "watermark"
+    heading = colors.get("heading") or "#0b2a56"
+    body = colors.get("body") or "#12233f"
+    muted = colors.get("muted") or "#5a6a80"
+    accent = colors.get("accent") or "#1a6b3a"
+    gold = colors.get("gold") or "#c9a227"
+    metrics = _sheet_metrics(options, landscape=landscape, envelope=envelope)
+    sheet_w = metrics["sheet_w"]
+    sheet_min_h = metrics["sheet_h"]
+    page_size = metrics["page_size"]
+    env_scale = metrics["env_scale"]
+    fit_x = metrics["fit_x"]
+    fit_y = metrics["fit_y"]
     hide_wm = bg in {"none", "plain"}
     if hide_wm:
         wm_css = "img.wm, .receipt::before { opacity: 0 !important; visibility: hidden !important; }"
@@ -1058,3 +1392,310 @@ def render_template_html(
     rendered = inject_template_runtime(raw, options=options, conn=conn, base_href=base_href)
     doc = {**doc, "options": options}
     return rendered, doc
+
+
+_EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.I)
+_MAIL_MAX_RECIPIENTS = 20
+_MAIL_MAX_ATTACH = 12
+_MAIL_MAX_BYTES = 12 * 1024 * 1024
+
+
+def parse_mail_recipients(raw: Any) -> list[str]:
+    if isinstance(raw, list):
+        parts = [str(x or "") for x in raw]
+    else:
+        parts = re.split(r"[,;\s]+", str(raw or ""))
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        email = part.strip().lower()
+        if not email or email in seen:
+            continue
+        if not _EMAIL_RE.match(email):
+            raise ValueError(f"Invalid email address: {part.strip()}")
+        seen.add(email)
+        out.append(email)
+        if len(out) > _MAIL_MAX_RECIPIENTS:
+            raise ValueError(f"At most {_MAIL_MAX_RECIPIENTS} recipients")
+    if not out:
+        raise ValueError("Enter at least one email address")
+    return out
+
+
+def _safe_attach_name(title: str, suffix: str = ".pdf", fallback: str = "template") -> str:
+    stem = re.sub(r"[^\w.\-]+", "_", (title or fallback).strip())[:80].strip("._") or fallback
+    suf = suffix if str(suffix).startswith(".") else f".{suffix}"
+    if suf and not stem.lower().endswith(suf.lower()):
+        stem += suf
+    return stem
+
+
+def _unique_filename(name: str, used: set[str]) -> str:
+    candidate = name or "attachment"
+    if candidate.lower() not in used:
+        return candidate
+    stem, ext = os.path.splitext(candidate)
+    n = 2
+    while True:
+        nxt = f"{stem}-{n}{ext}"
+        if nxt.lower() not in used:
+            return nxt
+        n += 1
+
+
+def _chrome_binary() -> str | None:
+    env = (os.environ.get("RWA_CHROME_BIN") or os.environ.get("CHROME_BIN") or "").strip()
+    names = ([env] if env else []) + [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ]
+    for name in names:
+        if not name:
+            continue
+        path = pathlib.Path(name)
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def _absolutize_site_urls(html: str, site_root: pathlib.Path) -> str:
+    root_uri = site_root.resolve().as_uri()
+    if not root_uri.endswith("/"):
+        root_uri += "/"
+
+    def repl(match: re.Match[str]) -> str:
+        attr, quote, path = match.group(1), match.group(2), match.group(3)
+        if path.startswith(("http:", "https:", "data:", "file:", "mailto:", "blob:", "#")):
+            return match.group(0)
+        rel = path.lstrip("/")
+        return f"{attr}={quote}{root_uri}{rel}{quote}"
+
+    return re.sub(
+        r"""((?:src|href))\s*=\s*(['"])(/[^'"]+)\2""",
+        repl,
+        html,
+        flags=re.IGNORECASE,
+    )
+
+
+def _html_to_pdf_chrome(html: str, site_root: pathlib.Path, options: dict[str, Any] | None = None) -> bytes | None:
+    binary = _chrome_binary()
+    if not binary:
+        return None
+    html = _inject_pdf_page_css(html, options)
+    localized = _absolutize_site_urls(html, site_root)
+    with tempfile.TemporaryDirectory(prefix="rwa-tpl-pdf-") as tmp:
+        tmp_path = pathlib.Path(tmp)
+        html_path = tmp_path / "template.html"
+        pdf_path = tmp_path / "template.pdf"
+        html_path.write_text(localized, encoding="utf-8")
+        cmd = [
+            binary,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--allow-file-access-from-files",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={pdf_path}",
+            "--virtual-time-budget=12000",
+            html_path.resolve().as_uri(),
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=50)
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+            # Older Chromium wants --headless without =new
+            cmd[1] = "--headless"
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, timeout=50)
+            except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+                return None
+        if pdf_path.is_file() and pdf_path.stat().st_size > 80:
+            return pdf_path.read_bytes()
+    return None
+
+
+def _html_to_pdf_weasyprint(html: str, site_root: pathlib.Path, options: dict[str, Any] | None = None) -> bytes | None:
+    try:
+        from weasyprint import HTML  # type: ignore
+    except Exception:
+        return None
+    html = _inject_pdf_page_css(html, options)
+    localized = re.sub(
+        r"""((?:src|href)\s*=\s*['"])/""",
+        r"\1",
+        html,
+        flags=re.IGNORECASE,
+    )
+    try:
+        return HTML(string=localized, base_url=str(site_root.resolve()) + "/").write_pdf()
+    except Exception:
+        return None
+
+
+def _image_to_pdf(path: pathlib.Path, options: dict[str, Any]) -> bytes:
+    from io import BytesIO
+
+    from reportlab.lib.pagesizes import A4, A5, A6, letter
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas as pdfcanvas
+
+    paper = (options or {}).get("paperSize") or "A4"
+    orient = str((options or {}).get("orientation") or "portrait").lower()
+    sizes = {"A4": A4, "A5": A5, "A6": A6, "Letter": letter}
+    page = sizes.get(paper, A4)
+    if orient == "landscape":
+        page = (page[1], page[0])
+    buf = BytesIO()
+    c = pdfcanvas.Canvas(buf, pagesize=page)
+    page_w, page_h = page
+    img = ImageReader(str(path))
+    iw, ih = img.getSize()
+    if not iw or not ih:
+        raise ValueError("Could not read image template")
+    margin = min(page_w, page_h) * 0.04
+    box_w, box_h = page_w - 2 * margin, page_h - 2 * margin
+    scale = min(box_w / iw, box_h / ih)
+    dw, dh = iw * scale, ih * scale
+    c.drawImage(img, (page_w - dw) / 2, (page_h - dh) / 2, width=dw, height=dh, preserveAspectRatio=True, mask="auto")
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def build_template_mail_attachment(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    template_id: str,
+) -> tuple[bytes, str, str, dict[str, Any]]:
+    """Return (bytes, filename, mime, dto). Print pads become PDF; Word files stay .doc/.docx."""
+    doc = get_template(conn, template_id, site_root=site_root)
+    if not doc:
+        raise ValueError("Template not found")
+    path = resolve_template_file(site_root, doc)
+    if not path or not path.is_file():
+        raise ValueError("Template file is missing")
+    mime = (doc.get("mimeType") or "").lower()
+    suffix = path.suffix.lower()
+    title = doc.get("title") or path.stem
+    original = doc.get("originalName") or path.name
+    if suffix in {".doc", ".docx"} or "wordprocessingml" in mime or mime == "application/msword":
+        attach_mime = mime or TEMPLATE_EXT_MIME.get(suffix) or "application/octet-stream"
+        return path.read_bytes(), original, attach_mime, doc
+    filename = _safe_attach_name(title, ".pdf")
+    if "pdf" in mime or suffix == ".pdf":
+        return path.read_bytes(), filename, "application/pdf", doc
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"} or mime.startswith("image/"):
+        if suffix == ".svg" or "svg" in mime:
+            raise ValueError("SVG templates cannot be mailed yet — download from the portal, or upload a PDF/DOCX.")
+        return _image_to_pdf(path, doc.get("options") or {}), filename, "application/pdf", doc
+    if "html" in mime or suffix in {".html", ".htm"}:
+        html, doc = render_template_html(conn, site_root, template_id)
+        opts = doc.get("options") or {}
+        pdf = _html_to_pdf_chrome(html, site_root, opts) or _html_to_pdf_weasyprint(html, site_root, opts)
+        if not pdf:
+            raise ValueError(
+                "Could not format this HTML pad as PDF. Install Chromium on the server (or set RWA_CHROME_BIN)."
+            )
+        return pdf, filename, "application/pdf", doc
+    raise ValueError("This file type cannot be mailed. Use HTML, PDF, image, or Word (.doc/.docx).")
+
+
+def collect_templates_for_mail(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    template_id: str | None = None,
+    category: str | None = None,
+    status: str | None = "all",
+) -> list[dict[str, Any]]:
+    if template_id:
+        doc = get_template(conn, template_id, site_root=site_root)
+        if not doc:
+            raise ValueError("Template not found")
+        return [doc]
+    cat = (category or "").strip().lower()
+    if not cat:
+        raise ValueError("Choose a template or a category")
+    docs = [
+        d for d in list_templates(conn, site_root=site_root, status=status or "all")
+        if str(d.get("category") or "").lower() == cat
+    ]
+    if not docs:
+        raise ValueError("No templates in that category")
+    if len(docs) > _MAIL_MAX_ATTACH:
+        raise ValueError(f"At most {_MAIL_MAX_ATTACH} templates can be mailed together")
+    return docs
+
+
+def mail_templates_pdf(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    to_raw: Any,
+    template_id: str | None = None,
+    category: str | None = None,
+    subject: str | None = None,
+    message: str | None = None,
+    status: str | None = "all",
+) -> dict[str, Any]:
+    recipients = parse_mail_recipients(to_raw)
+    docs = collect_templates_for_mail(
+        conn, site_root, template_id=template_id, category=category, status=status
+    )
+    attachments: list[tuple[str, bytes, str]] = []
+    used_names: set[str] = set()
+    total = 0
+    for doc in docs:
+        blob, filename, mime, _meta = build_template_mail_attachment(conn, site_root, doc["id"])
+        name = _unique_filename(filename, used_names)
+        used_names.add(name.lower())
+        total += len(blob)
+        if total > _MAIL_MAX_BYTES:
+            raise ValueError("Attachments are too large for one email — mail fewer templates")
+        attachments.append((name, blob, mime or "application/octet-stream"))
+
+    if template_id:
+        title = docs[0].get("title") or "template"
+        default_subject = f"MHWS template — {title}"
+        lead = f"Please find “{title}” attached."
+    else:
+        label = docs[0].get("categoryLabel") or category or "templates"
+        default_subject = f"MHWS templates — {label}"
+        lead = f"Please find {len(docs)} template file{'s' if len(docs) != 1 else ''} ({label}) attached."
+    note = (message or "").strip()
+    body = (
+        f"{lead}\n\n"
+        f"{(note + chr(10) + chr(10)) if note else ''}"
+        "These files are from the colony Templates library at Himuda Housing Colony Sanyard "
+        "(Mandi Housing Welfare Society).\n\n"
+        "— Residents Welfare Association\n"
+        "  Housing Colony Sanyard, Mandi\n"
+    )
+    from rwa_portal import send_site_email
+
+    result = send_site_email(
+        site_root=site_root,
+        to_addrs=recipients,
+        subject=(subject or "").strip() or default_subject,
+        text_body=body,
+        attachments=attachments,
+    )
+    return {
+        "ok": True,
+        "to": recipients,
+        "count": len(attachments),
+        "filenames": [a[0] for a in attachments],
+        "channel": result.get("channel"),
+        "from": result.get("from"),
+    }
