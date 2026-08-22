@@ -3,10 +3,23 @@
  * runtime) — toolbar.js renders whatever the registry holds.
  */
 import { registry } from './registry.js';
+import { pasteFromClipboard } from './clipboard.js';
 
 export const BUILTIN_EXTENSIONS = [
   { id: 'undo', group: 'history', icon: 'undo', title: 'Undo', command: 'undo' },
   { id: 'redo', group: 'history', icon: 'redo', title: 'Redo', command: 'redo' },
+
+  { id: 'cut', group: 'clipboard', icon: 'cut', title: 'Cut (Ctrl+X)', command: 'cut' },
+  { id: 'copy', group: 'clipboard', icon: 'copy', title: 'Copy (Ctrl+C)', command: 'copy' },
+  {
+    id: 'paste',
+    group: 'clipboard',
+    icon: 'paste',
+    title: 'Paste (Ctrl+V)',
+    run(driver) {
+      pasteFromClipboard(driver.host);
+    },
+  },
 
   { id: 'bold', group: 'inline', icon: 'bold', title: 'Bold', command: 'bold', mark: true },
   { id: 'italic', group: 'inline', icon: 'italic', title: 'Italic', command: 'italic', mark: true },

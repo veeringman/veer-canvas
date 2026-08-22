@@ -211,6 +211,44 @@ function tableHtml(rows, cols) {
   return `<table class="mhws-table" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${body}</tbody></table><p></p>`;
 }
 
+export function imageFloatStyle(width, flt) {
+  const pct = Math.max(10, Math.min(100, Number(width) || 40));
+  const w = `width:${pct}%;max-width:100%;`;
+  if (flt === 'left') return `${w}float:left;margin:0 10pt 8pt 0;display:block;`;
+  if (flt === 'right') return `${w}float:right;margin:0 0 8pt 10pt;display:block;`;
+  if (flt === 'center') return `${w}display:block;margin:8pt auto;float:none;`;
+  return `${w}display:inline-block;vertical-align:middle;margin:0 6pt 4pt 0;float:none;`;
+}
+
+export function applyImageLayout(wrap, width, flt) {
+  if (!wrap) return;
+  const pct = Math.max(10, Math.min(100, Number(width) || 40));
+  const flow = ['left', 'right', 'center'].includes(flt) ? flt : 'none';
+  wrap.dataset.width = String(pct);
+  wrap.dataset.float = flow;
+  wrap.setAttribute('style', imageFloatStyle(pct, flow));
+  wrap.contentEditable = 'false';
+  const img = wrap.querySelector('img');
+  if (img) {
+    img.removeAttribute('width');
+    img.removeAttribute('height');
+    img.draggable = false;
+    img.style.width = '100%';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+  }
+}
+
+export function wrappedImageHtml(src, spec = {}) {
+  const width = spec.width || 40;
+  const flt = spec.float || 'none';
+  const esc = String(src || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '');
+  return `<span class="mhws-img" contenteditable="false" data-width="${width}" data-float="${flt}" style="${imageFloatStyle(width, flt)}"><img src="${esc}" alt="" draggable="false" style="width:100%;height:auto;display:block"></span>&nbsp;`;
+}
+
 function closestCell(root) {
   let node = currentBlock(root);
   while (node && node !== root) {
@@ -514,6 +552,38 @@ export function createDomDriver(host) {
   const commands = {
     undo: () => exec('undo'),
     redo: () => exec('redo'),
+    copy: () => {
+      focus();
+      if (exec('copy')) return true;
+      const text = window.getSelection()?.toString() || '';
+      if (text && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        return true;
+      }
+      return false;
+    },
+    cut: () => {
+      focus();
+      if (exec('cut')) {
+        emitInput(host);
+        return true;
+      }
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || sel.isCollapsed) return false;
+      const text = sel.toString();
+      const range = sel.getRangeAt(0);
+      const finish = () => {
+        range.deleteContents();
+        emitInput(host);
+        return true;
+      };
+      if (text && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(finish).catch(() => {});
+        return true;
+      }
+      return finish();
+    },
+    paste: () => false,
     bold: () => exec('bold'),
     italic: () => exec('italic'),
     underline: () => exec('underline'),
@@ -560,7 +630,7 @@ export function createDomDriver(host) {
     },
     insertImage: (src) => {
       if (!src) return false;
-      return exec('insertImage', src);
+      return exec('insertHTML', wrappedImageHtml(src));
     },
     insertHTML: (html) => exec('insertHTML', html),
     link: (href) => {

@@ -21,6 +21,19 @@ Corpus building stays in the site app (SQLite / Info Centre). The sidecar only r
 
 **Moderation `action`:** `allow` | `flag` | `block`
 
+## Deploy binary (never compile on EC2)
+
+The production host must not run `cargo` / rustup. On a laptop or CI (Linux x86_64):
+
+```bash
+cd services/veer-ai
+cargo build --release
+mkdir -p dist
+cp target/release/veer-ai dist/veer-ai
+```
+
+`remote-deploy.sh` rsyncs `dist/` when present; `site-deploy.sh` installs it to `data/bin/veer-ai` or keeps the existing binary.
+
 ## Run locally
 
 ```bash

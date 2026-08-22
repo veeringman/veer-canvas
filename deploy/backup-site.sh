@@ -6,7 +6,7 @@
 #   WEB_ROOT=/var/www/hbcsanyard.veerlabs.solutions ./backup-site.sh
 #
 # Env:
-#   RETAIN_DAYS=14          keep dated backups this many days
+#   RETAIN_DAYS=3           keep dated backups this many days
 #   DISK_MIN_PCT=15         fail+alert if free space on backup volume below this %
 #   ACCESS_EVENTS_DAYS=90   prune access_events older than this
 #   BACKUP_ROOT=/var/backups/veercanvas/<site-id>
@@ -46,7 +46,7 @@ SITE_ID="${SITE_ID:-$(basename "$WEB_ROOT" | cut -d. -f1)}"
 # shellcheck source=ops/load-site-env.sh
 source "${SCRIPT_DIR}/ops/load-site-env.sh"
 load_site_env "$WEB_ROOT"
-RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-${RETAIN_DAYS:-7}}"
+RETAIN_DAYS="${BACKUP_RETAIN_DAYS:-${RETAIN_DAYS:-3}}"
 DISK_MIN_PCT="${DISK_MIN_PCT:-15}"
 ACCESS_EVENTS_DAYS="${ACCESS_EVENTS_DAYS:-90}"
 ALERT_ON_SUCCESS="${ALERT_ON_SUCCESS:-0}"

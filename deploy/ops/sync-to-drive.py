@@ -13,6 +13,7 @@ Requires:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import mimetypes
 import os
@@ -138,6 +139,124 @@ def _upload_file(service, MediaFileUpload, parent_id: str, path: Path, remote_na
     return created["id"]
 
 
+_IMPORT_SUFFIX = {".txt", ".text", ".doc", ".docx", ".pdf", ".pages"}
+_IMPORT_MIME = {
+    "application/pdf",
+    "text/plain",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.google-apps.document",
+    "application/vnd.apple.pages",
+    "application/x-iwork-pages-sffpages",
+}
+
+
+def _find_child_folder(service, parent_id: str, name: str) -> str | None:
+    safe = name.replace("'", "\\'")
+    q = (
+        f"name = '{safe}' and "
+        f"'{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    )
+    found = service.files().list(
+        q=q,
+        spaces="drive",
+        fields="files(id,name)",
+        pageSize=5,
+        includeItemsFromAllDrives=True,
+        **_DRIVE_KW,
+    ).execute()
+    files = found.get("files") or []
+    return files[0]["id"] if files else None
+
+
+def _is_importable(name: str, mime: str) -> bool:
+    suffix = Path(name or "").suffix.lower()
+    mime_l = (mime or "").lower()
+    if mime_l in _IMPORT_MIME or "google-apps.document" in mime_l:
+        return True
+    return suffix in _IMPORT_SUFFIX
+
+
+def _list_importable(service, folder_id: str) -> dict:
+    parents = [folder_id]
+    composer = _find_child_folder(service, folder_id, "Composer")
+    if composer:
+        parents.append(composer)
+    seen: set[str] = set()
+    files: list[dict] = []
+    for parent in parents:
+        page_token = None
+        while True:
+            resp = (
+                service.files()
+                .list(
+                    q=f"'{parent}' in parents and trashed = false",
+                    spaces="drive",
+                    fields="nextPageToken, files(id,name,mimeType,modifiedTime,size)",
+                    pageSize=50,
+                    pageToken=page_token,
+                    orderBy="modifiedTime desc",
+                    includeItemsFromAllDrives=True,
+                    **_DRIVE_KW,
+                )
+                .execute()
+            )
+            for item in resp.get("files") or []:
+                fid = item.get("id") or ""
+                if not fid or fid in seen:
+                    continue
+                name = item.get("name") or ""
+                mime = item.get("mimeType") or ""
+                if mime == "application/vnd.google-apps.folder" or not _is_importable(name, mime):
+                    continue
+                seen.add(fid)
+                files.append(
+                    {
+                        "id": fid,
+                        "name": name,
+                        "mime": mime,
+                        "modified": item.get("modifiedTime") or "",
+                    }
+                )
+            page_token = resp.get("nextPageToken")
+            if not page_token or len(files) >= 40:
+                break
+    files.sort(key=lambda x: x.get("modified") or "", reverse=True)
+    return {"ok": True, "files": files[:40]}
+
+
+def _download_importable(service, file_id: str, out: Path | None) -> dict:
+    from googleapiclient.http import MediaIoBaseDownload
+
+    meta = (
+        service.files()
+        .get(fileId=file_id, fields="id,name,mimeType,size", **_DRIVE_KW)
+        .execute()
+    )
+    name = meta.get("name") or "document"
+    mime = meta.get("mimeType") or "application/octet-stream"
+    if not _is_importable(name, mime):
+        return {"ok": False, "error": "That Drive file type cannot be imported."}
+    if mime == "application/vnd.google-apps.document":
+        data = service.files().export(fileId=file_id, mimeType="text/plain").execute()
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        name = f"{Path(name).stem}.txt"
+        mime = "text/plain"
+    else:
+        request = service.files().get_media(fileId=file_id, **_DRIVE_KW)
+        buf = io.BytesIO()
+        downloader = MediaIoBaseDownload(buf, request)
+        done = False
+        while not done:
+            _status, done = downloader.next_chunk()
+        data = buf.getvalue()
+    if out is None:
+        return {"ok": False, "error": "--download-out is required"}
+    out.write_bytes(data)
+    return {"ok": True, "name": name, "mime": mime, "path": str(out), "size": len(data)}
+
+
 def _prune_dated_backups(service, folder_id: str, site_id: str, retain_days: int) -> int:
     """Trash dated <site>-YYYYMMDD*.tgz older than retain_days; keep *-latest.tgz."""
     if retain_days <= 0:
@@ -192,10 +311,61 @@ def main() -> int:
     ap.add_argument("--folder-id", required=True)
     ap.add_argument("--site-id", default="site")
     ap.add_argument("--retain-days", type=int, default=int(os.environ.get("DRIVE_RETAIN_DAYS") or 14))
+    ap.add_argument("--upload-file", default="")
+    ap.add_argument("--upload-name", default="")
+    ap.add_argument("--subfolder", default="")
+    ap.add_argument("--list-import", action="store_true")
+    ap.add_argument("--download-id", default="")
+    ap.add_argument("--download-out", default="")
     args = ap.parse_args()
     os.environ["WEB_ROOT"] = str(Path(args.site_root))
     root = Path(args.site_root)
     service, MediaFileUpload = _drive_service()
+
+    if args.upload_file:
+        path = Path(args.upload_file)
+        if not path.is_file():
+            print(json.dumps({"ok": False, "error": f"File missing: {path}"}))
+            return 1
+        parent = args.folder_id
+        if args.subfolder:
+            parent = _ensure_child_folder(service, parent, args.subfolder)
+        fid = _upload_file(
+            service,
+            MediaFileUpload,
+            parent,
+            path,
+            remote_name=args.upload_name or path.name,
+        )
+        meta = (
+            service.files()
+            .get(
+                fileId=fid,
+                fields="id,name,webViewLink,webContentLink",
+                **_DRIVE_KW,
+            )
+            .execute()
+        )
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "id": fid,
+                    "name": meta.get("name") or path.name,
+                    "url": meta.get("webViewLink") or meta.get("webContentLink") or "",
+                }
+            )
+        )
+        return 0
+
+    if args.list_import:
+        print(json.dumps(_list_importable(service, args.folder_id)))
+        return 0
+
+    if args.download_id:
+        out = Path(args.download_out) if args.download_out else None
+        print(json.dumps(_download_importable(service, args.download_id, out)))
+        return 0
 
     backups_id = _ensure_child_folder(service, args.folder_id, "backups")
     assets_id = _ensure_child_folder(service, args.folder_id, "assets")

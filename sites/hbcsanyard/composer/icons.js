@@ -4,6 +4,9 @@ const SVG_ATTR = 'viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" 
 const PATHS = {
   undo: '<path d="M9 14H4V9"/><path d="M4 14a8 8 0 1 0 2.2-5.5L4 11"/>',
   redo: '<path d="M15 14h5V9"/><path d="M20 14a8 8 0 1 1-2.2-5.5L20 11"/>',
+  cut: '<circle cx="6" cy="7" r="2.4"/><circle cx="6" cy="17" r="2.4"/><path d="M20 5L8.2 12 20 19"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5h10"/>',
+  paste: '<path d="M9 4h6v3H9z"/><rect x="6" y="6" width="12" height="14" rx="1.5"/><path d="M9 12h6M9 16h4"/>',
   bold: '<path d="M7 5h6.2A3.3 3.3 0 0 1 16.5 8.3 3.1 3.1 0 0 1 13.5 11.5H7z"/><path d="M7 11.5h7.2A3.4 3.4 0 0 1 17.5 15 3.3 3.3 0 0 1 14.2 18.2H7z"/>',
   italic: '<path d="M10 5h8"/><path d="M6 19h8"/><path d="M14 5l-4 14"/>',
   underline: '<path d="M7 5v7.2A5 5 0 0 0 12 17a5 5 0 0 0 5-4.8V5"/><path d="M5 21h14"/>',
@@ -34,6 +37,7 @@ const PATHS = {
   tableDelete: '<rect x="3" y="6" width="12" height="12" rx="1"/><path d="M3 10h12M7 6v12"/><path d="M16 8l6 8M22 8l-6 8"/>',
   margins: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 8h8v8H8z"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   image: '<rect x="4" y="6" width="16" height="13" rx="1.5"/><circle cx="9" cy="11" r="1.5"/><path d="M20 16l-4.5-4.5L7 20"/>',
+  imageInline: '<rect x="4" y="8" width="7" height="8" rx="1"/><path d="M13 10h7M13 14h5"/>',
   sign: '<path d="M4 19h16"/><path d="M6 16c2-4 3.5-8 5-8 1.2 0 1.4 3 2.5 5 .8 1.6 2 3 4.5 3"/>',
 };
 

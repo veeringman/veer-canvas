@@ -1,0 +1,22 @@
+---
+description: EC2 host rules — no Rust builds, shared Drive venv, disk options
+globs: deploy/**/*,services/veer-ai/**/*
+alwaysApply: true
+---
+
+# EC2 host (VeerSetu `3.216.30.113`)
+
+Root disk is **14 GB**. Do not compile or rustup on this machine.
+
+## Hard rules
+
+- **Never `cargo build` / `rustup` / `gradle` / Android NDK on EC2.** Ship Linux binaries built on a laptop or CI.
+  - `veer-ai`: install `services/veer-ai/dist/veer-ai` (ELF x86_64) or keep the existing `data/bin/veer-ai`.
+  - AuthBuddy: run `/usr/local/bin/authbuddy` (copy a release binary). Do not leave `target/` on the host.
+- **One Google Drive venv:** `/var/lib/veercanvas/drive-venv`. Per-site `data/drive-venv` must be a symlink to that path, not a second copy.
+- **BuddyAuthenticator on EC2:** only `BuddyAuthenticator-latest.apk`. Versioned APKs live on Google Drive.
+- **On-box backups:** keep **3 days** (`BACKUP_RETAIN_DAYS=3`). Older copies stay on Google Drive.
+
+## Remaining disk options (not all done)
+
+See `deploy/EC2-DISK.md`. Prefer growing EBS when free space is chronically tight; do not wipe live `data/` or Docker Postgres.

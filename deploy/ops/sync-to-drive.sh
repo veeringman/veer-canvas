@@ -77,10 +77,10 @@ fi
 
 set +e
 PY="${DRIVE_PYTHON:-}"
-if [[ -z "$PY" && -x "${WEB_ROOT}/data/drive-venv/bin/python" ]]; then
-  PY="${WEB_ROOT}/data/drive-venv/bin/python"
-elif [[ -z "$PY" && -x /var/lib/veercanvas/drive-venv/bin/python ]]; then
+if [[ -z "$PY" && -x /var/lib/veercanvas/drive-venv/bin/python ]]; then
   PY=/var/lib/veercanvas/drive-venv/bin/python
+elif [[ -z "$PY" && -x "${WEB_ROOT}/data/drive-venv/bin/python" ]]; then
+  PY="${WEB_ROOT}/data/drive-venv/bin/python"
 fi
 PY="${PY:-python3}"
 OUT="$("$PY" "${SCRIPT_DIR}/sync-to-drive.py" \

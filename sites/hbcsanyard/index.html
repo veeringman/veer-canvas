@@ -22,12 +22,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260822mob1">
-  <link rel="stylesheet" href="composer/composer.css?v=20260822mob1">
+  <link rel="stylesheet" href="portal.css?v=20260822imp1">
+  <link rel="stylesheet" href="composer/composer.css?v=20260822clip1">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260821cmp5" defer></script>
-  <script type="module" src="composer/boot.js?v=20260822tbl2"></script>
+  <script src="portal.js?v=20260822clip1" defer></script>
+  <script type="module" src="composer/boot.js?v=20260822clip1"></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -2814,9 +2814,22 @@
                     <option value="draft">Draft</option>
                     <option value="published" selected>Published</option>
                   </select>
+                  <select id="tplComposeChrome" title="Header, footer and watermark" aria-label="Letterhead">
+                    <option value="simple">Simple header</option>
+                  </select>
+                  <select id="tplComposeWatermark" title="Watermark" aria-label="Watermark" hidden>
+                    <option value="1" selected>Watermark</option>
+                    <option value="0">No watermark</option>
+                  </select>
                   <div class="mhws-composer-actions">
                     <button type="submit" class="mhws-composer-btn is-accent" id="tplComposeSaveBtn" title="Save to library" aria-label="Save to library">
                       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11H5z"/><path d="M8 5v5h8V5"/><path d="M8 19v-6h8v6"/></svg>
+                    </button>
+                    <button type="button" class="mhws-composer-btn" id="tplComposeImportBtn" title="Import from text, Word, Pages, or PDF" aria-label="Import from text, Word, Pages, or PDF">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M8 14l4-4 4 4"/><path d="M5 5h14"/></svg>
+                    </button>
+                    <button type="button" class="mhws-composer-btn" id="tplComposeDownloadBtn" title="Download as Word, PDF, or text" aria-label="Download as Word, PDF, or text">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M5 19h14"/></svg>
                     </button>
                     <button type="button" class="mhws-composer-btn" id="tplComposePreviewBtn" title="Preview / print" aria-label="Preview / print">
                       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>
@@ -2829,6 +2842,7 @@
                 <p class="sr-only" id="tplStarterHint">Resolution, forwarding letter, notice, MOM, circular, agenda, office note.</p>
                 <div id="tplComposeToolbar"></div>
                 <input type="file" id="tplComposeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                <input type="file" id="tplComposeImportInput" accept=".txt,.text,.doc,.docx,.pages,.pdf,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
                 <div id="tplComposeEditor" class="mhws-composer-paper" data-placeholder="Choose a document type, then write…"></div>
                 <p class="mhws-composer-status" id="tplComposeStatus"></p>
               </form>

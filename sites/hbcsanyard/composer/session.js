@@ -1,6 +1,8 @@
 import { createDomDriver } from './driver-dom.js';
 import { renderToolbar } from './toolbar.js';
 import { attachTableUi } from './table-ui.js';
+import { attachImageUi } from './image-ui.js';
+import { attachClipboard } from './clipboard.js';
 import { registry } from './registry.js';
 
 const IMAGE_MAX_BYTES = 1.2 * 1024 * 1024;
@@ -46,6 +48,8 @@ export function createSession(opts) {
 
   renderToolbar(toolbar, driver, { onImageFile: pickImage });
   const tableUi = attachTableUi({ host, toolbar, driver, onChange: onInput });
+  const imageUi = attachImageUi({ host, toolbar, driver, onChange: onInput });
+  const clipboard = attachClipboard(host);
 
   if (imageInput) {
     imageInput.addEventListener('change', () => {
@@ -81,7 +85,9 @@ export function createSession(opts) {
       if (textarea) textarea.value = driver.getHTML();
     },
     isEmpty() {
-      const text = String(driver.getHTML() || '')
+      const html = String(driver.getHTML() || '');
+      if (/<img\b/i.test(html)) return false;
+      const text = html
         .replace(/<[^>]+>/g, ' ')
         .replace(/&nbsp;/gi, ' ')
         .replace(/\s+/g, ' ')
@@ -94,6 +100,8 @@ export function createSession(opts) {
     destroy() {
       host.removeEventListener('input', onInput);
       tableUi.destroy();
+      imageUi.destroy();
+      clipboard.destroy();
       driver.destroy();
     },
   };

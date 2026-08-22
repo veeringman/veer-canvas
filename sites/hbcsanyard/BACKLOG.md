@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-21
+Last updated: 2026-08-22
 
 ---
 
@@ -155,6 +155,9 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Directory, profile, household members (owner + delegates, view-only)
 - Info Centre, Works & Events
 - **Shared document composer** — Templates Compose and Info Centre HTML pages use the same editor (icons, panel / full-window / original layout) (2026-08-21)
+- **Composer download + letterhead pads + image tools** — save draft/published to the library; download Word / PDF (with chosen pad) or text (body only); save to Google Drive; click an image to resize, float, or drag (2026-08-22)
+- **Composer import** — pull text from `.txt` / Word / Pages / PDF (text layer only) on this device or Google Drive; letterhead stays a Compose option (2026-08-22)
+- **Composer clipboard + image click + letterhead logos** — cut/copy/paste (keys + toolbar); image tools on wrap click; pad logos/watermark inlined for preview/PDF (2026-08-22)
 - EC desk, observability (super admin)
 - Print letterhead / EC committee pads (`documents/`)
 - **Mail template PDFs** — EC Templates: Mail PDF per pad and per category, sent to one or more addresses (2026-08-21)

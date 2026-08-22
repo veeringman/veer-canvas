@@ -236,6 +236,56 @@
     return data;
   }
 
+  async function apiBinary(path, options = {}) {
+    const isForm = options.body instanceof FormData;
+    const headers = { ...(options.headers || {}) };
+    if (!isForm) headers['Content-Type'] = 'application/json';
+    const token = state.session?.token || loadStoredToken();
+    if (token) headers['X-RWA-Token'] = token;
+    let res;
+    try {
+      res = await fetch(path, {
+        credentials: 'same-origin',
+        ...options,
+        headers,
+      });
+    } catch (_err) {
+      throw new Error('Could not reach the server. Try again.');
+    }
+    if (!res.ok) {
+      let data = {};
+      try {
+        data = JSON.parse(await res.text() || '{}');
+      } catch (_err) {
+        data = {};
+      }
+      if (res.status === 401 && path.startsWith('/api/rwa/')) clearPersistedAuth();
+      throw new Error(friendlyApiError(res, data));
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+    const plain = /filename="?([^";]+)"?/i.exec(cd);
+    let filename = 'document';
+    try {
+      filename = decodeURIComponent((star && star[1]) || (plain && plain[1]) || filename);
+    } catch (_err) {
+      filename = (plain && plain[1]) || filename;
+    }
+    return { blob, filename, mime: res.headers.get('Content-Type') || blob.type };
+  }
+
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'document';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  }
+
   function friendlyApiError(res, data) {
     const status = Number(res?.status) || 0;
     const raw = String((data && (data.error || data.message)) || '').trim();
@@ -532,16 +582,30 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       document.body.classList.remove('is-printing-info');
       syncInfoCentreCaptureGuard();
     });
+    const isComposerTarget = (node) => Boolean(
+      node?.closest?.('.mhws-composer-paper, .mhws-composer-toolbar, .mhws-composer-shell [contenteditable="true"]'),
+    );
     document.addEventListener('contextmenu', (event) => {
       if (!isInfoCentreProtectEnforced()) return;
       if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
       const t = event.target;
+      if (isComposerTarget(t)) return;
       if (t?.closest?.('#panel-info, #docViewerDialog')) event.preventDefault();
     });
     document.addEventListener('copy', (event) => {
       if (!isInfoCentreProtectEnforced()) return;
       if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
       const t = event.target;
+      if (isComposerTarget(t)) return;
+      if (t?.closest?.('#panel-info, #docViewerDialog') || docViewerProtectActive) {
+        event.preventDefault();
+      }
+    });
+    document.addEventListener('cut', (event) => {
+      if (!isInfoCentreProtectEnforced()) return;
+      if (!docViewerProtectActive && !(el('panel-info') && !el('panel-info').hidden)) return;
+      const t = event.target;
+      if (isComposerTarget(t)) return;
       if (t?.closest?.('#panel-info, #docViewerDialog') || docViewerProtectActive) {
         event.preventDefault();
       }
@@ -14657,6 +14721,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   let templatesCache = [];
   let templatesCategories = [];
   let templatesStarters = [];
+  let templatesChromes = [];
   let composeSession = null;
   let composeDirty = false;
   let composePreviewUrl = '';
@@ -14692,6 +14757,48 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       }));
     select.innerHTML = opts.join('');
     if (prev && [...select.options].some((o) => o.value === prev)) select.value = prev;
+  }
+
+  function syncComposeWatermarkField() {
+    const select = el('tplComposeChrome');
+    const wm = el('tplComposeWatermark');
+    if (!wm) return;
+    const opt = select?.selectedOptions?.[0];
+    const hasWm = opt?.getAttribute('data-wm') === '1';
+    const wasOff = wm.disabled;
+    wm.hidden = !hasWm;
+    wm.disabled = !hasWm;
+    if (!hasWm) wm.value = '0';
+    else if (wasOff) wm.value = '1';
+  }
+
+  function fillComposeChromeSelect() {
+    const select = el('tplComposeChrome');
+    if (!select) return;
+    const prev = select.value;
+    const list = templatesChromes && templatesChromes.length
+      ? templatesChromes
+      : [{ id: 'simple', title: 'Simple header & footer', hasWatermark: false }];
+    select.innerHTML = list.map((c) => {
+      const wm = c.hasWatermark ? '1' : '0';
+      return `<option value="${escapeHtml(c.id)}" data-wm="${wm}">${escapeHtml(c.title)}</option>`;
+    }).join('');
+    if (prev && [...select.options].some((o) => o.value === prev)) select.value = prev;
+    else if ([...select.options].some((o) => o.value === 'tpl-mhws-letterhead')) select.value = 'tpl-mhws-letterhead';
+    syncComposeWatermarkField();
+  }
+
+  function composeExportPayload() {
+    const starter = currentComposeStarter();
+    return {
+      title: String(el('tplComposeTitle')?.value || '').trim() || 'Document',
+      category: el('tplComposeCategory')?.value || starter?.category || 'correspondence',
+      status: el('tplComposeStatus')?.value || 'published',
+      tags: (starter?.tags || ['compose']).join(', '),
+      htmlBody: composeSession ? composeSession.getHTML() : '',
+      chrome: el('tplComposeChrome')?.value || 'simple',
+      watermark: el('tplComposeWatermark')?.value !== '0',
+    };
   }
 
   async function mountComposeEditor() {
@@ -14770,10 +14877,20 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
 </body></html>`;
   }
 
-  function previewComposeDocument() {
+  async function previewComposeDocument() {
     if (!composeSession) return;
     const title = String(el('tplComposeTitle')?.value || '').trim() || 'Document';
-    const html = wrapComposePreviewHtml(title, composeSession.getHTML());
+    const statusLine = el('tplComposeStatus');
+    let html = '';
+    try {
+      const { blob } = await apiBinary('/api/rwa/templates/compose/preview', {
+        method: 'POST',
+        body: JSON.stringify(composeExportPayload()),
+      });
+      html = await blob.text();
+    } catch (_err) {
+      html = wrapComposePreviewHtml(title, composeSession.getHTML());
+    }
     if (composePreviewUrl) URL.revokeObjectURL(composePreviewUrl);
     composePreviewUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
     const dialog = el('docViewerDialog');
@@ -14784,6 +14901,7 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
       mime: 'text/html',
       isBlob: true,
     });
+    if (statusLine && !html) statusLine.textContent = 'Preview failed.';
   }
 
   function clearComposeDocument() {
@@ -14815,13 +14933,10 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     }
     const starter = currentComposeStarter();
     const editId = String(el('tplComposeEditId')?.value || '').trim();
-    const payload = {
-      title,
-      category: el('tplComposeCategory')?.value || starter?.category || 'correspondence',
-      status: el('tplComposeStatus')?.value || 'published',
-      tags: (starter?.tags || ['compose']).join(', '),
-      htmlBody: composeSession.getHTML(),
-    };
+    const payload = composeExportPayload();
+    payload.title = title;
+    payload.category = el('tplComposeCategory')?.value || starter?.category || 'correspondence';
+    payload.status = el('tplComposeStatus')?.value || 'published';
     if (saveBtn) saveBtn.disabled = true;
     if (statusLine) statusLine.textContent = 'Saving…';
     try {
@@ -14859,6 +14974,296 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     el('tplComposePreviewBtn')?.addEventListener('click', () => previewComposeDocument());
     el('tplComposeClearBtn')?.addEventListener('click', () => clearComposeDocument());
     el('tplComposeTitle')?.addEventListener('input', () => { composeDirty = true; });
+    el('tplComposeChrome')?.addEventListener('change', () => syncComposeWatermarkField());
+    el('tplComposeDownloadBtn')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeComposeImportPicker();
+      openComposeDownloadPicker(el('tplComposeDownloadBtn'));
+    });
+    el('tplComposeImportBtn')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeComposeDownloadPicker();
+      openComposeImportPicker(el('tplComposeImportBtn'));
+    });
+    el('tplComposeImportInput')?.addEventListener('change', () => {
+      const file = el('tplComposeImportInput')?.files && el('tplComposeImportInput').files[0];
+      if (!file) return;
+      importComposeFromLocal(file).finally(() => {
+        if (el('tplComposeImportInput')) el('tplComposeImportInput').value = '';
+      });
+    });
+  }
+
+  let composeDownloadPop = null;
+  let composeImportPop = null;
+
+  function closeComposeDownloadPicker() {
+    if (!composeDownloadPop) return;
+    composeDownloadPop.remove();
+    composeDownloadPop = null;
+    document.removeEventListener('mousedown', onComposeDownloadDoc, true);
+    document.removeEventListener('keydown', onComposeDownloadEsc, true);
+  }
+
+  function onComposeDownloadDoc(event) {
+    if (composeDownloadPop && !composeDownloadPop.contains(event.target) && !event.target.closest('#tplComposeDownloadBtn')) {
+      closeComposeDownloadPicker();
+    }
+  }
+
+  function onComposeDownloadEsc(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeComposeDownloadPicker();
+    }
+  }
+
+  function openComposeDownloadPicker(btn) {
+    if (!btn) return;
+    if (composeDownloadPop) {
+      closeComposeDownloadPicker();
+      return;
+    }
+    const pop = document.createElement('div');
+    pop.className = 'mhws-download-picker';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Download document');
+    pop.innerHTML = '<p>Download</p>';
+    [
+      { format: 'pdf', label: 'PDF', dest: 'download' },
+      { format: 'docx', label: 'Word (.docx)', dest: 'download' },
+      { format: 'txt', label: 'Text (.txt)', dest: 'download' },
+    ].forEach((item) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = item.label;
+      b.addEventListener('click', () => {
+        closeComposeDownloadPicker();
+        downloadComposeDocument(item.format, item.dest);
+      });
+      pop.append(b);
+    });
+    const driveHead = document.createElement('p');
+    driveHead.textContent = 'Google Drive';
+    pop.append(driveHead);
+    [
+      { format: 'pdf', label: 'PDF → Drive', dest: 'drive' },
+      { format: 'docx', label: 'Word → Drive', dest: 'drive' },
+      { format: 'txt', label: 'Text → Drive', dest: 'drive' },
+    ].forEach((item) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = item.label;
+      b.addEventListener('click', () => {
+        closeComposeDownloadPicker();
+        downloadComposeDocument(item.format, item.dest);
+      });
+      pop.append(b);
+    });
+    document.body.append(pop);
+    const br = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(br.left, window.innerWidth - 200))}px`;
+    pop.style.top = `${Math.min(br.bottom + 4, window.innerHeight - 320)}px`;
+    composeDownloadPop = pop;
+    document.addEventListener('mousedown', onComposeDownloadDoc, true);
+    document.addEventListener('keydown', onComposeDownloadEsc, true);
+  }
+
+  function closeComposeImportPicker() {
+    if (!composeImportPop) return;
+    composeImportPop.remove();
+    composeImportPop = null;
+    document.removeEventListener('mousedown', onComposeImportDoc, true);
+    document.removeEventListener('keydown', onComposeImportEsc, true);
+  }
+
+  function onComposeImportDoc(event) {
+    if (composeImportPop && !composeImportPop.contains(event.target) && !event.target.closest('#tplComposeImportBtn')) {
+      closeComposeImportPicker();
+    }
+  }
+
+  function onComposeImportEsc(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeComposeImportPicker();
+    }
+  }
+
+  function composeImportKindLabel(file) {
+    const name = String(file?.name || '').toLowerCase();
+    const mime = String(file?.mime || '').toLowerCase();
+    if (mime.includes('google-apps.document')) return 'Google Doc';
+    if (name.endsWith('.pdf') || mime.includes('pdf')) return 'PDF';
+    if (name.endsWith('.docx') || name.endsWith('.doc') || mime.includes('word') || mime.includes('msword')) return 'Word';
+    if (name.endsWith('.pages') || mime.includes('pages')) return 'Pages';
+    if (name.endsWith('.txt') || name.endsWith('.text') || mime.startsWith('text/')) return 'Text';
+    return 'File';
+  }
+
+  function openComposeImportPicker(btn) {
+    if (!btn) return;
+    if (composeImportPop) {
+      closeComposeImportPicker();
+      return;
+    }
+    const pop = document.createElement('div');
+    pop.className = 'mhws-download-picker is-wide';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Import document');
+    pop.innerHTML = '<p>Import</p>';
+    const localBtn = document.createElement('button');
+    localBtn.type = 'button';
+    localBtn.textContent = 'This device';
+    localBtn.addEventListener('click', () => {
+      closeComposeImportPicker();
+      el('tplComposeImportInput')?.click();
+    });
+    pop.append(localBtn);
+    const driveHead = document.createElement('p');
+    driveHead.textContent = 'Google Drive';
+    pop.append(driveHead);
+    const driveHint = document.createElement('p');
+    driveHint.className = 'is-muted';
+    driveHint.textContent = 'Loading…';
+    pop.append(driveHint);
+    document.body.append(pop);
+    const br = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(br.left, window.innerWidth - 280))}px`;
+    pop.style.top = `${Math.min(br.bottom + 4, window.innerHeight - 360)}px`;
+    composeImportPop = pop;
+    document.addEventListener('mousedown', onComposeImportDoc, true);
+    document.addEventListener('keydown', onComposeImportEsc, true);
+    loadComposeImportDriveList(pop, driveHint);
+  }
+
+  async function loadComposeImportDriveList(pop, hint) {
+    try {
+      const data = await api('/api/rwa/templates/compose/import/drive');
+      if (composeImportPop !== pop) return;
+      const files = Array.isArray(data.files) ? data.files : [];
+      hint.remove();
+      if (!files.length) {
+        const empty = document.createElement('p');
+        empty.className = 'is-muted';
+        empty.textContent = 'No text, Word, Pages, or PDF files in Drive.';
+        pop.append(empty);
+        return;
+      }
+      files.slice(0, 20).forEach((file) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const name = String(file.name || 'Untitled');
+        const short = name.length > 36 ? `${name.slice(0, 34)}…` : name;
+        b.textContent = `${short} · ${composeImportKindLabel(file)}`;
+        b.title = name;
+        b.addEventListener('click', () => {
+          closeComposeImportPicker();
+          importComposeFromDrive(file.id);
+        });
+        pop.append(b);
+      });
+    } catch (e) {
+      hint.className = 'is-muted';
+      hint.textContent = e.message || 'Google Drive is not available.';
+    }
+  }
+
+  async function applyComposeImport(result) {
+    if (!result?.html) throw new Error('No extractable text in that file.');
+    await mountComposeEditor();
+    if (!composeSession) throw new Error('Composer is not ready.');
+    if (composeDirty && !window.confirm('Replace the current draft with the imported text?')) {
+      return false;
+    }
+    composeSession.setHTML(result.html);
+    if (el('tplComposeTitle') && !String(el('tplComposeTitle').value || '').trim()) {
+      el('tplComposeTitle').value = result.title || '';
+    }
+    composeDirty = true;
+    const statusLine = el('tplComposeStatus');
+    if (statusLine) {
+      statusLine.textContent = `Imported “${result.sourceName || result.title || 'document'}”. Letterhead is applied when you save or download.`;
+    }
+    return true;
+  }
+
+  async function importComposeFromLocal(file) {
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('tplComposeStatus');
+    if (statusLine) statusLine.textContent = 'Importing…';
+    try {
+      const body = new FormData();
+      body.append('file', file, file.name);
+      const result = await api('/api/rwa/templates/compose/import', { method: 'POST', body });
+      await applyComposeImport(result);
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Import failed';
+    }
+  }
+
+  async function importComposeFromDrive(fileId) {
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('tplComposeStatus');
+    if (statusLine) statusLine.textContent = 'Importing from Google Drive…';
+    try {
+      const result = await api('/api/rwa/templates/compose/import', {
+        method: 'POST',
+        body: JSON.stringify({ fileId }),
+      });
+      await applyComposeImport(result);
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Drive import failed';
+    }
+  }
+
+  async function downloadComposeDocument(format, destination = 'download') {
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('tplComposeStatus');
+    const title = String(el('tplComposeTitle')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title required.';
+      return;
+    }
+    if (!composeSession || composeSession.isEmpty()) {
+      if (statusLine) statusLine.textContent = 'Write the document, or pick a starter.';
+      return;
+    }
+    const toDrive = destination === 'drive' || destination === 'gdrive';
+    if (statusLine) statusLine.textContent = toDrive ? 'Saving to Google Drive…' : 'Preparing download…';
+    try {
+      const payload = { ...composeExportPayload(), format, destination: toDrive ? 'drive' : 'download' };
+      if (toDrive) {
+        const data = await api('/api/rwa/templates/compose/export', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        const name = data.drive?.name || data.filename || title;
+        const url = data.drive?.url || '';
+        if (statusLine) {
+          statusLine.textContent = url
+            ? `Saved “${name}” to Google Drive.`
+            : `Saved “${name}” to Google Drive.`;
+        }
+        if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = ' Open';
+          statusLine?.append(' ', a);
+        }
+        return;
+      }
+      const { blob, filename } = await apiBinary('/api/rwa/templates/compose/export', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      triggerBlobDownload(blob, filename);
+      if (statusLine) statusLine.textContent = `Downloaded “${filename}”. Library save is separate.`;
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || (toDrive ? 'Drive save failed' : 'Download failed');
+    }
   }
 
   function syncTemplatesCustomSizeFields() {
@@ -15095,7 +15500,9 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     }
     templatesCache = data.templates || [];
     templatesStarters = Array.isArray(data.starters) ? data.starters : templatesStarters;
+    templatesChromes = Array.isArray(data.chromes) ? data.chromes : templatesChromes;
     fillComposeStarterSelect();
+    fillComposeChromeSelect();
     mountComposeEditor().catch(() => {});
     renderTemplatesList();
     if (el('templatesStatus') && !el('templatesEditId')?.value) {

@@ -333,30 +333,40 @@ EOF
   fi
 }
 
+# Linux x86_64 ELF? (never compile Rust on this EC2 host — see deploy/EC2-DISK.md)
+_veer_ai_is_linux_elf() {
+  local p="$1"
+  [[ -f "$p" && -r "$p" ]] || return 1
+  local mag
+  mag="$(head -c 4 "$p" 2>/dev/null || true)"
+  [[ "$mag" == $'\x7fELF' ]]
+}
+
 install_veer_ai() {
   local src="$WEB_ROOT/veercanvas/services/veer-ai"
   local bin_dir="$WEB_ROOT/data/bin"
+  local dest="$bin_dir/veer-ai"
   local unit_src="$WEB_ROOT/veercanvas/deploy/systemd/veer-ai.service"
   local unit_dst="/etc/systemd/system/veer-ai.service"
+  local shipped="" cand
   mkdir -p "$bin_dir"
-  if [[ ! -d "$src" ]]; then
-    echo "veer-ai source missing — skip"
-    return 0
-  fi
-  if ! command -v cargo >/dev/null 2>&1; then
-    echo "Installing rustup for ubuntu (needed for veer-ai) ..."
-    if ! sudo -u ubuntu bash -lc 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal'; then
-      echo "warning: rustup install failed — Mandi Adda moderation will fail-open" >&2
-      return 0
+  rm -rf "$src/target"
+  for cand in "$src/dist/veer-ai" "$src/dist/veer-ai-x86_64-linux"; do
+    if _veer_ai_is_linux_elf "$cand"; then
+      shipped="$cand"
+      break
     fi
-  fi
-  echo "Building veer-ai (Rust AI sidecar v0.79 — moderation + BM25/ngram RAG) ..."
-  if ! sudo -u ubuntu bash -lc 'source "$HOME/.cargo/env" 2>/dev/null; cd "'"$src"'" && cargo build --release'; then
-    echo "warning: veer-ai build failed — moderation/RAG will fall back" >&2
+  done
+  if [[ -n "$shipped" ]]; then
+    echo "Installing veer-ai from shipped binary $shipped (no cargo on EC2) ..."
+    install -m 755 "$shipped" "$dest"
+  elif [[ -x "$dest" ]] && _veer_ai_is_linux_elf "$dest"; then
+    echo "veer-ai: keeping existing $dest (EC2 does not compile Rust)"
+  else
+    echo "warning: no Linux veer-ai binary — copy services/veer-ai/dist/veer-ai from a laptop/CI build" >&2
     return 0
   fi
-  install -m 755 "$src/target/release/veer-ai" "$bin_dir/veer-ai"
-  chown ubuntu:ubuntu "$bin_dir/veer-ai" 2>/dev/null || true
+  chown ubuntu:ubuntu "$dest" 2>/dev/null || true
   if [[ -f "$unit_src" ]]; then
     sed "s|/var/www/cityofmandi.veerlabs.solutions|$WEB_ROOT|g" "$unit_src" > "$unit_dst"
     systemctl daemon-reload

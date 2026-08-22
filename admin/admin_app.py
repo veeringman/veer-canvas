@@ -6867,6 +6867,7 @@ def api_rwa_print_templates():
                 "categories": rwa_templates.categories(),
                 "optionPresets": rwa_templates.option_presets(),
                 "starters": rwa_templates.document_starters(),
+                "chromes": rwa_templates.compose_chromes(conn, SITE_ROOT),
             })
 
         upload = request.files.get("file") or request.files.get("document")
@@ -6896,6 +6897,116 @@ def api_rwa_print_templates():
             file_storage=upload,
         )
         return jsonify({"ok": True, "template": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/compose/preview", methods=["POST"])
+def api_rwa_compose_preview():
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        payload = request.get_json(force=True, silent=True) or {}
+        title = str(payload.get("title") or "Document").strip() or "Document"
+        html = rwa_templates.wrap_composed_document(
+            title=title,
+            body_html=str(payload.get("htmlBody") or payload.get("bodyHtml") or ""),
+            chrome=str(payload.get("chrome") or "simple"),
+            watermark=payload.get("watermark"),
+            site_root=SITE_ROOT,
+            conn=conn,
+        )
+        return Response(html, mimetype="text/html; charset=utf-8")
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/compose/export", methods=["POST"])
+def api_rwa_compose_export():
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        payload = request.get_json(force=True, silent=True) or {}
+        title = str(payload.get("title") or "Document").strip() or "Document"
+        data, filename, mime = rwa_templates.export_composed_document(
+            conn,
+            SITE_ROOT,
+            title=title,
+            body_html=str(payload.get("htmlBody") or payload.get("bodyHtml") or ""),
+            fmt=str(payload.get("format") or payload.get("fmt") or "pdf"),
+            chrome=str(payload.get("chrome") or "simple"),
+            watermark=payload.get("watermark"),
+        )
+        dest = str(payload.get("destination") or "download").strip().lower()
+        if dest in {"drive", "gdrive", "google"}:
+            import rwa_drive  # noqa: WPS433
+
+            info = rwa_drive.upload_bytes(SITE_ROOT, data, filename, mime=mime)
+            return jsonify({"ok": True, "filename": filename, "drive": info})
+        return send_file(
+            io.BytesIO(data),
+            mimetype=mime,
+            as_attachment=True,
+            download_name=filename,
+            max_age=0,
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/compose/import/drive", methods=["GET"])
+def api_rwa_compose_import_drive_list():
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        import rwa_drive  # noqa: WPS433
+
+        files = rwa_drive.list_importable_files(SITE_ROOT)
+        return jsonify({"ok": True, "files": files})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/compose/import", methods=["POST"])
+def api_rwa_compose_import():
+    conn = _rwa_conn()
+    try:
+        _sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        import rwa_compose_import  # noqa: WPS433
+        import rwa_drive  # noqa: WPS433
+
+        upload = request.files.get("file") or request.files.get("document")
+        if upload is not None and getattr(upload, "filename", None):
+            data = upload.read()
+            result = rwa_compose_import.extract_import(
+                data,
+                filename=pathlib.Path(str(upload.filename)).name,
+                mime=upload.mimetype,
+            )
+            return jsonify({"ok": True, **result})
+        payload = request.get_json(force=True, silent=True) or {}
+        file_id = str(payload.get("fileId") or payload.get("driveId") or "").strip()
+        if not file_id:
+            return jsonify({"ok": False, "error": "Choose a .txt, Word, Pages, or PDF file."}), 400
+        data, name, mime = rwa_drive.download_file(SITE_ROOT, file_id)
+        result = rwa_compose_import.extract_import(data, filename=name, mime=mime)
+        return jsonify({"ok": True, **result})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:

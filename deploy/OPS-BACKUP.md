@@ -9,12 +9,13 @@ Daily local backups + journal/nginx retention for each VeerCanvas site. Phase 2 
 | Backup script | `deploy/backup-site.sh` |
 | Installer | `deploy/install-ops.sh` (called from `site-deploy.sh`) |
 | Cron | `/etc/cron.d/veercanvas-backup-<site-id>` → **02:30** local |
-| Backup store | `/var/backups/veercanvas/<site-id>/` (7-day retention default) |
+| Backup store | `/var/backups/veercanvas/<site-id>/` (3-day retention default) |
 | Backup log | `/var/log/veercanvas/backup-<site-id>.log` |
 | Journald | `/etc/systemd/journald.conf.d/veercanvas.conf` (100M / 7d) |
 | Nginx rotate | `/etc/logrotate.d/veercanvas-nginx` (14 days) |
 | Events prune | `access_events` older than **90 days** (with each backup) |
 | **Drive sync** | After backup when `DRIVE_ENABLED=1` → `ops/sync-to-drive.sh` |
+| **Drive Python** | Shared venv `/var/lib/veercanvas/drive-venv` (per-site `data/drive-venv` is a symlink) |
 | **Vitals check** | `deploy/ops/check-server-vitals.sh` → **every 15 min** |
 | Vitals log | `/var/log/veercanvas/vitals-<site-id>.log` |
 
@@ -108,7 +109,7 @@ Verify login + a notice/dues read. Prefer copying `latest` aside first so you ca
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `RETAIN_DAYS` | 7 | On-disk backup age |
+| `RETAIN_DAYS` | 3 | On-disk backup age |
 | `DISK_MIN_PCT` | 15 | Fail if free % below this |
 | `ACCESS_EVENTS_DAYS` | 90 | Event prune window |
 | `ALERT_ON_SUCCESS` | 0 | Email on success too |

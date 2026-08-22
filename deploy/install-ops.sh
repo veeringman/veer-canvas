@@ -46,10 +46,11 @@ if ((${#NEED_APT[@]})); then
   apt-get install -y -qq "${NEED_APT[@]}"
 fi
 
-# Drive sync Python deps in a dedicated venv (PEP 668 / Ubuntu 24+)
-DRIVE_VENV="${DRIVE_VENV:-${WEB_ROOT}/data/drive-venv}"
+# One host-wide Drive venv (do not copy 150MB into every site data/).
+SHARED_DRIVE_VENV="/var/lib/veercanvas/drive-venv"
+DRIVE_VENV="${DRIVE_VENV:-$SHARED_DRIVE_VENV}"
 echo "install-ops: ensuring Google Drive venv at ${DRIVE_VENV}…"
-mkdir -p "$(dirname "$DRIVE_VENV")"
+mkdir -p /var/lib/veercanvas "$(dirname "$DRIVE_VENV")"
 if [[ ! -x "${DRIVE_VENV}/bin/python" ]]; then
   python3 -m venv "$DRIVE_VENV" || echo "install-ops: warning: venv create failed" >&2
 fi
@@ -61,6 +62,15 @@ else
   echo "install-ops: warning: Drive venv pip missing" >&2
 fi
 chown -R ubuntu:ubuntu "$DRIVE_VENV" 2>/dev/null || true
+# Per-site path stays valid as a symlink (remote-deploy protects data/).
+if [[ -n "$WEB_ROOT" ]]; then
+  mkdir -p "$WEB_ROOT/data"
+  if [[ -e "$WEB_ROOT/data/drive-venv" && ! -L "$WEB_ROOT/data/drive-venv" ]]; then
+    rm -rf "$WEB_ROOT/data/drive-venv"
+  fi
+  ln -sfn "$DRIVE_VENV" "$WEB_ROOT/data/drive-venv"
+  chown -h ubuntu:ubuntu "$WEB_ROOT/data/drive-venv" 2>/dev/null || true
+fi
 
 mkdir -p /var/backups/veercanvas /var/log/veercanvas /var/lib/veercanvas/vitals /etc/systemd/journald.conf.d
 chmod 750 /var/backups/veercanvas /var/log/veercanvas /var/lib/veercanvas

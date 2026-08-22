@@ -404,7 +404,7 @@ rsync -az \
   "${EC2_USER}@${EC2_HOST}:$WEB_ROOT/veercanvas/cli/"
 
 if [[ -d "$VEERCANVAS_ROOT/services/veer-ai" ]]; then
-  echo "Syncing veer-ai (Rust AI sidecar) ..."
+  echo "Syncing veer-ai (source + optional dist/ binary; EC2 must not cargo-build) ..."
   ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "mkdir -p '$WEB_ROOT/veercanvas/services'"
   rsync -az \
     -e "$RSYNC_SSH" \

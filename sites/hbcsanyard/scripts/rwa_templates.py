@@ -339,6 +339,51 @@ def document_starters() -> list[dict[str, Any]]:
     return list_document_starters()
 
 
+def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[dict[str, Any]]:
+    """Pads with a `.body-area` writing slot, plus the simple header/footer wrap."""
+    ensure_print_templates_table(conn)
+    seed_default_templates(conn, site_root)
+    preferred = ("tpl-mhws-letterhead", "tpl-rwa-letterhead-blank")
+    found: dict[str, dict[str, Any]] = {}
+    rows = conn.execute(
+        """
+        SELECT * FROM print_templates
+        WHERE status IN ('published', 'draft')
+        ORDER BY updated_at DESC
+        """
+    ).fetchall()
+    for row in rows:
+        doc = _row_to_dto(row, site_root)
+        path = resolve_template_file(site_root, doc)
+        if not path or path.suffix.lower() not in {".html", ".htm"}:
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not re.search(r"\bbody-area\b", raw, re.I):
+            continue
+        found[str(doc["id"])] = {
+            "id": doc["id"],
+            "title": {
+                "tpl-mhws-letterhead": "Official letterhead",
+                "tpl-rwa-letterhead-blank": "Blank letterhead",
+            }.get(str(doc["id"]), doc.get("title") or doc["id"]),
+            "hasWatermark": bool(re.search(r"""class=["'][^"']*\bwm\b""", raw, re.I)),
+            "category": doc.get("category") or "",
+        }
+    ordered: list[dict[str, Any]] = []
+    for tid in preferred:
+        if tid in found:
+            ordered.append(found.pop(tid))
+    letterheads = [item for item in found.values() if item.get("category") == "letterhead"]
+    rest = [item for item in found.values() if item.get("category") != "letterhead"]
+    ordered.extend(letterheads)
+    ordered.extend(rest)
+    ordered.append({"id": "simple", "title": "Simple header & footer", "hasWatermark": False, "category": ""})
+    return ordered
+
+
 _COMPOSE_BLOCK_RE = re.compile(
     r"<(script|iframe|object|embed|link|meta)(\s[^>]*)?>[\s\S]*?</\1\s*>",
     re.I,
@@ -382,15 +427,61 @@ def sanitize_compose_html(raw: str) -> str:
     return html.strip() or "<p></p>"
 
 
-def wrap_composed_document(*, title: str, body_html: str) -> str:
+def wrap_composed_document(
+    *,
+    title: str,
+    body_html: str,
+    chrome: str = "simple",
+    watermark: bool | None = True,
+    site_root: pathlib.Path | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> str:
+    from rwa_compose_export import (
+        COMPOSE_PAD_BODY_CSS,
+        as_bool,
+        embed_local_asset_urls,
+        inject_body_area,
+        rewrite_pad_urls,
+        set_html_title,
+        strip_base_tag,
+        strip_screen_chrome,
+    )
+
     heading = _html_escape((title or "Document").strip() or "Document")
     margins = parse_doc_margins_mm(body_html)
     body = sanitize_compose_html(body_html)
+    chrome_id = str(chrome or "simple").strip() or "simple"
+    show_wm = as_bool(watermark, True)
+    if chrome_id != "simple" and conn is not None and site_root is not None:
+        try:
+            pad_html, _doc = render_template_html(
+                conn,
+                site_root,
+                chrome_id,
+                options_override={
+                    "paperSize": "A4",
+                    "orientation": "portrait",
+                    "background": "watermark" if show_wm else "none",
+                },
+            )
+        except ValueError:
+            pad_html = ""
+        if pad_html:
+            pad_html = embed_local_asset_urls(
+                strip_base_tag(rewrite_pad_urls(strip_screen_chrome(pad_html))),
+                site_root,
+            )
+            injected = inject_body_area(pad_html, body)
+            if injected:
+                if "</head>" in injected:
+                    injected = injected.replace("</head>", COMPOSE_PAD_BODY_CSS + "\n</head>", 1)
+                return set_html_title(injected, title)
+
     page_margin = (
         f'{margins["top"]:g}mm {margins["right"]:g}mm '
         f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
     )
-    return f"""<!DOCTYPE html>
+    simple = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -425,6 +516,8 @@ def wrap_composed_document(*, title: str, body_html: str) -> str:
     .body th, .body td {{ border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }}
     .body th {{ background: #eef2f8; }}
     .body img {{ max-width: 100%; height: auto; }}
+    .body .mhws-img {{ max-width: 100%; }}
+    .body .mhws-img img {{ width: 100%; height: auto; display: block; }}
     .foot {{
       margin-top: 16pt;
       padding-top: 6pt;
@@ -448,6 +541,64 @@ def wrap_composed_document(*, title: str, body_html: str) -> str:
 </body>
 </html>
 """.strip()
+    return embed_local_asset_urls(simple, site_root)
+
+
+def export_composed_document(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    *,
+    title: str,
+    body_html: str,
+    fmt: str,
+    chrome: str = "simple",
+    watermark: bool | None = True,
+) -> tuple[bytes, str, str]:
+    """Return (bytes, filename, mime) for pdf / docx / txt."""
+    from rwa_compose_export import (
+        as_bool,
+        export_filename,
+        html_fragment_to_text,
+        inject_compose_pdf_css,
+        wrapped_html_to_docx_bytes,
+    )
+
+    kind = str(fmt or "pdf").strip().lower()
+    if kind in {"word", "doc"}:
+        kind = "docx"
+    if kind not in {"pdf", "docx", "txt"}:
+        raise ValueError("Download as PDF, Word (.docx), or Text (.txt).")
+    heading = (title or "Document").strip() or "Document"
+    show_wm = as_bool(watermark, True)
+    if kind == "txt":
+        text = html_fragment_to_text(body_html)
+        data = text.encode("utf-8")
+        return data, export_filename(heading, ".txt"), "text/plain; charset=utf-8"
+    html = wrap_composed_document(
+        title=heading,
+        body_html=body_html,
+        chrome=chrome,
+        watermark=show_wm,
+        site_root=site_root,
+        conn=conn,
+    )
+    if kind == "docx":
+        data = wrapped_html_to_docx_bytes(html=html, site_root=site_root)
+        return (
+            data,
+            export_filename(heading, ".docx"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    html = inject_compose_pdf_css(html)
+    opts = normalize_options({"paperSize": "A4", "orientation": "portrait", "background": "watermark" if show_wm else "none"})
+    pdf = _html_to_pdf_chrome(html, site_root, opts, inject_layout=False) or _html_to_pdf_weasyprint(
+        html, site_root, opts, inject_layout=False
+    )
+    if not pdf:
+        raise ValueError(
+            "Could not format this document as PDF. Install Chromium on the server (or set RWA_CHROME_BIN)."
+        )
+    return pdf, export_filename(heading, ".pdf"), "application/pdf"
 
 
 def _category(raw: str | None) -> str:
@@ -730,7 +881,16 @@ def upsert_template(
         static_path = None
 
     elif html_in is not None:
-        wrapped = wrap_composed_document(title=title, body_html=str(html_in or ""))
+        from rwa_compose_export import as_bool
+
+        wrapped = wrap_composed_document(
+            title=title,
+            body_html=str(html_in or ""),
+            chrome=str(payload.get("chrome") or payload.get("composeChrome") or "simple"),
+            watermark=as_bool(payload.get("watermark"), True),
+            site_root=pathlib.Path(site_root),
+            conn=conn,
+        )
         data = wrapped.encode("utf-8")
         if len(data) > TEMPLATE_MAX_BYTES:
             raise ValueError("Document too large (max 20 MB)")
@@ -1477,7 +1637,7 @@ def _absolutize_site_urls(html: str, site_root: pathlib.Path) -> str:
         attr, quote, path = match.group(1), match.group(2), match.group(3)
         if path.startswith(("http:", "https:", "data:", "file:", "mailto:", "blob:", "#")):
             return match.group(0)
-        rel = path.lstrip("/")
+        rel = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
         return f"{attr}={quote}{root_uri}{rel}{quote}"
 
     return re.sub(
@@ -1488,11 +1648,18 @@ def _absolutize_site_urls(html: str, site_root: pathlib.Path) -> str:
     )
 
 
-def _html_to_pdf_chrome(html: str, site_root: pathlib.Path, options: dict[str, Any] | None = None) -> bytes | None:
+def _html_to_pdf_chrome(
+    html: str,
+    site_root: pathlib.Path,
+    options: dict[str, Any] | None = None,
+    *,
+    inject_layout: bool = True,
+) -> bytes | None:
     binary = _chrome_binary()
     if not binary:
         return None
-    html = _inject_pdf_page_css(html, options)
+    if inject_layout:
+        html = _inject_pdf_page_css(html, options)
     localized = _absolutize_site_urls(html, site_root)
     with tempfile.TemporaryDirectory(prefix="rwa-tpl-pdf-") as tmp:
         tmp_path = pathlib.Path(tmp)
@@ -1525,12 +1692,19 @@ def _html_to_pdf_chrome(html: str, site_root: pathlib.Path, options: dict[str, A
     return None
 
 
-def _html_to_pdf_weasyprint(html: str, site_root: pathlib.Path, options: dict[str, Any] | None = None) -> bytes | None:
+def _html_to_pdf_weasyprint(
+    html: str,
+    site_root: pathlib.Path,
+    options: dict[str, Any] | None = None,
+    *,
+    inject_layout: bool = True,
+) -> bytes | None:
     try:
         from weasyprint import HTML  # type: ignore
     except Exception:
         return None
-    html = _inject_pdf_page_css(html, options)
+    if inject_layout:
+        html = _inject_pdf_page_css(html, options)
     localized = re.sub(
         r"""((?:src|href)\s*=\s*['"])/""",
         r"\1",
