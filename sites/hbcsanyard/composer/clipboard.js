@@ -12,9 +12,9 @@ const ALLOWED = new Set([
 ]);
 const ATTR_OK = new Set([
   'href', 'src', 'alt', 'colspan', 'rowspan', 'class', 'style',
-  'data-width', 'data-float', 'contenteditable',
+  'data-width', 'data-float', 'data-valign', 'contenteditable',
 ]);
-const STYLE_OK = /^(color|background-color|font-size|font-family|font-weight|font-style|text-decoration|text-align|width|max-width|height|float|margin|margin-left|margin-right|margin-top|margin-bottom|display|vertical-align)$/i;
+const STYLE_OK = /^(color|background-color|font-size|font-family|font-weight|font-style|text-decoration|text-align|width|max-width|height|float|margin|margin-left|margin-right|margin-top|margin-bottom|display|vertical-align|align-items|justify-content|flex|flex-direction|gap|line-height)$/i;
 
 function emit(host) {
   host.dispatchEvent(new Event('input', { bubbles: true }));
@@ -193,7 +193,7 @@ export function sanitizePastedHtml(html) {
         if (name === 'class') {
           const keep = String(attr.value || '')
             .split(/\s+/)
-            .filter((c) => c === 'mhws-img' || c === 'mhws-table');
+            .filter((c) => c === 'mhws-img' || c === 'mhws-img-pair' || c === 'mhws-img-text' || c === 'mhws-table');
           if (keep.length) child.setAttribute('class', keep.join(' '));
           else child.removeAttribute('class');
         }

@@ -512,6 +512,9 @@ def wrap_composed_document(
     .org .meta {{ margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }}
     .body {{ min-height: 180mm; }}
     .body p {{ margin: 0 0 8pt; }}
+    .body h2 {{ margin: 0 0 8pt; font-size: 18pt; font-weight: 700; color: #0b2a56; }}
+    .body h3 {{ margin: 0 0 6pt; font-size: 14pt; font-weight: 700; color: #143a6e; }}
+    .body .mhws-img-pair {{ display: flex; align-items: stretch; gap: 10pt; width: 100%; margin: 0 0 8pt; }}
     .body table {{ border-collapse: collapse; width: 100%; margin: 8pt 0; }}
     .body th, .body td {{ border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }}
     .body th {{ background: #eef2f8; }}

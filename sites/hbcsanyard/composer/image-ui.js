@@ -1,5 +1,5 @@
 import { iconSvg } from './icons.js';
-import { wrappedImageHtml, applyImageLayout } from './driver-dom.js';
+import { wrappedImageHtml, applyImageLayout, ensureImagePair, applyPairValign } from './driver-dom.js';
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -85,6 +85,9 @@ export function attachImageUi({ host, toolbar, driver, onChange }) {
     toolBtn('alignCenter', 'Centre on line', 'float-center'),
     toolBtn('alignRight', 'Float right', 'float-right'),
     toolBtn('imageInline', 'In line with text', 'float-none'),
+    toolBtn('valignTop', 'Text at top of image', 'valign-top'),
+    toolBtn('valignMiddle', 'Text in middle of image', 'valign-middle'),
+    toolBtn('valignBottom', 'Text at bottom of image', 'valign-bottom'),
     toolBtn('tableDelete', 'Delete image', 'delete'),
   );
   toolbar.after(tools);
@@ -159,8 +162,9 @@ export function attachImageUi({ host, toolbar, driver, onChange }) {
       return;
     }
     if (act === 'delete') {
-      const next = active.nextSibling;
-      active.remove();
+      const gone = active.closest('.mhws-img-pair') || active;
+      const next = gone.nextSibling;
+      gone.remove();
       hide();
       notify();
       if (next) {
@@ -171,6 +175,14 @@ export function attachImageUi({ host, toolbar, driver, onChange }) {
         sel.removeAllRanges();
         sel.addRange(range);
       }
+      return;
+    }
+    if (act.startsWith('valign-')) {
+      const pair = ensureImagePair(active, act.slice(7));
+      applyPairValign(pair, act.slice(7));
+      applyImageLayout(active, widthOf(active), 'none', act.slice(7));
+      layout();
+      notify();
       return;
     }
     if (act.startsWith('float-')) {
@@ -222,9 +234,10 @@ export function attachImageUi({ host, toolbar, driver, onChange }) {
     }
     if (current.kind === 'move' && current.moved) {
       const range = caretRange(event.clientX, event.clientY);
-      if (range && host.contains(range.commonAncestorContainer) && !current.node.contains(range.commonAncestorContainer)) {
+      const moveNode = current.node.closest('.mhws-img-pair') || current.node;
+      if (range && host.contains(range.commonAncestorContainer) && !moveNode.contains(range.commonAncestorContainer)) {
         try {
-          range.insertNode(current.node);
+          range.insertNode(moveNode);
         } catch (_err) {
           /* ignore invalid insert */
         }
@@ -303,7 +316,8 @@ export function attachImageUi({ host, toolbar, driver, onChange }) {
     if (event.key !== 'Backspace' && event.key !== 'Delete') return;
     event.preventDefault();
     event.stopPropagation();
-    active.remove();
+    const gone = active.closest('.mhws-img-pair') || active;
+    gone.remove();
     hide();
     notify();
   }

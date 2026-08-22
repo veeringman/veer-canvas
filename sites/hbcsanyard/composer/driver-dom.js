@@ -93,6 +93,76 @@ function closestEditableBlock(root) {
   return null;
 }
 
+const BLOCK_TAGS = {
+  paragraph: 'P',
+  p: 'P',
+  h2: 'H2',
+  h3: 'H3',
+  blockquote: 'BLOCKQUOTE',
+};
+
+function selectedTextBlocks(root) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !root.contains(sel.anchorNode)) return [];
+  if (sel.isCollapsed) return [];
+  const range = sel.getRangeAt(0);
+  return [...root.querySelectorAll('p, h2, h3, h4, li, blockquote')].filter((el) => {
+    try {
+      return range.intersectsNode(el);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function applyBlockStyle(root, kind) {
+  const tag = BLOCK_TAGS[String(kind || 'paragraph')] || 'P';
+  const name = tag.toLowerCase();
+  exec('formatBlock', name);
+  exec('formatBlock', `<${name}>`);
+  let block = closestEditableBlock(root);
+  if (block && /^(LI|TD|TH)$/.test(block.tagName)) {
+    return true;
+  }
+  if (block && block.tagName !== tag) {
+    const next = document.createElement(name);
+    next.innerHTML = block.innerHTML || '<br>';
+    if (block.style.marginLeft) next.style.marginLeft = block.style.marginLeft;
+    if (block.style.lineHeight) next.style.lineHeight = block.style.lineHeight;
+    block.replaceWith(next);
+    block = next;
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  if (block && (tag === 'H2' || tag === 'H3')) {
+    block.querySelectorAll('[style]').forEach((el) => {
+      el.style.fontSize = '';
+      el.style.fontWeight = '';
+    });
+  }
+  emitInput(root);
+  return true;
+}
+
+function applyLineHeight(root, raw) {
+  const value = String(raw || '').trim();
+  if (!value) return false;
+  const selected = selectedTextBlocks(root);
+  const targets = selected.length
+    ? selected
+    : [root, ...root.querySelectorAll('p, h2, h3, h4, li, blockquote')];
+  targets.forEach((el) => {
+    el.style.lineHeight = value;
+  });
+  if (!selected.length) root.dataset.mhwsLh = value;
+  emitInput(root);
+  return true;
+}
+
 function indentBlock(root, out) {
   let block = closestEditableBlock(root);
   if (!block) {
@@ -217,10 +287,83 @@ export function imageFloatStyle(width, flt) {
   if (flt === 'left') return `${w}float:left;margin:0 10pt 8pt 0;display:block;`;
   if (flt === 'right') return `${w}float:right;margin:0 0 8pt 10pt;display:block;`;
   if (flt === 'center') return `${w}display:block;margin:8pt auto;float:none;`;
-  return `${w}display:inline-block;vertical-align:middle;margin:0 6pt 4pt 0;float:none;`;
+  return `${w}display:block;margin:0;float:none;flex:0 0 ${pct}%;`;
 }
 
-export function applyImageLayout(wrap, width, flt) {
+const VALIGN_FLEX = { top: 'flex-start', middle: 'center', center: 'center', bottom: 'flex-end' };
+
+export function applyPairValign(pair, valign) {
+  if (!pair) return;
+  const v = ['top', 'middle', 'bottom'].includes(valign) ? valign : (pair.dataset.valign || 'top');
+  pair.dataset.valign = v;
+  const align = VALIGN_FLEX[v] || 'flex-start';
+  pair.style.display = 'flex';
+  pair.style.alignItems = 'stretch';
+  pair.style.gap = '10pt';
+  pair.style.width = '100%';
+  pair.style.maxWidth = '100%';
+  pair.style.margin = '0 0 8pt';
+  const text = pair.querySelector(':scope > .mhws-img-text');
+  if (text) {
+    text.contentEditable = 'true';
+    text.style.flex = '1 1 auto';
+    text.style.minWidth = '0';
+    text.style.display = 'flex';
+    text.style.flexDirection = 'column';
+    text.style.justifyContent = align;
+  }
+}
+
+export function ensureImagePair(imgWrap, valign) {
+  if (!imgWrap) return null;
+  let pair = imgWrap.closest('.mhws-img-pair');
+  if (pair) {
+    applyPairValign(pair, valign);
+    return pair;
+  }
+  pair = document.createElement('span');
+  pair.className = 'mhws-img-pair';
+  pair.contentEditable = 'false';
+  const text = document.createElement('span');
+  text.className = 'mhws-img-text';
+  text.contentEditable = 'true';
+  const moved = [];
+  let sib = imgWrap.nextSibling;
+  while (sib) {
+    const next = sib.nextSibling;
+    if (sib.nodeType === Node.ELEMENT_NODE && (sib.classList.contains('mhws-img') || sib.classList.contains('mhws-img-pair'))) break;
+    moved.push(sib);
+    sib = next;
+  }
+  imgWrap.replaceWith(pair);
+  pair.append(imgWrap);
+  moved.forEach((node) => text.append(node));
+  if (!String(text.textContent || '').replace(/\u200b/g, '').trim()) {
+    text.innerHTML = '<p><br></p>';
+  } else if (![...text.children].some((el) => /^(P|H2|H3|H4|DIV|UL|OL)$/.test(el.tagName))) {
+    const p = document.createElement('p');
+    while (text.firstChild) p.append(text.firstChild);
+    text.append(p);
+  }
+  pair.append(text);
+  applyPairValign(pair, valign);
+  return pair;
+}
+
+export function unwrapImagePair(imgWrap) {
+  const pair = imgWrap?.closest('.mhws-img-pair');
+  if (!pair) return;
+  const parent = pair.parentNode;
+  if (!parent) return;
+  const text = pair.querySelector(':scope > .mhws-img-text');
+  parent.insertBefore(imgWrap, pair);
+  if (text) {
+    while (text.firstChild) parent.insertBefore(text.firstChild, pair);
+  }
+  pair.remove();
+}
+
+export function applyImageLayout(wrap, width, flt, valign) {
   if (!wrap) return;
   const pct = Math.max(10, Math.min(100, Number(width) || 40));
   const flow = ['left', 'right', 'center'].includes(flt) ? flt : 'none';
@@ -237,16 +380,21 @@ export function applyImageLayout(wrap, width, flt) {
     img.style.height = 'auto';
     img.style.display = 'block';
   }
+  if (flow === 'none') ensureImagePair(wrap, valign);
+  else unwrapImagePair(wrap);
 }
 
 export function wrappedImageHtml(src, spec = {}) {
   const width = spec.width || 40;
   const flt = spec.float || 'none';
+  const valign = spec.valign || 'top';
   const esc = String(src || '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '');
-  return `<span class="mhws-img" contenteditable="false" data-width="${width}" data-float="${flt}" style="${imageFloatStyle(width, flt)}"><img src="${esc}" alt="" draggable="false" style="width:100%;height:auto;display:block"></span>&nbsp;`;
+  const img = `<span class="mhws-img" contenteditable="false" data-width="${width}" data-float="${flt}" style="${imageFloatStyle(width, flt)}"><img src="${esc}" alt="" draggable="false" style="width:100%;height:auto;display:block"></span>`;
+  if (flt !== 'none') return `${img}&nbsp;`;
+  return `<span class="mhws-img-pair" contenteditable="false" data-valign="${valign}" style="display:flex;align-items:stretch;gap:10pt;width:100%;max-width:100%;margin:0 0 8pt"><span class="mhws-img" contenteditable="false" data-width="${width}" data-float="none" style="${imageFloatStyle(width, 'none')}"><img src="${esc}" alt="" draggable="false" style="width:100%;height:auto;display:block"></span><span class="mhws-img-text" contenteditable="true" style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:flex-start"><p><br></p></span></span>`;
 }
 
 function closestCell(root) {
@@ -598,10 +746,12 @@ export function createDomDriver(host) {
     alignCenter: () => exec('justifyCenter'),
     alignRight: () => exec('justifyRight'),
     alignJustify: () => exec('justifyFull'),
-    paragraph: () => exec('formatBlock', 'p'),
-    h2: () => exec('formatBlock', 'h2'),
-    h3: () => exec('formatBlock', 'h3'),
-    blockquote: () => exec('formatBlock', 'blockquote'),
+    paragraph: () => applyBlockStyle(host, 'paragraph'),
+    h2: () => applyBlockStyle(host, 'h2'),
+    h3: () => applyBlockStyle(host, 'h3'),
+    blockquote: () => applyBlockStyle(host, 'blockquote'),
+    blockStyle: (kind) => applyBlockStyle(host, kind),
+    lineHeight: (value) => applyLineHeight(host, value),
     hr: () => exec('insertHorizontalRule'),
     removeFormat: () => exec('removeFormat'),
     fontFamily: (name) => exec('fontName', name),

@@ -24,8 +24,28 @@ COMPOSE_PAD_BODY_CSS = """
 <style id="mhws-compose-body">
   .screen-hint, .layout-picker { display: none !important; }
   .body-area p { margin: 0 0 8pt; }
-  .body-area h2 { margin: 0 0 8pt; font-size: 13pt; color: #0b2a56; }
-  .body-area h3 { margin: 0 0 6pt; font-size: 12pt; color: #0b2a56; }
+  .body-area h2, .body-area h2 span {
+    margin: 0 0 8pt;
+    font-size: 18pt;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #0b2a56;
+  }
+  .body-area h3, .body-area h3 span {
+    margin: 0 0 6pt;
+    font-size: 14pt;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #143a6e;
+  }
+  .body-area .mhws-img-pair {
+    display: flex;
+    align-items: stretch;
+    gap: 10pt;
+    width: 100%;
+    margin: 0 0 8pt;
+  }
+  .body-area .mhws-img-text { flex: 1 1 auto; min-width: 0; }
   .body-area table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
   .body-area th, .body-area td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
   .body-area th { background: #eef2f8; }
@@ -48,14 +68,29 @@ COMPOSE_PAD_BODY_CSS = """
 
 COMPOSE_PDF_CSS = """
 <style id="mhws-compose-pdf">
+  /* Headless print uses print-pad-common (283mm). Pin chrome to a full A4 page. */
   @page { size: A4 portrait; margin: 0; }
-  html, body {
+  html, body,
+  html.pad-a4-full, html.pad-a4-full body,
+  html.pad-a4-blank, html.pad-a4-blank body {
     background: #fff !important;
     width: 210mm !important;
+    min-height: 297mm !important;
+    height: auto !important;
+    max-height: none !important;
     margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    position: relative !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .screen-hint, .layout-picker { display: none !important; }
-  .sheet {
+  .sheet,
+  html.pad-a4-full .sheet,
+  html.pad-a4-blank .sheet {
+    position: relative !important;
+    box-sizing: border-box !important;
     width: 210mm !important;
     min-height: 297mm !important;
     height: auto !important;
@@ -64,14 +99,44 @@ COMPOSE_PDF_CSS = """
     border: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
-  .pad { overflow: visible !important; max-height: none !important; }
-  .body-area {
-    min-height: 40mm !important;
+  .pad,
+  html.pad-a4-full .pad,
+  html.pad-a4-blank .pad {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 34mm !important;
+  }
+  .body-area,
+  html.pad-a4-full .body-area,
+  html.pad-a4-full .sheet[data-layout="top"] .body-area,
+  html.pad-a4-full .sheet[data-layout="left"] .body-area,
+  html.pad-a4-blank .body-area {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
   }
-  .foot, footer.foot { position: relative !important; }
+  .foot, footer.foot,
+  html.pad-a4-full .foot,
+  html.pad-a4-blank .slogan-bar {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    flex: none !important;
+  }
+  html.pad-a4-full .foot .slogan-bar,
+  html.pad-a4-blank .slogan-bar {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
 </style>
 """
 
@@ -345,6 +410,8 @@ class _DocxBuilder(HTMLParser):
         elif tag in {"p", "h1", "h2", "h3", "blockquote", "header", "footer"}:
             if not self.in_table:
                 self.para = self.doc.add_paragraph()
+                if tag in {"h1", "h2", "h3"}:
+                    self.bold += 1
                 if tag in {"h1", "h2", "header", "footer"} or classes & {"brand", "org", "foot"}:
                     try:
                         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -395,6 +462,8 @@ class _DocxBuilder(HTMLParser):
         elif tag == "u":
             self.underline = max(0, self.underline - 1)
         elif tag in {"p", "h1", "h2", "h3", "blockquote", "li", "header", "footer"}:
+            if tag in {"h1", "h2", "h3"}:
+                self.bold = max(0, self.bold - 1)
             self.para = None
         elif tag == "span" and self._has_class("title"):
             self._add_run(" — ")

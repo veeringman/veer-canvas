@@ -40,7 +40,9 @@ Templates Compose:
 - **Save** — still writes draft/published HTML into the template library.
 - **Download** — Word (`.docx`) and PDF use the chosen pad (header, footer, watermark). Text (`.txt`) is the body only. **Google Drive** saves the same files into a `Composer` folder when Drive backups are enabled.
 - **Import** — text-only from this device or Google Drive: `.txt`, Word (`.docx`; older `.doc` if it is actually HTML/DOCX), Pages (preview PDF / index.xml), or PDF text layer (no OCR). Letterhead is not applied on import.
-- **Images** — click to select; corner handles resize; drag to move; float left / centre / right.
+- **Images** — click to select; corner handles resize; drag to move; float left / centre / right. **In line** puts a text span beside the image so several lines sit against its height (top / middle / bottom).
+- **Line spacing** — toolbar 1.0–2.0; highlighted paragraph only, otherwise the whole document.
+- **Title / subtitle** — Heading and Subheading convert the paragraph to `h2` / `h3` (18pt / 14pt bold navy).
 - **Clipboard** — Ctrl/Cmd+C / X / V inside the editor, paste from other apps (text, Word HTML, images), plus Cut / Copy / Paste on the toolbar.
 
 ## How to extend

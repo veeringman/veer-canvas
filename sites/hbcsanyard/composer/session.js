@@ -68,6 +68,22 @@ export function createSession(opts) {
 
   host.addEventListener('input', onInput);
 
+  const syncBlockSelect = () => {
+    const select = toolbar.querySelector('[data-group="block"] select');
+    if (!select) return;
+    let node = driver.currentBlock && driver.currentBlock();
+    let value = 'paragraph';
+    while (node && node !== host) {
+      if (node.tagName === 'H2') { value = 'h2'; break; }
+      if (node.tagName === 'H3') { value = 'h3'; break; }
+      if (node.tagName === 'BLOCKQUOTE') { value = 'blockquote'; break; }
+      if (node.tagName === 'P') { value = 'paragraph'; break; }
+      node = node.parentElement;
+    }
+    if (select.value !== value) select.value = value;
+  };
+  document.addEventListener('selectionchange', syncBlockSelect);
+
   return {
     driver,
     registry,
@@ -99,6 +115,7 @@ export function createSession(opts) {
     },
     destroy() {
       host.removeEventListener('input', onInput);
+      document.removeEventListener('selectionchange', syncBlockSelect);
       tableUi.destroy();
       imageUi.destroy();
       clipboard.destroy();
