@@ -43,6 +43,7 @@ Templates Compose:
 - **Images** — click to select; corner handles resize; drag to move; float left / centre / right. **In line** puts a text span beside the image so several lines sit against its height (top / middle / bottom).
 - **Line spacing** — toolbar 1.0–2.0; highlighted paragraph only, otherwise the whole document.
 - **Title / subtitle** — Heading and Subheading convert the paragraph to `h2` / `h3` (18pt / 14pt bold navy).
+- **Tables** — insert, resize, row/column tools. **Apply** Cell / Row / Col / Table, then set line thickness (0 hides borders), line colour, fill, and text colour. Preview and PDF/Word keep those styles.
 - **Clipboard** — Ctrl/Cmd+C / X / V inside the editor, paste from other apps (text, Word HTML, images), plus Cut / Copy / Paste on the toolbar.
 
 ## How to extend

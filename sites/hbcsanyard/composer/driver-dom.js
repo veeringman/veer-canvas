@@ -71,7 +71,9 @@ function applyPageMargins(host, spec = {}) {
   host.dataset.mhwsMr = String(next.right);
   host.dataset.mhwsMb = String(next.bottom);
   host.dataset.mhwsMl = String(next.left);
-  host.style.padding = `${next.top}mm ${next.right}mm ${next.bottom}mm ${next.left}mm`;
+  if (!host.classList.contains('is-paged')) {
+    host.style.padding = `${next.top}mm ${next.right}mm ${next.bottom}mm ${next.left}mm`;
+  }
   return next;
 }
 
@@ -180,12 +182,104 @@ function indentBlock(root, out) {
   return true;
 }
 
-function wrapInline(styles) {
+function rangeInHost(host, range) {
+  try {
+    const node = range.commonAncestorContainer;
+    return host === node || host.contains(node);
+  } catch {
+    return false;
+  }
+}
+
+function collectSplitTextNodes(range) {
+  const ancestor = range.commonAncestorContainer;
+  const scope = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentNode : ancestor;
+  if (!scope) return [];
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.data) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest('[contenteditable="false"]')) return NodeFilter.FILTER_REJECT;
+      try {
+        return range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      } catch {
+        return NodeFilter.FILTER_REJECT;
+      }
+    },
+  });
+  const raw = [];
+  while (walker.nextNode()) raw.push(walker.currentNode);
+  const pieces = [];
+  for (let i = raw.length - 1; i >= 0; i -= 1) {
+    const node = raw[i];
+    let from = 0;
+    let to = node.data.length;
+    if (node === range.startContainer) from = range.startOffset;
+    if (node === range.endContainer) to = range.endOffset;
+    if (from < 0) from = 0;
+    if (to > node.data.length) to = node.data.length;
+    if (from >= to) continue;
+    let piece = node;
+    if (to < piece.data.length) piece.splitText(to);
+    if (from > 0) piece = piece.splitText(from);
+    if (piece.data) pieces.push(piece);
+  }
+  pieces.reverse();
+  return pieces;
+}
+
+function canReuseSpan(el) {
+  if (!el || el.tagName !== 'SPAN') return false;
+  if (el.className && el.className !== 'mhws-type') return false;
+  if (el.contentEditable === 'false') return false;
+  return el.childNodes.length === 1;
+}
+
+function wrapTextNode(node, styles) {
+  const parent = node.parentElement;
+  if (canReuseSpan(parent)) {
+    Object.assign(parent.style, styles);
+    return parent;
+  }
+  const span = document.createElement('span');
+  span.className = 'mhws-type';
+  Object.assign(span.style, styles);
+  parent.insertBefore(span, node);
+  span.appendChild(node);
+  return span;
+}
+
+function clearDescendantStyles(span, styles) {
+  span.querySelectorAll('[style]').forEach((el) => {
+    Object.keys(styles).forEach((key) => {
+      el.style[key] = '';
+    });
+    if (el.tagName === 'FONT') {
+      if (styles.fontSize) el.removeAttribute('size');
+      if (styles.fontFamily) el.removeAttribute('face');
+    }
+  });
+}
+
+function selectNodes(nodes) {
+  if (!nodes.length) return;
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
+  const range = document.createRange();
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  range.setStart(first, 0);
+  range.setEnd(last, last.nodeType === Node.TEXT_NODE ? last.data.length : last.childNodes.length);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function applyInlineStyles(root, styles) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
   const range = sel.getRangeAt(0);
+  if (!rangeInHost(root, range)) return false;
   if (range.collapsed) {
     const span = document.createElement('span');
+    span.className = 'mhws-type';
     Object.assign(span.style, styles);
     span.appendChild(document.createTextNode('\u200b'));
     range.insertNode(span);
@@ -194,17 +288,24 @@ function wrapInline(styles) {
     next.collapse(true);
     sel.removeAllRanges();
     sel.addRange(next);
-    return;
+    emitInput(root);
+    return true;
   }
-  const span = document.createElement('span');
-  Object.assign(span.style, styles);
-  try {
-    range.surroundContents(span);
-  } catch {
-    const frag = range.extractContents();
-    span.appendChild(frag);
-    range.insertNode(span);
-  }
+  const nodes = collectSplitTextNodes(range);
+  if (!nodes.length) return false;
+  const spans = nodes.map((node) => wrapTextNode(node, styles));
+  spans.forEach((span) => clearDescendantStyles(span, styles));
+  selectNodes(nodes);
+  emitInput(root);
+  return true;
+}
+
+function normalizeFontSize(raw) {
+  const size = String(raw || '').trim();
+  if (!size) return '';
+  if (/^[1-7]$/.test(size)) return FONT_SIZE_MAP[size] || '';
+  if (/^\d+(\.\d+)?$/.test(size)) return `${size}pt`;
+  return size;
 }
 
 function deepestTextEnd(node) {
@@ -235,6 +336,63 @@ function placeCaret(node, offset) {
  * is a flex item (fixed by wrapping the paper). Strip zero-width markers
  * so Backspace can delete the previous visible character on the line.
  */
+function insertTabAtCaret(root) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !root.contains(sel.anchorNode)) return false;
+  const range = sel.getRangeAt(0);
+  range.collapse(true);
+  const span = document.createElement('span');
+  span.className = 'mhws-tab';
+  span.appendChild(document.createTextNode('\t'));
+  range.insertNode(span);
+  const after = document.createRange();
+  after.setStartAfter(span);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  emitInput(root);
+  return true;
+}
+
+function deleteTabBeforeCaret(root) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !sel.isCollapsed || !root.contains(sel.anchorNode)) return false;
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  let offset = range.startOffset;
+  if (node.nodeType === Node.ELEMENT_NODE && offset > 0) {
+    const prev = node.childNodes[offset - 1];
+    if (prev?.nodeType === Node.ELEMENT_NODE && prev.classList.contains('mhws-tab')) {
+      prev.remove();
+      emitInput(root);
+      return true;
+    }
+    if (prev?.nodeType === Node.TEXT_NODE) {
+      node = prev;
+      offset = prev.data.length;
+    }
+  }
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (offset > 0 && node.data.charAt(offset - 1) === '\t') {
+      node.deleteData(offset - 1, 1);
+      placeCaret(node, offset - 1);
+      emitInput(root);
+      return true;
+    }
+    if (node.parentElement?.classList.contains('mhws-tab')) {
+      const span = node.parentElement;
+      const parent = span.parentNode;
+      const idx = [...parent.childNodes].indexOf(span);
+      span.remove();
+      if (parent.childNodes[idx]) placeCaret(parent.childNodes[idx], 0);
+      else placeCaret(parent, idx);
+      emitInput(root);
+      return true;
+    }
+  }
+  return false;
+}
+
 function handleBackspace(root, event) {
   if (event.altKey || event.ctrlKey || event.metaKey) return false;
   const sel = window.getSelection();
@@ -270,15 +428,24 @@ function handleBackspace(root, event) {
   return false;
 }
 
+const TABLE_LINE = '0.6pt solid #0b2a56';
+
 function tableHtml(rows, cols) {
   const r = Math.min(20, Math.max(1, Number(rows) || 3));
   const c = Math.min(12, Math.max(1, Number(cols) || 3));
   const w = `${(100 / c).toFixed(4)}%`;
   const colgroup = `<colgroup>${`<col style="width:${w}">`.repeat(c)}</colgroup>`;
-  const cell = '<td>&nbsp;</td>';
-  const header = `<tr>${'<th>&nbsp;</th>'.repeat(c)}</tr>`;
+  const cell = `<td style="border:${TABLE_LINE}">&nbsp;</td>`;
+  const header = `<tr>${`<th style="border:${TABLE_LINE};background:#eef2f8">&nbsp;</th>`.repeat(c)}</tr>`;
   const body = Array.from({ length: r - 1 }, () => `<tr>${cell.repeat(c)}</tr>`).join('');
-  return `<table class="mhws-table" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${body}</tbody></table><p></p>`;
+  return `<table class="mhws-table" data-mhws-bw="0.6" data-mhws-bc="#0b2a56" style="table-layout:fixed;width:100%">${colgroup}<thead>${header}</thead><tbody>${body}</tbody></table><p></p>`;
+}
+
+function copyCellChrome(from, to) {
+  if (!from || !to) return;
+  ['border', 'borderWidth', 'borderStyle', 'borderColor', 'backgroundColor', 'color', 'padding'].forEach((k) => {
+    if (from.style[k]) to.style[k] = from.style[k];
+  });
 }
 
 export function imageFloatStyle(width, flt) {
@@ -488,27 +655,105 @@ function clampPt(value, fallback) {
   return Math.max(0, Math.min(48, Math.round(n * 10) / 10));
 }
 
-function cellsForMargin(ctx, spec = {}) {
+function clampBorderPt(value, fallback = 0.6) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(8, Math.round(n * 2) / 2));
+}
+
+function normalizeHex(raw, fallback = '#0b2a56') {
+  const s = String(raw || '').trim();
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toLowerCase();
+  }
+  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
+  const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    return `#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+  }
+  if (s === 'transparent' || s === 'none') return '';
+  return fallback;
+}
+
+function styleScopeOf(ctx, spec = {}) {
+  const asked = spec.scope;
+  if (asked === 'cell' || asked === 'row' || asked === 'col' || asked === 'table') return asked;
+  if (ctx.table?.querySelector('tr.is-row-pick')) return 'row';
+  if (ctx.table?.querySelector('td.is-col-pick, th.is-col-pick')) return 'col';
+  return 'cell';
+}
+
+function cellsForStyle(ctx, spec = {}) {
   const table = ctx.table;
   if (!table) return [];
-  if (spec.scope === 'cell' && ctx.cell) return [ctx.cell];
-  if (spec.scope === 'row' && ctx.row) return [...ctx.row.cells];
-  if (spec.scope === 'col') {
+  const scope = styleScopeOf(ctx, spec);
+  if (scope === 'cell' && ctx.cell) return [ctx.cell];
+  if (scope === 'row' && ctx.row) return [...ctx.row.cells];
+  if (scope === 'col') {
     return [...table.rows].map((r) => r.cells[ctx.colIndex]).filter(Boolean);
-  }
-  if (table.querySelector('tr.is-row-pick')) {
-    return [...table.querySelector('tr.is-row-pick').cells];
-  }
-  const colCell = table.querySelector('td.is-col-pick, th.is-col-pick');
-  if (colCell) {
-    const i = colCell.cellIndex;
-    return [...table.rows].map((r) => r.cells[i]).filter(Boolean);
   }
   return [...table.querySelectorAll('th, td')];
 }
 
+export function applyTableBorders(ctx, spec = {}) {
+  const cells = cellsForStyle(ctx, spec);
+  if (!cells.length) return false;
+  const sample = cells[0];
+  const width = spec.width === '' || spec.width == null
+    ? clampBorderPt(Number.parseFloat(sample.style.borderWidth) || 0.6)
+    : clampBorderPt(spec.width, 0);
+  const color = normalizeHex(spec.color, sample.style.borderColor || '#0b2a56') || '#0b2a56';
+  const border = width <= 0 ? 'none' : `${width}pt solid ${color}`;
+  cells.forEach((cell) => {
+    cell.style.border = border;
+    if (width <= 0) {
+      cell.style.borderWidth = '0';
+      cell.style.borderStyle = 'none';
+      cell.style.borderColor = 'transparent';
+    }
+  });
+  if (ctx.table) {
+    ctx.table.dataset.mhwsBw = String(width);
+    ctx.table.dataset.mhwsBc = color;
+    if (styleScopeOf(ctx, spec) === 'table') {
+      ctx.table.classList.toggle('mhws-table-noborder', width <= 0);
+    } else if (width > 0) {
+      ctx.table.classList.remove('mhws-table-noborder');
+    }
+  }
+  return true;
+}
+
+export function applyTableFill(ctx, spec = {}) {
+  const cells = cellsForStyle(ctx, spec);
+  if (!cells.length) return false;
+  const clear = spec.clear || spec.color === 'none' || spec.color === 'transparent';
+  if (clear) {
+    cells.forEach((cell) => {
+      cell.style.backgroundColor = 'transparent';
+    });
+    return true;
+  }
+  const color = normalizeHex(spec.color, '#eef2f8');
+  if (!color) return false;
+  cells.forEach((cell) => {
+    cell.style.backgroundColor = color;
+  });
+  return true;
+}
+
+export function applyTableTextColor(ctx, spec = {}) {
+  const cells = cellsForStyle(ctx, spec);
+  if (!cells.length) return false;
+  const color = normalizeHex(spec.color, '#12233f') || '#12233f';
+  cells.forEach((cell) => {
+    cell.style.color = color;
+  });
+  return true;
+}
+
 export function applyCellMargins(ctx, spec = {}) {
-  const cells = cellsForMargin(ctx, spec);
+  const cells = cellsForStyle(ctx, spec);
   if (!cells.length) return false;
   const sample = cells[0];
   const cur = {
@@ -545,6 +790,7 @@ function insertRowAt(ctx, where) {
   for (let i = 0; i < count; i += 1) {
     const cell = document.createElement(useTh ? 'th' : 'td');
     cell.innerHTML = '&nbsp;';
+    copyCellChrome(row.cells[i], cell);
     tr.appendChild(cell);
   }
   if (where === 'above') {
@@ -569,9 +815,11 @@ function insertColAt(ctx, where) {
   const group = ensureColgroup(table);
   const at = where === 'left' ? colIndex : colIndex + 1;
   [...table.rows].forEach((r) => {
+    const neighbor = r.cells[colIndex] || r.cells[0];
     const ref = r.cells[at] || null;
-    const cell = document.createElement(r.cells[0]?.tagName === 'TH' ? 'th' : 'td');
+    const cell = document.createElement(neighbor?.tagName === 'TH' ? 'th' : 'td');
     cell.innerHTML = '&nbsp;';
+    copyCellChrome(neighbor, cell);
     r.insertBefore(cell, ref);
   });
   const col = document.createElement('col');
@@ -654,8 +902,31 @@ export function createDomDriver(host) {
   host.spellcheck = true;
   applyPageMargins(host, DEFAULT_PAGE_MARGINS);
 
+  let savedRange = null;
+
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (rangeInHost(host, range)) savedRange = range.cloneRange();
+  }
+
+  function restoreSelection() {
+    if (!savedRange) return false;
+    if (!rangeInHost(host, savedRange)) return false;
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    try {
+      sel.addRange(savedRange);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function focus() {
-    host.focus();
+    host.focus({ preventScroll: true });
+    restoreSelection();
   }
 
   function onKeydown(event) {
@@ -672,12 +943,20 @@ export function createDomDriver(host) {
       emitInput(host);
       return;
     }
-    indentBlock(host, event.shiftKey);
+    if (event.shiftKey) {
+      if (!deleteTabBeforeCaret(host)) indentBlock(host, true);
+      return;
+    }
+    insertTabAtCaret(host);
   }
   host.addEventListener('keydown', onKeydown, true);
+  document.addEventListener('selectionchange', saveSelection);
 
   function getHTML() {
-    const inner = stripPageMargins(host.innerHTML || '<p></p>');
+    const box = document.createElement('div');
+    box.innerHTML = host.innerHTML || '<p></p>';
+    box.querySelectorAll('.mhws-page-spacer, .mhws-page-chrome, .mhws-page-frames').forEach((el) => el.remove());
+    const inner = stripPageMargins(box.innerHTML || '<p></p>');
     const m = readPageMargins(host);
     return `<!--mhws-margins:${m.top},${m.right},${m.bottom},${m.left}-->${inner}`;
   }
@@ -687,6 +966,7 @@ export function createDomDriver(host) {
     applyPageMargins(host, parsePageMargins(raw));
     const inner = stripPageMargins(raw).trim();
     host.innerHTML = inner || '<p></p>';
+    savedRange = null;
   }
 
   function withTable(fn, spec = {}) {
@@ -754,23 +1034,15 @@ export function createDomDriver(host) {
     lineHeight: (value) => applyLineHeight(host, value),
     hr: () => exec('insertHorizontalRule'),
     removeFormat: () => exec('removeFormat'),
-    fontFamily: (name) => exec('fontName', name),
+    fontFamily: (name) => {
+      const family = String(name || '').trim();
+      if (!family) return false;
+      return applyInlineStyles(host, { fontFamily: family });
+    },
     fontSize: (pt) => {
-      const size = String(pt || '').trim();
+      const size = normalizeFontSize(pt);
       if (!size) return false;
-      if (/^[1-7]$/.test(size)) {
-        exec('fontSize', size);
-        host.querySelectorAll('font[size]').forEach((el) => {
-          const mapped = FONT_SIZE_MAP[el.getAttribute('size')] || size;
-          const span = document.createElement('span');
-          span.style.fontSize = mapped.includes('pt') || mapped.includes('px') ? mapped : `${mapped}pt`;
-          span.innerHTML = el.innerHTML;
-          el.replaceWith(span);
-        });
-        return true;
-      }
-      wrapInline({ fontSize: size.includes('pt') || size.includes('px') ? size : `${size}pt` });
-      return true;
+      return applyInlineStyles(host, { fontSize: size });
     },
     color: (hex) => exec('foreColor', hex),
     highlight: (hex) => exec('hiliteColor', hex) || exec('backColor', hex),
@@ -815,13 +1087,31 @@ export function createDomDriver(host) {
       applyTableMargins(ctx.table, spec);
       return true;
     }, spec),
+    tableBorders: (spec = {}) => withTable((ctx) => {
+      applyTableBorders(ctx, spec);
+      return true;
+    }, spec),
+    tableFill: (spec = {}) => withTable((ctx) => {
+      applyTableFill(ctx, spec);
+      return true;
+    }, spec),
+    tableTextColor: (spec = {}) => withTable((ctx) => {
+      applyTableTextColor(ctx, spec);
+      return true;
+    }, spec),
   };
 
   function run(commandId, payload) {
-    focus();
+    restoreSelection();
+    if (document.activeElement !== host && !host.contains(document.activeElement)) {
+      host.focus({ preventScroll: true });
+      restoreSelection();
+    }
     const fn = commands[commandId];
     if (!fn) return false;
-    return fn(payload) !== false;
+    const ok = fn(payload) !== false;
+    saveSelection();
+    return ok;
   }
 
   return {
@@ -830,6 +1120,8 @@ export function createDomDriver(host) {
     wrap,
     mount() {},
     focus,
+    saveSelection,
+    restoreSelection,
     getHTML,
     setHTML,
     run,
@@ -843,6 +1135,7 @@ export function createDomDriver(host) {
     },
     destroy() {
       host.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('selectionchange', saveSelection);
       host.removeAttribute('contenteditable');
     },
   };

@@ -87,7 +87,7 @@
     .wm {
       position: absolute;
       left: 50%;
-      top: 52%;
+      top: 50%;
       transform: translate(-50%, -50%);
       width: min(112mm, 70%);
       max-height: 46%;
@@ -119,6 +119,10 @@
       width: 24mm;
       height: auto;
       display: block;
+      border: 0;
+      outline: 0;
+      box-shadow: none;
+      background: transparent;
     }
     .brand-text { min-width: 0; }
     .brand h1 {
@@ -248,11 +252,8 @@
     .sheet[data-layout="top"] .role .ph {
       margin-top: 0.15mm;
     }
-    .sheet[data-layout="top"] .officers-foot {
-      width: 36mm;
-      height: 0;
-      margin: 0 auto 1mm;
-      border-top: 0.7pt solid rgba(201, 162, 39, 0.55);
+    .sheet[data-layout="top"] .officers + .rule {
+      margin: 0 0 1.6mm;
     }
     .sheet[data-layout="top"] .body-area {
       flex: 1;
@@ -273,7 +274,7 @@
     .sheet[data-layout="left"] .foot {
       grid-column: 1 / -1;
     }
-    .sheet[data-layout="left"] .officers-foot {
+    .sheet[data-layout="left"] .officers + .rule {
       display: none;
     }
     .sheet[data-layout="left"] .officers {
@@ -440,7 +441,7 @@
 
     <div class="pad">
       <header class="brand">
-        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="Himuda Housing Colony Sanyard">
         <div class="brand-text">
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
@@ -473,7 +474,7 @@
           <span class="ph"><span class="lbl">Ph</span>94180 71187</span>
         </div>
       </section>
-      <div class="officers-foot" aria-hidden="true"></div>
+      <div class="rule" aria-hidden="true"><span class="pip"></span></div>
 
       <div class="body-area" aria-label="Letter writing area"></div>
 

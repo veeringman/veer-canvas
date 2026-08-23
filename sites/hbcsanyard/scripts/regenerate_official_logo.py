@@ -712,6 +712,9 @@ def regenerate(source: Path | None = None) -> Path:
     # Rim LEDs after the hat so top skip stays clear of the navy band.
     _draw_rim_leds(img, center=(cx, cy))
 
+    from export_logo_variants import _strip_lower_crop_box
+
+    img = _strip_lower_crop_box(img)
     img.save(OUT, optimize=True)
     return OUT
 

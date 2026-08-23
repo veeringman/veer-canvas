@@ -7,6 +7,7 @@ syncs site-meta.json role paths. Consumer registry lives in logo.manifest.json.
 
 from __future__ import annotations
 
+import math
 import shutil
 from pathlib import Path
 
@@ -25,12 +26,71 @@ NAVY_BG = (21, 35, 63, 255)
 GOLD_RING = (201, 162, 39, 110)
 
 
+def _strip_lower_crop_box(img: Image.Image) -> Image.Image:
+    """Remove the leftover 1px U-shaped crop rectangle around the lower half of the seal.
+
+    Archive masters carried a faint gray bounding box from midline to the bottom edge.
+    It survives `_transparent_exterior` (it does not touch the corners) and becomes a
+    hard hairline on cream paper / PDF after `_cert_seal` hardens alpha.
+    """
+    out = img.copy()
+    px = out.load()
+    w, h = out.size
+    cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+    seal_r = min(w, h) * 0.44
+    min_col = max(24, int(h * 0.28))
+    min_row = max(24, int(w * 0.45))
+
+    def is_mark(x: int, y: int) -> bool:
+        r, g, b, a = px[x, y]
+        if a < 12:
+            return False
+        if math.hypot(x - cx, y - cy) < seal_r:
+            return False
+        return (max(r, g, b) - min(r, g, b)) <= 48
+
+    cleared = 0
+    for x in range(w):
+        ys = [y for y in range(int(cy), h) if is_mark(x, y)]
+        if len(ys) < min_col:
+            continue
+        for y in ys:
+            px[x, y] = (0, 0, 0, 0)
+            cleared += 1
+        for dx in (-1, 1):
+            nx = x + dx
+            if 0 <= nx < w:
+                for y in ys:
+                    if is_mark(nx, y):
+                        px[nx, y] = (0, 0, 0, 0)
+                        cleared += 1
+
+    for y in range(int(h * 0.82), h):
+        xs = [x for x in range(w) if is_mark(x, y)]
+        if len(xs) < min_row:
+            continue
+        for x in xs:
+            px[x, y] = (0, 0, 0, 0)
+            cleared += 1
+        for dy in (-1, 1):
+            ny = y + dy
+            if 0 <= ny < h:
+                for x in xs:
+                    if is_mark(x, ny):
+                        px[x, ny] = (0, 0, 0, 0)
+                        cleared += 1
+
+    if cleared:
+        print(f"  stripped {cleared} crop-box pixels from {w}×{h} seal")
+    return out
+
+
 def _load_master() -> Image.Image:
     if not MASTER.is_file():
         raise FileNotFoundError(f"Master logo missing: {MASTER}")
     img = Image.open(MASTER).convert("RGBA")
-    # Ensure true transparency outside the seal (no flat black matte).
-    return img
+    # Ensure true transparency outside the seal (no flat black matte / crop hairline).
+    return _strip_lower_crop_box(img)
 
 
 def _fit(img: Image.Image, size: int, *, pad_ratio: float = 0.0) -> Image.Image:
@@ -153,8 +213,8 @@ def export_all() -> None:
         return Image.merge("RGBA", (*rgb.split(), alpha))
 
     # PDF / letterhead seals: prefer dedicated cert seal; keep print/pdf in sync.
-    cert320 = _cert_seal(master, 320)
-    print256 = _harden_alpha(_fit(master, 256, pad_ratio=0.02))
+    cert320 = _strip_lower_crop_box(_cert_seal(master, 320))
+    print256 = _strip_lower_crop_box(_harden_alpha(_fit(master, 256, pad_ratio=0.02)))
     pdf256 = print256
     web512 = _fit(master, 512, pad_ratio=0.02)
     web256 = print256

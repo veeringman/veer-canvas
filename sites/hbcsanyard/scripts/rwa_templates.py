@@ -243,13 +243,353 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         key: _hex_color(colors_in.get(key), fallback)
         for key, fallback in base["colors"].items()
     }
-    return {
+    out = {
         "paperSize": paper,
         "orientation": orientation,
         "background": bg,
         "customWidthCm": _cm_value(data.get("customWidthCm"), CUSTOM_W_CM),
         "customHeightCm": _cm_value(data.get("customHeightCm"), CUSTOM_H_CM),
         "colors": colors,
+    }
+    if data.get("composed"):
+        out["composed"] = True
+        out["composeChrome"] = str(data.get("composeChrome") or "").strip() or "simple"
+        out["composeWatermark"] = bool(data.get("composeWatermark", True))
+    if isinstance(data.get("stationery"), dict):
+        out["stationery"] = normalize_stationery(data["stationery"])
+    return out
+
+
+STATIONERY_PAPERS: dict[str, tuple[float, float]] = {
+    "A3": (297.0, 420.0),
+    "A4": (210.0, 297.0),
+    "A5": (148.0, 210.0),
+    "A6": (105.0, 148.0),
+    "B5": (176.0, 250.0),
+    "Letter": (215.9, 279.4),
+    "Legal": (215.9, 355.6),
+    "Tabloid": (279.4, 431.8),
+    "Executive": (184.2, 266.7),
+}
+STATIONERY_FONTS = {
+    "noto": '"Noto Sans", "Segoe UI", sans-serif',
+    "source": '"Source Sans 3", "Segoe UI", sans-serif',
+    "georgia": 'Georgia, "Times New Roman", serif',
+    "garamond": '"Cormorant Garamond", Garamond, Georgia, serif',
+    "times": '"Times New Roman", Times, serif',
+}
+STATIONERY_BORDERS = ("none", "navy-rule", "tricolor", "gold-rule", "double-box")
+_STATIONERY_URL_RE = re.compile(
+    r"^(https?:\/\/|\/|data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,)",
+    re.I,
+)
+
+
+def _stationery_url(raw: Any) -> str:
+    text = str(raw or "").strip()
+    if text and _STATIONERY_URL_RE.match(text):
+        return text
+    return ""
+
+
+def _stationery_num(raw: Any, lo: float, hi: float, default: float) -> float:
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if n != n:
+        return default
+    return round(min(hi, max(lo, n)), 2)
+
+
+def default_stationery() -> dict[str, Any]:
+    return {
+        "paper": {"id": "A4", "widthMm": 210.0, "heightMm": 297.0, "orientation": "portrait"},
+        "backgroundColor": "#ffffff",
+        "logo": {
+            "src": "/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1",
+            "widthMm": 18.0,
+            "align": "center",
+            "enabled": True,
+        },
+        "headerLines": [
+            {
+                "text": "Mandi Housing Welfare Society",
+                "font": "garamond",
+                "sizePt": 15,
+                "weight": "700",
+                "color": "#0b2a56",
+                "align": "center",
+            },
+            {
+                "text": "Himuda Housing Colony Sanyard",
+                "font": "source",
+                "sizePt": 10,
+                "weight": "600",
+                "color": "#1a6b3a",
+                "align": "center",
+            },
+            {
+                "text": "Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012",
+                "font": "noto",
+                "sizePt": 8,
+                "weight": "400",
+                "color": "#5a6a80",
+                "align": "center",
+            },
+        ],
+        "watermark": {
+            "src": "/assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm8",
+            "opacity": 0.72,
+            "enabled": True,
+        },
+        "footer": {
+            "text": "Unity · Harmony · Progress · Mandi Housing Welfare Society",
+            "font": "noto",
+            "sizePt": 8,
+            "weight": "600",
+            "color": "#5a6a80",
+        },
+        "border": {"style": "tricolor"},
+    }
+
+
+def normalize_stationery(raw: Any = None) -> dict[str, Any]:
+    base = default_stationery()
+    data = raw if isinstance(raw, dict) else {}
+    paper_in = data.get("paper") if isinstance(data.get("paper"), dict) else {}
+    paper_id = str(paper_in.get("id") or "A4").strip()
+    known = STATIONERY_PAPERS.get(paper_id)
+    custom = paper_id == "CUSTOM" or known is None and paper_in.get("widthMm")
+    if custom:
+        paper_id = "CUSTOM"
+        width_mm = _stationery_num(paper_in.get("widthMm"), 70, 450, 210)
+        height_mm = _stationery_num(paper_in.get("heightMm"), 70, 500, 297)
+    else:
+        paper_id = paper_id if known else "A4"
+        width_mm, height_mm = STATIONERY_PAPERS[paper_id]
+    orientation = "landscape" if str(paper_in.get("orientation") or "").lower() == "landscape" else "portrait"
+    if orientation == "landscape":
+        width_mm, height_mm = max(width_mm, height_mm), min(width_mm, height_mm)
+    logo_in = data.get("logo") if isinstance(data.get("logo"), dict) else {}
+    wm_in = data.get("watermark") if isinstance(data.get("watermark"), dict) else {}
+    foot_in = data.get("footer") if isinstance(data.get("footer"), dict) else {}
+    border_in = data.get("border") if isinstance(data.get("border"), dict) else {}
+    lines_in = data.get("headerLines") if isinstance(data.get("headerLines"), list) else base["headerLines"]
+    header_lines = []
+    for i, line in enumerate(lines_in[:8]):
+        src = line if isinstance(line, dict) else {}
+        fallback = base["headerLines"][min(i, len(base["headerLines"]) - 1)]
+        align = src.get("align") if src.get("align") in ("left", "center", "right") else fallback["align"]
+        weight = str(src.get("weight") or fallback["weight"])
+        if weight not in {"400", "500", "600", "700"}:
+            weight = fallback["weight"]
+        font = src.get("font") if src.get("font") in STATIONERY_FONTS else fallback["font"]
+        header_lines.append(
+            {
+                "text": str(src.get("text") or ""),
+                "font": font,
+                "sizePt": _stationery_num(src.get("sizePt"), 6, 36, fallback["sizePt"]),
+                "weight": weight,
+                "color": _hex_color(src.get("color"), fallback["color"]),
+                "align": align,
+            }
+        )
+    if not header_lines:
+        header_lines = [dict(base["headerLines"][0], text="")]
+    logo_src = _stationery_url(logo_in.get("src")) or ("" if logo_in.get("enabled") is False else base["logo"]["src"])
+    wm_src = _stationery_url(wm_in.get("src")) or ("" if wm_in.get("enabled") is False else base["watermark"]["src"])
+    border_style = border_in.get("style") if border_in.get("style") in STATIONERY_BORDERS else "navy-rule"
+    return {
+        "paper": {
+            "id": paper_id,
+            "widthMm": width_mm,
+            "heightMm": height_mm,
+            "orientation": orientation,
+        },
+        "backgroundColor": _hex_color(data.get("backgroundColor"), base["backgroundColor"]),
+        "logo": {
+            "src": logo_src,
+            "widthMm": _stationery_num(logo_in.get("widthMm"), 8, 60, base["logo"]["widthMm"]),
+            "align": logo_in.get("align") if logo_in.get("align") in ("left", "center", "right") else "center",
+            "enabled": logo_in.get("enabled") is not False and bool(logo_src),
+        },
+        "headerLines": header_lines,
+        "watermark": {
+            "src": wm_src,
+            "opacity": _stationery_num(wm_in.get("opacity"), 0.08, 1.0, base["watermark"]["opacity"]),
+            "enabled": wm_in.get("enabled") is not False and bool(wm_src),
+        },
+        "footer": {
+            "text": str(foot_in.get("text") or ""),
+            "font": foot_in.get("font") if foot_in.get("font") in STATIONERY_FONTS else base["footer"]["font"],
+            "sizePt": _stationery_num(foot_in.get("sizePt"), 6, 16, base["footer"]["sizePt"]),
+            "weight": (
+                str(foot_in.get("weight"))
+                if str(foot_in.get("weight") or "") in {"400", "500", "600", "700"}
+                else base["footer"]["weight"]
+            ),
+            "color": _hex_color(foot_in.get("color"), base["footer"]["color"]),
+        },
+        "border": {"style": border_style},
+    }
+
+
+def _stationery_border_css(style: str) -> str:
+    if style == "double-box":
+        return (
+            ".sheet { outline: 1.4pt solid #0b2a56; outline-offset: -4mm; }\n"
+            ".pad { box-shadow: inset 0 0 0 0.6pt rgba(11,42,86,0.35); }\n"
+        )
+    if style == "gold-rule":
+        return ".mhws-st-foot { border-top: 0.8pt solid #c9a227; }\n"
+    if style == "navy-rule":
+        return ".mhws-st-foot { border-top: 0.7pt solid rgba(11,42,86,0.35); }\n"
+    if style == "tricolor":
+        return (
+            ".sheet::before, .sheet::after { content: \"\"; position: absolute; top: 0; height: 2.8mm; z-index: 2; }\n"
+            ".sheet::before { left: 0; width: 42%; background: #0b2a56; }\n"
+            ".sheet::after { right: 0; width: 42%; background: #1a6b3a; }\n"
+            ".mhws-st-accent { position: absolute; top: 0; left: 42%; width: 16%; height: 2.8mm; background: #c9a227; z-index: 2; }\n"
+            ".mhws-st-head { padding-top: 4mm; }\n"
+            ".mhws-st-foot { border-top: 0.7pt solid rgba(11,42,86,0.35); }\n"
+        )
+    return ""
+
+
+def render_stationery_html(spec_in: Any, title: str = "Letterhead") -> str:
+    spec = normalize_stationery(spec_in)
+    w = spec["paper"]["widthMm"]
+    h = spec["paper"]["heightMm"]
+    heading = _html_escape(title or "Letterhead")
+    logo = spec["logo"]
+    logo_html = (
+        f'<img class="mhws-st-logo" src="{_html_escape(logo["src"])}" alt="" style="width:{logo["widthMm"]:g}mm">'
+        if logo.get("enabled") and logo.get("src")
+        else ""
+    )
+    lines = []
+    for line in spec["headerLines"]:
+        font = STATIONERY_FONTS.get(line["font"], STATIONERY_FONTS["noto"])
+        text = _html_escape(line["text"]) or "&nbsp;"
+        lines.append(
+            f'<p class="mhws-st-line" style="font-family:{font};font-size:{line["sizePt"]:g}pt;'
+            f'font-weight:{line["weight"]};color:{line["color"]};text-align:{line["align"]}">{text}</p>'
+        )
+    head_align = logo.get("align") if logo.get("align") in ("left", "right") else "center"
+    titles = f'<div class="mhws-st-titles">{"".join(lines)}</div>'
+    if head_align == "left":
+        head_inner = f"{logo_html}{titles}"
+        head_layout = "grid-template-columns:auto 1fr;align-items:center;gap:6mm;"
+        head_display = "grid"
+    elif head_align == "right":
+        head_inner = f"{titles}{logo_html}"
+        head_layout = "grid-template-columns:1fr auto;align-items:center;gap:6mm;"
+        head_display = "grid"
+    else:
+        head_inner = f"{logo_html}{titles}"
+        head_layout = "flex-direction:column;align-items:center;text-align:center;gap:2.5mm;"
+        head_display = "flex"
+    wm = spec["watermark"]
+    wm_html = (
+        f'<img class="wm" src="{_html_escape(wm["src"])}" alt="" style="opacity:{wm["opacity"]:g}">'
+        if wm.get("enabled") and wm.get("src")
+        else ""
+    )
+    foot = spec["footer"]
+    foot_font = STATIONERY_FONTS.get(foot["font"], STATIONERY_FONTS["noto"])
+    foot_html = (
+        f'<footer class="mhws-st-foot" style="font-family:{foot_font};font-size:{foot["sizePt"]:g}pt;'
+        f'font-weight:{foot["weight"]};color:{foot["color"]}">{_html_escape(foot["text"])}</footer>'
+        if foot.get("text")
+        else '<footer class="mhws-st-foot"></footer>'
+    )
+    accent = '<div class="mhws-st-accent"></div>' if spec["border"]["style"] == "tricolor" else ""
+    css = f"""
+    @page {{ size: {w:g}mm {h:g}mm; margin: 0; }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ margin: 0; padding: 0; background: #c5cdd8; }}
+    .sheet {{
+      position: relative; width: {w:g}mm; min-height: {h:g}mm; margin: 0 auto;
+      background: {spec["backgroundColor"]}; overflow: hidden;
+    }}
+    .pad {{
+      position: relative; z-index: 1; display: flex; flex-direction: column;
+      min-height: {h:g}mm; padding: 8mm 12mm 0;
+    }}
+    .mhws-st-head {{ display: {head_display}; {head_layout} padding-bottom: 3.5mm; }}
+    .mhws-st-logo {{ display: block; height: auto; border: 0; background: transparent; }}
+    .mhws-st-titles {{ min-width: 0; width: 100%; }}
+    .mhws-st-line {{ margin: 0 0 1mm; line-height: 1.25; }}
+    .rule {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 3mm;
+      margin: 0 0 2.2mm;
+      width: 100%;
+    }}
+    .rule::before, .rule::after {{
+      content: "";
+      height: 0;
+      border-top: 1pt solid #0b2a56;
+    }}
+    .rule .pip {{
+      width: 2.2mm;
+      height: 2.2mm;
+      background: #c9a227;
+      transform: rotate(45deg);
+      box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
+    }}
+    .mhws-header-gold-rule {{ display: none !important; }}
+    .body-area {{ flex: 1 1 auto; min-height: 40mm; }}
+    .mhws-st-foot {{ margin-top: auto; padding: 3mm 0 8mm; text-align: center; }}
+    img.wm {{
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: min(112mm, 68%); height: auto; pointer-events: none; z-index: 0;
+    }}
+    {_stationery_border_css(spec["border"]["style"])}
+    """
+    return f"""<!DOCTYPE html>
+<html lang="en" class="mhws-stationery-pad">
+<head>
+  <meta charset="UTF-8">
+  <title>{heading}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Noto+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>{css}</style>
+</head>
+<body>
+  <div class="sheet">
+    {accent}
+    {wm_html}
+    <div class="pad">
+      <header class="mhws-st-head is-{head_align}">{head_inner}</header>
+      <div class="rule" aria-hidden="true"><span class="pip"></span></div>
+      <div class="body-area"></div>
+      {foot_html}
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+def stationery_paper_options(spec: dict[str, Any] | None) -> dict[str, Any]:
+    """Map a stationery spec onto the existing print-options fields."""
+    data = normalize_stationery(spec)
+    paper_id = data["paper"]["id"]
+    width_cm = round(float(data["paper"]["widthMm"]) / 10.0, 1)
+    height_cm = round(float(data["paper"]["heightMm"]) / 10.0, 1)
+    mapped = paper_id if paper_id in PAPER_SIZES else "CUSTOM"
+    return {
+        "paperSize": mapped,
+        "orientation": data["paper"]["orientation"],
+        "background": "watermark" if data["watermark"].get("enabled") else "none",
+        "customWidthCm": width_cm,
+        "customHeightCm": height_cm,
+        "stationery": data,
     }
 
 
@@ -340,7 +680,7 @@ def document_starters() -> list[dict[str, Any]]:
 
 
 def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[dict[str, Any]]:
-    """Pads with a `.body-area` writing slot, plus the simple header/footer wrap."""
+    """Pads with a `.body-area` writing slot, plus simple header/footer and no-template wraps."""
     ensure_print_templates_table(conn)
     seed_default_templates(conn, site_root)
     preferred = ("tpl-mhws-letterhead", "tpl-rwa-letterhead-blank")
@@ -354,15 +694,22 @@ def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[d
     ).fetchall()
     for row in rows:
         doc = _row_to_dto(row, site_root)
-        path = resolve_template_file(site_root, doc)
-        if not path or path.suffix.lower() not in {".html", ".htm"}:
-            continue
-        try:
-            raw = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if not re.search(r"\bbody-area\b", raw, re.I):
-            continue
+        opts = doc.get("options") or {}
+        stationery = opts.get("stationery") if isinstance(opts.get("stationery"), dict) else None
+        raw = ""
+        if stationery:
+            raw = render_stationery_html(stationery, doc.get("title") or "Letterhead")
+        else:
+            path = resolve_template_file(site_root, doc)
+            if not path or path.suffix.lower() not in {".html", ".htm"}:
+                continue
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if not re.search(r"\bbody-area\b", raw, re.I):
+                continue
+        paper = (stationery or {}).get("paper") or {}
         found[str(doc["id"])] = {
             "id": doc["id"],
             "title": {
@@ -371,7 +718,44 @@ def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[d
             }.get(str(doc["id"]), doc.get("title") or doc["id"]),
             "hasWatermark": bool(re.search(r"""class=["'][^"']*\bwm\b""", raw, re.I)),
             "category": doc.get("category") or "",
+            "headerHtml": "",
+            "footerHtml": "",
+            "chromeCss": "",
+            "watermarkUrl": "",
+            "paperId": paper.get("id") or "A4",
+            "widthMm": paper.get("widthMm") or 210,
+            "heightMm": paper.get("heightMm") or 297,
         }
+        try:
+            from rwa_compose_export import extract_pad_chrome, rewrite_pad_urls, strip_screen_chrome
+
+            pad_html, _dto = render_template_html(
+                conn,
+                site_root,
+                str(doc["id"]),
+                options_override={
+                    "paperSize": "A4",
+                    "orientation": "portrait",
+                    "background": "none",
+                },
+            )
+            parts = extract_pad_chrome(rewrite_pad_urls(strip_screen_chrome(pad_html)))
+            found[str(doc["id"])]["headerHtml"] = parts.get("headerHtml") or ""
+            found[str(doc["id"])]["footerHtml"] = parts.get("footerHtml") or ""
+            found[str(doc["id"])]["chromeCss"] = parts.get("chromeCss") or ""
+            found[str(doc["id"])]["watermarkUrl"] = parts.get("watermarkUrl") or ""
+        except Exception:
+            try:
+                from rwa_compose_export import extract_pad_chrome, rewrite_pad_urls, strip_screen_chrome
+
+                parts = extract_pad_chrome(rewrite_pad_urls(strip_screen_chrome(raw)))
+                found[str(doc["id"])]["headerHtml"] = parts.get("headerHtml") or ""
+                found[str(doc["id"])]["footerHtml"] = parts.get("footerHtml") or ""
+                found[str(doc["id"])]["chromeCss"] = parts.get("chromeCss") or found[str(doc["id"])].get("chromeCss") or ""
+                if parts.get("watermarkUrl"):
+                    found[str(doc["id"])]["watermarkUrl"] = parts["watermarkUrl"]
+            except Exception:
+                pass
     ordered: list[dict[str, Any]] = []
     for tid in preferred:
         if tid in found:
@@ -381,6 +765,24 @@ def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[d
     ordered.extend(letterheads)
     ordered.extend(rest)
     ordered.append({"id": "simple", "title": "Simple header & footer", "hasWatermark": False, "category": ""})
+    ordered.append({
+        "id": "none",
+        "title": "No template",
+        "hasWatermark": False,
+        "category": "",
+        "headerHtml": "",
+        "footerHtml": "",
+        "chromeCss": "",
+        "watermarkUrl": "",
+    })
+    from rwa_compose_export import COMPOSE_CHROME_LAYOUT_CSS, PLAIN_CHROME_IDS
+
+    layout_css = re.sub(r"</?style[^>]*>", "", COMPOSE_CHROME_LAYOUT_CSS).strip()
+    for item in ordered:
+        if item.get("id") in PLAIN_CHROME_IDS:
+            continue
+        if item.get("headerHtml") or item.get("footerHtml"):
+            item["chromeCss"] = f"{(item.get('chromeCss') or '').strip()}\n{layout_css}".strip()
     return ordered
 
 
@@ -415,8 +817,22 @@ def parse_doc_margins_mm(html: str) -> dict[str, float]:
     return out
 
 
+def compose_body_margins_mm(body_html: str, chrome_id: str) -> dict[str, float]:
+    """Top/bottom are zero when a letterhead template is applied; sides stay as saved."""
+    from rwa_compose_export import PLAIN_CHROME_IDS
+
+    margins = parse_doc_margins_mm(body_html)
+    if str(chrome_id or "").strip() not in PLAIN_CHROME_IDS:
+        margins["top"] = 0.0
+        margins["bottom"] = 0.0
+    return margins
+
+
 def sanitize_compose_html(raw: str) -> str:
     html = str(raw or "")
+    from rwa_compose_export import strip_pager_markup
+
+    html = strip_pager_markup(html)
     html = _COMPOSE_BLOCK_RE.sub("", html)
     html = _COMPOSE_VOID_RE.sub("", html)
     html = _COMPOSE_ONATTR_RE.sub("", html)
@@ -438,9 +854,14 @@ def wrap_composed_document(
 ) -> str:
     from rwa_compose_export import (
         COMPOSE_PAD_BODY_CSS,
+        PLAIN_CHROME_IDS,
         as_bool,
         embed_local_asset_urls,
         inject_body_area,
+        inject_compose_chrome_layout,
+        inject_compose_page_extras,
+        inject_compose_pdf_css,
+        paginate_pad_html,
         rewrite_pad_urls,
         set_html_title,
         strip_base_tag,
@@ -448,10 +869,59 @@ def wrap_composed_document(
     )
 
     heading = _html_escape((title or "Document").strip() or "Document")
-    margins = parse_doc_margins_mm(body_html)
-    body = sanitize_compose_html(body_html)
     chrome_id = str(chrome or "simple").strip() or "simple"
+    margins = compose_body_margins_mm(body_html, chrome_id)
+    body = sanitize_compose_html(body_html)
     show_wm = as_bool(watermark, True)
+    if chrome_id in PLAIN_CHROME_IDS:
+        page_margin = (
+            f'{margins["top"]:g}mm {margins["right"]:g}mm '
+            f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
+        )
+        plain = f"""<!DOCTYPE html>
+<html lang="en" class="mhws-compose-multipage">
+<head>
+  <meta charset="UTF-8">
+  <title>{heading}</title>
+  <style>
+    @page {{ size: 210mm 297mm; margin: 0; }}
+    * {{ box-sizing: border-box; }}
+    html, body {{
+      margin: 0;
+      padding: 0;
+      width: 210mm;
+      color: #12233f;
+      font: 11pt/1.45 "Source Sans 3", "Segoe UI", Georgia, serif;
+      background: #fff;
+    }}
+    .body {{ padding: {page_margin}; }}
+    .body p {{ margin: 0 0 8pt; }}
+    .body h2 {{ margin: 0 0 8pt; font-size: 18pt; font-weight: 700; color: #0b2a56; }}
+    .body h3 {{ margin: 0 0 6pt; font-size: 14pt; font-weight: 700; color: #143a6e; }}
+    .body h2 span, .body h3 span {{ font-size: inherit; font-weight: inherit; color: inherit; }}
+    .body .mhws-tab {{ white-space: pre; tab-size: 4; }}
+    .body .mhws-img-pair {{ display: flex; align-items: stretch; gap: 10pt; width: 100%; margin: 0 0 8pt; }}
+    .body table {{ border-collapse: collapse; width: 100%; margin: 8pt 0; }}
+    .body th, .body td {{ border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }}
+    .body th {{ background: #eef2f8; }}
+    .body table.mhws-table-noborder th,
+    .body table.mhws-table-noborder td {{ border: 0 !important; }}
+    .body img {{ max-width: 100%; height: auto; }}
+    .body .mhws-img {{ max-width: 100%; }}
+    .body .mhws-img img {{ width: 100%; height: auto; display: block; }}
+  </style>
+</head>
+<body>
+  <div class="body">{body}</div>
+</body>
+</html>
+""".strip()
+        return embed_local_asset_urls(
+            inject_compose_page_extras(
+                inject_compose_pdf_css(plain), "none", margins, watermark=False
+            ),
+            site_root,
+        )
     if chrome_id != "simple" and conn is not None and site_root is not None:
         try:
             pad_html, _doc = render_template_html(
@@ -473,34 +943,48 @@ def wrap_composed_document(
             )
             injected = inject_body_area(pad_html, body)
             if injected:
+                injected = paginate_pad_html(injected)
+                pad_css = COMPOSE_PAD_BODY_CSS.replace(
+                    ".body-area p {",
+                    f".body-area {{ padding: {margins['top']:g}mm {margins['right']:g}mm "
+                    f"{margins['bottom']:g}mm {margins['left']:g}mm; }}\n  .body-area p {{",
+                    1,
+                )
                 if "</head>" in injected:
-                    injected = injected.replace("</head>", COMPOSE_PAD_BODY_CSS + "\n</head>", 1)
-                return set_html_title(injected, title)
+                    injected = injected.replace("</head>", pad_css + "\n</head>", 1)
+                injected = inject_compose_page_extras(
+                    inject_compose_pdf_css(injected),
+                    chrome_id,
+                    margins,
+                    watermark=show_wm,
+                )
+                return set_html_title(inject_compose_chrome_layout(injected), title)
 
     page_margin = (
         f'{margins["top"]:g}mm {margins["right"]:g}mm '
         f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
     )
     simple = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="mhws-compose-multipage">
 <head>
   <meta charset="UTF-8">
   <title>{heading}</title>
   <style>
-    @page {{ size: A4 portrait; margin: {page_margin}; }}
+    @page {{ size: 210mm 297mm; margin: 0; }}
     * {{ box-sizing: border-box; }}
-    body {{
+    html, body {{
       margin: 0;
+      padding: 0;
+      width: 210mm;
       color: #12233f;
       font: 11pt/1.45 "Source Sans 3", "Segoe UI", Georgia, serif;
+      background: #fff;
     }}
     .org {{
       text-align: center;
-      border-bottom: 1.4pt solid #0b2a56;
-      padding: 0 0 8pt;
-      margin: 0 0 14pt;
+      padding: 10mm 12mm 4pt;
     }}
-    .org img {{ width: 18mm; height: auto; }}
+    .org img {{ width: 18mm; height: auto; border: 0; outline: 0; box-shadow: none; background: transparent; }}
     .org h1 {{
       margin: 4pt 0 0;
       font-size: 15pt;
@@ -510,20 +994,23 @@ def wrap_composed_document(
     }}
     .org .sub {{ margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }}
     .org .meta {{ margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }}
-    .body {{ min-height: 180mm; }}
+    .body {{ padding: {page_margin}; }}
     .body p {{ margin: 0 0 8pt; }}
     .body h2 {{ margin: 0 0 8pt; font-size: 18pt; font-weight: 700; color: #0b2a56; }}
     .body h3 {{ margin: 0 0 6pt; font-size: 14pt; font-weight: 700; color: #143a6e; }}
+    .body h2 span, .body h3 span {{ font-size: inherit; font-weight: inherit; color: inherit; }}
+    .body .mhws-tab {{ white-space: pre; tab-size: 4; }}
     .body .mhws-img-pair {{ display: flex; align-items: stretch; gap: 10pt; width: 100%; margin: 0 0 8pt; }}
     .body table {{ border-collapse: collapse; width: 100%; margin: 8pt 0; }}
     .body th, .body td {{ border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }}
     .body th {{ background: #eef2f8; }}
+    .body table.mhws-table-noborder th,
+    .body table.mhws-table-noborder td {{ border: 0 !important; }}
     .body img {{ max-width: 100%; height: auto; }}
     .body .mhws-img {{ max-width: 100%; }}
     .body .mhws-img img {{ width: 100%; height: auto; display: block; }}
     .foot {{
-      margin-top: 16pt;
-      padding-top: 6pt;
+      padding: 6pt 12mm 10mm;
       border-top: 0.7pt solid rgba(11,42,86,0.35);
       font-size: 8pt;
       color: #5a6a80;
@@ -532,19 +1019,29 @@ def wrap_composed_document(
   </style>
 </head>
 <body>
-  <header class="org">
-    <img src="/assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
-    <h1>Mandi Housing Welfare Society</h1>
-    <p class="sub">Himuda Housing Colony Sanyard</p>
-    <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
-      housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
-  </header>
-  <main class="body">{body}</main>
-  <footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+  <div class="mhws-run-header">
+    <header class="org">
+      <img src="/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
+      <h1>Mandi Housing Welfare Society</h1>
+      <p class="sub">Himuda Housing Colony Sanyard</p>
+      <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
+        housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
+    </header>
+    <div class="rule" aria-hidden="true"><span class="pip"></span></div>
+  </div>
+  <div class="body">{body}</div>
+  <div class="mhws-run-footer">
+    <footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+  </div>
 </body>
 </html>
 """.strip()
-    return embed_local_asset_urls(simple, site_root)
+    return embed_local_asset_urls(
+        inject_compose_chrome_layout(
+            inject_compose_page_extras(inject_compose_pdf_css(simple), "simple", margins, watermark=False)
+        ),
+        site_root,
+    )
 
 
 def export_composed_document(
@@ -594,7 +1091,7 @@ def export_composed_document(
         )
     html = inject_compose_pdf_css(html)
     opts = normalize_options({"paperSize": "A4", "orientation": "portrait", "background": "watermark" if show_wm else "none"})
-    pdf = _html_to_pdf_chrome(html, site_root, opts, inject_layout=False) or _html_to_pdf_weasyprint(
+    pdf = _html_to_pdf_weasyprint(html, site_root, opts, inject_layout=False) or _html_to_pdf_chrome(
         html, site_root, opts, inject_layout=False
     )
     if not pdf:
@@ -923,6 +1420,53 @@ def upsert_template(
         mime_type = "text/html"
         size_bytes = len(data)
         static_path = None
+        options["composed"] = True
+        options["composeChrome"] = str(payload.get("chrome") or payload.get("composeChrome") or "simple")
+        options["composeWatermark"] = as_bool(payload.get("watermark"), True)
+        options_json = json.dumps(options, ensure_ascii=False)
+        if "compose" not in tags:
+            tags = list(tags) + ["compose"]
+
+    elif payload.get("stationery") is not None:
+        spec = normalize_stationery(payload.get("stationery"))
+        stationery_html = render_stationery_html(spec, title)
+        data = stationery_html.encode("utf-8")
+        if len(data) > TEMPLATE_MAX_BYTES:
+            raise ValueError("Template too large (max 20 MB)")
+        store_name = "doc.html"
+        dest_dir = template_item_dir(site_root, tid)
+        target = dest_dir / store_name
+        tmp = dest_dir / f".{store_name}.{secrets.token_hex(4)}.tmp"
+        try:
+            tmp.write_bytes(data)
+            tmp.replace(target)
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+        for old in list(dest_dir.iterdir()):
+            if old.is_file() and old.name != store_name and not old.name.startswith("."):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        safe_title = re.sub(r"[^\w.\-]+", "_", title)[:60].strip("._") or "letterhead"
+        doc_type = "file"
+        filename = store_name
+        original_name = f"{safe_title}.html"
+        mime_type = "text/html"
+        size_bytes = len(data)
+        static_path = None
+        mapped = stationery_paper_options(spec)
+        options.update(mapped)
+        options.pop("composed", None)
+        options_json = json.dumps(options, ensure_ascii=False)
+        if "stationery" not in tags:
+            tags = list(tags) + ["stationery"]
+        if category in ("other", "correspondence") and "category" not in payload:
+            category = "letterhead"
 
     if not existing and doc_type == "file" and not filename:
         raise ValueError("Choose a file to upload, or provide a static path under documents/")
@@ -1222,6 +1766,11 @@ def _pdf_page_layout_css(
 
 
 def _inject_pdf_page_css(html: str, options: dict[str, Any] | None = None) -> str:
+    text = html or ""
+    if "mhws-print-pages" in text or "mhws-compose-multipage" in text:
+        from rwa_compose_export import inject_compose_pdf_css
+
+        return inject_compose_pdf_css(text)
     opts = normalize_options(options)
     envelope = bool(re.search(r"envelope-pad", html, re.I))
     mom = bool(re.search(r"pad-mom", html, re.I))
@@ -1677,6 +2226,7 @@ def _html_to_pdf_chrome(
             "--disable-dev-shm-usage",
             "--allow-file-access-from-files",
             "--no-pdf-header-footer",
+            "--hide-scrollbars",
             f"--print-to-pdf={pdf_path}",
             "--virtual-time-budget=12000",
             html_path.resolve().as_uri(),

@@ -1356,6 +1356,7 @@ def build_cash_receipt_booklet_pdf(
     paper_pattern: str = "lines",
     layout: str = "a4-3",
     orientation: str = "portrait",
+    signatories: int = 1,
 ) -> tuple[bytes, str]:
     """Blank cash-receipt booklet — slip width always 210 mm (A4 / A5-landscape)."""
     from reportlab.lib import colors
@@ -1377,6 +1378,11 @@ def build_cash_receipt_booklet_pdf(
         tint = "cream"
     if pattern not in {"none", "lines", "diagonal", "dots", "guilloche"}:
         pattern = "lines"
+    try:
+        signatory_count = int(signatories or 1)
+    except (TypeError, ValueError):
+        signatory_count = 1
+    signatory_count = 2 if signatory_count >= 2 else 1
 
     tint_map = {
         "white": colors.white,
@@ -1559,20 +1565,41 @@ def build_cash_receipt_booklet_pdf(
         c.setLineWidth(0.55)
         c.line(inner_x, foot_top, right, foot_top)
         c.setFillColor(colors.HexColor(BRAND_MUTED))
-        c.setFont("Helvetica", max(5.5, 6.2 * scale))
-        c.drawString(inner_x, foot_top - 4.0 * mm, "Mode: Cash only. Subject to verification by the Society.")
+        note_fs = max(5.5, 6.2 * scale)
+        c.setFont("Helvetica", note_fs)
+        if signatory_count == 2:
+            c.drawString(inner_x, foot_top - 4.0 * mm, "Mode: Cash only. Subject to verification.")
+        else:
+            c.drawString(inner_x, foot_top - 4.0 * mm, "Mode: Cash only. Subject to verification by the Society.")
         c.drawString(inner_x, foot_top - 7.2 * mm, f"{ORG_EMAIL}  ·  {ORG_WEB}")
-        sig_w = 52 * mm
         sig_base = box_y + 5.5 * mm
+        sig_gap = 2.8 * mm
+        sig_roles = (
+            ["Treasurer / Office bearer"]
+            if signatory_count == 1
+            else ["President", "Treasurer / Office bearer"]
+        )
+        if signatory_count == 1:
+            sig_w = 48 * mm
+            slots = [(right - sig_w, sig_w, sig_roles[0])]
+        else:
+            sig_w = 34 * mm
+            total_w = 2 * sig_w + sig_gap
+            sig_start = right - total_w
+            slots = [
+                (sig_start, sig_w, sig_roles[0]),
+                (sig_start + sig_w + sig_gap, sig_w, sig_roles[1]),
+            ]
         c.setStrokeColor(Color(11 / 255, 42 / 255, 86 / 255, alpha=0.45))
         c.setLineWidth(0.65)
-        c.line(right - sig_w, sig_base + 6.5 * mm, right, sig_base + 6.5 * mm)
-        c.setFillColor(colors.HexColor(BRAND_NAVY))
-        c.setFont("Helvetica-Bold", max(6, 6.8 * scale))
-        c.drawCentredString(right - sig_w / 2, sig_base + 3.2 * mm, "Authorised signatory")
-        c.setFillColor(colors.HexColor(BRAND_GREEN))
-        c.setFont("Helvetica", max(5.2, 5.8 * scale))
-        c.drawCentredString(right - sig_w / 2, sig_base + 0.8 * mm, "Treasurer / Office bearer")
+        for sx, sw, role in slots:
+            c.line(sx, sig_base + 6.5 * mm, sx + sw, sig_base + 6.5 * mm)
+            c.setFillColor(colors.HexColor(BRAND_NAVY))
+            c.setFont("Helvetica-Bold", max(5.6, 6.8 * scale))
+            c.drawCentredString(sx + sw / 2, sig_base + 3.2 * mm, "Authorised signatory")
+            c.setFillColor(colors.HexColor(BRAND_GREEN))
+            c.setFont("Helvetica", max(5.0, 5.8 * scale))
+            c.drawCentredString(sx + sw / 2, sig_base + 0.8 * mm, role)
 
     serial = start_no
     for _page_i in range(page_count):

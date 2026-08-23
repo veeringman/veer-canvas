@@ -12,9 +12,9 @@ const ALLOWED = new Set([
 ]);
 const ATTR_OK = new Set([
   'href', 'src', 'alt', 'colspan', 'rowspan', 'class', 'style',
-  'data-width', 'data-float', 'data-valign', 'contenteditable',
+  'data-width', 'data-float', 'data-valign', 'data-mhws-bw', 'data-mhws-bc', 'contenteditable',
 ]);
-const STYLE_OK = /^(color|background-color|font-size|font-family|font-weight|font-style|text-decoration|text-align|width|max-width|height|float|margin|margin-left|margin-right|margin-top|margin-bottom|display|vertical-align|align-items|justify-content|flex|flex-direction|gap|line-height)$/i;
+const STYLE_OK = /^(color|background|background-color|font-size|font-family|font-weight|font-style|text-decoration|text-align|width|max-width|height|float|margin|margin-left|margin-right|margin-top|margin-bottom|padding|padding-left|padding-right|padding-top|padding-bottom|display|vertical-align|align-items|justify-content|flex|flex-direction|gap|line-height|border|border-width|border-style|border-color|border-top|border-right|border-bottom|border-left)$/i;
 
 function emit(host) {
   host.dispatchEvent(new Event('input', { bubbles: true }));
@@ -193,7 +193,7 @@ export function sanitizePastedHtml(html) {
         if (name === 'class') {
           const keep = String(attr.value || '')
             .split(/\s+/)
-            .filter((c) => c === 'mhws-img' || c === 'mhws-img-pair' || c === 'mhws-img-text' || c === 'mhws-table');
+            .filter((c) => c === 'mhws-img' || c === 'mhws-img-pair' || c === 'mhws-img-text' || c === 'mhws-table' || c === 'mhws-table-noborder');
           if (keep.length) child.setAttribute('class', keep.join(' '));
           else child.removeAttribute('class');
         }

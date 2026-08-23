@@ -30,21 +30,50 @@ function toolBtn(icon, title, action) {
   return btn;
 }
 
-function numField(label, key, unit, title) {
+function numField(label, key, unit, title, extra = {}) {
   const lab = el('label', { className: 'mhws-table-num', title: title || label });
   lab.append(el('span', {}, [label]));
   const input = el('input', {
     type: 'number',
-    min: '0',
-    max: '48',
-    step: '1',
-    value: '0',
+    min: extra.min != null ? String(extra.min) : '0',
+    max: extra.max != null ? String(extra.max) : '48',
+    step: extra.step != null ? String(extra.step) : '1',
+    value: extra.value != null ? String(extra.value) : '0',
     'data-margin-key': key,
     'aria-label': title || label,
   });
   lab.append(input);
   lab.append(el('span', { className: 'mhws-margin-unit' }, [unit]));
   return { lab, input };
+}
+
+function colorField(label, title, value) {
+  const wrap = el('label', { className: 'mhws-table-color', title });
+  wrap.append(el('span', {}, [label]));
+  const input = el('input', {
+    type: 'color',
+    title,
+    value: value || '#0b2a56',
+    'aria-label': title,
+  });
+  wrap.append(input);
+  return { lab: wrap, input };
+}
+
+function cssColorToHex(c, fallback = '#0b2a56') {
+  const s = String(c || '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toLowerCase();
+  }
+  const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (m) {
+    const a = s.startsWith('rgba') ? Number((s.match(/,\s*([0-9.]+)\s*\)$/) || [])[1]) : 1;
+    if (a === 0) return '';
+    return `#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+  }
+  if (s === 'transparent' || s === 'none') return '';
+  return fallback;
 }
 
 let openPicker = null;
@@ -184,6 +213,33 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     left: numField('L', 'table-left', 'pt', 'Table left margin'),
     right: numField('R', 'table-right', 'pt', 'Table right margin'),
   };
+  const borderWidth = numField('Line', 'border-w', 'pt', 'Border thickness — 0 hides the line', {
+    min: 0, max: 8, step: 0.5, value: 0.6,
+  });
+  const borderColor = colorField('', 'Border colour', '#0b2a56');
+  const fillColor = colorField('Fill', 'Cell / row / column background', '#eef2f8');
+  const textColor = colorField('Text', 'Cell text colour', '#12233f');
+  const fillNone = toolBtn('clear', 'No fill', 'fillNone');
+  let styleScope = 'table';
+  const scopeWrap = el('span', { className: 'mhws-table-scope', role: 'group', 'aria-label': 'Apply to' });
+  const scopeBtns = {};
+  [['cell', 'Cell'], ['row', 'Row'], ['col', 'Col'], ['table', 'Table']].forEach(([id, label]) => {
+    const btn = el('button', {
+      type: 'button',
+      className: id === 'table' ? 'is-on' : '',
+      title: `Apply to ${label.toLowerCase()}`,
+      'data-scope': id,
+    });
+    btn.textContent = label;
+    scopeBtns[id] = btn;
+    scopeWrap.append(btn);
+  });
+  function setScope(next) {
+    styleScope = next;
+    Object.entries(scopeBtns).forEach(([id, btn]) => {
+      btn.classList.toggle('is-on', id === next);
+    });
+  }
   tools.append(
     el('span', { className: 'mhws-table-tools-label' }, ['Table']),
     toolBtn('tableRowAdd', 'Insert row below', 'rowBelow'),
@@ -193,6 +249,14 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     toolBtn('tableColAddLeft', 'Insert column left', 'colLeft'),
     toolBtn('tableColDel', 'Delete this column', 'colDel'),
     toolBtn('tableDelete', 'Delete table', 'tableDel'),
+    el('span', { className: 'mhws-table-tools-label' }, ['Apply']),
+    scopeWrap,
+    el('span', { className: 'mhws-table-tools-label' }, ['Line']),
+    borderWidth.lab,
+    borderColor.lab,
+    fillColor.lab,
+    fillNone,
+    textColor.lab,
     el('span', { className: 'mhws-table-tools-label' }, ['Cell']),
     cellFields.top.lab,
     cellFields.bottom.lab,
@@ -210,6 +274,7 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
   wrap.append(overlay);
 
   let activeTable = null;
+  let lastCell = null;
   let drag = null;
 
   function notify() {
@@ -218,6 +283,7 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
 
   function hide() {
     activeTable = null;
+    lastCell = null;
     overlay.hidden = true;
     overlay.innerHTML = '';
     tools.hidden = true;
@@ -302,16 +368,21 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
 
   function contextFromPick() {
     const ctx = driver.tableContext();
-    if (ctx) return ctx;
+    if (ctx) {
+      lastCell = ctx.cell;
+      return ctx;
+    }
     if (!activeTable) return null;
     const rowEl = activeTable.querySelector('tr.is-row-pick');
     const colEl = activeTable.querySelector('td.is-col-pick, th.is-col-pick');
-    const row = rowEl || activeTable.rows[0];
-    const colIndex = colEl ? colEl.cellIndex : 0;
+    const row = rowEl || (lastCell && activeTable.contains(lastCell) ? lastCell.parentElement : null) || activeTable.rows[0];
+    const colIndex = colEl
+      ? colEl.cellIndex
+      : (lastCell && activeTable.contains(lastCell) ? lastCell.cellIndex : 0);
     return {
       table: activeTable,
       row,
-      cell: row?.cells[colIndex],
+      cell: lastCell && activeTable.contains(lastCell) ? lastCell : row?.cells[colIndex],
       rowIndex: row?.rowIndex || 0,
       colIndex,
     };
@@ -322,12 +393,17 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     event.preventDefault();
   });
   tools.addEventListener('click', (event) => {
+    const scopeBtn = event.target.closest('[data-scope]');
+    if (scopeBtn) {
+      setScope(scopeBtn.getAttribute('data-scope'));
+      return;
+    }
     const btn = event.target.closest('[data-table-act]');
     if (!btn) return;
     const act = btn.getAttribute('data-table-act');
     const ctx = contextFromPick();
     driver.focus();
-    const spec = ctx || {};
+    const spec = { ...(ctx || {}), scope: styleScope };
     if (act === 'rowBelow') driver.run('tableInsertRow', { ...spec, where: 'below' });
     if (act === 'rowAbove') driver.run('tableInsertRow', { ...spec, where: 'above' });
     if (act === 'rowDel') driver.run('tableDeleteRow', spec);
@@ -335,6 +411,7 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     if (act === 'colLeft') driver.run('tableInsertCol', { ...spec, where: 'left' });
     if (act === 'colDel') driver.run('tableDeleteCol', spec);
     if (act === 'tableDel') driver.run('tableDelete', spec);
+    if (act === 'fillNone') driver.run('tableFill', { ...spec, clear: true });
     const next = driver.tableContext();
     showFor(next?.table || (host.contains(activeTable) ? activeTable : null));
     notify();
@@ -345,11 +422,20 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     const cell = ctx.cell || table.querySelector('td, th');
     const cs = cell ? window.getComputedStyle(cell) : null;
     const pt = (px) => Math.round((Number.parseFloat(px) || 0) * 72 / 96);
+    const ptHalf = (px) => Math.round((Number.parseFloat(px) || 0) * 72 / 96 * 2) / 2;
     if (cs) {
       cellFields.top.input.value = String(pt(cs.paddingTop));
       cellFields.right.input.value = String(pt(cs.paddingRight));
       cellFields.bottom.input.value = String(pt(cs.paddingBottom));
       cellFields.left.input.value = String(pt(cs.paddingLeft));
+      const bw = ptHalf(cs.borderTopWidth);
+      borderWidth.input.value = String(cs.borderTopStyle === 'none' ? 0 : bw);
+      const lineHex = cssColorToHex(cs.borderTopColor, '#0b2a56');
+      if (lineHex) borderColor.input.value = lineHex;
+      const fillHex = cssColorToHex(cs.backgroundColor, '');
+      fillColor.input.value = fillHex || '#ffffff';
+      const textHex = cssColorToHex(cs.color, '#12233f');
+      if (textHex) textColor.input.value = textHex;
     }
     const ts = window.getComputedStyle(table);
     tableFields.top.input.value = String(pt(ts.marginTop));
@@ -358,11 +444,16 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     tableFields.left.input.value = String(pt(ts.marginLeft));
   }
 
+  function styleSpec() {
+    return { ...(contextFromPick() || {}), scope: styleScope };
+  }
+
   function onCellMarginChange() {
     const ctx = contextFromPick();
     if (!ctx) return;
     driver.run('tableCellMargins', {
       ...ctx,
+      scope: styleScope,
       top: cellFields.top.input.value,
       right: cellFields.right.input.value,
       bottom: cellFields.bottom.input.value,
@@ -384,8 +475,35 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
     notify();
   }
 
+  function onBorderChange() {
+    if (!contextFromPick() && !activeTable) return;
+    driver.run('tableBorders', {
+      ...styleSpec(),
+      width: borderWidth.input.value,
+      color: borderColor.input.value,
+    });
+    notify();
+    layout();
+  }
+
+  function onFillChange() {
+    if (!contextFromPick() && !activeTable) return;
+    driver.run('tableFill', { ...styleSpec(), color: fillColor.input.value });
+    notify();
+  }
+
+  function onTextColorChange() {
+    if (!contextFromPick() && !activeTable) return;
+    driver.run('tableTextColor', { ...styleSpec(), color: textColor.input.value });
+    notify();
+  }
+
   Object.values(cellFields).forEach(({ input }) => input.addEventListener('change', onCellMarginChange));
   Object.values(tableFields).forEach(({ input }) => input.addEventListener('change', onTableMarginChange));
+  borderWidth.input.addEventListener('change', onBorderChange);
+  borderColor.input.addEventListener('input', onBorderChange);
+  fillColor.input.addEventListener('input', onFillChange);
+  textColor.input.addEventListener('input', onTextColorChange);
 
   overlay.addEventListener('mousedown', (event) => {
     const colR = event.target.closest('.mhws-table-col-resizer');
@@ -406,6 +524,7 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
         sel.addRange(range);
       }
       fillMarginFields(activeTable);
+      setScope('col');
       return;
     }
     if (rowG && activeTable) {
@@ -422,6 +541,7 @@ export function attachTableUi({ host, toolbar, driver, onChange }) {
         sel.addRange(range);
       }
       fillMarginFields(activeTable);
+      setScope('row');
       return;
     }
     if (!activeTable || (!colR && !rowR)) return;

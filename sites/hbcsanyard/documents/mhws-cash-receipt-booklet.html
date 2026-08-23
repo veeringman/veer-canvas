@@ -164,6 +164,10 @@
       width: 12mm;
       height: auto;
       display: block;
+      border: 0;
+      outline: 0;
+      box-shadow: none;
+      background: transparent;
     }
     .r-org h1 {
       margin: 0;
@@ -379,12 +383,31 @@
 
     .r-foot {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 3mm;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 2.5mm;
       margin-top: 1.2mm;
       padding-top: 1.2mm;
       border-top: 0.6pt solid var(--line);
       align-items: end;
+    }
+    .r-foot.signatories-2 {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr) minmax(0, 0.72fr);
+    }
+    .signatures {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+      min-width: 0;
+    }
+    .r-foot.signatories-2 .signatures {
+      display: contents;
+    }
+    .r-foot.signatories-2 .sign .who {
+      font-size: 6pt;
+      letter-spacing: 0.03em;
+    }
+    .r-foot.signatories-2 .sign .role {
+      font-size: 5.6pt;
     }
     .note {
       font-size: 6pt;
@@ -642,6 +665,12 @@
         <option value="guilloche">Guilloche</option>
       </select>
     </label>
+    <label>Signatories
+      <select id="signatoryCount">
+        <option value="1" selected>One</option>
+        <option value="2">Two</option>
+      </select>
+    </label>
     <div class="actions">
       <button type="button" id="applyReceiptOpts">Preview</button>
       <button type="button" class="secondary" id="printReceipts">View / Print PDF</button>
@@ -673,7 +702,7 @@
       <img class="r-wm" src="../assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9" alt="" aria-hidden="true">
       <span class="copy-tag">Original</span>
       <header class="r-top">
-        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
+        <img class="r-logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
         <div class="r-org">
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>
@@ -728,10 +757,12 @@
           <strong>Web:</strong> housingcolonysanyard.in ·
           <strong>Email:</strong> housingcolonysanyard@gmail.com
         </p>
-        <div class="sign">
-          <div class="space"></div>
-          <div class="who">Authorised signatory</div>
-          <div class="role">Treasurer / Office bearer</div>
+        <div class="signatures">
+          <div class="sign">
+            <div class="space"></div>
+            <div class="who">Authorised signatory</div>
+            <div class="role">Treasurer / Office bearer</div>
+          </div>
         </div>
       </footer>
     </article>
@@ -788,6 +819,35 @@
     return LAYOUTS[key] ? key : 'a4-3';
   }
 
+  function signatoryCount() {
+    const v = parseInt(document.getElementById('signatoryCount')?.value, 10);
+    return v === 2 ? 2 : 1;
+  }
+
+  const SIGNATORY_ROLES = {
+    1: ['Treasurer / Office bearer'],
+    2: ['President', 'Treasurer / Office bearer'],
+  };
+
+  function applySignatories(receiptEl, count) {
+    const foot = receiptEl.querySelector('.r-foot');
+    const wrap = receiptEl.querySelector('.signatures');
+    if (!foot || !wrap) return;
+    const n = count === 2 ? 2 : 1;
+    foot.classList.toggle('signatories-2', n === 2);
+    wrap.replaceChildren();
+    const roles = SIGNATORY_ROLES[n];
+    for (let i = 0; i < n; i += 1) {
+      const sign = document.createElement('div');
+      sign.className = 'sign';
+      sign.innerHTML = `
+        <div class="space"></div>
+        <div class="who">Authorised signatory</div>
+        <div class="role">${roles[i]}</div>`;
+      wrap.appendChild(sign);
+    }
+  }
+
   function opts() {
     const layout = layoutKey();
     const slips = LAYOUTS[layout].slips;
@@ -796,8 +856,9 @@
     const tint = document.getElementById('paperTint').value || 'cream';
     const pattern = document.getElementById('paperPattern').value || 'lines';
     const orientation = orientationKey();
+    const signatories = signatoryCount();
     const end = Math.min(SERIAL_MAX, start + pages * slips - 1);
-    return { start, pages, tint, pattern, layout, orientation, slips, end, total: end - start + 1 };
+    return { start, pages, tint, pattern, layout, orientation, slips, end, total: end - start + 1, signatories };
   }
 
   function bookletUrl(o, disposition) {
@@ -808,6 +869,7 @@
       orientation: o.orientation,
       tint: o.tint,
       pattern: o.pattern,
+      signatories: String(o.signatories || 1),
       disposition: disposition || 'attachment',
     });
     return `/api/rwa/public/cash-receipt-booklet.pdf?${q.toString()}`;
@@ -838,9 +900,10 @@
     return parts.join('');
   }
 
-  function decorateReceipt(el, serial, tint, pattern) {
+  function decorateReceipt(el, serial, tint, pattern, signatories) {
     el.setAttribute('data-tint', tint);
     el.setAttribute('data-pattern', pattern);
+    applySignatories(el, signatories || 1);
     const slot = el.querySelector('.rcpt-no');
     if (slot) slot.textContent = pad7(serial);
     const svg = el.querySelector('.r-bg-svg');
@@ -857,7 +920,7 @@
     const tpl = document.getElementById('receiptTpl');
     if (!sheet || !tpl) return;
     const slipClass = ' slip-wide';
-    sheet.className = `sheet layout-${o.layout} orient-${o.orientation}${slipClass}`;
+    sheet.className = `sheet layout-${o.layout} orient-${o.orientation}${slipClass}${o.signatories === 2 ? ' signatories-2' : ''}`;
     sheet.replaceChildren();
     if (viewport) {
       const ar = (PAGE_AR[o.layout] && PAGE_AR[o.layout][o.orientation]) || '210 / 297';
@@ -876,7 +939,7 @@
     }
     for (let i = 0; i < o.slips; i += 1) {
       const node = tpl.content.firstElementChild.cloneNode(true);
-      decorateReceipt(node, o.start + i, o.tint, o.pattern);
+      decorateReceipt(node, o.start + i, o.tint, o.pattern, o.signatories);
       sheet.appendChild(node);
       if (i < o.slips - 1) {
         const perf = document.createElement('div');
@@ -1068,7 +1131,7 @@
       closePdfOverlay();
     }
   });
-  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout'].forEach((id) => {
+  ['startReceiptNo', 'pageCount', 'paperTint', 'paperPattern', 'receiptLayout', 'signatoryCount'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', () => {
       if (id === 'receiptLayout') syncOrientationDefault();
       applyOpts();

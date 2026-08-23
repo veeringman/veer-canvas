@@ -2555,12 +2555,41 @@ body.is-view-only #grievanceForm {
   font-size: 0.82rem;
 }
 .templates-editor {
-  margin-top: 1rem;
+  margin-top: 0.65rem;
   border: 1px solid rgba(15, 40, 80, 0.12);
   border-radius: 10px;
   padding: 0.55rem 0.85rem 0.85rem;
   background: rgba(255, 255, 255, 0.55);
 }
+.templates-editor:not([open]) {
+  padding-bottom: 0.45rem;
+}
+.templates-filters {
+  margin-bottom: 0.35rem;
+}
+#templatesList {
+  margin-top: 0.85rem;
+}
+.templates-print-options {
+  margin: 0.35rem 0 0.15rem;
+  border: 1px solid rgba(15, 40, 80, 0.1);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem 0.55rem;
+  background: rgba(248, 250, 252, 0.8);
+}
+.templates-print-options > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.88rem;
+  color: var(--navy);
+  user-select: none;
+}
+.templates-print-options > summary::-webkit-details-marker { display: none; }
+.templates-print-options > summary::after {
+  content: " ▾";
+  opacity: 0.55;
+}
+.templates-print-options[open] > summary::after { content: " ▴"; }
 .templates-editor-summary {
   cursor: pointer;
   list-style: none;

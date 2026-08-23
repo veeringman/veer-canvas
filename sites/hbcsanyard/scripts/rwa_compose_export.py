@@ -10,6 +10,8 @@ from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 
+DIAMOND_RULE_HTML = '<div class="rule" aria-hidden="true"><span class="pip"></span></div>'
+
 
 def _html_escape(text: Any) -> str:
     s = "" if text is None else str(text)
@@ -20,24 +22,124 @@ def _html_escape(text: Any) -> str:
         .replace('"', "&quot;")
     )
 
+
+_CSS_DECL_RE = re.compile(r"([a-z-]+)\s*:\s*([^;]+)", re.I)
+
+
+def _css_decls(style: str) -> dict[str, str]:
+    return {m.group(1).strip().lower(): m.group(2).strip() for m in _CSS_DECL_RE.finditer(style or "")}
+
+
+def _css_hex(value: str) -> str | None:
+    s = (value or "").strip().lower()
+    if s in {"none", "transparent"}:
+        return None
+    if re.fullmatch(r"#[0-9a-f]{6}", s):
+        return s[1:]
+    if re.fullmatch(r"#[0-9a-f]{3}", s):
+        return "".join(ch * 2 for ch in s[1:])
+    m = re.match(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", s)
+    if not m:
+        return None
+    if s.startswith("rgba") and re.search(r",\s*0(?:\.0+)?\s*\)$", s):
+        return None
+    return "".join(f"{int(m.group(i)):02x}" for i in range(1, 4))
+
+
+def _css_pt(value: str) -> float | None:
+    s = (value or "").strip().lower()
+    if s in {"", "none"}:
+        return 0.0 if s == "none" else None
+    m = re.match(r"([0-9.]+)\s*(pt|px)?", s)
+    if not m:
+        return None
+    n = float(m.group(1))
+    if m.group(2) == "px":
+        n = n * 72.0 / 96.0
+    return n
+
+
+def _apply_docx_cell(cell: Any, spec: dict[str, str]) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import RGBColor
+
+    text = spec.get("text") or ""
+    cell.text = text
+    decls = _css_decls(spec.get("style") or "")
+    fill = _css_hex(decls.get("background-color") or decls.get("background") or "")
+    if fill:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill)
+        tc_pr.append(shd)
+    border = decls.get("border") or ""
+    bwidth = _css_pt(decls.get("border-width") or "")
+    if border.strip() == "none" or "border-style: none" in (spec.get("style") or "").lower():
+        bwidth = 0.0
+    if bwidth is None:
+        for part in border.split():
+            got = _css_pt(part)
+            if got is not None:
+                bwidth = got
+                break
+    bcolor = _css_hex(decls.get("border-color") or "")
+    if not bcolor:
+        for part in border.split():
+            got = _css_hex(part)
+            if got:
+                bcolor = got
+                break
+    if bwidth is None and not border:
+        bwidth = 0.6
+        bcolor = bcolor or "0b2a56"
+    if bwidth is not None:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        borders = OxmlElement("w:tcBorders")
+        val = "nil" if bwidth <= 0 else "single"
+        sz = str(max(0, int(round(bwidth * 8))))
+        for edge in ("top", "left", "bottom", "right"):
+            edge_el = OxmlElement(f"w:{edge}")
+            edge_el.set(qn("w:val"), val)
+            if val != "nil":
+                edge_el.set(qn("w:sz"), sz)
+                edge_el.set(qn("w:space"), "0")
+                edge_el.set(qn("w:color"), bcolor or "0b2a56")
+            borders.append(edge_el)
+        tc_pr.append(borders)
+    color = _css_hex(decls.get("color") or "")
+    if color:
+        try:
+            rgb = RGBColor.from_string(color)
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.color.rgb = rgb
+        except Exception:
+            pass
+
 COMPOSE_PAD_BODY_CSS = """
 <style id="mhws-compose-body">
   .screen-hint, .layout-picker { display: none !important; }
   .body-area p { margin: 0 0 8pt; }
-  .body-area h2, .body-area h2 span {
+  .body-area h2 {
     margin: 0 0 8pt;
     font-size: 18pt;
     font-weight: 700;
     line-height: 1.25;
     color: #0b2a56;
   }
-  .body-area h3, .body-area h3 span {
+  .body-area h3 {
     margin: 0 0 6pt;
     font-size: 14pt;
     font-weight: 700;
     line-height: 1.3;
     color: #143a6e;
   }
+  .body-area h2 span,
+  .body-area h3 span { font-size: inherit; font-weight: inherit; color: inherit; }
+  .body-area .mhws-tab { white-space: pre; tab-size: 4; }
   .body-area .mhws-img-pair {
     display: flex;
     align-items: stretch;
@@ -49,6 +151,8 @@ COMPOSE_PAD_BODY_CSS = """
   .body-area table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
   .body-area th, .body-area td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
   .body-area th { background: #eef2f8; }
+  .body-area table.mhws-table-noborder th,
+  .body-area table.mhws-table-noborder td { border: 0 !important; }
   .body-area img { max-width: 100%; height: auto; }
   .body-area .mhws-img { max-width: 100%; }
   .body-area .mhws-img img { width: 100%; height: auto; display: block; }
@@ -57,6 +161,10 @@ COMPOSE_PAD_BODY_CSS = """
     width: 24mm;
     height: auto;
     visibility: visible;
+    border: 0;
+    outline: 0;
+    box-shadow: none;
+    background: transparent;
   }
   img.wm { display: block; }
   @media print {
@@ -66,22 +174,110 @@ COMPOSE_PAD_BODY_CSS = """
 </style>
 """
 
+COMPOSE_CHROME_LAYOUT_CSS = """
+<style id="mhws-compose-chrome-layout">
+  .sheet[data-layout="top"] .officers,
+  .officers {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    column-gap: 0;
+    align-items: start;
+    justify-items: center;
+    margin: 0 0 1.6mm;
+    width: 100%;
+    padding: 0;
+  }
+  .sheet[data-layout="top"] .role,
+  .officers .role {
+    text-align: center;
+    min-width: 0;
+    width: 100%;
+    padding: 0 2mm;
+    position: relative;
+    align-self: start;
+  }
+  .sheet[data-layout="top"] .role:not(:last-child)::after,
+  .officers .role:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 10%;
+    bottom: 10%;
+    right: 0;
+    width: 0;
+    border-right: 0.7pt solid rgba(11, 42, 86, 0.14);
+  }
+  .sheet[data-layout="top"] .officers + .rule,
+  .officers + .rule {
+    display: grid !important;
+    margin: 0 0 1.6mm;
+  }
+  .officers-foot,
+  .mhws-header-gold-rule {
+    display: none !important;
+  }
+  .rule {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 3mm;
+    margin: 0 0 2.2mm;
+    width: 100%;
+  }
+  .rule::before,
+  .rule::after {
+    content: "";
+    height: 0;
+    border-top: 1pt solid #0b2a56;
+  }
+  .rule .pip {
+    width: 2.2mm;
+    height: 2.2mm;
+    background: #c9a227;
+    transform: rotate(45deg);
+    box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35);
+  }
+  img.wm, .wm {
+    top: 50% !important;
+  }
+  .mhws-run-header .head,
+  .mhws-print-head .head,
+  .mhws-page-chrome-tpl .head,
+  .mhws-chrome-inner .head,
+  .mhws-run-header .mhws-st-head,
+  .mhws-print-head .mhws-st-head,
+  .mhws-page-chrome-tpl .mhws-st-head,
+  .mhws-chrome-inner .mhws-st-head,
+  .mhws-run-header .mhws-simple-head,
+  .mhws-print-head .mhws-simple-head,
+  .mhws-page-chrome-tpl .mhws-simple-head,
+  .mhws-chrome-inner .mhws-simple-head,
+  .mhws-run-header .org,
+  .mhws-print-head .org,
+  .mhws-page-chrome-tpl .org,
+  .mhws-chrome-inner .org,
+  .mhws-run-header .brand,
+  .mhws-print-head .brand,
+  .mhws-page-chrome-tpl .brand,
+  .mhws-chrome-inner .brand {
+    border-bottom: none !important;
+  }
+</style>
+"""
+
 COMPOSE_PDF_CSS = """
 <style id="mhws-compose-pdf">
-  /* Headless print uses print-pad-common (283mm). Pin chrome to a full A4 page. */
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: 210mm 297mm; margin: 0; }
   html, body,
   html.pad-a4-full, html.pad-a4-full body,
-  html.pad-a4-blank, html.pad-a4-blank body {
+  html.pad-a4-blank, html.pad-a4-blank body,
+  html.mhws-compose-multipage, html.mhws-compose-multipage body {
     background: #fff !important;
     width: 210mm !important;
-    min-height: 297mm !important;
+    min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
     margin: 0 !important;
-    padding: 0 !important;
     overflow: visible !important;
-    position: relative !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -92,62 +288,271 @@ COMPOSE_PDF_CSS = """
     position: relative !important;
     box-sizing: border-box !important;
     width: 210mm !important;
-    min-height: 297mm !important;
+    min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
     margin: 0 !important;
     border: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
   }
-  .pad,
-  html.pad-a4-full .pad,
-  html.pad-a4-blank .pad {
-    flex: 1 1 auto !important;
+  .pad { display: block !important; flex: none !important; min-height: 0 !important; height: auto !important; overflow: visible !important; }
+  .body-area, .body {
+    flex: none !important;
     min-height: 0 !important;
     max-height: none !important;
-    overflow: visible !important;
-    padding-bottom: 34mm !important;
-  }
-  .body-area,
-  html.pad-a4-full .body-area,
-  html.pad-a4-full .sheet[data-layout="top"] .body-area,
-  html.pad-a4-full .sheet[data-layout="left"] .body-area,
-  html.pad-a4-blank .body-area {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
+    height: auto !important;
     overflow: visible !important;
   }
-  .foot, footer.foot,
-  html.pad-a4-full .foot,
-  html.pad-a4-blank .slogan-bar {
-    position: absolute !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
+  .mhws-run-header {
+    position: running(mhws-hd);
+    width: 210mm;
+    background: #fff;
+  }
+  .mhws-run-footer {
+    position: running(mhws-ft);
+    width: 210mm;
+    background: #fff;
+  }
+  .foot, footer.foot, html.pad-a4-full .foot {
+    position: static !important;
+    bottom: auto !important;
     width: 100% !important;
     margin: 0 !important;
     flex: none !important;
   }
-  html.pad-a4-full .foot .slogan-bar,
-  html.pad-a4-blank .slogan-bar {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
+  html.pad-a4-full .slogan-bar { margin-left: -12mm !important; margin-right: -12mm !important; width: auto !important; }
+  html.pad-a4-blank .slogan-bar { position: static !important; margin-left: -14mm !important; margin-right: -14mm !important; width: auto !important; }
 </style>
 """
+
+PRINT_CHROME_MM = {
+    "none": (0.0, 0.0),
+    "simple": (40.0, 22.0),
+    "tpl-mhws-letterhead": (58.0, 32.0),
+    "tpl-rwa-letterhead-blank": (48.0, 28.0),
+}
+PLAIN_CHROME_IDS = frozenset({"none", "none-template", "plain"})
+DEFAULT_PRINT_CHROME_MM = (48.0, 28.0)
+
+
+def compose_page_css(chrome_id: str, margins: dict[str, float], *, watermark: bool = True) -> str:
+    if chrome_id in PLAIN_CHROME_IDS:
+        hd, ft = 0.0, 0.0
+    else:
+        hd, ft = PRINT_CHROME_MM.get(chrome_id, DEFAULT_PRINT_CHROME_MM)
+    mt, mr, mb, ml = margins["top"], margins["right"], margins["bottom"], margins["left"]
+    wm_off = (
+        ""
+        if watermark
+        else "img.wm { display: none !important; visibility: hidden !important; opacity: 0 !important; }"
+    )
+    running = ""
+    if hd or ft:
+        running = f"""
+  @page {{
+    @top-center {{ content: element(mhws-hd); }}
+    @bottom-center {{ content: element(mhws-ft); }}
+  }}
+  .mhws-run-header {{
+    position: running(mhws-hd);
+    width: 210mm;
+    background: #fff;
+  }}
+  .mhws-run-footer {{
+    position: running(mhws-ft);
+    width: 210mm;
+    background: #fff;
+  }}
+"""
+    return f"""
+<style id="mhws-compose-page">
+  @page {{
+    size: 210mm 297mm;
+    margin: {hd:g}mm 0 {ft:g}mm 0;
+  }}
+  {running}
+  .body-area, .body {{
+    padding: {mt:g}mm {mr:g}mm {mb:g}mm {ml:g}mm !important;
+  }}
+  img.wm {{
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(112mm, 70%) !important;
+    max-height: 46% !important;
+    height: auto !important;
+    object-fit: contain !important;
+    opacity: 0.75 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+    display: block !important;
+  }}
+  {wm_off}
+  html.is-mhws-paged @page {{ margin: 0; }}
+  html.is-mhws-paged .mhws-run-header,
+  html.is-mhws-paged .mhws-run-footer,
+  html.is-mhws-paged .body-area,
+  html.is-mhws-paged .body,
+  html.is-mhws-paged img.wm {{ display: none !important; }}
+  .mhws-print-desk {{
+    display: none;
+    background: #c5cdd8;
+    padding: 8mm 0;
+  }}
+  html.is-mhws-paged .mhws-print-desk {{ display: block; }}
+  html.is-mhws-paged, html.is-mhws-paged body {{
+    background: #c5cdd8 !important;
+    width: auto !important;
+  }}
+  .mhws-print-sheet {{
+    position: relative;
+    box-sizing: border-box;
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto 8mm;
+    background: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    page-break-after: always;
+    break-after: page;
+    box-shadow: 0 1px 6px rgba(15, 40, 80, 0.2);
+  }}
+  .mhws-print-sheet:last-child {{ margin-bottom: 0; page-break-after: auto; }}
+  .mhws-print-head, .mhws-print-foot {{ flex: 0 0 auto; width: 210mm; background: #fff; overflow: visible; }}
+  .mhws-print-body {{
+    flex: 1 1 auto;
+    min-height: 1mm;
+    overflow: hidden;
+    padding: {mt:g}mm {mr:g}mm {mb:g}mm {ml:g}mm !important;
+    box-sizing: border-box;
+  }}
+  .mhws-print-sheet img.wm {{
+    position: absolute !important;
+    top: 50% !important;
+    z-index: 0 !important;
+  }}
+  @media print {{
+    html.is-mhws-paged, html.is-mhws-paged body {{ background: #fff !important; }}
+    .mhws-print-desk {{ padding: 0; background: #fff; }}
+    .mhws-print-sheet {{
+      margin: 0;
+      box-shadow: none;
+    }}
+  }}
+</style>
+"""
+
+
+PREVIEW_PAGINATE_JS = r"""
+<script id="mhws-preview-pager">
+(function () {
+  function go() {
+    if (document.documentElement.classList.contains('is-mhws-paged')) return;
+    var body = document.querySelector('.body-area, .body');
+    var head = document.querySelector('.mhws-run-header');
+    var foot = document.querySelector('.mhws-run-footer');
+    if (!body) return;
+    var wm = document.querySelector('img.wm');
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;left:-9999px;width:210mm;height:297mm;';
+    document.body.appendChild(probe);
+    var pagePx = probe.offsetHeight;
+    probe.remove();
+    var headH = head ? head.offsetHeight : 0;
+    var footH = foot ? foot.offsetHeight : 0;
+    var mt = parseFloat((body.style.paddingTop || getComputedStyle(body).paddingTop)) || 0;
+    var mb = parseFloat((body.style.paddingBottom || getComputedStyle(body).paddingBottom)) || 0;
+    var inner = Math.max(48, pagePx - headH - footH - mt - mb);
+    var desk = document.createElement('div');
+    desk.className = 'mhws-print-desk';
+    var blocks = Array.prototype.slice.call(body.children);
+    var slot = null;
+    var used = 0;
+    function newSheet() {
+      var sheet = document.createElement('div');
+      sheet.className = 'mhws-print-sheet';
+      if (wm) {
+        var w = wm.cloneNode(true);
+        w.removeAttribute('id');
+        sheet.appendChild(w);
+      }
+      if (head) {
+        var h = head.cloneNode(true);
+        h.className = 'mhws-print-head';
+        h.style.position = 'static';
+        sheet.appendChild(h);
+      }
+      var b = document.createElement('div');
+      b.className = 'mhws-print-body';
+      sheet.appendChild(b);
+      if (foot) {
+        var f = foot.cloneNode(true);
+        f.className = 'mhws-print-foot';
+        f.style.position = 'static';
+        sheet.appendChild(f);
+      }
+      desk.appendChild(sheet);
+      slot = b;
+      used = 0;
+    }
+    newSheet();
+    blocks.forEach(function (block) {
+      var hgt = block.getBoundingClientRect().height;
+      if (used > 8 && used + hgt > inner + 1) newSheet();
+      slot.appendChild(block);
+      used += hgt;
+    });
+    document.documentElement.classList.add('is-mhws-paged');
+    document.body.appendChild(desk);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
+</script>
+"""
+
+
+def inject_compose_chrome_layout(html: str) -> str:
+    text = html or ""
+    if 'id="mhws-compose-chrome-layout"' in text:
+        return text
+    if "</head>" in text:
+        return text.replace("</head>", COMPOSE_CHROME_LAYOUT_CSS + "\n</head>", 1)
+    return text + COMPOSE_CHROME_LAYOUT_CSS
+
+
+def inject_compose_page_extras(html: str, chrome_id: str, margins: dict[str, float], *, watermark: bool = True) -> str:
+    text = html or ""
+    css = compose_page_css(chrome_id, margins, watermark=watermark)
+    if chrome_id not in PLAIN_CHROME_IDS:
+        css += COMPOSE_CHROME_LAYOUT_CSS
+    if 'id="mhws-compose-page"' not in text:
+        if "</head>" in text:
+            text = text.replace("</head>", css + "\n</head>", 1)
+        else:
+            text = css + text
+    if 'id="mhws-preview-pager"' not in text:
+        if "</body>" in text:
+            text = text.replace("</body>", PREVIEW_PAGINATE_JS + "\n</body>", 1)
+        else:
+            text += PREVIEW_PAGINATE_JS
+    return text
 
 
 def inject_compose_pdf_css(html: str) -> str:
     if not html:
         return html
+    if 'id="mhws-compose-pdf"' in html:
+        return html
     if "</head>" in html:
         return html.replace("</head>", COMPOSE_PDF_CSS + "\n</head>", 1)
     return COMPOSE_PDF_CSS + html
 
+_WM_IMG_RE = re.compile(r'<img\b[^>]*\bwm\b[^>]*>\s*', re.I)
 _BODY_AREA_RE = re.compile(
     r'(<div\b[^>]*\bbody-area\b[^>]*>)(.*?)(</div>)',
     re.I | re.S,
@@ -169,11 +574,175 @@ def as_bool(raw: Any, default: bool = True) -> bool:
     return str(raw).strip().lower() not in {"", "0", "false", "no", "off", "none"}
 
 
-def inject_body_area(pad_html: str, body: str) -> str | None:
-    match = _BODY_AREA_RE.search(pad_html or "")
+def _find_body_area(html: str) -> tuple[int, str, str, str] | None:
+    """Return (start, open_tag, inner_html, after_close) for the writing area."""
+    match = re.search(r"<div\b[^>]*\bbody-area\b[^>]*>", html or "", flags=re.I)
     if not match:
         return None
-    return pad_html[: match.start()] + match.group(1) + body + match.group(3) + pad_html[match.end() :]
+    inner, after = _split_at_div_depth(html[match.end() :], 1)
+    return match.start(), match.group(0), inner, after
+
+
+def inject_body_area(pad_html: str, body: str) -> str | None:
+    found = _find_body_area(pad_html or "")
+    if not found:
+        return None
+    start, open_tag, _inner, after = found
+    return pad_html[:start] + open_tag + body + "</div>" + after
+
+
+def strip_print_pad_common(html: str) -> str:
+    return re.sub(r'<link\b[^>]*print-pad-common[^>]*>\s*', "", html or "", flags=re.I)
+
+
+def _add_html_class(html: str, class_name: str) -> str:
+    def add(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        if class_name in tag:
+            return tag
+        if re.search(r"\bclass\s*=", tag, re.I):
+            return re.sub(r'(\bclass\s*=\s*["\'])', rf"\1{class_name} ", tag, count=1, flags=re.I)
+        return tag[:-1] + f' class="{class_name}">'
+
+    return re.sub(r"<html\b[^>]*>", add, html or "", count=1, flags=re.I)
+
+
+def _split_at_div_depth(html: str, depth: int = 1) -> tuple[str, str]:
+    current = depth
+    for match in re.finditer(r"</?div\b[^>]*>", html or "", flags=re.I):
+        token = match.group(0)
+        closing = token.lower().startswith("</")
+        self_close = token.rstrip().endswith("/>")
+        if closing:
+            current -= 1
+            if current == 0:
+                return html[: match.start()], html[match.end() :]
+        elif not self_close:
+            current += 1
+    return html, ""
+
+
+def _extract_wm(html: str) -> tuple[str, str]:
+    found = _WM_IMG_RE.findall(html or "")
+    return "".join(found), _WM_IMG_RE.sub("", html or "")
+
+
+def _last_div_open(html: str, class_name: str) -> re.Match[str] | None:
+    found_open = None
+    for found in re.finditer(r"<div\b[^>]*>", html or "", flags=re.I):
+        if re.search(rf"\b{re.escape(class_name)}\b", found.group(0), re.I):
+            found_open = found
+    return found_open
+
+
+def paginate_pad_html(html: str) -> str:
+    """Repeat letterhead header/footer on every printed page; let the body flow."""
+    text = strip_print_pad_common(html or "")
+    found = _find_body_area(text)
+    if not found:
+        return _add_html_class(text, "mhws-compose-multipage")
+    start, _open_tag, body, suffix = found
+    prefix = text[:start]
+    pad_open = _last_div_open(prefix, "pad")
+    sheet_open = _last_div_open(prefix, "sheet")
+    container = pad_open or sheet_open
+    if not container:
+        return _add_html_class(text, "mhws-compose-multipage")
+    header_inner = prefix[container.end() :]
+    footer_inner, rest = _split_at_div_depth(suffix, 1)
+    wm, header_inner = _extract_wm(header_inner)
+    if pad_open and sheet_open:
+        pre_pad = prefix[sheet_open.end() : pad_open.start()]
+        extra_wm, pre_pad = _extract_wm(pre_pad)
+        wm = extra_wm + wm
+        header_inner = f"{pre_pad}<div class=\"pad\">{header_inner}</div>"
+        footer_inner = f"<div class=\"pad\">{footer_inner}</div>"
+        before = prefix[: sheet_open.end()]
+    else:
+        before = prefix[: container.end()]
+    table = (
+        f"{wm}"
+        f'<div class="mhws-run-header">{header_inner}</div>'
+        f'<div class="body-area">{body}</div>'
+        f'<div class="mhws-run-footer">{footer_inner}</div>'
+    )
+    return _add_html_class(before + table + rest, "mhws-compose-multipage")
+
+
+def _header_has_end_separator(html: str) -> bool:
+    text = html or ""
+    if re.search(r'<div class="rule"', text, flags=re.I):
+        return True
+    return "mhws-header-gold-rule" in text or "officers-foot" in text
+
+
+def extract_pad_chrome(html: str) -> dict[str, str]:
+    """Header/footer markup from a letterhead pad, for the composer page frames."""
+    text = strip_print_pad_common(strip_screen_chrome(html or ""))
+    css_parts = [m.group(1) for m in re.finditer(r"<style\b[^>]*>([\s\S]*?)</style>", text, flags=re.I)]
+    chrome_css = "\n".join(css_parts)
+    found = _find_body_area(text)
+    if not found:
+        return {"headerHtml": "", "footerHtml": "", "chromeCss": chrome_css, "watermarkUrl": ""}
+    start, _open_tag, _body, suffix = found
+    prefix = text[:start]
+    pad_open = _last_div_open(prefix, "pad")
+    sheet_open = _last_div_open(prefix, "sheet")
+    container = pad_open or sheet_open
+    if not container:
+        return {"headerHtml": "", "footerHtml": "", "chromeCss": chrome_css, "watermarkUrl": ""}
+    header_inner = prefix[container.end() :]
+    footer_inner, _rest = _split_at_div_depth(suffix, 1)
+    wm, header_inner = _extract_wm(header_inner)
+    if pad_open and sheet_open:
+        pre_pad = prefix[sheet_open.end() : pad_open.start()]
+        extra_wm, pre_pad = _extract_wm(pre_pad)
+        wm = extra_wm + wm
+        sheet_tag = prefix[sheet_open.start() : sheet_open.end()]
+        layout_m = re.search(r'data-layout=["\']([^"\']+)["\']', sheet_tag, flags=re.I)
+        layout = (layout_m.group(1) if layout_m else "top").strip() or "top"
+        header_inner = (
+            f'{pre_pad}<div class="sheet" data-layout="{layout}">'
+            f'<div class="pad">{header_inner}</div></div>'
+        )
+        footer_inner = f'<div class="pad">{footer_inner}</div>'
+    wm_src = ""
+    src = re.search(r'\bsrc=["\']([^"\']+)["\']', wm, flags=re.I)
+    if src:
+        wm_src = src.group(1)
+    header_out = header_inner.strip()
+    if re.search(r'\bclass="[^"]*\bofficers\b', header_out, flags=re.I):
+        if not re.search(r'\bclass="[^"]*\bsheet\b', header_out, flags=re.I):
+            header_out = f'<div class="sheet" data-layout="top"><div class="pad">{header_out}</div></div>'
+    if header_out and not _header_has_end_separator(header_out):
+        header_out = re.sub(
+            r"(</div>\s*</div>\s*)$",
+            rf"{DIAMOND_RULE_HTML}\1",
+            header_out,
+            count=1,
+        )
+        if not re.search(r'<div class="rule"', header_out, flags=re.I):
+            header_out = f'{header_out}{DIAMOND_RULE_HTML}'
+    return {
+        "headerHtml": header_out,
+        "footerHtml": footer_inner.strip(),
+        "chromeCss": chrome_css,
+        "watermarkUrl": wm_src,
+    }
+
+
+def strip_pager_markup(html: str) -> str:
+    text = html or ""
+    pattern = re.compile(
+        r'<div\b[^>]*\b(mhws-page-spacer|mhws-page-chrome|mhws-page-frames)\b[^>]*>',
+        re.I,
+    )
+    while True:
+        match = pattern.search(text)
+        if not match:
+            return text
+        _inner, after = _split_at_div_depth(text[match.end() :], 1)
+        text = text[: match.start()] + after
 
 
 def strip_screen_chrome(html: str) -> str:
@@ -329,9 +898,10 @@ class _DocxBuilder(HTMLParser):
         self.underline = 0
         self.para = None
         self.in_table = 0
-        self.rows: list[list[str]] = []
-        self.cur_row: list[str] | None = None
+        self.rows: list[list[dict[str, str]]] = []
+        self.cur_row: list[dict[str, str]] | None = None
         self.td_bits: list[str] | None = None
+        self.td_style = ""
         self.img_width_pct = 40
         self.class_stack: list[str] = []
 
@@ -434,6 +1004,7 @@ class _DocxBuilder(HTMLParser):
             self.cur_row = []
         elif tag in {"td", "th"}:
             self.td_bits = []
+            self.td_style = ad.get("style", "")
         elif tag == "span" and "mhws-img" in classes:
             self.img_width_pct = _parse_width_pct(ad.get("style", ""), default=int(ad.get("data-width") or 40) or 40)
         elif tag == "img":
@@ -470,8 +1041,9 @@ class _DocxBuilder(HTMLParser):
         elif tag in {"td", "th"}:
             text = unescape("".join(self.td_bits or [])).strip()
             if self.cur_row is not None:
-                self.cur_row.append(text)
+                self.cur_row.append({"text": text, "style": self.td_style or ""})
             self.td_bits = None
+            self.td_style = ""
         elif tag == "tr":
             if self.cur_row is not None:
                 self.rows.append(self.cur_row)
@@ -483,13 +1055,12 @@ class _DocxBuilder(HTMLParser):
             if rows:
                 cols = max(len(r) for r in rows)
                 table = self.doc.add_table(rows=len(rows), cols=max(1, cols))
-                try:
-                    table.style = "Table Grid"
-                except Exception:
-                    pass
                 for i, row in enumerate(rows):
                     for j in range(cols):
-                        table.rows[i].cells[j].text = row[j] if j < len(row) else ""
+                        spec = row[j] if j < len(row) else {"text": "", "style": ""}
+                        if isinstance(spec, str):
+                            spec = {"text": spec, "style": ""}
+                        _apply_docx_cell(table.rows[i].cells[j], spec)
             self.para = None
         elif tag == "span":
             self.img_width_pct = 40

@@ -2,6 +2,16 @@ import { registry } from './registry.js';
 import { registerBuiltins } from './formats.js';
 import { createSession } from './session.js';
 import { attachLayout, extractBody, collapseAll } from './layout.js';
+import {
+  STATIONERY_PAPERS,
+  STATIONERY_FONTS,
+  STATIONERY_BORDERS,
+  defaultStationerySpec,
+  normalizeStationerySpec,
+  renderStationeryDocument,
+  paintStationeryPreview,
+  readImageAsDataUrl,
+} from './stationery.js';
 
 registerBuiltins();
 
@@ -20,6 +30,16 @@ const api = {
   extractBody,
   collapseAll,
   ready,
+  stationery: {
+    papers: STATIONERY_PAPERS,
+    fonts: STATIONERY_FONTS,
+    borders: STATIONERY_BORDERS,
+    defaultSpec: defaultStationerySpec,
+    normalize: normalizeStationerySpec,
+    renderDocument: renderStationeryDocument,
+    paintPreview: paintStationeryPreview,
+    readImageAsDataUrl,
+  },
 };
 
 window.MhwsComposer = api;

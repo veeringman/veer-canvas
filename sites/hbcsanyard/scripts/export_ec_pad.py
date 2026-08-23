@@ -458,7 +458,7 @@ def render(office: list[dict], general: list[dict]) -> str:
 
     <div class="pad">
       <header class="brand">
-        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png" alt="Himuda Housing Colony Sanyard">
+        <img class="logo" src="../assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="Himuda Housing Colony Sanyard">
         <div>
           <h1>Mandi Housing Welfare Society</h1>
           <p class="colony">Himuda Housing Colony Sanyard</p>

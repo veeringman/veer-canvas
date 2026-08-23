@@ -21,13 +21,13 @@
   <meta name="application-name" content="Home@Sanyard">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260822imp1">
-  <link rel="stylesheet" href="composer/composer.css?v=20260822typ1">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="portal.css?v=20260823login1">
+  <link rel="stylesheet" href="composer/composer.css?v=20260823ob6">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260822typ1" defer></script>
-  <script type="module" src="composer/boot.js?v=20260822typ2"></script>
+  <script src="portal.js?v=20260823ob6" defer></script>
+  <script type="module" src="composer/boot.js?v=20260823ob6"></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -2776,14 +2776,18 @@
           <div class="roster-toolbar">
             <div>
               <h3>Templates</h3>
-              <p class="muted">Print pads, a document library, or <strong>Compose</strong> a letter, resolution, notice, or MOM online — choose a starter, edit, then save / print / mail.</p>
+              <p class="muted">Library of letters, notices, and print pads. Write online, or upload a file — then open, mail, or download from the list.</p>
             </div>
-            <button type="button" class="btn ghost compact" id="templatesRefreshBtn">Refresh</button>
+            <div class="roster-toolbar-actions">
+              <button type="button" class="btn primary compact" id="templatesNewBtn" title="Create new document or letterhead template">New</button>
+              <button type="button" class="btn secondary compact" id="templatesUploadBtn">Upload file</button>
+              <button type="button" class="btn ghost compact" id="templatesRefreshBtn">Refresh</button>
+            </div>
           </div>
-          <div class="settings-grid" style="margin-bottom:0.75rem">
-            <label>Filter category
+          <div class="settings-grid templates-filters">
+            <label>Category
               <select id="templatesCategoryFilter">
-                <option value="">All categories</option>
+                <option value="">All</option>
               </select>
             </label>
             <label>Status
@@ -2795,11 +2799,10 @@
               </select>
             </label>
           </div>
-          <div id="templatesList" class="info-doc-list is-cards"></div>
-          <details class="templates-editor" id="templatesCompose" open>
+          <details class="templates-editor" id="templatesCompose">
             <summary class="templates-editor-summary">
-              <strong>Compose document</strong>
-              <span class="muted"> — pick a starter, then refine in the editor</span>
+              <strong>Write a document</strong>
+              <span class="muted"> — letter, resolution, notice, or MOM</span>
             </summary>
             <div id="tplComposeShell" class="mhws-composer-shell" data-layout="original">
               <form id="templatesComposeForm" class="templates-compose-meta">
@@ -2816,12 +2819,16 @@
                   </select>
                   <select id="tplComposeChrome" title="Header, footer and watermark" aria-label="Letterhead">
                     <option value="simple">Simple header</option>
+                    <option value="none">No template</option>
                   </select>
                   <select id="tplComposeWatermark" title="Watermark" aria-label="Watermark" hidden>
                     <option value="1" selected>Watermark</option>
                     <option value="0">No watermark</option>
                   </select>
                   <div class="mhws-composer-actions">
+                    <button type="button" class="mhws-composer-btn" id="tplComposeNewBtn" title="Create new document or template" aria-label="Create new">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    </button>
                     <button type="submit" class="mhws-composer-btn is-accent" id="tplComposeSaveBtn" title="Save to library" aria-label="Save to library">
                       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11H5z"/><path d="M8 5v5h8V5"/><path d="M8 19v-6h8v6"/></svg>
                     </button>
@@ -2837,6 +2844,9 @@
                     <button type="button" class="mhws-composer-btn" id="tplComposeClearBtn" title="Clear" aria-label="Clear">
                       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l.8 12h8.4L17 7"/></svg>
                     </button>
+                    <button type="button" class="mhws-composer-btn" id="tplComposeCloseBtn" title="Close document" aria-label="Close document">
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                    </button>
                   </div>
                 </div>
                 <p class="sr-only" id="tplStarterHint">Resolution, forwarding letter, notice, MOM, circular, agenda, office note.</p>
@@ -2848,10 +2858,136 @@
               </form>
             </div>
           </details>
+          <details class="templates-editor" id="templatesStationery">
+            <summary class="templates-editor-summary">
+              <strong>Design a letterhead template</strong>
+              <span class="muted"> — logo, header lines, watermark, footer, paper size</span>
+            </summary>
+            <form id="templatesStationeryForm" class="mhws-stationery-form">
+              <input type="hidden" id="tplStationeryEditId" value="">
+              <div class="mhws-composer-meta mhws-stationery-meta">
+                <button type="button" class="mhws-composer-btn" id="tplStationeryNewBtn" title="Create new document or template" aria-label="Create new">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                </button>
+                <input type="text" id="tplStationeryTitle" maxlength="160" required placeholder="Letterhead title" autocomplete="off" aria-label="Title">
+                <select id="tplStationeryCategory" title="Category" aria-label="Category"></select>
+                <select id="tplStationeryStatus" title="Status" aria-label="Status">
+                  <option value="draft">Draft</option>
+                  <option value="published" selected>Published</option>
+                </select>
+                <div class="mhws-composer-actions">
+                  <button type="submit" class="mhws-composer-btn is-accent" id="tplStationerySaveBtn" title="Save letterhead" aria-label="Save letterhead">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h11l3 3v11H5z"/><path d="M8 5v5h8V5"/><path d="M8 19v-6h8v6"/></svg>
+                  </button>
+                  <button type="button" class="mhws-composer-btn" id="tplStationeryPreviewBtn" title="Preview / print" aria-label="Preview">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </button>
+                  <button type="button" class="mhws-composer-btn" id="tplStationeryCloseBtn" title="Close template designer" aria-label="Close">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="mhws-stationery-layout">
+                <div class="mhws-stationery-controls">
+                  <fieldset>
+                    <legend>Paper</legend>
+                    <div class="mhws-stationery-grid">
+                      <label>Size
+                        <select id="tplStPaper"></select>
+                      </label>
+                      <label>Orientation
+                        <select id="tplStOrientation">
+                          <option value="portrait">Portrait</option>
+                          <option value="landscape">Landscape</option>
+                        </select>
+                      </label>
+                      <label class="tpl-st-custom" hidden>Width (mm)
+                        <input type="number" id="tplStWidthMm" min="70" max="450" step="0.1" value="210">
+                      </label>
+                      <label class="tpl-st-custom" hidden>Height (mm)
+                        <input type="number" id="tplStHeightMm" min="70" max="500" step="0.1" value="297">
+                      </label>
+                      <label>Background
+                        <input type="color" id="tplStBg" value="#ffffff">
+                      </label>
+                      <label>Edge / border
+                        <select id="tplStBorder"></select>
+                      </label>
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Logo</legend>
+                    <div class="mhws-stationery-grid">
+                      <label class="mhws-stationery-check"><input type="checkbox" id="tplStLogoOn" checked> Show logo</label>
+                      <label>Width (mm)
+                        <input type="number" id="tplStLogoW" min="8" max="60" step="0.5" value="18">
+                      </label>
+                      <label>Align
+                        <select id="tplStLogoAlign">
+                          <option value="center" selected>Center</option>
+                          <option value="left">Left</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </label>
+                      <label class="span-2">Image
+                        <input type="file" id="tplStLogoFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                      </label>
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Header lines</legend>
+                    <div id="tplStHeaderLines" class="mhws-stationery-lines"></div>
+                    <button type="button" class="btn ghost compact" id="tplStAddLineBtn">Add line</button>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Watermark</legend>
+                    <div class="mhws-stationery-grid">
+                      <label class="mhws-stationery-check"><input type="checkbox" id="tplStWmOn" checked> Show watermark</label>
+                      <label>Opacity
+                        <input type="number" id="tplStWmOpacity" min="0.08" max="1" step="0.02" value="0.72">
+                      </label>
+                      <label class="span-2">Image
+                        <input type="file" id="tplStWmFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                      </label>
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Footer</legend>
+                    <div class="mhws-stationery-grid">
+                      <label class="span-2">Text
+                        <input type="text" id="tplStFootText" maxlength="240" placeholder="Footer line">
+                      </label>
+                      <label>Font
+                        <select id="tplStFootFont"></select>
+                      </label>
+                      <label>Size (pt)
+                        <input type="number" id="tplStFootSize" min="6" max="16" step="0.5" value="8">
+                      </label>
+                      <label>Weight
+                        <select id="tplStFootWeight">
+                          <option value="400">Regular</option>
+                          <option value="500">Medium</option>
+                          <option value="600" selected>Semibold</option>
+                          <option value="700">Bold</option>
+                        </select>
+                      </label>
+                      <label>Colour
+                        <input type="color" id="tplStFootColor" value="#5a6a80">
+                      </label>
+                    </div>
+                  </fieldset>
+                </div>
+                <div class="mhws-stationery-preview-wrap">
+                  <div id="tplStationeryPreview" class="mhws-stationery-preview" aria-label="Letterhead preview"></div>
+                </div>
+              </div>
+              <p class="mhws-composer-status" id="tplStationeryStatus"></p>
+            </form>
+          </details>
           <details class="templates-editor" id="templatesEditor">
             <summary class="templates-editor-summary">
-              <strong>Add / edit template</strong>
-              <span class="muted"> — metadata, print options, upload</span>
+              <strong>Upload a file</strong>
+              <span class="muted"> — Word, PDF, image, or print pad</span>
             </summary>
             <form id="templatesForm" class="stack" style="margin-top:0.75rem">
             <input type="hidden" id="templatesEditId" value="">
@@ -2872,57 +3008,63 @@
                   <option value="archived">Archived</option>
                 </select>
               </label>
-              <label class="span-2">Tags
-                <input type="text" id="templatesTagsInput" maxlength="200" placeholder="comma-separated, e.g. a4, print, cash" autocomplete="off">
-              </label>
-              <label>Paper size
-                <select id="templatesPaperSizeInput">
-                  <option value="A4" selected>A4</option>
-                  <option value="A5">A5</option>
-                  <option value="A6">A6</option>
-                  <option value="Letter">Letter</option>
-                  <option value="E2210">22 × 10 cm (envelope)</option>
-                  <option value="CUSTOM">Custom (cm)</option>
-                </select>
-              </label>
-              <label class="span-2" id="templatesCustomSizeWrap" hidden>Custom size (width × height, cm)
-                <span class="tpl-custom-size">
-                  <input type="number" id="templatesCustomW" min="8" max="40" step="0.1" value="22" inputmode="decimal" aria-label="Width in centimetres">
-                  <span aria-hidden="true">×</span>
-                  <input type="number" id="templatesCustomH" min="6" max="30" step="0.1" value="10" inputmode="decimal" aria-label="Height in centimetres">
-                </span>
-              </label>
-              <label>Background
-                <select id="templatesBackgroundInput">
-                  <option value="watermark" selected>Watermark</option>
-                  <option value="none">No watermark</option>
-                  <option value="plain">Plain white</option>
-                </select>
-              </label>
-              <label>Heading colour
-                <input type="color" id="templatesColorHeading" value="#0b2a56">
-              </label>
-              <label>Body colour
-                <input type="color" id="templatesColorBody" value="#12233f">
-              </label>
-              <label>Muted colour
-                <input type="color" id="templatesColorMuted" value="#5a6a80">
-              </label>
-              <label>Accent colour
-                <input type="color" id="templatesColorAccent" value="#1a6b3a">
-              </label>
-              <label class="span-2">Upload file
+              <label class="span-2">File
                 <input type="file" id="templatesFileInput" accept=".html,.htm,.pdf,.png,.jpg,.jpeg,.webp,.svg,.doc,.docx,application/pdf,text/html,image/*">
               </label>
             </div>
-            <p class="muted">Edit saves catalogue fields and print options (paper size, background, colours). Pad body text including office bearers stays as authored in the template file. Uploading a file replaces the document body. Supported: HTML, PDF, images, DOC/DOCX (max 20 MB).</p>
+            <details class="templates-print-options">
+              <summary>Print size, watermark, and colours</summary>
+              <div class="settings-grid" style="margin-top:0.65rem">
+                <label>Paper size
+                  <select id="templatesPaperSizeInput">
+                    <option value="A4" selected>A4</option>
+                    <option value="A5">A5</option>
+                    <option value="A6">A6</option>
+                    <option value="Letter">Letter</option>
+                    <option value="E2210">22 × 10 cm (envelope)</option>
+                    <option value="CUSTOM">Custom (cm)</option>
+                  </select>
+                </label>
+                <label class="span-2" id="templatesCustomSizeWrap" hidden>Custom size (width × height, cm)
+                  <span class="tpl-custom-size">
+                    <input type="number" id="templatesCustomW" min="8" max="40" step="0.1" value="22" inputmode="decimal" aria-label="Width in centimetres">
+                    <span aria-hidden="true">×</span>
+                    <input type="number" id="templatesCustomH" min="6" max="30" step="0.1" value="10" inputmode="decimal" aria-label="Height in centimetres">
+                  </span>
+                </label>
+                <label>Background
+                  <select id="templatesBackgroundInput">
+                    <option value="watermark" selected>Watermark</option>
+                    <option value="none">No watermark</option>
+                    <option value="plain">Plain white</option>
+                  </select>
+                </label>
+                <label>Heading colour
+                  <input type="color" id="templatesColorHeading" value="#0b2a56">
+                </label>
+                <label>Body colour
+                  <input type="color" id="templatesColorBody" value="#12233f">
+                </label>
+                <label>Muted colour
+                  <input type="color" id="templatesColorMuted" value="#5a6a80">
+                </label>
+                <label>Accent colour
+                  <input type="color" id="templatesColorAccent" value="#1a6b3a">
+                </label>
+                <label class="span-2">Tags
+                  <input type="text" id="templatesTagsInput" maxlength="200" placeholder="optional, comma-separated" autocomplete="off">
+                </label>
+              </div>
+            </details>
+            <p class="muted">HTML, PDF, images, or Word — max 20 MB. Leave the file blank when updating title or print settings only.</p>
             <div class="btn-row">
-              <button type="submit" class="btn primary" id="templatesSaveBtn">Save template</button>
-              <button type="button" class="btn ghost" id="templatesResetBtn">Clear form</button>
+              <button type="submit" class="btn primary" id="templatesSaveBtn">Save to library</button>
+              <button type="button" class="btn ghost" id="templatesResetBtn">Clear</button>
             </div>
             <p class="muted" id="templatesStatus"></p>
             </form>
           </details>
+          <div id="templatesList" class="info-doc-list is-cards"></div>
           <dialog id="templateMailDialog" class="ledger-dialog" aria-labelledby="templateMailTitle">
             <form id="templateMailForm" class="stack" method="dialog">
               <header class="panel-head">
@@ -3222,6 +3364,7 @@
             <p class="muted" id="docViewerMeta"></p>
           </div>
           <button type="button" class="btn secondary compact" id="docViewerPrintBtn" hidden>Print</button>
+          <button type="button" class="btn secondary compact" id="docViewerEditComposeBtn" hidden>Edit</button>
           <a class="btn secondary compact" id="docViewerDownloadBtn" hidden download>Download</a>
           <a class="btn ghost compact" id="docViewerNewTabBtn" hidden target="_blank" rel="noopener">Open in new tab</a>
         </header>
@@ -3242,6 +3385,7 @@
         <footer class="doc-viewer-mobile-bar" id="docViewerMobileBar">
           <div class="doc-viewer-mobile-actions">
             <button type="button" class="btn secondary" id="docViewerMobilePrintBtn" hidden>Print</button>
+            <button type="button" class="btn secondary" id="docViewerMobileEditComposeBtn" hidden>Edit</button>
             <a class="btn secondary" id="docViewerMobileDownloadBtn" hidden download>Download</a>
           </div>
           <button type="button" class="btn secondary" id="docViewerMobileBackBtn">← Back to app</button>

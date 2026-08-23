@@ -3787,6 +3787,10 @@ def api_rwa_public_cash_receipt_booklet_pdf():
     pattern = (request.args.get("pattern") or "lines").strip().lower()
     layout = (request.args.get("layout") or "a4-3").strip().lower()
     orientation = (request.args.get("orientation") or "portrait").strip().lower()
+    try:
+        signatories = int(request.args.get("signatories") or 1)
+    except ValueError:
+        signatories = 1
     disposition = (request.args.get("disposition") or "attachment").strip().lower()
     as_attachment = disposition != "inline"
     try:
@@ -3798,6 +3802,7 @@ def api_rwa_public_cash_receipt_booklet_pdf():
             paper_pattern=pattern,
             layout=layout,
             orientation=orientation,
+            signatories=signatories,
         )
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500

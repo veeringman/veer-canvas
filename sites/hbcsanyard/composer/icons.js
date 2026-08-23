@@ -32,6 +32,8 @@ const PATHS = {
   highlight: '<path d="M7 16l-2 4 4-2 8.5-8.5a2.1 2.1 0 0 0 0-3L15.5 4.5a2.1 2.1 0 0 0-3 0z"/><path d="M12 8l4 4"/>',
   clear: '<path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l.8 12h8.4L17 7"/><path d="M10 11v5M14 11v5"/>',
   table: '<rect x="4" y="5" width="16" height="14" rx="1.2"/><path d="M4 10h16M4 15h16M10 5v14M16 5v14"/>',
+  tableBorder: '<rect x="5" y="6" width="14" height="12" rx="1"/><path d="M5 12h14"/>',
+  tableFill: '<rect x="5" y="6" width="14" height="12" rx="1" fill="currentColor" fill-opacity="0.22"/><path d="M5 6h14v12H5z"/>',
   tableRowAdd: '<path d="M4 6h16M4 11h16"/><path d="M12 14v6"/><path d="M9 17h6"/>',
   tableRowAddAbove: '<path d="M12 4v6"/><path d="M9 7h6"/><path d="M4 13h16M4 18h16"/>',
   tableRowDel: '<path d="M4 7h16M4 12h16"/><path d="M9 17h6"/>',

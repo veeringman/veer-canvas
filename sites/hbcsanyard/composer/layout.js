@@ -13,6 +13,7 @@ const ICON = {
   original: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="1.5"/><path d="M8 10h8M8 14h5"/></svg>',
   panel: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M15 5v14"/></svg>',
   window: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H5v4"/><path d="M15 4h4v4"/><path d="M9 20H5v-4"/><path d="M15 20h4v-4"/></svg>',
+  windowExit: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8H5V4"/><path d="M15 8h4V4"/><path d="M9 16H5v4"/><path d="M15 16h4v4"/></svg>',
 };
 
 const bound = new Map();
@@ -96,9 +97,18 @@ function syncChrome(shell, mode) {
   const title = chrome?.querySelector('.mhws-composer-chrome-title');
   if (title) title.textContent = LABELS[mode] || LABELS.original;
   chrome?.querySelectorAll('[data-compose-layout]').forEach((btn) => {
-    const on = btn.getAttribute('data-compose-layout') === mode;
+    const kind = btn.getAttribute('data-compose-layout');
+    const on = kind === mode;
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (kind === 'window') {
+      btn.innerHTML = on ? ICON.windowExit : ICON.window;
+      btn.title = on ? 'Exit full window' : 'Full window';
+      btn.setAttribute('aria-label', btn.title);
+    } else if (kind === 'panel') {
+      btn.title = on ? 'Exit panel mode' : 'Panel mode';
+      btn.setAttribute('aria-label', btn.title);
+    }
   });
 }
 
@@ -181,7 +191,12 @@ export function attachLayout(shell, opts = {}) {
     chrome.addEventListener('click', (event) => {
       const layoutBtn = event.target.closest('[data-compose-layout]');
       if (layoutBtn) {
-        setShellLayout(shell, layoutBtn.getAttribute('data-compose-layout'));
+        const requested = layoutBtn.getAttribute('data-compose-layout');
+        const current = shell.dataset.layout || 'original';
+        const next = requested && requested === current && requested !== 'original'
+          ? 'original'
+          : requested;
+        setShellLayout(shell, next);
         return;
       }
       const langBtn = event.target.closest('[data-compose-lang]');
@@ -224,8 +239,9 @@ export function extractBody(html) {
   if (!raw) return '<p></p>';
   if (typeof DOMParser === 'undefined') return raw;
   const doc = new DOMParser().parseFromString(raw, 'text/html');
-  const content = doc.querySelector('.content')
+  const content = doc.querySelector('.body-area')
     || doc.querySelector('main.body')
+    || doc.querySelector('.content')
     || doc.querySelector('main')
     || doc.body;
   const inner = (content && content.innerHTML.trim()) || raw;

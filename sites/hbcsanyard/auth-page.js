@@ -26,6 +26,16 @@
     const sid = (window.VeerAuth && window.VeerAuth.savedSessionId()) || '';
     const dest = returnTo();
 
+    function goPortal(token) {
+      if (token) {
+        try { localStorage.setItem('hbcsanyard_rwa_token', String(token)); } catch (_e) { /* ignore */ }
+      }
+      const target = dest.indexOf('index.html') >= 0 || /housingcolonysanyard\.in\/?(?:$|\?)/i.test(dest)
+        ? 'index.html#home'
+        : dest;
+      window.location.replace(target);
+    }
+
     // Bridge AuthBuddy → RWA session when returning to the portal with plot context.
     if (sid && houseId && (purpose === 'login' || purpose === 'bridge')) {
       fetch('/api/rwa/authbuddy/session', {
@@ -41,7 +51,7 @@
         .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
         .then(({ ok, d }) => {
           if (ok && d && d.token) {
-            window.location.replace(dest.indexOf('index.html') >= 0 ? 'index.html#home' : dest);
+            goPortal(d.token);
             return;
           }
           setError((d && d.error) || 'This AuthBuddy account is not linked to a member on this plot. Use email passcode on the gate first, then Link AuthBuddy with the same email.');
@@ -66,7 +76,7 @@
         .then(({ ok, d }) => {
           if (ok) {
             setStatus('AuthBuddy linked. Returning…');
-            setTimeout(() => { window.location.replace(dest); }, 500);
+            setTimeout(() => { goPortal(d && d.token); }, 500);
             return;
           }
           setError((d && d.error) || 'Could not link AuthBuddy. Sign in to the colony with email passcode first, and use the same email on the AuthBuddy account.');
@@ -78,7 +88,7 @@
       return;
     }
 
-    window.location.replace(dest);
+    goPortal();
   }
 
   function clientId() {

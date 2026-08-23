@@ -27,7 +27,10 @@ export function renderToolbar(toolbarEl, driver, { onImageFile } = {}) {
   toolbarEl.setAttribute('role', 'toolbar');
   toolbarEl.setAttribute('aria-label', 'Document formatting');
 
-  const keepSel = (event) => event.preventDefault();
+  const keepSel = (event) => {
+    if (event) event.preventDefault();
+    if (typeof driver.saveSelection === 'function') driver.saveSelection();
+  };
 
   registry.groups().forEach((group) => {
     const wrap = el('div', { className: 'mhws-composer-group' });
@@ -42,6 +45,7 @@ export function renderToolbar(toolbarEl, driver, { onImageFile } = {}) {
           title: ext.title || ext.id,
           'aria-label': ext.title || ext.id,
         });
+        select.dataset.command = ext.command || ext.id;
         (ext.options || []).forEach((opt, i) => {
           const o = document.createElement('option');
           o.value = opt.value;
@@ -49,9 +53,10 @@ export function renderToolbar(toolbarEl, driver, { onImageFile } = {}) {
           if (i === 0) o.selected = true;
           select.append(o);
         });
-        select.addEventListener('mousedown', (e) => e.stopPropagation());
+        select.addEventListener('mousedown', () => {
+          if (typeof driver.saveSelection === 'function') driver.saveSelection();
+        });
         select.addEventListener('change', () => {
-          driver.focus();
           const value = select.value;
           if (ext.command) driver.run(ext.command, value);
           else if (ext.run) ext.run(driver, value);
@@ -70,9 +75,11 @@ export function renderToolbar(toolbarEl, driver, { onImageFile } = {}) {
           value: ext.value || '#12233f',
           'aria-label': ext.title || ext.id,
         });
-        input.addEventListener('mousedown', keepSel);
+        input.addEventListener('mousedown', (event) => {
+          keepSel(event);
+          if (typeof driver.saveSelection === 'function') driver.saveSelection();
+        });
         input.addEventListener('input', () => {
-          driver.focus();
           driver.run(ext.command, input.value);
         });
         cluster.append(input);
@@ -111,7 +118,6 @@ export function renderToolbar(toolbarEl, driver, { onImageFile } = {}) {
         return;
       }
       btn.addEventListener('click', () => {
-        driver.focus();
         if (ext.run) ext.run(driver);
         else if (ext.command) driver.run(ext.command);
       });

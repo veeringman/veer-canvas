@@ -1,5 +1,5 @@
 /* Himuda Housing Colony Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v188-inbox1';
+const CACHE = 'hbc-sanyard-v195-ob6';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -8,8 +8,8 @@ const PRECACHE = [
   '/quote.html',
   '/manifest.webmanifest?v=20260812pwa4',
   '/apple-touch-icon.png?v=20260812pwa4',
-  '/portal.css?v=20260818inbox1',
-  '/portal.js?v=20260818inbox1',
+  '/portal.css?v=20260823login1',
+  '/portal.js?v=20260823ob3',
   '/documents/proceedings-mom-print.css?v=20260813mom16',
   '/assets/favicon-192.png?v=20260812pwa4',
   '/assets/apple-touch-icon.png?v=20260812pwa4',

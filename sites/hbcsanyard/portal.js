@@ -319,6 +319,7 @@
 
   let docViewerObjectUrl = '';
   let docViewerStreamUrl = '';
+  let docViewerTemplateId = '';
   // Non-modal doc viewer sits under modal top-layer dialogs (vault). Park them while viewing.
   let docViewerResumeVaultHouseId = '';
   let docViewerProtectActive = false;
@@ -673,6 +674,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     const printBtn = el('docViewerPrintBtn');
     if (printBtn) printBtn.hidden = true;
+    [el('docViewerEditComposeBtn'), el('docViewerMobileEditComposeBtn')].forEach((btn) => {
+      if (btn) btn.hidden = true;
+    });
+    docViewerTemplateId = '';
     const mobileDl = el('docViewerMobileDownloadBtn');
     if (mobileDl) {
       mobileDl.hidden = true;
@@ -771,7 +776,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return { effectiveMime, isImage, isPdf, isHtml };
   }
 
-  function syncDocViewerActionButtons({ canDownload = false, downloadUrl = '', filename = '', canPrint = false } = {}) {
+  function syncDocViewerActionButtons({
+    canDownload = false,
+    downloadUrl = '',
+    filename = '',
+    canPrint = false,
+    canEditCompose = false,
+  } = {}) {
     const saveName = filename || 'document';
     const dlButtons = [el('docViewerDownloadBtn'), el('docViewerMobileDownloadBtn')];
     dlButtons.forEach((dl) => {
@@ -790,6 +801,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     printButtons.forEach((btn) => {
       if (!btn) return;
       btn.hidden = !canPrint;
+    });
+    [el('docViewerEditComposeBtn'), el('docViewerMobileEditComposeBtn')].forEach((btn) => {
+      if (btn) btn.hidden = !canEditCompose;
     });
   }
 
@@ -842,6 +856,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     newTabUrl = '',
     protectContent = false,
     canPrint = true,
+    canDownload = true,
+    canEditCompose = false,
+    templateId = '',
     printAfterOpen = false,
   } = {}) {
     const dialog = el('docViewerDialog');
@@ -852,6 +869,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (isBlob) docViewerObjectUrl = srcUrl;
     else docViewerStreamUrl = srcUrl;
+    docViewerTemplateId = String(templateId || '');
 
     if (el('docViewerTitle')) el('docViewerTitle').textContent = title || filename || 'Document';
     if (el('docViewerMeta')) {
@@ -934,10 +952,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     setDocViewerProtected(protectedView);
     syncDocViewerActionButtons({
-      canDownload: !protectedView && Boolean(downloadUrl),
+      canDownload: canDownload !== false && !protectedView && Boolean(downloadUrl),
       downloadUrl: downloadUrl || '',
       filename: filename || title || 'document',
       canPrint: !protectedView && Boolean(canPrint) && Boolean(showFrame || isImage),
+      canEditCompose: Boolean(canEditCompose) && Boolean(docViewerTemplateId),
     });
     if (protectedView) setDocViewerNewTab('');
     else setDocViewerNewTab(newTabUrl || downloadUrl || (!isBlob ? srcUrl : ''));
@@ -1100,6 +1119,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('docViewerMobileDownloadBtn')?.addEventListener('click', (event) => {
     downloadDocViewerContent(event);
   });
+  const onEditComposeFromViewer = () => {
+    const id = docViewerTemplateId;
+    if (!id) return;
+    beginEditComposedTemplate(id).catch((err) => {
+      window.alert(err?.message || 'Could not open composer');
+    });
+  };
+  el('docViewerEditComposeBtn')?.addEventListener('click', onEditComposeFromViewer);
+  el('docViewerMobileEditComposeBtn')?.addEventListener('click', onEditComposeFromViewer);
   window.addEventListener('message', (event) => {
     // Templates inside the doc-viewer iframe can ask the portal to show a PDF
     // in-app (keeps mobile / PWA users from getting trapped in system PDF chrome).
@@ -8988,7 +9016,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   const MOM_ASSETS = {
     wm: '/assets/mhws-logo/mhws-logo-watermark.png?v=20260811wm9',
-    seal: '/assets/mhws-logo/mhws-logo-seal-cert.png',
+    seal: '/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1',
   };
 
   function momText(text) {
@@ -14328,6 +14356,33 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('infoDocForm')?.addEventListener('submit', saveInfoDocument);
   bindComposeUi();
   el('templatesRefreshBtn')?.addEventListener('click', () => loadTemplates().catch(console.error));
+  el('templatesNewBtn')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    openTemplatesNewPicker(el('templatesNewBtn'));
+  });
+  el('templatesUploadBtn')?.addEventListener('click', () => startUploadTemplate());
+  el('templatesCompose')?.addEventListener('toggle', () => {
+    if (!el('templatesCompose')?.open) return;
+    if (el('templatesEditor')) el('templatesEditor').open = false;
+    if (el('templatesStationery')) el('templatesStationery').open = false;
+    mountComposeEditor().catch((e) => {
+      if (el('tplComposeStatus')) {
+        el('tplComposeStatus').textContent = e.message || 'Composer failed to load — hard refresh the page.';
+      }
+    });
+  });
+  el('templatesStationery')?.addEventListener('toggle', () => {
+    if (!el('templatesStationery')?.open) return;
+    if (el('templatesCompose')) el('templatesCompose').open = false;
+    if (el('templatesEditor')) el('templatesEditor').open = false;
+    ensureStationeryForm().then(() => paintStationeryDesk()).catch(() => {});
+  });
+  el('templatesEditor')?.addEventListener('toggle', () => {
+    if (el('templatesEditor')?.open) {
+      if (el('templatesCompose')) el('templatesCompose').open = false;
+      if (el('templatesStationery')) el('templatesStationery').open = false;
+    }
+  });
   el('templatesCategoryFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
   el('templatesStatusFilter')?.addEventListener('change', () => loadTemplates().catch(console.error));
   el('templatesForm')?.addEventListener('submit', saveTemplate);
@@ -14350,6 +14405,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const mailBtn = event.target.closest('[data-tpl-mail]');
     const mailCatBtn = event.target.closest('[data-tpl-mail-category]');
     const editBtn = event.target.closest('[data-tpl-edit]');
+    const composeEditBtn = event.target.closest('[data-tpl-compose-edit]');
+    const stationeryEditBtn = event.target.closest('[data-tpl-stationery-edit]');
     const delBtn = event.target.closest('[data-tpl-delete]');
     if (openBtn) {
       openTemplate(openBtn.getAttribute('data-tpl-open')).catch((e) => {
@@ -14377,6 +14434,20 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }
     if (mailCatBtn) {
       openTemplateMailDialog({ category: mailCatBtn.getAttribute('data-tpl-mail-category') });
+      return;
+    }
+    if (composeEditBtn) {
+      beginEditComposedTemplate(composeEditBtn.getAttribute('data-tpl-compose-edit')).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open composer failed';
+        else window.alert(e.message || 'Open composer failed');
+      });
+      return;
+    }
+    if (stationeryEditBtn) {
+      beginEditStationeryTemplate(stationeryEditBtn.getAttribute('data-tpl-stationery-edit')).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open template designer failed';
+        else window.alert(e.message || 'Open template designer failed');
+      });
       return;
     }
     if (editBtn) {
@@ -14725,6 +14796,12 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   let composeSession = null;
   let composeDirty = false;
   let composePreviewUrl = '';
+  let stationeryDirty = false;
+  let stationerySpec = null;
+  let stationeryPreviewUrl = '';
+  let templatesNewPop = null;
+  let stationeryBound = false;
+  bindStationeryUi();
   const COMPOSE_LAYOUT_KEY = 'mhws-composer-layout';
   const COMPOSE_LAYOUTS = {
     original: 'Original layout',
@@ -14772,13 +14849,29 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     else if (wasOff) wm.value = '1';
   }
 
+  function composeMarginsForChrome(chromeId) {
+    if (chromeId === 'none') {
+      return { top: 16, right: 16, bottom: 16, left: 16 };
+    }
+    return { top: 0, right: 16, bottom: 0, left: 16 };
+  }
+
+  function applyComposeChromeSettings(chromeId) {
+    const id = chromeId || el('tplComposeChrome')?.value || 'simple';
+    composeSession?.driver?.setPageMargins?.(composeMarginsForChrome(id));
+    composeSession?.setChrome?.(id);
+  }
+
   function fillComposeChromeSelect() {
     const select = el('tplComposeChrome');
     if (!select) return;
     const prev = select.value;
     const list = templatesChromes && templatesChromes.length
       ? templatesChromes
-      : [{ id: 'simple', title: 'Simple header & footer', hasWatermark: false }];
+      : [
+        { id: 'simple', title: 'Simple header & footer', hasWatermark: false },
+        { id: 'none', title: 'No template', hasWatermark: false },
+      ];
     select.innerHTML = list.map((c) => {
       const wm = c.hasWatermark ? '1' : '0';
       return `<option value="${escapeHtml(c.id)}" data-wm="${wm}">${escapeHtml(c.title)}</option>`;
@@ -14803,11 +14896,19 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function mountComposeEditor() {
     const C = await whenComposerReady();
-    if (!C) return null;
+    if (!C) {
+      if (el('tplComposeStatus')) {
+        el('tplComposeStatus').textContent = 'Composer failed to load — hard refresh the page.';
+      }
+      return null;
+    }
     const shell = el('tplComposeShell');
     const host = el('tplComposeEditor');
     const toolbar = el('tplComposeToolbar');
-    if (!host || !toolbar) return null;
+    if (!host || !toolbar) {
+      if (el('tplComposeStatus')) el('tplComposeStatus').textContent = 'Composer markup is missing.';
+      return null;
+    }
     if (shell && !shell.dataset.layoutBound) {
       C.attachLayout(shell, { storageKey: 'mhws-composer-layout-templates' });
     }
@@ -14816,9 +14917,20 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         host,
         toolbar,
         imageInput: el('tplComposeImageInput'),
+        paper: 'A4',
+        getChromeId: () => el('tplComposeChrome')?.value || 'simple',
+        getChromeParts: () => {
+          const id = el('tplComposeChrome')?.value || 'simple';
+          return (templatesChromes || []).find((c) => c.id === id) || { id };
+        },
+        getWatermark: () => {
+          const opt = el('tplComposeChrome')?.selectedOptions?.[0];
+          return opt?.getAttribute('data-wm') === '1' && el('tplComposeWatermark')?.value !== '0';
+        },
         onDirty: () => { composeDirty = true; },
       });
     }
+    applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
     return composeSession;
   }
 
@@ -14845,35 +14957,67 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     composeDirty = false;
   }
 
+  function parseComposeMargins(html) {
+    const match = String(html || '').match(/<!--\s*mhws-margins:([\d.]+),([\d.]+),([\d.]+),([\d.]+)\s*-->/i);
+    const num = (i, fallback) => {
+      const value = Number.parseFloat(match && match[i]);
+      return Number.isFinite(value) && value >= 0 && value <= 50 ? value : fallback;
+    };
+    return { top: num(1, 16), right: num(2, 16), bottom: num(3, 16), left: num(4, 16) };
+  }
+
   function wrapComposePreviewHtml(title, bodyHtml) {
     const heading = escapeHtml((title || 'Document').trim() || 'Document');
-    return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>${heading}</title>
-<style>
-@page { size: A4 portrait; margin: 16mm; }
-body { margin: 0; color: #12233f; font: 11pt/1.45 Georgia, serif; }
-.org { text-align: center; border-bottom: 1.4pt solid #0b2a56; padding: 0 0 8pt; margin: 0 0 14pt; }
-.org img { width: 18mm; height: auto; }
-.org h1 { margin: 4pt 0 0; font-size: 15pt; letter-spacing: 0.04em; text-transform: uppercase; color: #0b2a56; }
-.org .sub { margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }
-.org .meta { margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }
-.body { min-height: 180mm; }
-.body p { margin: 0 0 8pt; }
-.body table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
-.body th, .body td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
-.body th { background: #eef2f8; }
-.body img { max-width: 100%; height: auto; }
-.foot { margin-top: 16pt; padding-top: 6pt; border-top: 0.7pt solid rgba(11,42,86,0.35); font-size: 8pt; color: #5a6a80; text-align: center; }
-</style></head><body>
+    const chrome = el('tplComposeChrome')?.value || 'simple';
+    const margins = chrome === 'none'
+      ? parseComposeMargins(bodyHtml)
+      : composeMarginsForChrome(chrome);
+    const pad = `${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm`;
+    const none = chrome === 'none';
+    const head = none ? '' : `<div class="mhws-run-header">
 <header class="org">
-<img src="/assets/mhws-logo/mhws-logo-seal-cert.png" alt="">
+<img src="/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
 <h1>Mandi Housing Welfare Society</h1>
 <p class="sub">Himuda Housing Colony Sanyard</p>
 <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
 housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
 </header>
-<main class="body">${bodyHtml || '<p></p>'}</main>
+<div class="rule" aria-hidden="true"><span class="pip"></span></div>
+</div>`;
+    const foot = none ? '' : `<div class="mhws-run-footer">
 <footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+</div>`;
+    return `<!DOCTYPE html>
+<html lang="en" class="mhws-compose-multipage"><head><meta charset="UTF-8"><title>${heading}</title>
+<style>
+@page { size: 210mm 297mm; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 210mm; color: #12233f; font: 11pt/1.45 Georgia, serif; background: #fff; overflow: visible; }
+.org { text-align: center; padding: 10mm 12mm 4pt; }
+.org img { width: 18mm; height: auto; border: 0; outline: 0; box-shadow: none; background: transparent; }
+.org h1 { margin: 4pt 0 0; font-size: 15pt; letter-spacing: 0.04em; text-transform: uppercase; color: #0b2a56; }
+.org .sub { margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }
+.org .meta { margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }
+.rule { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 3mm; margin: 0 0 2.2mm; width: 100%; }
+.rule::before, .rule::after { content: ""; height: 0; border-top: 1pt solid #0b2a56; }
+.rule .pip { width: 2.2mm; height: 2.2mm; background: #c9a227; transform: rotate(45deg); box-shadow: 0 0 0 1.2pt #fff, 0 0 0 1.7pt rgba(11, 42, 86, 0.35); }
+.body { padding: ${pad}; }
+.body p { margin: 0 0 8pt; }
+.body h2 { margin: 0 0 8pt; font-size: 18pt; font-weight: 700; color: #0b2a56; }
+.body h3 { margin: 0 0 6pt; font-size: 14pt; font-weight: 700; color: #143a6e; }
+.body h2 span, .body h3 span { font-size: inherit; font-weight: inherit; color: inherit; }
+.body .mhws-tab { white-space: pre; tab-size: 4; }
+.body table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+.body th, .body td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
+.body th { background: #eef2f8; }
+.body table.mhws-table-noborder th,
+.body table.mhws-table-noborder td { border: 0 !important; }
+.body img { max-width: 100%; height: auto; }
+.foot { padding: 6pt 12mm 10mm; border-top: 0.7pt solid rgba(11,42,86,0.35); font-size: 8pt; color: #5a6a80; text-align: center; }
+</style></head><body>
+${head}
+<div class="body">${bodyHtml || '<p></p>'}</div>
+${foot}
 </body></html>`;
   }
 
@@ -14888,8 +15032,10 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
         body: JSON.stringify(composeExportPayload()),
       });
       html = await blob.text();
-    } catch (_err) {
-      html = wrapComposePreviewHtml(title, composeSession.getHTML());
+      if (statusLine) statusLine.textContent = '';
+    } catch (err) {
+      if (statusLine) statusLine.textContent = err.message || 'Preview failed — letterhead could not be applied.';
+      return;
     }
     if (composePreviewUrl) URL.revokeObjectURL(composePreviewUrl);
     composePreviewUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
@@ -14904,17 +15050,66 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     if (statusLine && !html) statusLine.textContent = 'Preview failed.';
   }
 
-  function clearComposeDocument() {
-    if (composeDirty && !window.confirm('Clear the current draft?')) return;
+  function resetComposeFields() {
     if (el('tplComposeEditId')) el('tplComposeEditId').value = '';
     if (el('tplStarterSelect')) el('tplStarterSelect').value = '';
     if (el('tplComposeTitle')) el('tplComposeTitle').value = '';
     composeSession?.setHTML('<p></p>');
+    applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
     composeDirty = false;
     if (el('tplComposeStatus')) el('tplComposeStatus').textContent = '';
     if (el('tplStarterHint')) {
       el('tplStarterHint').textContent = 'Resolution, forwarding letter, notice, MOM, circular, agenda, office note — add more starters in the catalogue without changing the editor.';
     }
+  }
+
+  function clearComposeDocument() {
+    if (composeDirty && !window.confirm('Clear the current draft?')) return;
+    resetComposeFields();
+  }
+
+  function closeComposeDocument() {
+    if (composeDirty && !window.confirm('Close without saving? The current draft will be cleared.')) return;
+    resetComposeFields();
+    if (el('templatesCompose')) el('templatesCompose').open = false;
+  }
+
+  function showTemplatesWorkspace(mode) {
+    const composeBox = el('templatesCompose');
+    const stationeryBox = el('templatesStationery');
+    const editor = el('templatesEditor');
+    if (composeBox) composeBox.open = mode === 'compose';
+    if (stationeryBox) stationeryBox.open = mode === 'stationery';
+    if (editor) editor.open = mode === 'upload';
+  }
+
+  async function startNewComposeDocument() {
+    if (composeDirty && !window.confirm('Start a new document? The current draft will be cleared.')) return;
+    if (stationeryDirty && !window.confirm('Leave the letterhead designer? Unsaved template changes will be lost.')) return;
+    resetComposeFields();
+    resetStationeryFields();
+    showTemplatesWorkspace('compose');
+    const statusLine = el('tplComposeStatus');
+    try {
+      const session = await mountComposeEditor();
+      el('tplComposeShell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!session) {
+        if (statusLine) statusLine.textContent = 'Composer failed to load — hard refresh the page.';
+        return;
+      }
+      session.driver?.focus?.();
+      if (statusLine && !statusLine.textContent) {
+        statusLine.textContent = 'New document — pick a starter or start writing.';
+      }
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Could not open composer.';
+    }
+  }
+
+  function startUploadTemplate() {
+    resetTemplatesForm();
+    showTemplatesWorkspace('upload');
+    el('templatesForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   async function saveComposeDocument(event) {
@@ -14950,6 +15145,7 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
           body: JSON.stringify(payload),
         })).template;
       composeDirty = false;
+      if (el('tplComposeEditId') && doc?.id) el('tplComposeEditId').value = doc.id;
       await loadTemplates();
       if (statusLine) statusLine.textContent = `Saved “${doc?.title || title}”. Open it from the library to print or mail.`;
     } catch (e) {
@@ -14973,8 +15169,19 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     });
     el('tplComposePreviewBtn')?.addEventListener('click', () => previewComposeDocument());
     el('tplComposeClearBtn')?.addEventListener('click', () => clearComposeDocument());
+    el('tplComposeCloseBtn')?.addEventListener('click', () => closeComposeDocument());
+    el('tplComposeNewBtn')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      openTemplatesNewPicker(el('tplComposeNewBtn'));
+    });
     el('tplComposeTitle')?.addEventListener('input', () => { composeDirty = true; });
-    el('tplComposeChrome')?.addEventListener('change', () => syncComposeWatermarkField());
+    el('tplComposeChrome')?.addEventListener('change', () => {
+      syncComposeWatermarkField();
+      applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
+    });
+    el('tplComposeWatermark')?.addEventListener('change', () => {
+      applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
+    });
     el('tplComposeDownloadBtn')?.addEventListener('click', (event) => {
       event.preventDefault();
       closeComposeImportPicker();
@@ -15336,7 +15543,7 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     }
     if (el('templatesCategoryFilter')) {
       const prev = el('templatesCategoryFilter').value;
-      el('templatesCategoryFilter').innerHTML = `<option value="">All categories</option>${opts}`;
+      el('templatesCategoryFilter').innerHTML = `<option value="">All</option>${opts}`;
       if (prev && [...el('templatesCategoryFilter').options].some((o) => o.value === prev)) {
         el('templatesCategoryFilter').value = prev;
       }
@@ -15348,6 +15555,15 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
         el('tplComposeCategory').value = prev;
       } else if ([...el('tplComposeCategory').options].some((o) => o.value === 'correspondence')) {
         el('tplComposeCategory').value = 'correspondence';
+      }
+    }
+    if (el('tplStationeryCategory')) {
+      const prev = el('tplStationeryCategory').value;
+      el('tplStationeryCategory').innerHTML = opts;
+      if (prev && [...el('tplStationeryCategory').options].some((o) => o.value === prev)) {
+        el('tplStationeryCategory').value = prev;
+      } else if ([...el('tplStationeryCategory').options].some((o) => o.value === 'letterhead')) {
+        el('tplStationeryCategory').value = 'letterhead';
       }
     }
   }
@@ -15363,13 +15579,514 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
       el('templatesCategoryInput').value = templatesCategories[0].id;
     }
     applyTemplateOptionsToForm(templatesOptionDefaults);
-    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Save template';
+    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Save to library';
     if (el('templatesStatus')) el('templatesStatus').textContent = '';
+    const printOpts = el('templatesEditor')?.querySelector('.templates-print-options');
+    if (printOpts) printOpts.open = false;
+  }
+
+  function closeTemplatesNewPicker() {
+    if (!templatesNewPop) return;
+    templatesNewPop.remove();
+    templatesNewPop = null;
+    document.removeEventListener('mousedown', onTemplatesNewDoc, true);
+    document.removeEventListener('keydown', onTemplatesNewEsc, true);
+  }
+
+  function onTemplatesNewDoc(event) {
+    if (
+      templatesNewPop
+      && !templatesNewPop.contains(event.target)
+      && !event.target.closest('#templatesNewBtn, #tplComposeNewBtn, #tplStationeryNewBtn')
+    ) {
+      closeTemplatesNewPicker();
+    }
+  }
+
+  function onTemplatesNewEsc(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeTemplatesNewPicker();
+    }
+  }
+
+  function openTemplatesNewPicker(btn) {
+    if (!btn) return;
+    if (templatesNewPop) {
+      closeTemplatesNewPicker();
+      return;
+    }
+    const pop = document.createElement('div');
+    pop.className = 'mhws-download-picker';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Create new');
+    pop.innerHTML = '<p>Create new</p>';
+    [
+      { id: 'document', label: 'Document' },
+      { id: 'template', label: 'Template (letterhead)' },
+    ].forEach((item) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = item.label;
+      b.addEventListener('click', () => {
+        closeTemplatesNewPicker();
+        if (item.id === 'template') startNewStationeryTemplate();
+        else startNewComposeDocument();
+      });
+      pop.append(b);
+    });
+    document.body.append(pop);
+    const br = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(br.left, window.innerWidth - 220))}px`;
+    pop.style.top = `${Math.min(br.bottom + 4, window.innerHeight - 160)}px`;
+    templatesNewPop = pop;
+    document.addEventListener('mousedown', onTemplatesNewDoc, true);
+    document.addEventListener('keydown', onTemplatesNewEsc, true);
+  }
+
+  function stationeryApi() {
+    return window.MhwsComposer?.stationery || null;
+  }
+
+  async function ensureStationeryForm() {
+    const C = await whenComposerReady();
+    const apiSt = C?.stationery || stationeryApi();
+    if (!apiSt) throw new Error('Template designer failed to load — hard refresh the page.');
+    if (!stationerySpec) stationerySpec = apiSt.normalize(apiSt.defaultSpec());
+    if (el('tplStPaper') && !el('tplStPaper').options.length) {
+      el('tplStPaper').innerHTML = apiSt.papers
+        .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)}</option>`)
+        .join('');
+    }
+    if (el('tplStBorder') && !el('tplStBorder').options.length) {
+      el('tplStBorder').innerHTML = apiSt.borders
+        .map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.label)}</option>`)
+        .join('');
+    }
+    if (el('tplStFootFont') && !el('tplStFootFont').options.length) {
+      el('tplStFootFont').innerHTML = apiSt.fonts
+        .map((f) => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.label)}</option>`)
+        .join('');
+    }
+    return apiSt;
+  }
+
+  function syncStationeryCustomFields() {
+    const custom = el('tplStPaper')?.value === 'CUSTOM';
+    document.querySelectorAll('.tpl-st-custom').forEach((node) => {
+      node.hidden = !custom;
+    });
+  }
+
+  function renderStationeryHeaderLines(lines) {
+    const mount = el('tplStHeaderLines');
+    const apiSt = stationeryApi();
+    if (!mount || !apiSt) return;
+    const fonts = apiSt.fonts;
+    mount.innerHTML = (lines || []).map((line, index) => `
+      <div class="mhws-stationery-line" data-line="${index}">
+        <input type="text" data-field="text" value="${escapeHtml(line.text || '')}" placeholder="Header line ${index + 1}" aria-label="Header line ${index + 1}">
+        <select data-field="font" aria-label="Font">
+          ${fonts.map((f) => `<option value="${escapeHtml(f.id)}"${f.id === line.font ? ' selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
+        </select>
+        <input type="number" data-field="sizePt" min="6" max="36" step="0.5" value="${escapeHtml(String(line.sizePt || 11))}" aria-label="Size">
+        <select data-field="weight" aria-label="Weight">
+          ${['400', '500', '600', '700'].map((w) => `<option value="${w}"${String(line.weight) === w ? ' selected' : ''}>${w === '400' ? 'Regular' : w === '500' ? 'Medium' : w === '600' ? 'Semibold' : 'Bold'}</option>`).join('')}
+        </select>
+        <input type="color" data-field="color" value="${escapeHtml(line.color || '#0b2a56')}" aria-label="Colour">
+        <select data-field="align" aria-label="Align">
+          ${['left', 'center', 'right'].map((a) => `<option value="${a}"${line.align === a ? ' selected' : ''}>${a[0].toUpperCase()}${a.slice(1)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn ghost compact" data-remove-line="${index}" title="Remove line" ${lines.length <= 1 ? 'disabled' : ''}>×</button>
+      </div>
+    `).join('');
+  }
+
+  function applyStationerySpecToForm(specIn) {
+    const apiSt = stationeryApi();
+    if (!apiSt) return;
+    stationerySpec = apiSt.normalize(specIn || apiSt.defaultSpec());
+    const spec = stationerySpec;
+    if (el('tplStationeryTitle') && !el('tplStationeryEditId')?.value) {
+      /* keep title when editing */
+    }
+    if (el('tplStPaper')) el('tplStPaper').value = spec.paper.id || 'A4';
+    if (el('tplStOrientation')) el('tplStOrientation').value = spec.paper.orientation || 'portrait';
+    if (el('tplStWidthMm')) el('tplStWidthMm').value = spec.paper.widthMm;
+    if (el('tplStHeightMm')) el('tplStHeightMm').value = spec.paper.heightMm;
+    if (el('tplStBg')) el('tplStBg').value = spec.backgroundColor || '#ffffff';
+    if (el('tplStBorder')) el('tplStBorder').value = spec.border?.style || 'navy-rule';
+    if (el('tplStLogoOn')) el('tplStLogoOn').checked = !!spec.logo?.enabled;
+    if (el('tplStLogoW')) el('tplStLogoW').value = spec.logo?.widthMm || 18;
+    if (el('tplStLogoAlign')) el('tplStLogoAlign').value = spec.logo?.align || 'center';
+    if (el('tplStWmOn')) el('tplStWmOn').checked = !!spec.watermark?.enabled;
+    if (el('tplStWmOpacity')) el('tplStWmOpacity').value = spec.watermark?.opacity ?? 0.72;
+    if (el('tplStFootText')) el('tplStFootText').value = spec.footer?.text || '';
+    if (el('tplStFootFont')) el('tplStFootFont').value = spec.footer?.font || 'noto';
+    if (el('tplStFootSize')) el('tplStFootSize').value = spec.footer?.sizePt || 8;
+    if (el('tplStFootWeight')) el('tplStFootWeight').value = spec.footer?.weight || '600';
+    if (el('tplStFootColor')) el('tplStFootColor').value = spec.footer?.color || '#5a6a80';
+    syncStationeryCustomFields();
+    renderStationeryHeaderLines(spec.headerLines);
+  }
+
+  function readStationerySpecFromForm() {
+    const apiSt = stationeryApi();
+    if (!apiSt) return stationerySpec;
+    const lines = [];
+    el('tplStHeaderLines')?.querySelectorAll('.mhws-stationery-line').forEach((row) => {
+      lines.push({
+        text: row.querySelector('[data-field="text"]')?.value || '',
+        font: row.querySelector('[data-field="font"]')?.value || 'noto',
+        sizePt: row.querySelector('[data-field="sizePt"]')?.value || 11,
+        weight: row.querySelector('[data-field="weight"]')?.value || '600',
+        color: row.querySelector('[data-field="color"]')?.value || '#0b2a56',
+        align: row.querySelector('[data-field="align"]')?.value || 'center',
+      });
+    });
+    const prev = stationerySpec || apiSt.defaultSpec();
+    stationerySpec = apiSt.normalize({
+      paper: {
+        id: el('tplStPaper')?.value || 'A4',
+        widthMm: el('tplStWidthMm')?.value,
+        heightMm: el('tplStHeightMm')?.value,
+        orientation: el('tplStOrientation')?.value || 'portrait',
+      },
+      backgroundColor: el('tplStBg')?.value || '#ffffff',
+      logo: {
+        src: prev.logo?.src || '',
+        enabled: !!el('tplStLogoOn')?.checked,
+        widthMm: el('tplStLogoW')?.value || 18,
+        align: el('tplStLogoAlign')?.value || 'center',
+      },
+      headerLines: lines,
+      watermark: {
+        src: prev.watermark?.src || '',
+        enabled: !!el('tplStWmOn')?.checked,
+        opacity: el('tplStWmOpacity')?.value || 0.72,
+      },
+      footer: {
+        text: el('tplStFootText')?.value || '',
+        font: el('tplStFootFont')?.value || 'noto',
+        sizePt: el('tplStFootSize')?.value || 8,
+        weight: el('tplStFootWeight')?.value || '600',
+        color: el('tplStFootColor')?.value || '#5a6a80',
+      },
+      border: { style: el('tplStBorder')?.value || 'navy-rule' },
+    });
+    return stationerySpec;
+  }
+
+  function paintStationeryDesk() {
+    const apiSt = stationeryApi();
+    const host = el('tplStationeryPreview');
+    if (!apiSt || !host) return;
+    const spec = readStationerySpecFromForm();
+    apiSt.paintPreview(host, spec);
+  }
+
+  function markStationeryDirty() {
+    stationeryDirty = true;
+    syncStationeryCustomFields();
+    paintStationeryDesk();
+  }
+
+  function resetStationeryFields() {
+    const apiSt = stationeryApi();
+    if (el('tplStationeryEditId')) el('tplStationeryEditId').value = '';
+    if (el('tplStationeryTitle')) el('tplStationeryTitle').value = '';
+    if (el('tplStationeryStatus')) el('tplStationeryStatus').value = 'published';
+    if (el('tplStationeryCategory') && [...(el('tplStationeryCategory').options || [])].some((o) => o.value === 'letterhead')) {
+      el('tplStationeryCategory').value = 'letterhead';
+    }
+    if (el('tplStLogoFile')) el('tplStLogoFile').value = '';
+    if (el('tplStWmFile')) el('tplStWmFile').value = '';
+    stationerySpec = apiSt ? apiSt.normalize(apiSt.defaultSpec()) : null;
+    if (stationerySpec) applyStationerySpecToForm(stationerySpec);
+    stationeryDirty = false;
+    if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = '';
+  }
+
+  async function startNewStationeryTemplate() {
+    if (composeDirty && !window.confirm('Leave the document composer? Unsaved document changes will be lost.')) return;
+    if (stationeryDirty && !window.confirm('Start a new letterhead? The current draft will be cleared.')) return;
+    resetComposeFields();
+    showTemplatesWorkspace('stationery');
+    try {
+      await ensureStationeryForm();
+      resetStationeryFields();
+      paintStationeryDesk();
+      el('templatesStationery')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el('tplStationeryTitle')?.focus();
+      if (el('tplStationeryStatus')) {
+        el('tplStationeryStatus').textContent = 'New letterhead — adjust chrome, then save. It appears in the document letterhead list.';
+      }
+    } catch (e) {
+      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Could not open template designer.';
+    }
+  }
+
+  function closeStationeryDesigner() {
+    if (stationeryDirty && !window.confirm('Close without saving? Unsaved letterhead changes will be lost.')) return;
+    resetStationeryFields();
+    if (el('templatesStationery')) el('templatesStationery').open = false;
+  }
+
+  async function saveStationeryTemplate(event) {
+    event.preventDefault();
+    if (!hasEntitlement('manage_templates')) return;
+    const statusLine = el('tplStationeryStatus');
+    const saveBtn = el('tplStationerySaveBtn');
+    const title = String(el('tplStationeryTitle')?.value || '').trim();
+    if (!title) {
+      if (statusLine) statusLine.textContent = 'Title required.';
+      return;
+    }
+    try {
+      await ensureStationeryForm();
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Designer not ready.';
+      return;
+    }
+    const spec = readStationerySpecFromForm();
+    const editId = String(el('tplStationeryEditId')?.value || '').trim();
+    const payload = {
+      title,
+      category: el('tplStationeryCategory')?.value || 'letterhead',
+      status: el('tplStationeryStatus')?.value || 'published',
+      tags: 'stationery,letterhead',
+      stationery: spec,
+    };
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Saving…';
+    try {
+      const doc = editId
+        ? (await api(`/api/rwa/templates/${encodeURIComponent(editId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })).template
+        : (await api('/api/rwa/templates', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })).template;
+      stationeryDirty = false;
+      if (el('tplStationeryEditId') && doc?.id) el('tplStationeryEditId').value = doc.id;
+      await loadTemplates();
+      if (statusLine) {
+        statusLine.textContent = `Saved “${doc?.title || title}”. Use it as letterhead when writing a document.`;
+      }
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Save failed';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  async function previewStationeryTemplate() {
+    try {
+      await ensureStationeryForm();
+    } catch (e) {
+      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Designer not ready.';
+      return;
+    }
+    const apiSt = stationeryApi();
+    const title = String(el('tplStationeryTitle')?.value || '').trim() || 'Letterhead';
+    const html = apiSt.renderDocument(readStationerySpecFromForm(), title);
+    if (stationeryPreviewUrl) URL.revokeObjectURL(stationeryPreviewUrl);
+    stationeryPreviewUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const dialog = el('docViewerDialog');
+    if (dialog) document.body.appendChild(dialog);
+    showDocViewerSource(stationeryPreviewUrl, {
+      title,
+      filename: `${title}.html`,
+      mime: 'text/html',
+      isBlob: true,
+    });
+  }
+
+  async function pickStationeryImage(kind, file) {
+    const apiSt = await ensureStationeryForm();
+    try {
+      const src = await apiSt.readImageAsDataUrl(file);
+      const spec = readStationerySpecFromForm();
+      if (kind === 'logo') {
+        spec.logo.src = src;
+        spec.logo.enabled = true;
+        if (el('tplStLogoOn')) el('tplStLogoOn').checked = true;
+      } else {
+        spec.watermark.src = src;
+        spec.watermark.enabled = true;
+        if (el('tplStWmOn')) el('tplStWmOn').checked = true;
+      }
+      stationerySpec = apiSt.normalize(spec);
+      stationeryDirty = true;
+      paintStationeryDesk();
+    } catch (e) {
+      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Image failed';
+    }
+  }
+
+  function bindStationeryUi() {
+    if (stationeryBound) return;
+    stationeryBound = true;
+    el('templatesStationeryForm')?.addEventListener('submit', (event) => {
+      saveStationeryTemplate(event).catch((e) => {
+        if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Save failed';
+      });
+    });
+    el('tplStationeryNewBtn')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      openTemplatesNewPicker(el('tplStationeryNewBtn'));
+    });
+    el('tplStationeryPreviewBtn')?.addEventListener('click', () => previewStationeryTemplate());
+    el('tplStationeryCloseBtn')?.addEventListener('click', () => closeStationeryDesigner());
+    el('tplStationeryTitle')?.addEventListener('input', () => { stationeryDirty = true; });
+    el('tplStAddLineBtn')?.addEventListener('click', () => {
+      const spec = readStationerySpecFromForm();
+      if ((spec.headerLines || []).length >= 8) return;
+      spec.headerLines.push({
+        text: '',
+        font: 'noto',
+        sizePt: 10,
+        weight: '600',
+        color: '#0b2a56',
+        align: 'center',
+      });
+      stationerySpec = spec;
+      renderStationeryHeaderLines(spec.headerLines);
+      markStationeryDirty();
+    });
+    el('tplStHeaderLines')?.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-remove-line]');
+      if (!btn) return;
+      const index = Number(btn.getAttribute('data-remove-line'));
+      const spec = readStationerySpecFromForm();
+      if ((spec.headerLines || []).length <= 1) return;
+      spec.headerLines.splice(index, 1);
+      stationerySpec = spec;
+      renderStationeryHeaderLines(spec.headerLines);
+      markStationeryDirty();
+    });
+    el('tplStHeaderLines')?.addEventListener('input', () => markStationeryDirty());
+    el('tplStHeaderLines')?.addEventListener('change', () => markStationeryDirty());
+    [
+      'tplStPaper', 'tplStOrientation', 'tplStWidthMm', 'tplStHeightMm', 'tplStBg', 'tplStBorder',
+      'tplStLogoOn', 'tplStLogoW', 'tplStLogoAlign', 'tplStWmOn', 'tplStWmOpacity',
+      'tplStFootText', 'tplStFootFont', 'tplStFootSize', 'tplStFootWeight', 'tplStFootColor',
+      'tplStationeryCategory', 'tplStationeryStatus',
+    ].forEach((id) => {
+      el(id)?.addEventListener('input', () => markStationeryDirty());
+      el(id)?.addEventListener('change', () => markStationeryDirty());
+    });
+    el('tplStLogoFile')?.addEventListener('change', () => {
+      const file = el('tplStLogoFile')?.files?.[0];
+      if (file) pickStationeryImage('logo', file);
+    });
+    el('tplStWmFile')?.addEventListener('change', () => {
+      const file = el('tplStWmFile')?.files?.[0];
+      if (file) pickStationeryImage('wm', file);
+    });
+  }
+
+  function isStationeryTemplate(doc) {
+    if (!doc) return false;
+    if (doc.options && doc.options.stationery && typeof doc.options.stationery === 'object') return true;
+    return (doc.tags || []).includes('stationery');
+  }
+
+  function isComposedTemplate(doc) {
+    if (!doc) return false;
+    if (isStationeryTemplate(doc)) return false;
+    if (doc.options && doc.options.composed) return true;
+    return (doc.tags || []).includes('compose');
+  }
+
+  async function beginEditComposedTemplate(id) {
+    const doc = await resolveTemplateDoc(id);
+    if (!doc?.id) throw new Error('Document not found');
+    if (isStationeryTemplate(doc)) {
+      await beginEditStationeryTemplate(doc.id);
+      return;
+    }
+    if (!isComposedTemplate(doc)) {
+      beginEditTemplate(id);
+      return;
+    }
+    const session = await mountComposeEditor();
+    if (!session) throw new Error('Composer is not ready');
+    const headers = {};
+    if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
+    const res = await fetch(authDocUrl(`/api/rwa/templates/${encodeURIComponent(doc.id)}/file`), {
+      credentials: 'same-origin',
+      headers,
+    });
+    if (!res.ok) throw new Error('Could not load the document');
+    const html = await res.text();
+    const C = window.MhwsComposer;
+    const body = C?.extractBody ? C.extractBody(html) : html;
+    session.setHTML(body || '<p></p>');
+    if (el('tplComposeEditId')) el('tplComposeEditId').value = doc.id;
+    if (el('tplComposeTitle')) el('tplComposeTitle').value = doc.title || '';
+    if (el('tplComposeCategory') && doc.category) el('tplComposeCategory').value = doc.category;
+    if (el('tplComposeStatus') && doc.status) el('tplComposeStatus').value = doc.status;
+    const chrome = doc.options?.composeChrome || '';
+    if (el('tplComposeChrome') && chrome) {
+      const select = el('tplComposeChrome');
+      if ([...select.options].some((o) => o.value === chrome)) select.value = chrome;
+    }
+    if (el('tplComposeWatermark') && doc.options && 'composeWatermark' in doc.options) {
+      el('tplComposeWatermark').value = doc.options.composeWatermark ? '1' : '0';
+    }
+    syncComposeWatermarkField();
+    applyComposeChromeSettings(chrome || el('tplComposeChrome')?.value || 'simple');
+    composeDirty = false;
+    showTemplatesWorkspace('compose');
+    closeDocViewer();
+    if (el('tplComposeStatus')) {
+      el('tplComposeStatus').textContent = `Editing “${doc.title || 'document'}”. Save to update the library copy.`;
+    }
+    el('tplComposeShell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    session.driver?.focus?.();
+  }
+
+  async function beginEditStationeryTemplate(id) {
+    const doc = await resolveTemplateDoc(id);
+    if (!doc?.id) throw new Error('Template not found');
+    if (!isStationeryTemplate(doc)) {
+      beginEditTemplate(id);
+      return;
+    }
+    await ensureStationeryForm();
+    if (el('tplStationeryEditId')) el('tplStationeryEditId').value = doc.id;
+    if (el('tplStationeryTitle')) el('tplStationeryTitle').value = doc.title || '';
+    if (el('tplStationeryCategory') && doc.category) el('tplStationeryCategory').value = doc.category;
+    if (el('tplStationeryStatus') && doc.status) el('tplStationeryStatus').value = doc.status;
+    applyStationerySpecToForm(doc.options?.stationery || stationeryApi()?.defaultSpec());
+    stationeryDirty = false;
+    showTemplatesWorkspace('stationery');
+    paintStationeryDesk();
+    closeDocViewer();
+    if (el('tplStationeryStatus')) {
+      el('tplStationeryStatus').textContent = `Editing “${doc.title || 'letterhead'}”. Save to update the letterhead.`;
+    }
+    el('templatesStationery')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function beginEditTemplate(id) {
     const doc = templatesCache.find((t) => t.id === id);
     if (!doc) return;
+    if (isStationeryTemplate(doc)) {
+      beginEditStationeryTemplate(doc.id).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open template designer failed';
+      });
+      return;
+    }
+    if (isComposedTemplate(doc)) {
+      beginEditComposedTemplate(doc.id).catch((e) => {
+        if (el('templatesStatus')) el('templatesStatus').textContent = e.message || 'Open composer failed';
+      });
+      return;
+    }
     if (el('templatesEditId')) el('templatesEditId').value = doc.id;
     if (el('templatesTitleInput')) el('templatesTitleInput').value = doc.title || '';
     if (el('templatesDescInput')) el('templatesDescInput').value = doc.description || '';
@@ -15378,14 +16095,15 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     if (el('templatesTagsInput')) el('templatesTagsInput').value = (doc.tags || []).join(', ');
     if (el('templatesFileInput')) el('templatesFileInput').value = '';
     applyTemplateOptionsToForm(doc.options || templatesOptionDefaults);
-    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Update template';
+    if (el('templatesSaveBtn')) el('templatesSaveBtn').textContent = 'Update';
     if (el('templatesStatus')) {
       el('templatesStatus').textContent = doc.docType === 'static'
-        ? 'Editing metadata & print options for a seeded site document. Upload a file to replace with a private copy.'
-        : 'Editing template. Leave file blank to keep the current file.';
+        ? 'Editing a seeded print pad. Upload a file only if you want to replace it with a private copy.'
+        : 'Leave the file blank to keep the current file.';
     }
-    const editor = el('templatesEditor');
-    if (editor) editor.open = true;
+    showTemplatesWorkspace('upload');
+    const printOpts = el('templatesEditor')?.querySelector('.templates-print-options');
+    if (printOpts) printOpts.open = true;
     el('templatesForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
@@ -15394,6 +16112,49 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     const mime = String(doc?.mimeType || '').toLowerCase();
     return name.includes('.docx') || name.includes('.doc')
       || mime.includes('msword') || mime.includes('wordprocessingml');
+  }
+
+  function templateKindBadge(doc) {
+    if (isStationeryTemplate(doc)) return { label: 'Letterhead', cls: 'is-link' };
+    if (isComposedTemplate(doc)) return { label: 'Written', cls: 'is-file' };
+    if (templateLooksOffice(doc)) return { label: 'Word', cls: 'is-file' };
+    const mime = String(doc?.mimeType || '').toLowerCase();
+    const name = `${doc?.originalName || ''} ${doc?.filename || ''} ${doc?.staticPath || ''} ${doc?.publicUrl || ''}`.toLowerCase();
+    if (mime.includes('pdf') || name.includes('.pdf')) return { label: 'PDF', cls: 'is-file' };
+    if (templateIsHtml(doc) || doc?.docType === 'static') return { label: 'Print pad', cls: 'is-link' };
+    return { label: 'File', cls: 'is-file' };
+  }
+
+  function templateVisibleTags(doc) {
+    const skip = new Set([
+      'compose', 'composed', 'stationery', 'print', 'a4', 'letterhead',
+      String(doc?.category || '').toLowerCase(),
+    ]);
+    return (doc?.tags || []).filter((t) => {
+      const v = String(t || '').trim();
+      return v && !skip.has(v.toLowerCase());
+    });
+  }
+
+  function templateCardMeta(doc) {
+    const bits = [];
+    if (!isComposedTemplate(doc) && doc.originalName) bits.push(doc.originalName);
+    if (doc.updatedAt) {
+      bits.push(`Updated ${new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`);
+    }
+    if (isComposedTemplate(doc)) return bits.join(' · ');
+    const opts = doc.options || {};
+    let paperLabel = opts.paperSize || 'A4';
+    if (opts.paperSize === 'E2210') paperLabel = '22 × 10 cm';
+    if (opts.paperSize === 'CUSTOM') {
+      const w = opts.customWidthCm || 22;
+      const h = opts.customHeightCm || 10;
+      paperLabel = `${w} × ${h} cm`;
+    }
+    const bg = opts.background === 'none' ? 'no watermark' : (opts.background === 'plain' ? 'plain' : '');
+    bits.push(paperLabel);
+    if (bg) bits.push(bg);
+    return bits.join(' · ');
   }
 
   function groupedTemplates(list) {
@@ -15420,51 +16181,43 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     const mount = el('templatesList');
     if (!mount) return;
     if (!templatesCache.length) {
-      mount.innerHTML = '<p class="muted">No templates yet. Upload a letterhead, receipt pad, or form below.</p>';
+      mount.innerHTML = '<p class="muted">Nothing in this view. Write a document or upload a file.</p>';
       return;
     }
     mount.innerHTML = groupedTemplates(templatesCache).map((group) => {
       const cards = group.items.map((doc) => {
-      const tags = (doc.tags || []).map((t) => `<span class="info-doc-badge">${escapeHtml(t)}</span>`).join(' ');
-      const updated = doc.updatedAt
-        ? new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      const tags = templateVisibleTags(doc).map((t) => `<span class="info-doc-badge">${escapeHtml(t)}</span>`).join(' ');
+      const kind = templateKindBadge(doc);
+      const composed = isComposedTemplate(doc);
+      const stationery = isStationeryTemplate(doc);
+      const status = doc.status && doc.status !== 'published'
+        ? `<span class="info-doc-badge is-draft">${escapeHtml(doc.status)}</span>`
         : '';
-      const opts = doc.options || {};
-      let paperLabel = opts.paperSize || 'A4';
-      if (opts.paperSize === 'E2210') paperLabel = '22 × 10 cm';
-      if (opts.paperSize === 'CUSTOM') {
-        const w = opts.customWidthCm || 22;
-        const h = opts.customHeightCm || 10;
-        paperLabel = `${w} × ${h} cm`;
-      }
-      const optBits = [
-        paperLabel,
-        opts.background === 'none' ? 'no watermark' : (opts.background === 'plain' ? 'plain' : 'watermark'),
-      ].join(' · ');
+      const meta = templateCardMeta(doc);
       return `
         <article class="info-doc-card" data-doc-type="${escapeHtml(doc.docType || 'file')}">
           <div class="info-doc-card-row">
             <div>
               <div class="info-doc-badges">
-                <span class="info-doc-badge">${escapeHtml(doc.categoryLabel || doc.category || 'Other')}</span>
-                <span class="info-doc-badge ${doc.status === 'published' ? '' : 'is-draft'}">${escapeHtml(doc.status || '')}</span>
-                <span class="info-doc-badge ${doc.docType === 'static' ? 'is-link' : 'is-file'}">${escapeHtml(doc.docType === 'static' ? 'site file' : 'upload')}</span>
+                <span class="info-doc-badge ${kind.cls}">${escapeHtml(kind.label)}</span>
+                ${status}
               </div>
-              <h4 class="info-doc-card-title tpl-open-title" data-tpl-open="${escapeHtml(doc.id)}" title="Open template">${escapeHtml(doc.title || 'Untitled')}</h4>
-              <p class="meta">${escapeHtml(doc.originalName || doc.staticPath || '')}${updated ? ` · Updated ${escapeHtml(updated)}` : ''} · ${escapeHtml(optBits)}</p>
+              <h4 class="info-doc-card-title tpl-open-title" data-tpl-open="${escapeHtml(doc.id)}" title="Open">${escapeHtml(doc.title || 'Untitled')}</h4>
+              ${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ''}
               ${doc.description ? `<p class="summary">${escapeHtml(doc.description)}</p>` : ''}
               ${tags ? `<div class="info-doc-badges" style="margin-top:0.35rem">${tags}</div>` : ''}
             </div>
           </div>
           <div class="tpl-card-toolbar">
             <button type="button" class="btn secondary compact" data-tpl-open="${escapeHtml(doc.id)}">Open</button>
+            ${composed ? `<button type="button" class="btn ghost compact" data-tpl-compose-edit="${escapeHtml(doc.id)}">Edit</button>` : ''}
+            ${stationery ? `<button type="button" class="btn ghost compact" data-tpl-stationery-edit="${escapeHtml(doc.id)}">Edit</button>` : ''}
             <details class="tpl-card-actions">
               <summary class="btn ghost compact tpl-card-actions-summary">More</summary>
               <div class="btn-row info-doc-card-actions-inline">
                 <button type="button" class="btn ghost compact" data-tpl-download="${escapeHtml(doc.id)}">Download</button>
-                <button type="button" class="btn ghost compact" data-tpl-print="${escapeHtml(doc.id)}">Print</button>
                 <button type="button" class="btn ghost compact" data-tpl-mail="${escapeHtml(doc.id)}">Mail</button>
-                <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Edit</button>
+                <button type="button" class="btn ghost compact" data-tpl-edit="${escapeHtml(doc.id)}">Details</button>
                 <button type="button" class="btn ghost compact" data-tpl-delete="${escapeHtml(doc.id)}">Delete</button>
               </div>
             </details>
@@ -15477,9 +16230,9 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
           <div class="tpl-category-head">
             <div>
               <h4>${escapeHtml(group.label)}</h4>
-              <p class="muted">${count} template${count === 1 ? '' : 's'}</p>
+              <p class="muted">${count} item${count === 1 ? '' : 's'}</p>
             </div>
-            <button type="button" class="btn ghost compact" data-tpl-mail-category="${escapeHtml(group.id)}">Mail</button>
+            ${count > 1 ? `<button type="button" class="btn ghost compact" data-tpl-mail-category="${escapeHtml(group.id)}">Mail all</button>` : ''}
           </div>
           <div class="info-doc-list is-cards">${cards}</div>
         </section>`;
@@ -15503,7 +16256,14 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     templatesChromes = Array.isArray(data.chromes) ? data.chromes : templatesChromes;
     fillComposeStarterSelect();
     fillComposeChromeSelect();
-    mountComposeEditor().catch(() => {});
+    applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
+    if (el('templatesCompose')?.open) {
+      mountComposeEditor().catch((e) => {
+        if (el('tplComposeStatus')) {
+          el('tplComposeStatus').textContent = e.message || 'Composer failed to load — hard refresh the page.';
+        }
+      });
+    }
     renderTemplatesList();
     if (el('templatesStatus') && !el('templatesEditId')?.value) {
       el('templatesStatus').textContent = `${templatesCache.length} template${templatesCache.length === 1 ? '' : 's'}`;
@@ -15569,6 +16329,9 @@ housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
       downloadUrl: urls.downloadUrl,
       newTabUrl: urls.viewUrl,
       canPrint: true,
+      canDownload: false,
+      canEditCompose: isComposedTemplate(doc),
+      templateId: doc.id,
       printAfterOpen: Boolean(printAfter),
     });
   }
