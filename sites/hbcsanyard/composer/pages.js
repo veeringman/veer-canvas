@@ -12,7 +12,7 @@ export const PAPER_SIZES = {
 
 const CHROME_MM = {
   none: { header: 0, footer: 0 },
-  simple: { header: 40, footer: 22 },
+  simple: { header: 32, footer: 22 },
   'tpl-mhws-letterhead': { header: 58, footer: 32 },
   'tpl-rwa-letterhead-blank': { header: 48, footer: 28 },
 };
@@ -23,13 +23,15 @@ const GAP_MM = 18;
 
 const DIAMOND_RULE = '<div class="rule" aria-hidden="true"><span class="pip"></span></div>';
 
-const SIMPLE_HEAD = `<div class="mhws-simple-head">
+const SIMPLE_HEAD = `<div class="mhws-simple-chrome">
+  <div class="mhws-simple-head">
   <img src="/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
   <h1>Mandi Housing Welfare Society</h1>
   <p class="sub">Himuda Housing Colony Sanyard</p>
   <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012</p>
 </div>
-${DIAMOND_RULE}`;
+${DIAMOND_RULE}
+</div>`;
 
 const SIMPLE_FOOT = `<div class="mhws-simple-foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</div>`;
 
@@ -214,6 +216,9 @@ function fillExact(el, html, css) {
         overflow: visible !important;
         margin: 0 !important;
         background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
       }
       .screen-hint, .layout-picker { display: none !important; }
       img.wm { display: none !important; }
@@ -258,15 +263,20 @@ function applyWatermark(host, url, pageCount, pagePx, gapPx) {
     host.style.backgroundPosition = '';
     host.style.backgroundSize = '';
     host.style.backgroundRepeat = '';
+    host.style.backgroundOrigin = '';
+    host.style.backgroundClip = '';
     return;
   }
+  const stride = pagePx + gapPx;
   const layers = Array.from({ length: pageCount }, () => `url("${url}")`);
   host.style.backgroundImage = layers.join(',');
-  host.style.backgroundRepeat = 'no-repeat';
+  host.style.backgroundRepeat = Array.from({ length: pageCount }, () => 'no-repeat').join(',');
+  host.style.backgroundOrigin = Array.from({ length: pageCount }, () => 'border-box').join(',');
+  host.style.backgroundClip = Array.from({ length: pageCount }, () => 'border-box').join(',');
   host.style.backgroundPosition = Array.from({ length: pageCount }, (_, i) => (
-    `center ${i * (pagePx + gapPx) + pagePx * 0.5}px`
+    `center ${i * stride + pagePx * 0.5}px`
   )).join(',');
-  host.style.backgroundSize = Array.from({ length: pageCount }, () => '112mm auto').join(',');
+  host.style.backgroundSize = Array.from({ length: pageCount }, () => 'min(112mm, 70%) auto').join(',');
 }
 
 function marginBox(heightPx) {
@@ -274,6 +284,21 @@ function marginBox(heightPx) {
   box.className = 'mhws-page-chrome-margin';
   box.style.height = `${Math.max(0, heightPx)}px`;
   return box;
+}
+
+function accurateChromePx(wrap, html, css, widthPx, fallbackMm, mmPx, chromeId) {
+  if (!html) return 0;
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:absolute;left:-9999px;top:0;width:${Math.max(120, widthPx)}px;visibility:hidden;pointer-events:none`;
+  (wrap || document.body).append(probe);
+  const tpl = document.createElement('div');
+  tpl.className = `mhws-page-chrome-tpl is-${chromeId || 'simple'}`;
+  fillExact(tpl, html, css);
+  probe.append(tpl);
+  const px = Math.max(0, filledChromeHeight(tpl));
+  probe.remove();
+  if (px < 8) return Math.ceil(mmPx * fallbackMm);
+  return px;
 }
 
 function paintFrames(wrap, host, spec) {
@@ -289,6 +314,8 @@ function paintFrames(wrap, host, spec) {
   layer.style.height = `${Math.max(host.offsetHeight, sheetStride)}px`;
   layer.dataset.chrome = chromeId;
   layer.innerHTML = '';
+  let maxHeadPx = headerPx;
+  let maxFootPx = footerPx;
   for (let i = 0; i < pageCount; i += 1) {
     const y = i * (pagePx + gapPx);
     const head = document.createElement('div');
@@ -298,8 +325,7 @@ function paintFrames(wrap, host, spec) {
     tpl.className = `mhws-page-chrome-tpl is-${chromeId}`;
     fillExact(tpl, headerHtml, chromeCss);
     const actualHeadPx = Math.max(headerPx, filledChromeHeight(tpl));
-    tpl.style.minHeight = `${actualHeadPx}px`;
-    tpl.style.height = 'auto';
+    maxHeadPx = Math.max(maxHeadPx, actualHeadPx);
     head.style.height = `${actualHeadPx + marginTopPx}px`;
     head.append(tpl);
     head.append(marginBox(marginTopPx));
@@ -311,13 +337,13 @@ function paintFrames(wrap, host, spec) {
     ftpl.className = `mhws-page-chrome-tpl is-${chromeId}`;
     fillExact(ftpl, footerHtml, chromeCss);
     const actualFootPx = Math.max(footerPx, filledChromeHeight(ftpl));
-    ftpl.style.minHeight = `${actualFootPx}px`;
-    ftpl.style.height = 'auto';
+    maxFootPx = Math.max(maxFootPx, actualFootPx);
     foot.style.height = `${actualFootPx + marginBottomPx}px`;
     foot.style.top = `${y + pagePx - (actualFootPx + marginBottomPx)}px`;
     foot.append(ftpl);
     layer.append(foot);
   }
+  return { headPx: maxHeadPx, footPx: maxFootPx };
 }
 
 function makeBreak(pageNo, leftover, footerBand, gapPx, headerBand, padLeft, padRight) {
@@ -383,11 +409,16 @@ export function attachPager(host, opts = {}) {
       const fallback = chromeFor(chromeIdNow);
       let headerPx = 0;
       let footerPx = 0;
-      if (parts.headerHtml) {
-        headerPx = chromeBandPx(wrap || host, parts.headerHtml, parts.chromeCss, hostBox.width, fallback.header, mmPx);
+      const cachedChrome = host.dataset.mhwsLayoutChrome || '';
+      if (cachedChrome === chromeIdNow && host.dataset.mhwsHeadPx) {
+        headerPx = Number(host.dataset.mhwsHeadPx) || 0;
+        footerPx = Number(host.dataset.mhwsFootPx) || 0;
       }
-      if (parts.footerHtml) {
-        footerPx = chromeBandPx(wrap || host, parts.footerHtml, parts.chromeCss, hostBox.width, fallback.footer, mmPx);
+      if (parts.headerHtml && !headerPx) {
+        headerPx = accurateChromePx(wrap || host, parts.headerHtml, parts.chromeCss, hostBox.width, fallback.header, mmPx, chromeIdNow);
+      }
+      if (parts.footerHtml && !footerPx) {
+        footerPx = accurateChromePx(wrap || host, parts.footerHtml, parts.chromeCss, hostBox.width, fallback.footer, mmPx, chromeIdNow);
       }
       host.style.padding = `${headerPx + mmPx * margins.top}px ${margins.right}mm ${footerPx + mmPx * margins.bottom}px ${margins.left}mm`;
       const cs = window.getComputedStyle(host);
@@ -431,7 +462,7 @@ export function attachPager(host, opts = {}) {
       host.style.minHeight = `${sheetMm}mm`;
       host.style.boxSizing = 'border-box';
       if (wrap && (parts.headerHtml || parts.footerHtml)) {
-        paintFrames(wrap, host, {
+        const framed = paintFrames(wrap, host, {
           pageCount,
           pagePx,
           gapPx,
@@ -444,10 +475,27 @@ export function attachPager(host, opts = {}) {
           chromeCss: parts.chromeCss,
           chromeId: parts.id,
         });
+        const padHead = framed.headPx + mmPx * margins.top;
+        const padFoot = framed.footPx + mmPx * margins.bottom;
+        host.dataset.mhwsLayoutChrome = chromeIdNow;
+        host.dataset.mhwsHeadPx = String(framed.headPx);
+        host.dataset.mhwsFootPx = String(framed.footPx);
+        host.style.padding = `${padHead}px ${margins.right}mm ${padFoot}px ${margins.left}mm`;
+        if (
+          (Math.abs(framed.headPx - headerPx) > 1 || Math.abs(framed.footPx - footerPx) > 1)
+          && !host.dataset.mhwsRepaginate
+        ) {
+          host.dataset.mhwsRepaginate = '1';
+          window.requestAnimationFrame(() => {
+            delete host.dataset.mhwsRepaginate;
+            paginate();
+          });
+        }
       } else {
         wrap?.querySelector(':scope > .mhws-page-frames')?.replaceChildren();
       }
       applyWatermark(host, parts.watermarkUrl, pageCount, pagePx, gapPx);
+      host.classList.toggle('has-watermark', Boolean(parts.watermarkUrl));
       if (typeof opts.restoreSelection === 'function') opts.restoreSelection();
     } finally {
       if (wasEditable !== 'false') host.setAttribute('contenteditable', wasEditable || 'true');
@@ -495,6 +543,10 @@ export function attachPager(host, opts = {}) {
     schedule,
     setChrome(id) {
       chromeId = id || 'simple';
+      delete host.dataset.mhwsLayoutChrome;
+      delete host.dataset.mhwsHeadPx;
+      delete host.dataset.mhwsFootPx;
+      delete host.dataset.mhwsRepaginate;
       refresh();
     },
     setPaper(id) {

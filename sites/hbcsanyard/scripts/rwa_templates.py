@@ -982,18 +982,18 @@ def wrap_composed_document(
     }}
     .org {{
       text-align: center;
-      padding: 10mm 12mm 4pt;
+      padding: 5mm 12mm 2pt;
     }}
-    .org img {{ width: 18mm; height: auto; border: 0; outline: 0; box-shadow: none; background: transparent; }}
+    .org img {{ width: 14mm; height: auto; border: 0; outline: 0; box-shadow: none; background: transparent; }}
     .org h1 {{
-      margin: 4pt 0 0;
-      font-size: 15pt;
+      margin: 3pt 0 0;
+      font-size: 13pt;
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: #0b2a56;
     }}
-    .org .sub {{ margin: 2pt 0 0; font-size: 10pt; font-weight: 600; color: #1a6b3a; }}
-    .org .meta {{ margin: 2pt 0 0; font-size: 8.5pt; color: #5a6a80; }}
+    .org .sub {{ margin: 1.5pt 0 0; font-size: 9pt; font-weight: 600; color: #1a6b3a; }}
+    .org .meta {{ margin: 1.5pt 0 0; font-size: 7.5pt; color: #5a6a80; }}
     .body {{ padding: {page_margin}; }}
     .body p {{ margin: 0 0 8pt; }}
     .body h2 {{ margin: 0 0 8pt; font-size: 18pt; font-weight: 700; color: #0b2a56; }}
@@ -1020,6 +1020,7 @@ def wrap_composed_document(
 </head>
 <body>
   <div class="mhws-run-header">
+    <div class="mhws-simple-chrome">
     <header class="org">
       <img src="/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
       <h1>Mandi Housing Welfare Society</h1>
@@ -1028,6 +1029,7 @@ def wrap_composed_document(
         housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
     </header>
     <div class="rule" aria-hidden="true"><span class="pip"></span></div>
+    </div>
   </div>
   <div class="body">{body}</div>
   <div class="mhws-run-footer">
@@ -1089,6 +1091,11 @@ def export_composed_document(
             export_filename(heading, ".docx"),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
+    if kind == "pdf":
+        from rwa_compose_export import finalize_compose_pdf_html
+
+        margins = compose_body_margins_mm(body_html, chrome)
+        html = finalize_compose_pdf_html(html, margins)
     html = inject_compose_pdf_css(html)
     opts = normalize_options({"paperSize": "A4", "orientation": "portrait", "background": "watermark" if show_wm else "none"})
     pdf = _html_to_pdf_weasyprint(html, site_root, opts, inject_layout=False) or _html_to_pdf_chrome(

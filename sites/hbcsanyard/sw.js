@@ -1,5 +1,5 @@
 /* Himuda Housing Colony Sanyard PWA service worker — network-first so phones get updates */
-const CACHE = 'hbc-sanyard-v195-ob6';
+const CACHE = 'hbc-sanyard-v195-ob10';
 const PRECACHE = [
   '/',
   '/index.html',

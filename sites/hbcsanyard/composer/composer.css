@@ -257,7 +257,9 @@
 .mhws-composer-paper.is-paged {
   max-width: none;
   flex-shrink: 0;
-  background-clip: padding-box;
+}
+.mhws-composer-paper.is-paged.has-watermark {
+  background-color: #fff;
 }
 .mhws-page-frames {
   position: absolute;
@@ -280,6 +282,12 @@
   flex: 0 0 auto;
   overflow: visible;
   box-sizing: border-box;
+}
+.mhws-page-chrome-tpl .sheet,
+.mhws-page-chrome-tpl .pad {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 .mhws-page-chrome-margin {
   flex: 1 1 auto;
@@ -314,43 +322,45 @@
   text-transform: uppercase;
   color: #5a6a80;
 }
+.mhws-simple-chrome {
+  box-sizing: border-box;
+  width: 100%;
+}
 .mhws-simple-head {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-  padding: 6mm 12mm 2mm;
+  justify-content: flex-start;
+  padding: 3mm 12mm 1mm;
   text-align: center;
   box-sizing: border-box;
   font-family: "Noto Sans", "Segoe UI", sans-serif;
 }
 .mhws-simple-head img {
-  width: 16mm;
+  width: 14mm;
   height: auto;
   display: block;
 }
 .mhws-simple-head h1 {
-  margin: 2mm 0 0;
-  font-size: 12pt;
+  margin: 1.5mm 0 0;
+  font-size: 11pt;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #0b2a56;
   font-weight: 700;
 }
 .mhws-simple-head .sub {
-  margin: 1mm 0 0;
-  font-size: 8.5pt;
+  margin: 0.8mm 0 0;
+  font-size: 8pt;
   font-weight: 600;
   color: #1a6b3a;
 }
 .mhws-simple-head .meta {
-  margin: 1mm 0 0;
-  font-size: 7.5pt;
+  margin: 0.8mm 0 0;
+  font-size: 7pt;
   color: #5a6a80;
 }
 .mhws-simple-foot {
-  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -496,6 +506,7 @@
 .mhws-page-chrome-tpl .mhws-header-gold-rule {
   display: none;
 }
+.mhws-page-chrome-tpl .mhws-simple-chrome .rule,
 .mhws-page-chrome-tpl .mhws-simple-head + .rule,
 .mhws-page-chrome-tpl .org + .rule,
 .mhws-page-chrome-tpl .mhws-st-head + .rule {

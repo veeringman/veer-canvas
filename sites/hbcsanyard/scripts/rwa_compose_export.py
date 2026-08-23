@@ -261,6 +261,52 @@ COMPOSE_CHROME_LAYOUT_CSS = """
   .mhws-chrome-inner .brand {
     border-bottom: none !important;
   }
+  .mhws-run-header .org,
+  .mhws-print-head .org {
+    padding: 5mm 12mm 2pt !important;
+  }
+  .mhws-run-header .org img,
+  .mhws-print-head .org img {
+    width: 14mm !important;
+  }
+  .mhws-run-header .org h1,
+  .mhws-print-head .org h1 {
+    margin: 3pt 0 0 !important;
+    font-size: 13pt !important;
+  }
+  .mhws-run-header .org .sub,
+  .mhws-print-head .org .sub {
+    margin: 1.5pt 0 0 !important;
+    font-size: 9pt !important;
+  }
+  .mhws-run-header .org .meta,
+  .mhws-print-head .org .meta {
+    margin: 1.5pt 0 0 !important;
+    font-size: 7.5pt !important;
+  }
+  .mhws-run-header .mhws-simple-head,
+  .mhws-print-head .mhws-simple-head {
+    padding: 3mm 12mm 1.5mm !important;
+  }
+  .mhws-run-header .mhws-simple-head img,
+  .mhws-print-head .mhws-simple-head img {
+    width: 14mm !important;
+  }
+  .mhws-run-header .mhws-simple-head h1,
+  .mhws-print-head .mhws-simple-head h1 {
+    margin: 1.5mm 0 0 !important;
+    font-size: 11pt !important;
+  }
+  .mhws-run-header .mhws-simple-chrome,
+  .mhws-print-head .mhws-simple-chrome {
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .mhws-run-header .mhws-simple-chrome .rule,
+  .mhws-print-head .mhws-simple-chrome .rule {
+    margin: 0 12mm 1.6mm !important;
+    width: auto !important;
+  }
 </style>
 """
 
@@ -305,15 +351,76 @@ COMPOSE_PDF_CSS = """
     height: auto !important;
     overflow: visible !important;
   }
-  .mhws-run-header {
-    position: running(mhws-hd);
-    width: 210mm;
-    background: #fff;
+  html.is-mhws-paged .sheet {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
-  .mhws-run-footer {
-    position: running(mhws-ft);
-    width: 210mm;
-    background: #fff;
+  html.is-mhws-paged .mhws-print-desk {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    padding: 8mm 0 !important;
+    background: #c5cdd8 !important;
+  }
+  html.is-mhws-paged,
+  html.is-mhws-paged body {
+    width: auto !important;
+    min-width: 100% !important;
+    max-width: none !important;
+    background: #c5cdd8 !important;
+  }
+  html.is-mhws-paged .mhws-print-sheet {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    max-height: none !important;
+    margin: 0 auto 8mm !important;
+    box-shadow: 0 1px 6px rgba(15, 40, 80, 0.2) !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+    overflow: visible !important;
+  }
+  html.is-mhws-paged .mhws-print-head,
+  html.is-mhws-paged .mhws-print-foot {
+    overflow: visible !important;
+    flex-shrink: 0 !important;
+  }
+  html.is-mhws-paged .mhws-print-head .sheet {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  html.is-mhws-paged .mhws-print-body {
+    overflow: hidden !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+  html.is-mhws-paged .mhws-print-sheet > img.wm {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 0.75 !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(112mm, 70%) !important;
+    max-height: 46% !important;
+    height: auto !important;
+    object-fit: contain !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+  }
+  html.is-mhws-paged .mhws-print-head .sheet,
+  html.is-mhws-paged .mhws-print-head .mhws-run-header .sheet {
+    overflow: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
   }
   .foot, footer.foot, html.pad-a4-full .foot {
     position: static !important;
@@ -322,6 +429,52 @@ COMPOSE_PDF_CSS = """
     margin: 0 !important;
     flex: none !important;
   }
+  @media print {
+    html.is-mhws-paged,
+    html.is-mhws-paged.pad-a4-full,
+    html.is-mhws-paged.mhws-compose-multipage {
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    html.is-mhws-paged body,
+    html.is-mhws-paged.pad-a4-full body {
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
+    html.is-mhws-paged .mhws-run-header,
+    html.is-mhws-paged .mhws-run-footer,
+    html.is-mhws-paged .body-area,
+    html.is-mhws-paged .body,
+    html.is-mhws-paged body > img.wm,
+    html.is-mhws-paged .mhws-run-header .sheet,
+    html.is-mhws-paged .body-area .sheet {
+      display: none !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      page-break-before: avoid !important;
+      page-break-after: avoid !important;
+    }
+    html.is-mhws-paged .mhws-print-desk {
+      padding: 0 !important;
+      background: #fff !important;
+    }
+    html.is-mhws-paged .mhws-print-sheet {
+      margin: 0 !important;
+      box-shadow: none !important;
+      page-break-after: avoid !important;
+      break-after: avoid-page !important;
+    }
+    html.is-mhws-paged .mhws-print-sheet:not(:last-child) {
+      page-break-after: always !important;
+      break-after: page !important;
+    }
+  }
   html.pad-a4-full .slogan-bar { margin-left: -12mm !important; margin-right: -12mm !important; width: auto !important; }
   html.pad-a4-blank .slogan-bar { position: static !important; margin-left: -14mm !important; margin-right: -14mm !important; width: auto !important; }
 </style>
@@ -329,7 +482,7 @@ COMPOSE_PDF_CSS = """
 
 PRINT_CHROME_MM = {
     "none": (0.0, 0.0),
-    "simple": (40.0, 22.0),
+    "simple": (32.0, 22.0),
     "tpl-mhws-letterhead": (58.0, 32.0),
     "tpl-rwa-letterhead-blank": (48.0, 28.0),
 }
@@ -338,41 +491,18 @@ DEFAULT_PRINT_CHROME_MM = (48.0, 28.0)
 
 
 def compose_page_css(chrome_id: str, margins: dict[str, float], *, watermark: bool = True) -> str:
-    if chrome_id in PLAIN_CHROME_IDS:
-        hd, ft = 0.0, 0.0
-    else:
-        hd, ft = PRINT_CHROME_MM.get(chrome_id, DEFAULT_PRINT_CHROME_MM)
     mt, mr, mb, ml = margins["top"], margins["right"], margins["bottom"], margins["left"]
     wm_off = (
         ""
         if watermark
         else "img.wm { display: none !important; visibility: hidden !important; opacity: 0 !important; }"
     )
-    running = ""
-    if hd or ft:
-        running = f"""
-  @page {{
-    @top-center {{ content: element(mhws-hd); }}
-    @bottom-center {{ content: element(mhws-ft); }}
-  }}
-  .mhws-run-header {{
-    position: running(mhws-hd);
-    width: 210mm;
-    background: #fff;
-  }}
-  .mhws-run-footer {{
-    position: running(mhws-ft);
-    width: 210mm;
-    background: #fff;
-  }}
-"""
     return f"""
 <style id="mhws-compose-page">
   @page {{
     size: 210mm 297mm;
-    margin: {hd:g}mm 0 {ft:g}mm 0;
+    margin: 0;
   }}
-  {running}
   .body-area, .body {{
     padding: {mt:g}mm {mr:g}mm {mb:g}mm {ml:g}mm !important;
   }}
@@ -391,12 +521,30 @@ def compose_page_css(chrome_id: str, margins: dict[str, float], *, watermark: bo
     display: block !important;
   }}
   {wm_off}
-  html.is-mhws-paged @page {{ margin: 0; }}
   html.is-mhws-paged .mhws-run-header,
   html.is-mhws-paged .mhws-run-footer,
   html.is-mhws-paged .body-area,
-  html.is-mhws-paged .body,
-  html.is-mhws-paged img.wm {{ display: none !important; }}
+  html.is-mhws-paged .body {{
+    display: none !important;
+  }}
+  html.is-mhws-paged .mhws-run-header img.wm,
+  html.is-mhws-paged body > img.wm,
+  html.is-mhws-paged .sheet > img.wm {{
+    display: none !important;
+  }}
+  html.is-mhws-paged .mhws-print-head .sheet,
+  html.is-mhws-paged .mhws-print-head .mhws-run-header .sheet,
+  .mhws-print-head .sheet {{
+    overflow: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 210mm !important;
+    display: block !important;
+    flex: none !important;
+    border: none !important;
+    box-shadow: none !important;
+  }}
   .mhws-print-desk {{
     display: none;
     background: #c5cdd8;
@@ -406,41 +554,124 @@ def compose_page_css(chrome_id: str, margins: dict[str, float], *, watermark: bo
   html.is-mhws-paged, html.is-mhws-paged body {{
     background: #c5cdd8 !important;
     width: auto !important;
+    min-width: 100% !important;
+  }}
+  html.is-mhws-paged .mhws-print-desk {{
+    width: 100%;
+    box-sizing: border-box;
   }}
   .mhws-print-sheet {{
     position: relative;
     box-sizing: border-box;
     width: 210mm;
+    min-height: 297mm;
     height: 297mm;
     margin: 0 auto 8mm;
     background: #fff;
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: avoid;
+    break-after: avoid-page;
     box-shadow: 0 1px 6px rgba(15, 40, 80, 0.2);
   }}
-  .mhws-print-sheet:last-child {{ margin-bottom: 0; page-break-after: auto; }}
-  .mhws-print-head, .mhws-print-foot {{ flex: 0 0 auto; width: 210mm; background: #fff; overflow: visible; }}
+  .mhws-print-sheet:not(:last-child) {{
+    page-break-after: always;
+    break-after: page;
+  }}
+  .mhws-print-sheet:last-child {{ margin-bottom: 0; page-break-after: avoid; break-after: avoid-page; }}
+  .mhws-print-head, .mhws-print-foot {{
+    flex: 0 0 auto;
+    width: 210mm;
+    background: #fff;
+    overflow: visible;
+  }}
+  .mhws-print-head .sheet {{
+    border: none !important;
+    box-shadow: none !important;
+  }}
   .mhws-print-body {{
     flex: 1 1 auto;
-    min-height: 1mm;
+    min-height: 0;
     overflow: hidden;
     padding: {mt:g}mm {mr:g}mm {mb:g}mm {ml:g}mm !important;
     box-sizing: border-box;
   }}
   .mhws-print-sheet img.wm {{
     position: absolute !important;
+    left: 50% !important;
     top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(112mm, 70%) !important;
+    max-height: 46% !important;
+    height: auto !important;
+    object-fit: contain !important;
+    opacity: 0.75 !important;
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: none !important;
     z-index: 0 !important;
   }}
+  .mhws-print-head,
+  .mhws-print-body,
+  .mhws-print-foot {{
+    position: relative;
+    z-index: 1;
+  }}
   @media print {{
-    html.is-mhws-paged, html.is-mhws-paged body {{ background: #fff !important; }}
-    .mhws-print-desk {{ padding: 0; background: #fff; }}
-    .mhws-print-sheet {{
-      margin: 0;
-      box-shadow: none;
+    html.is-mhws-paged,
+    html.is-mhws-paged.pad-a4-full,
+    html.is-mhws-paged.pad-a4-blank,
+    html.is-mhws-paged.mhws-compose-multipage {{
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }}
+    html.is-mhws-paged body,
+    html.is-mhws-paged.pad-a4-full body,
+    html.is-mhws-paged.mhws-compose-multipage body {{
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      width: auto !important;
+      overflow: visible !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+    }}
+    html.is-mhws-paged .mhws-run-header,
+    html.is-mhws-paged .mhws-run-footer,
+    html.is-mhws-paged .body-area,
+    html.is-mhws-paged .body,
+    html.is-mhws-paged body > img.wm,
+    html.is-mhws-paged .mhws-run-header .sheet,
+    html.is-mhws-paged .body-area .sheet {{
+      display: none !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      page-break-before: avoid !important;
+      page-break-after: avoid !important;
+      break-before: avoid-page !important;
+      break-after: avoid-page !important;
+    }}
+    html.is-mhws-paged .mhws-print-desk {{
+      padding: 0 !important;
+      background: #fff !important;
+    }}
+    html.is-mhws-paged .mhws-print-sheet {{
+      margin: 0 !important;
+      box-shadow: none !important;
+      height: 297mm !important;
+      min-height: 297mm !important;
+      max-height: 297mm !important;
+      page-break-after: avoid !important;
+      break-after: avoid-page !important;
+    }}
+    html.is-mhws-paged .mhws-print-sheet:not(:last-child) {{
+      page-break-after: always !important;
+      break-after: page !important;
     }}
   }}
 </style>
@@ -506,6 +737,11 @@ PREVIEW_PAGINATE_JS = r"""
       slot.appendChild(block);
       used += hgt;
     });
+    var sheets = desk.querySelectorAll('.mhws-print-sheet');
+    for (var si = sheets.length - 1; si > 0; si -= 1) {
+      var lb = sheets[si].querySelector('.mhws-print-body');
+      if (lb && !lb.children.length) sheets[si].remove();
+    }
     document.documentElement.classList.add('is-mhws-paged');
     document.body.appendChild(desk);
   }
@@ -674,6 +910,50 @@ def _header_has_end_separator(html: str) -> bool:
     if re.search(r'<div class="rule"', text, flags=re.I):
         return True
     return "mhws-header-gold-rule" in text or "officers-foot" in text
+
+
+def _extract_div_by_class(html: str, class_name: str) -> str:
+    text = html or ""
+    match = re.search(
+        rf'<div\b[^>]*\bclass="[^"]*\b{re.escape(class_name)}\b[^"]*"[^>]*>',
+        text,
+        flags=re.I,
+    )
+    if not match:
+        match = re.search(
+            rf"<div\b[^>]*\bclass='[^']*\b{re.escape(class_name)}\b[^']*'[^>]*>",
+            text,
+            flags=re.I,
+        )
+    if not match:
+        return ""
+    inner, _rest = _split_at_div_depth(text[match.end() :], 1)
+    return inner
+
+
+def finalize_compose_pdf_html(html: str, margins: dict[str, float]) -> str:
+    """Build a fixed A4 sheet for PDF export (mirrors preview pager without a browser)."""
+    text = html or ""
+    if "mhws-print-desk" in text or not re.search(r"\bmhws-run-header\b", text, flags=re.I):
+        return text
+    wm_match = re.search(r'<img\b[^>]*\bwm\b[^>]*>', text, flags=re.I)
+    wm = wm_match.group(0) if wm_match else ""
+    head = _extract_div_by_class(text, "mhws-run-header")
+    body = _extract_div_by_class(text, "body-area")
+    foot = _extract_div_by_class(text, "mhws-run-footer")
+    desk = (
+        '<div class="mhws-print-desk">'
+        '<div class="mhws-print-sheet">'
+        f"{wm}"
+        f'<div class="mhws-print-head">{head}</div>'
+        f'<div class="mhws-print-body">{body}</div>'
+        f'<div class="mhws-print-foot">{foot}</div>'
+        "</div></div>"
+    )
+    text = _add_html_class(text, "is-mhws-paged")
+    if "</body>" in text:
+        return text.replace("</body>", desk + "\n</body>", 1)
+    return text + desk
 
 
 def extract_pad_chrome(html: str) -> dict[str, str]:
