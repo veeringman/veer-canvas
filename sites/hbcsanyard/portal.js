@@ -14727,6 +14727,49 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return Array.from(document.querySelectorAll('#reportFields input[name="field"]:checked')).map((i) => i.value);
   }
 
+  function reportCustomColumnLabels() {
+    return [el('reportCustomCol1'), el('reportCustomCol2')]
+      .map((input) => (input?.value || '').trim())
+      .filter(Boolean)
+      .slice(0, 2);
+  }
+
+  function setReportCustomColumnLabels(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    const labels = list.map((item) => (typeof item === 'string' ? item : item?.label || '').trim()).filter(Boolean);
+    if (el('reportCustomCol1')) el('reportCustomCol1').value = labels[0] || '';
+    if (el('reportCustomCol2')) el('reportCustomCol2').value = labels[1] || '';
+  }
+
+  function reportStyleOptions() {
+    const fontSize = Number.parseInt(el('reportFontSize')?.value || '12', 10);
+    let color = (el('reportColor')?.value || 'black').trim().toLowerCase();
+    if (color === 'dark' || color === 'warm') color = color === 'warm' ? 'brown' : 'black';
+    const contrast = (el('reportContrast')?.value || 'hard').trim().toLowerCase();
+    const allowed = ['black', 'navy', 'brown', 'blue', 'green', 'maroon'];
+    return {
+      fontSize: Number.isFinite(fontSize) ? fontSize : 12,
+      color: allowed.includes(color) ? color : 'black',
+      contrast: contrast === 'normal' ? 'normal' : 'hard',
+    };
+  }
+
+  function setReportStyleOptions(raw) {
+    const style = raw && typeof raw === 'object' ? raw : {};
+    const fontSize = String(style.fontSize ?? style.font_size ?? 12);
+    let color = String(style.color || 'black').toLowerCase();
+    if (color === 'dark') color = 'black';
+    if (color === 'warm') color = 'brown';
+    const contrast = String(style.contrast || 'hard').toLowerCase();
+    const allowed = ['black', 'navy', 'brown', 'blue', 'green', 'maroon'];
+    if (el('reportFontSize')) {
+      const opt = Array.from(el('reportFontSize').options).find((o) => o.value === fontSize);
+      el('reportFontSize').value = opt ? fontSize : '12';
+    }
+    if (el('reportColor')) el('reportColor').value = allowed.includes(color) ? color : 'black';
+    if (el('reportContrast')) el('reportContrast').value = contrast === 'normal' ? 'normal' : 'hard';
+  }
+
   function syncReportUi() {
     const def = currentReportDef();
     const isCustom = def?.kind === 'custom' || def?.id === 'custom';
@@ -14774,6 +14817,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('reportTenantStatus') && filters.status && dataset === 'tenants') {
       el('reportTenantStatus').value = filters.status;
     }
+    setReportCustomColumnLabels(filters.customColumns || []);
+    setReportStyleOptions(filters.style || { fontSize: 12, color: 'black', contrast: 'hard' });
     const ui = reportMeta.datasets?.[dataset]?.filterUi || {};
     const duesLike = dataset === 'dues' || ui.pendingOnly;
     const concernsLike = dataset === 'concerns' || ui.concernStatus;
@@ -16599,11 +16644,16 @@ ${foot}
     } else if (dataset === 'concerns') {
       filters.status = el('reportConcernStatus')?.value || 'open';
     }
+    const customColumns = reportCustomColumnLabels().map((label) => ({ label }));
+    if (customColumns.length) filters.customColumns = customColumns;
+    const style = reportStyleOptions();
+    filters.style = style;
     return {
       reportId,
       dataset,
       fields: selectedReportFieldIds(),
       filters,
+      style,
       title: def?.title || undefined,
     };
   }
@@ -16643,6 +16693,8 @@ ${foot}
       ? (reportMeta.datasets?.[dataset]?.fields || [])
       : (def?.fields || []);
     renderReportFields(fields, fields.filter((f) => f.default).map((f) => f.id));
+    setReportCustomColumnLabels([]);
+    setReportStyleOptions({ fontSize: 12, color: 'black', contrast: 'hard' });
     if (el('reportStatus')) el('reportStatus').textContent = 'Columns reset to defaults.';
   });
 

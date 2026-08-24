@@ -469,6 +469,7 @@ def reports_meta(conn=None) -> dict:
             "description": "Pick a dataset, columns, and filters — optionally save as a template.",
             "kind": "custom",
             "datasets": list(datasets.keys()),
+            "maxCustomColumns": 2,
         },
     ]
     templates = list_report_templates(conn) if conn is not None else []
@@ -1271,7 +1272,7 @@ def _draw_cash_receipt_leaf_chrome(
     return inner_x, content_bottom, box_w - 2 * pad, content_top - content_bottom
 
 
-def _cell(value: str, *, align: str = "left", markup: bool = False):
+def _cell(value: str, *, align: str = "left", markup: bool = False, font_size: float = 12.0, text_color: str | None = None):
     rl = _reportlab()
     styles = rl["getSampleStyleSheet"]()
     a = rl["TA_LEFT"]
@@ -1279,17 +1280,95 @@ def _cell(value: str, *, align: str = "left", markup: bool = False):
         a = rl["TA_RIGHT"]
     elif align == "center":
         a = rl["TA_CENTER"]
-    style = rl["ParagraphStyle"](
-        "cell",
-        parent=styles["Normal"],
-        fontSize=7.5,
-        leading=9,
-        alignment=a,
-    )
+    size = max(7.0, min(16.0, float(font_size or 12)))
+    hex_color = (text_color or "#000000").strip().lstrip("#") or "000000"
+    # Unique name required — ReportLab reuses styles by name and ignores later textColor.
+    style_name = f"cell_{size:g}_{align}_{hex_color}_{1 if markup else 0}"
+    kwargs = {
+        "parent": styles["Normal"],
+        "fontSize": size,
+        "leading": size + 2.5,
+        "alignment": a,
+        "textColor": rl["colors"].HexColor(f"#{hex_color}"),
+    }
+    style = rl["ParagraphStyle"](style_name, **kwargs)
     text = _pdf_safe(value if value is not None else "-")
     if not markup:
         text = text.replace("&", "&amp;").replace("<", "&lt;")
     return rl["Paragraph"](text or "-", style)
+
+
+# Font / data colours for report tables. "dark" kept as alias of black.
+REPORT_FONT_COLORS = {
+    "black": "#000000",
+    "dark": "#000000",
+    "navy": "#0b2a56",
+    "brown": "#5c3310",
+    "blue": "#0b57a8",
+    "green": "#0f5c38",
+    "maroon": "#7a1f2b",
+}
+
+
+def _resolve_report_style(raw) -> dict[str, Any]:
+    """Font size / colour / contrast for tabular report PDFs. Defaults: 12, black, hard."""
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        font_size = float(raw.get("fontSize") if raw.get("fontSize") is not None else raw.get("font_size") or 12)
+    except (TypeError, ValueError):
+        font_size = 12.0
+    font_size = max(7.0, min(16.0, font_size))
+    color = str(raw.get("color") or "black").strip().lower()
+    if color == "warm":
+        color = "brown"
+    if color not in REPORT_FONT_COLORS:
+        color = "black"
+    contrast = str(raw.get("contrast") or "hard").strip().lower()
+    if contrast not in {"hard", "normal"}:
+        contrast = "hard"
+    hard = contrast == "hard"
+    text = REPORT_FONT_COLORS[color]
+    # Header / chrome follow the chosen ink colour; hard = stronger grid + flat white rows.
+    header_bg = {
+        "black": "#000000",
+        "dark": "#000000",
+        "navy": "#0b2a56",
+        "brown": "#5c3310",
+        "blue": "#0b57a8",
+        "green": "#0f5c38",
+        "maroon": "#7a1f2b",
+    }[color]
+    if not hard:
+        # Slightly soften header for normal contrast
+        soft_headers = {
+            "black": "#222222",
+            "dark": "#222222",
+            "navy": "#15233f",
+            "brown": "#6b4423",
+            "blue": "#1a6fc0",
+            "green": "#1a7a4a",
+            "maroon": "#943445",
+        }
+        header_bg = soft_headers[color]
+    return {
+        "fontSize": font_size,
+        "leading": font_size + (2.5 if hard else 1.5),
+        "color": "black" if color == "dark" else color,
+        "contrast": contrast,
+        "gridWidth": 0.9 if hard else 0.4,
+        "pad": 4 if font_size >= 11 else 3,
+        "header_bg": header_bg,
+        "header_fg": "#ffffff",
+        "text": text,
+        "meta": "#111111" if hard else "#555555",
+        "grid": "#000000" if hard else "#888888",
+        "row_a": "#ffffff",
+        "row_b": "#ffffff" if hard else "#f3f3f3",
+        "total_bg": "#d9d9d9" if hard else "#ececec",
+        "sub": text if hard else "#4a3728",
+        "title": text,
+        "bearer": text if hard else "#3d2914",
+    }
 
 
 def _cash_receipt_layout(layout: str | None) -> tuple[str, dict[str, Any]]:
@@ -1636,6 +1715,7 @@ def build_pending_dues_pdf(
     filters: dict | None = None,
     org_title: str | None = None,
     org_subtitle: str | None = None,
+    style: dict | None = None,
 ) -> bytes:
     """Return PDF bytes for Pending Dues Report."""
     rl = _reportlab()
@@ -1650,7 +1730,9 @@ def build_pending_dues_pdf(
     styles = rl["getSampleStyleSheet"]()
 
     filters = filters or {}
-    field_defs = _resolve_fields(fields)
+    look = _resolve_report_style(style if style is not None else filters.get("style"))
+    fs = look["fontSize"]
+    field_defs = _append_custom_columns(_resolve_fields(fields), filters)
     rows = query_pending_dues_rows(conn, enrich_payment_row, filters=filters)
     bearers = office_bearers_for_header(conn)
 
@@ -1674,26 +1756,26 @@ def build_pending_dues_pdf(
     org_style = ParagraphStyle(
         "org",
         parent=styles["Heading1"],
-        fontSize=13,
-        leading=16,
-        textColor=colors.HexColor("#15233f"),
+        fontSize=max(13, fs + 1),
+        leading=max(16, fs + 4),
+        textColor=colors.HexColor(look["title"]),
         alignment=rl["TA_LEFT"],
         spaceAfter=2,
     )
     sub_style = ParagraphStyle(
         "sub",
         parent=styles["Normal"],
-        fontSize=8.5,
-        leading=11,
-        textColor=colors.HexColor("#4a3728"),
+        fontSize=max(8.5, fs - 2),
+        leading=max(11, fs),
+        textColor=colors.HexColor(look["sub"]),
         spaceAfter=2,
     )
     report_style = ParagraphStyle(
         "reportTitle",
         parent=styles["Heading2"],
-        fontSize=11,
-        leading=14,
-        textColor=colors.HexColor("#15233f"),
+        fontSize=max(11, fs),
+        leading=max(14, fs + 2),
+        textColor=colors.HexColor(look["title"]),
         alignment=rl["TA_CENTER"],
         spaceBefore=4,
         spaceAfter=4,
@@ -1701,16 +1783,16 @@ def build_pending_dues_pdf(
     meta_style = ParagraphStyle(
         "meta",
         parent=styles["Normal"],
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor("#555555"),
+        fontSize=max(8, fs - 2),
+        leading=max(10, fs),
+        textColor=colors.HexColor(look["meta"]),
     )
     bearer_style = ParagraphStyle(
         "bearer",
         parent=styles["Normal"],
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor("#3d2914"),
+        fontSize=max(8, fs - 2),
+        leading=max(10, fs),
+        textColor=colors.HexColor(look["bearer"]),
     )
 
     story: list = []
@@ -1780,8 +1862,9 @@ def build_pending_dues_pdf(
             ParagraphStyle(
                 "th",
                 parent=styles["Normal"],
-                fontSize=7.5,
-                textColor=colors.white,
+                fontSize=fs,
+                leading=look["leading"],
+                textColor=colors.HexColor(look["header_fg"]),
                 alignment=rl["TA_CENTER"],
             ),
         )
@@ -1800,9 +1883,16 @@ def build_pending_dues_pdf(
                 num = int(row.get(fid) or 0)
                 totals[fid] = totals.get(fid, 0) + num
                 val = _fmt_inr(num)
+            elif f.get("empty"):
+                val = ""
             else:
                 val = str(row.get(fid) or "-")
-            cells.append(_cell(val, align=f.get("align") or "left"))
+            cells.append(_cell(
+                val,
+                align=f.get("align") or "left",
+                font_size=fs,
+                text_color=look["text"],
+            ))
         data.append(cells)
 
     if rows:
@@ -1810,15 +1900,25 @@ def build_pending_dues_pdf(
         for f in field_defs:
             fid = f["id"]
             if fid == "sno":
-                total_cells.append(_cell(""))
+                total_cells.append(_cell("", font_size=fs, text_color=look["text"]))
             elif fid == "name":
-                total_cells.append(_cell("<b>Total</b>", align="left", markup=True))
+                total_cells.append(_cell(
+                    "<b>Total</b>", align="left", markup=True, font_size=fs, text_color=look["text"],
+                ))
+            elif f.get("empty"):
+                total_cells.append(_cell("", font_size=fs, text_color=look["text"]))
             elif fid in MONEY_FIELDS:
                 total_cells.append(
-                    _cell(f"<b>{_fmt_inr(totals.get(fid, 0))}</b>", align="right", markup=True)
+                    _cell(
+                        f"<b>{_fmt_inr(totals.get(fid, 0))}</b>",
+                        align="right",
+                        markup=True,
+                        font_size=fs,
+                        text_color=look["text"],
+                    )
                 )
             else:
-                total_cells.append(_cell(""))
+                total_cells.append(_cell("", font_size=fs, text_color=look["text"]))
         data.append(total_cells)
 
     col_widths = [min(f.get("width", 50), 140) for f in field_defs]
@@ -1827,21 +1927,26 @@ def build_pending_dues_pdf(
     col_widths = [w * scale for w in col_widths]
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
+    pad = look["pad"]
     style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#15233f")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(look["header_bg"])),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(look["header_fg"])),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#6b4a2e")),
+        ("FONTSIZE", (0, 0), (-1, -1), fs),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(look["text"])),
+        ("GRID", (0, 0), (-1, -1), look["gridWidth"], colors.HexColor(look["grid"])),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2 if rows else -1), [colors.HexColor("#fffdf8"), colors.HexColor("#f5f1e8")]),
+        ("TOPPADDING", (0, 0), (-1, -1), pad),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad),
+        ("RIGHTPADDING", (0, 0), (-1, -1), pad),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2 if rows else -1), [
+            colors.HexColor(look["row_a"]),
+            colors.HexColor(look["row_b"]),
+        ]),
     ]
     if rows:
-        style_cmds.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#ebe4d4")))
+        style_cmds.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor(look["total_bg"])))
     table.setStyle(TableStyle(style_cmds))
     story.append(table)
 
@@ -1849,7 +1954,12 @@ def build_pending_dues_pdf(
     story.append(
         Paragraph(
             f"{ORG_SLOGAN} — {ORG_SHORT}",
-            ParagraphStyle("foot", parent=meta_style, alignment=rl["TA_CENTER"], fontSize=7.5),
+            ParagraphStyle(
+                "foot",
+                parent=meta_style,
+                alignment=rl["TA_CENTER"],
+                fontSize=max(7.5, fs - 3),
+            ),
         )
     )
 
@@ -1987,6 +2097,46 @@ def _resolve_dataset_fields(dataset: str, field_ids: list[str] | None) -> list[d
     if len(selected) < 2:
         return [f for f in catalog if f.get("default")]
     return selected
+
+
+MAX_CUSTOM_COLUMNS = 2
+
+
+def _parse_custom_column_labels(raw) -> list[str]:
+    labels: list[str] = []
+    if not isinstance(raw, list):
+        return labels
+    for item in raw:
+        if isinstance(item, dict):
+            label = str(item.get("label") or "").strip()
+        else:
+            label = str(item or "").strip()
+        if not label:
+            continue
+        labels.append(label[:40])
+        if len(labels) >= MAX_CUSTOM_COLUMNS:
+            break
+    return labels
+
+
+def _append_custom_columns(field_defs: list[dict], filters: dict | None) -> list[dict]:
+    labels = _parse_custom_column_labels((filters or {}).get("customColumns"))
+    if not labels:
+        return field_defs
+    out = list(field_defs)
+    for i, label in enumerate(labels):
+        out.append({
+            "id": f"__custom_{i}__",
+            "label": label,
+            "align": "left",
+            "width": 55,
+            "empty": True,
+        })
+    return out
+
+
+def _resolve_report_fields(dataset: str, field_ids: list[str] | None, filters: dict | None) -> list[dict]:
+    return _append_custom_columns(_resolve_dataset_fields(dataset, field_ids), filters)
 
 
 def query_directory_rows(directory_fn, conn, *, filters: dict | None = None) -> list[dict]:
@@ -2320,6 +2470,7 @@ def build_tabular_pdf(
     rows: list[dict],
     money_fields: set[str] | None = None,
     filter_summary: str = "",
+    style: dict | None = None,
 ) -> bytes:
     """Generic landscape PDF with letterhead + table."""
     rl = _reportlab()
@@ -2333,6 +2484,8 @@ def build_tabular_pdf(
     Image = rl["Image"]
     styles = rl["getSampleStyleSheet"]()
     money_fields = money_fields or set()
+    look = _resolve_report_style(style)
+    fs = look["fontSize"]
 
     bearers = office_bearers_for_header(conn)
     generated = _fmt_ist_datetime()
@@ -2349,22 +2502,24 @@ def build_tabular_pdf(
         author=ORG_AUTHOR,
     )
     org_style = ParagraphStyle(
-        "org", parent=styles["Heading1"], fontSize=13, leading=16,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_LEFT"], spaceAfter=2,
+        "org", parent=styles["Heading1"], fontSize=max(13, fs + 1), leading=max(16, fs + 4),
+        textColor=colors.HexColor(look["title"]), alignment=rl["TA_LEFT"], spaceAfter=2,
     )
     sub_style = ParagraphStyle(
-        "sub", parent=styles["Normal"], fontSize=8.5, leading=11,
-        textColor=colors.HexColor("#4a3728"), spaceAfter=2,
+        "sub", parent=styles["Normal"], fontSize=max(8.5, fs - 2), leading=max(11, fs),
+        textColor=colors.HexColor(look["sub"]), spaceAfter=2,
     )
     report_style = ParagraphStyle(
-        "reportTitle", parent=styles["Heading2"], fontSize=11, leading=14,
-        textColor=colors.HexColor("#15233f"), alignment=rl["TA_CENTER"], spaceBefore=4, spaceAfter=4,
+        "reportTitle", parent=styles["Heading2"], fontSize=max(11, fs), leading=max(14, fs + 2),
+        textColor=colors.HexColor(look["title"]), alignment=rl["TA_CENTER"], spaceBefore=4, spaceAfter=4,
     )
     meta_style = ParagraphStyle(
-        "meta", parent=styles["Normal"], fontSize=8, leading=10, textColor=colors.HexColor("#555555"),
+        "meta", parent=styles["Normal"], fontSize=max(8, fs - 2), leading=max(10, fs),
+        textColor=colors.HexColor(look["meta"]),
     )
     bearer_style = ParagraphStyle(
-        "bearer", parent=styles["Normal"], fontSize=8, leading=10, textColor=colors.HexColor("#3d2914"),
+        "bearer", parent=styles["Normal"], fontSize=max(8, fs - 2), leading=max(10, fs),
+        textColor=colors.HexColor(look["bearer"]),
     )
     story: list = []
     seal = _seal_path(site_root)
@@ -2408,7 +2563,14 @@ def build_tabular_pdf(
     header_row = [
         Paragraph(
             f"<b>{f['label']}</b>",
-            ParagraphStyle("th", parent=styles["Normal"], fontSize=7.5, textColor=colors.white, alignment=rl["TA_CENTER"]),
+            ParagraphStyle(
+                "th",
+                parent=styles["Normal"],
+                fontSize=fs,
+                leading=look["leading"],
+                textColor=colors.HexColor(look["header_fg"]),
+                alignment=rl["TA_CENTER"],
+            ),
         )
         for f in field_defs
     ]
@@ -2424,41 +2586,58 @@ def build_tabular_pdf(
                 num = int(row.get(fid) or 0)
                 totals[fid] = totals.get(fid, 0) + num
                 val = _fmt_inr(num)
+            elif f.get("empty"):
+                val = ""
             else:
                 val = str(row.get(fid) or "-")
-            cells.append(_cell(val, align=f.get("align") or "left"))
+            cells.append(_cell(
+                val,
+                align=f.get("align") or "left",
+                font_size=fs,
+                text_color=look["text"],
+            ))
         data.append(cells)
     if rows and money_fields:
         total_cells = []
         for f in field_defs:
             fid = f["id"]
             if fid == "name":
-                total_cells.append(_cell("<b>Total</b>", align="left", markup=True))
+                total_cells.append(_cell(
+                    "<b>Total</b>", align="left", markup=True, font_size=fs, text_color=look["text"],
+                ))
             elif fid in money_fields:
-                total_cells.append(_cell(f"<b>{_fmt_inr(totals.get(fid, 0))}</b>", align="right", markup=True))
+                total_cells.append(_cell(
+                    f"<b>{_fmt_inr(totals.get(fid, 0))}</b>",
+                    align="right",
+                    markup=True,
+                    font_size=fs,
+                    text_color=look["text"],
+                ))
             else:
-                total_cells.append(_cell(""))
+                total_cells.append(_cell("", font_size=fs, text_color=look["text"]))
         data.append(total_cells)
 
     col_widths = [min(f.get("width", 50), 140) for f in field_defs]
     scale = doc.width / (sum(col_widths) or 1)
     col_widths = [w * scale for w in col_widths]
     table = Table(data, colWidths=col_widths, repeatRows=1)
+    pad = look["pad"]
     style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#15233f")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#6b4a2e")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(look["header_bg"])),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor(look["header_fg"])),
+        ("FONTSIZE", (0, 0), (-1, -1), fs),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor(look["text"])),
+        ("GRID", (0, 0), (-1, -1), look["gridWidth"], colors.HexColor(look["grid"])),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), pad),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad),
+        ("RIGHTPADDING", (0, 0), (-1, -1), pad),
         ("ROWBACKGROUNDS", (0, 1), (-1, -2 if (rows and money_fields) else -1),
-         [colors.HexColor("#fffdf8"), colors.HexColor("#f5f1e8")]),
+         [colors.HexColor(look["row_a"]), colors.HexColor(look["row_b"])]),
     ]
     if rows and money_fields:
-        style_cmds.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#ebe4d4")))
+        style_cmds.append(("BACKGROUND", (0, -1), (-1, -1), colors.HexColor(look["total_bg"])))
     table.setStyle(TableStyle(style_cmds))
     story.append(table)
 
@@ -3144,14 +3323,18 @@ def generate_report_pdf(
         if not tpl:
             raise ValueError("Saved template not found")
         report_id = "custom"
+        prior_style = payload.get("style")
         payload = {
             "dataset": tpl["dataset"],
             "fields": fields or tpl["fields"],
             "filters": {**(tpl.get("filters") or {}), **filters},
             "title": payload.get("title") or tpl.get("name"),
+            "style": prior_style,
         }
         fields = payload["fields"]
         filters = payload["filters"]
+
+    look = _resolve_report_style(payload.get("style") or filters.get("style"))
 
     if report_id == "pending-dues":
         pdf = build_pending_dues_pdf(
@@ -3160,6 +3343,7 @@ def generate_report_pdf(
             enrich_payment_row=enrich_payment_row,
             fields=fields,
             filters=filters,
+            style=look,
         )
         return pdf, f"pending-dues-{stamp}.pdf"
 
@@ -3167,7 +3351,7 @@ def generate_report_pdf(
         dataset = str(payload.get("dataset") or filters.get("dataset") or "").strip()
         if dataset not in DATASETS_META:
             raise ValueError("Select a dataset for the custom report")
-        field_defs = _resolve_dataset_fields(dataset, fields)
+        field_defs = _resolve_report_fields(dataset, fields, filters)
         title = str(payload.get("title") or DATASETS_META[dataset]["title"])
         money = MONEY_FIELDS
 
@@ -3176,7 +3360,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Custom Dues Report",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · dues",
+                filter_summary="custom · dues", style=look,
             )
             return pdf, f"custom-dues-{stamp}.pdf"
 
@@ -3185,7 +3369,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Payments Received",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · payments",
+                filter_summary="custom · payments", style=look,
             )
             return pdf, f"custom-payments-{stamp}.pdf"
 
@@ -3194,7 +3378,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Cash Register",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · cash register",
+                filter_summary="custom · cash register", style=look,
             )
             return pdf, f"custom-cash-{stamp}.pdf"
 
@@ -3203,7 +3387,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Reimbursement Claims",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · reimbursements",
+                filter_summary="custom · reimbursements", style=look,
             )
             return pdf, f"custom-reimbursements-{stamp}.pdf"
 
@@ -3212,7 +3396,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "All Transactions",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · transactions",
+                filter_summary="custom · transactions", style=look,
             )
             return pdf, f"custom-transactions-{stamp}.pdf"
 
@@ -3221,7 +3405,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "No Dues Certificates",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · no dues",
+                filter_summary="custom · no dues", style=look,
             )
             return pdf, f"custom-no-dues-{stamp}.pdf"
 
@@ -3232,7 +3416,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Directory Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · directory",
+                filter_summary="custom · directory", style=look,
             )
             return pdf, f"custom-directory-{stamp}.pdf"
 
@@ -3243,7 +3427,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Concerns Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · concerns",
+                filter_summary="custom · concerns", style=look,
             )
             return pdf, f"custom-concerns-{stamp}.pdf"
 
@@ -3254,7 +3438,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Works & Events",
                 field_defs=field_defs, rows=rows, money_fields=money,
-                filter_summary="custom · works",
+                filter_summary="custom · works", style=look,
             )
             return pdf, f"custom-works-{stamp}.pdf"
 
@@ -3265,7 +3449,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Notices Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · notices",
+                filter_summary="custom · notices", style=look,
             )
             return pdf, f"custom-notices-{stamp}.pdf"
 
@@ -3274,7 +3458,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Passes Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · passes",
+                filter_summary="custom · passes", style=look,
             )
             return pdf, f"custom-passes-{stamp}.pdf"
 
@@ -3283,7 +3467,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Tenants Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · tenants",
+                filter_summary="custom · tenants", style=look,
             )
             return pdf, f"custom-tenants-{stamp}.pdf"
 
@@ -3292,7 +3476,7 @@ def generate_report_pdf(
             pdf = build_tabular_pdf(
                 conn, site_root=site_root, title=title or "Vehicles Report",
                 field_defs=field_defs, rows=rows,
-                filter_summary="custom · vehicles",
+                filter_summary="custom · vehicles", style=look,
             )
             return pdf, f"custom-vehicles-{stamp}.pdf"
 

@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="composer/composer.css?v=20260823ob10">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260823ob6" defer></script>
+  <script src="portal.js?v=20260824ob13" defer></script>
   <script type="module" src="composer/boot.js?v=20260823ob10"></script>
 </head>
 <body>
@@ -2707,6 +2707,49 @@
             <fieldset class="report-fields">
               <legend>Columns</legend>
               <div class="report-field-grid" id="reportFields"></div>
+            </fieldset>
+            <fieldset class="report-fields" id="reportCustomColumns">
+              <legend>Extra blank columns (optional)</legend>
+              <p class="muted" style="margin:0 0 0.65rem">Add up to two empty columns with your own headings (e.g. Remarks, Signature).</p>
+              <div class="settings-grid">
+                <label>Column 1
+                  <input type="text" id="reportCustomCol1" maxlength="40" placeholder="e.g. Remarks" autocomplete="off">
+                </label>
+                <label>Column 2
+                  <input type="text" id="reportCustomCol2" maxlength="40" placeholder="e.g. Signature" autocomplete="off">
+                </label>
+              </div>
+            </fieldset>
+            <fieldset class="report-fields" id="reportStyleOptions">
+              <legend>PDF look</legend>
+              <div class="settings-grid">
+                <label>Font size
+                  <select id="reportFontSize">
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12" selected>12</option>
+                    <option value="14">14</option>
+                  </select>
+                </label>
+                <label>Font colour
+                  <select id="reportColor">
+                    <option value="black" selected>Black</option>
+                    <option value="navy">Navy</option>
+                    <option value="brown">Brown</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="maroon">Maroon</option>
+                  </select>
+                </label>
+                <label>Contrast
+                  <select id="reportContrast">
+                    <option value="hard" selected>Hard</option>
+                    <option value="normal">Normal</option>
+                  </select>
+                </label>
+              </div>
             </fieldset>
             <div class="report-filters settings-grid" id="reportFilters">
               <label>Section
