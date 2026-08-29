@@ -122,40 +122,59 @@ def _apply_docx_cell(cell: Any, spec: dict[str, str]) -> None:
 COMPOSE_PAD_BODY_CSS = """
 <style id="mhws-compose-body">
   .screen-hint, .layout-picker { display: none !important; }
-  .body-area p { margin: 0 0 8pt; }
-  .body-area h2 {
+  .body-area p, .body p, .mhws-print-body p { margin: 0 0 8pt; }
+  .body-area h2, .body h2, .mhws-print-body h2 {
     margin: 0 0 8pt;
     font-size: 18pt;
     font-weight: 700;
     line-height: 1.25;
     color: #0b2a56;
   }
-  .body-area h3 {
+  .body-area h3, .body h3, .mhws-print-body h3 {
     margin: 0 0 6pt;
     font-size: 14pt;
     font-weight: 700;
     line-height: 1.3;
     color: #143a6e;
   }
-  .body-area h2 span,
-  .body-area h3 span { font-size: inherit; font-weight: inherit; color: inherit; }
-  .body-area .mhws-tab { white-space: pre; tab-size: 4; }
-  .body-area .mhws-img-pair {
+  .body-area h2 span, .body-area h3 span,
+  .body h2 span, .body h3 span,
+  .mhws-print-body h2 span, .mhws-print-body h3 span {
+    font-size: inherit; font-weight: inherit; color: inherit;
+  }
+  .body-area .mhws-tab, .body .mhws-tab, .mhws-print-body .mhws-tab {
+    white-space: pre; tab-size: 4;
+  }
+  .body-area .mhws-img-pair, .body .mhws-img-pair, .mhws-print-body .mhws-img-pair {
     display: flex;
     align-items: stretch;
     gap: 10pt;
     width: 100%;
     margin: 0 0 8pt;
   }
-  .body-area .mhws-img-text { flex: 1 1 auto; min-width: 0; }
-  .body-area table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
-  .body-area th, .body-area td { border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top; }
-  .body-area th { background: #eef2f8; }
+  .body-area .mhws-img-text, .body .mhws-img-text, .mhws-print-body .mhws-img-text {
+    flex: 1 1 auto; min-width: 0;
+  }
+  .body-area table, .body table, .mhws-print-body table {
+    border-collapse: collapse; width: 100%; margin: 8pt 0;
+  }
+  .body-area th, .body-area td,
+  .body th, .body td,
+  .mhws-print-body th, .mhws-print-body td {
+    border: 0.6pt solid #0b2a56; padding: 4pt 6pt; vertical-align: top;
+  }
+  .body-area th, .body th, .mhws-print-body th { background: #eef2f8; }
   .body-area table.mhws-table-noborder th,
-  .body-area table.mhws-table-noborder td { border: 0 !important; }
-  .body-area img { max-width: 100%; height: auto; }
-  .body-area .mhws-img { max-width: 100%; }
-  .body-area .mhws-img img { width: 100%; height: auto; display: block; }
+  .body-area table.mhws-table-noborder td,
+  .body table.mhws-table-noborder th,
+  .body table.mhws-table-noborder td,
+  .mhws-print-body table.mhws-table-noborder th,
+  .mhws-print-body table.mhws-table-noborder td { border: 0 !important; }
+  .body-area img, .body img, .mhws-print-body img { max-width: 100%; height: auto; }
+  .body-area .mhws-img, .body .mhws-img, .mhws-print-body .mhws-img { max-width: 100%; }
+  .body-area .mhws-img img, .body .mhws-img img, .mhws-print-body .mhws-img img {
+    width: 100%; height: auto; display: block;
+  }
   .brand .logo, header.org img, .org img {
     display: block;
     width: 24mm;
@@ -905,13 +924,6 @@ def paginate_pad_html(html: str) -> str:
     return _add_html_class(before + table + rest, "mhws-compose-multipage")
 
 
-def _header_has_end_separator(html: str) -> bool:
-    text = html or ""
-    if re.search(r'<div class="rule"', text, flags=re.I):
-        return True
-    return "mhws-header-gold-rule" in text or "officers-foot" in text
-
-
 def _extract_div_by_class(html: str, class_name: str) -> str:
     text = html or ""
     match = re.search(
@@ -929,6 +941,31 @@ def _extract_div_by_class(html: str, class_name: str) -> str:
         return ""
     inner, _rest = _split_at_div_depth(text[match.end() :], 1)
     return inner
+
+
+def extract_compose_body_from_html(html: str) -> str:
+    """Editable body fragment from wrapped compose HTML or pass-through fragment."""
+    text = str(html or "").strip()
+    if not text:
+        return "<p></p>"
+    if not re.search(r"<!DOCTYPE|<html\b", text, re.I):
+        return text
+    margins_m = re.search(r"<!--\s*mhws-margins:[^>]*-->", text, re.I)
+    margins = margins_m.group(0) if margins_m else ""
+    body = _extract_div_by_class(text, "body-area")
+    if not body:
+        body = _extract_div_by_class(text, "body")
+    body = (body or "").strip() or "<p></p>"
+    if margins and "mhws-margins:" not in body:
+        return f"{margins}{body}"
+    return body
+
+
+def _header_has_end_separator(html: str) -> bool:
+    text = html or ""
+    if re.search(r'<div class="rule"', text, flags=re.I):
+        return True
+    return "mhws-header-gold-rule" in text or "officers-foot" in text
 
 
 def finalize_compose_pdf_html(html: str, margins: dict[str, float]) -> str:

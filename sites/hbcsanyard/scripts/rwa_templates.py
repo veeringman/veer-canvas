@@ -7,6 +7,7 @@ Storage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pathlib
@@ -33,6 +34,8 @@ TEMPLATE_CATEGORIES: list[tuple[str, str]] = [
 ]
 
 TEMPLATE_MAX_BYTES = 20 * 1024 * 1024
+COMPOSE_ENGINE_VERSION = 1
+COMPOSE_BODY_STORE = "body.html"
 TEMPLATE_EXT_MIME = {
     ".html": "text/html",
     ".htm": "text/html",
@@ -182,6 +185,235 @@ def ensure_print_templates_table(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE print_templates ADD COLUMN options_json TEXT NOT NULL DEFAULT '{}'"
         )
+    ensure_template_versions_table(conn)
+
+
+def _veercanvas_root() -> pathlib.Path:
+    return pathlib.Path(os.environ.get("VEERCANVAS_ROOT", pathlib.Path(__file__).resolve().parents[3]))
+
+
+def load_society_branding(site_root: pathlib.Path) -> dict[str, Any]:
+    """Society strings and logo paths from site-meta.json (see core/document-engine/branding.py)."""
+    try:
+        import importlib.util
+
+        branding_py = _veercanvas_root() / "core" / "document-engine" / "branding.py"
+        if branding_py.is_file():
+            spec = importlib.util.spec_from_file_location("veer_document_branding", branding_py)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                return mod.load_society_branding(site_root)
+    except Exception:
+        pass
+    society = "Residents Welfare Association"
+    return {
+        "societyName": society,
+        "colonyName": society,
+        "addressLine": "",
+        "email": "",
+        "publicOrigin": "",
+        "metaLine": "",
+        "footerLine": society,
+        "logoPrint": "/assets/favicon-192.png",
+        "logoWatermark": "/assets/favicon-192.png",
+    }
+
+
+def ensure_template_versions_table(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS template_versions (
+          template_id TEXT NOT NULL,
+          version INTEGER NOT NULL,
+          fingerprint TEXT NOT NULL,
+          compiled_html TEXT NOT NULL,
+          spec_json TEXT NOT NULL DEFAULT '{}',
+          published_at TEXT NOT NULL,
+          published_by TEXT,
+          PRIMARY KEY (template_id, version)
+        );
+        CREATE INDEX IF NOT EXISTS idx_template_versions_tpl
+          ON template_versions(template_id, version DESC);
+        """
+    )
+
+
+def get_latest_template_version(conn: sqlite3.Connection, template_id: str) -> int:
+    ensure_template_versions_table(conn)
+    row = conn.execute(
+        "SELECT MAX(version) FROM template_versions WHERE template_id = ?",
+        (str(template_id or "").strip(),),
+    ).fetchone()
+    return int(row[0] or 0) if row and row[0] is not None else 0
+
+
+def list_template_versions(
+    conn: sqlite3.Connection,
+    template_id: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    ensure_template_versions_table(conn)
+    lim = max(1, min(int(limit or 20), 100))
+    rows = conn.execute(
+        """
+        SELECT version, fingerprint, published_at, published_by
+        FROM template_versions
+        WHERE template_id = ?
+        ORDER BY version DESC
+        LIMIT ?
+        """,
+        (str(template_id or "").strip(), lim),
+    ).fetchall()
+    return [
+        {
+            "version": int(r["version"]),
+            "fingerprint": r["fingerprint"],
+            "publishedAt": r["published_at"],
+            "publishedBy": r["published_by"],
+        }
+        for r in rows
+    ]
+
+
+def load_template_version_html(
+    conn: sqlite3.Connection,
+    template_id: str,
+    version: int,
+) -> str | None:
+    ensure_template_versions_table(conn)
+    if not template_id or not version:
+        return None
+    row = conn.execute(
+        """
+        SELECT compiled_html FROM template_versions
+        WHERE template_id = ? AND version = ?
+        """,
+        (str(template_id).strip(), int(version)),
+    ).fetchone()
+    if not row:
+        return None
+    return str(row["compiled_html"] or "")
+
+
+def compile_chrome_template_html(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    template_id: str,
+) -> str:
+    doc = get_template(conn, template_id, site_root=site_root)
+    if not doc:
+        raise ValueError("Template not found")
+    opts = doc.get("options") or {}
+    stationery = opts.get("stationery") if isinstance(opts.get("stationery"), dict) else None
+    if stationery:
+        return render_stationery_html(normalize_stationery(stationery), doc.get("title") or "Letterhead")
+    html, _ = render_template_html(conn, site_root, template_id)
+    return html
+
+
+def publish_template_version(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    template_id: str,
+    *,
+    actor: str | None = None,
+) -> dict[str, Any]:
+    ensure_template_versions_table(conn)
+    tid = str(template_id or "").strip()
+    if not tid:
+        raise ValueError("Template id required")
+    html = compile_chrome_template_html(conn, site_root, tid)
+    fingerprint = compute_chrome_fingerprint(conn, site_root, tid)
+    doc = get_template(conn, tid, site_root=site_root)
+    spec_json = json.dumps(doc.get("options") or {}, ensure_ascii=False)
+    version = get_latest_template_version(conn, tid) + 1
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT INTO template_versions(
+          template_id, version, fingerprint, compiled_html, spec_json,
+          published_at, published_by
+        ) VALUES (?,?,?,?,?,?,?)
+        """,
+        (tid, version, fingerprint, html, spec_json, now, actor),
+    )
+    conn.commit()
+    return {
+        "templateId": tid,
+        "version": version,
+        "fingerprint": fingerprint,
+        "publishedAt": now,
+        "publishedBy": actor,
+    }
+
+
+def seed_template_versions(conn: sqlite3.Connection, site_root: pathlib.Path) -> None:
+    """Publish v1 snapshots for seeded pads and stationery letterheads (idempotent)."""
+    ensure_template_versions_table(conn)
+    seed_default_templates(conn, site_root)
+    ids: set[str] = {str(item["id"]) for item in _SEED_TEMPLATES}
+    rows = conn.execute(
+        "SELECT id, options_json FROM print_templates WHERE status != 'archived'"
+    ).fetchall()
+    for row in rows:
+        opts = normalize_options(row["options_json"])
+        if opts.get("stationery"):
+            ids.add(str(row["id"]))
+    for tid in ids:
+        if get_latest_template_version(conn, tid) > 0:
+            continue
+        try:
+            publish_template_version(conn, site_root, tid, actor="system")
+        except Exception:
+            continue
+
+
+def compose_chrome_status(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    options: dict[str, Any] | None,
+) -> dict[str, Any]:
+    from rwa_compose_export import PLAIN_CHROME_IDS
+
+    opts = normalize_options(options)
+    if not opts.get("composed"):
+        return {}
+    chrome = str(opts.get("composeChrome") or "simple")
+    saved_fp = str(opts.get("composeChromeFingerprint") or "").strip()
+    current_fp = compute_chrome_fingerprint(conn, site_root, chrome)
+    saved_ver = int(opts.get("composeChromeVersion") or 0)
+    latest_ver = (
+        get_latest_template_version(conn, chrome)
+        if chrome not in PLAIN_CHROME_IDS and chrome != "simple"
+        else 0
+    )
+    fp_stale = bool(saved_fp and saved_fp != current_fp)
+    ver_stale = bool(latest_ver and saved_ver and saved_ver < latest_ver)
+    return {
+        "composeChrome": chrome,
+        "composeChromeFingerprint": saved_fp,
+        "composeChromeFingerprintCurrent": current_fp,
+        "composeChromeVersion": saved_ver,
+        "composeChromeVersionLatest": latest_ver,
+        "composeChromeStale": fp_stale or ver_stale,
+    }
+
+
+def _enrich_template_meta(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    dto: dict[str, Any],
+) -> dict[str, Any]:
+    tid = str(dto.get("id") or "").strip()
+    if tid:
+        dto["publishedVersion"] = get_latest_template_version(conn, tid)
+        dto["publishedVersions"] = list_template_versions(conn, tid, limit=8)
+    opts = dto.get("options") or {}
+    if opts.get("composed"):
+        dto["composeChromeStatus"] = compose_chrome_status(conn, site_root, opts)
+    return dto
 
 
 def _hex_color(raw: Any, fallback: str) -> str:
@@ -255,6 +487,21 @@ def normalize_options(raw: Any = None) -> dict[str, Any]:
         out["composed"] = True
         out["composeChrome"] = str(data.get("composeChrome") or "").strip() or "simple"
         out["composeWatermark"] = bool(data.get("composeWatermark", True))
+        fp = str(data.get("composeChromeFingerprint") or "").strip()
+        if fp:
+            out["composeChromeFingerprint"] = fp
+        ver = data.get("composeEngineVersion")
+        if ver is not None:
+            try:
+                out["composeEngineVersion"] = int(ver)
+            except (TypeError, ValueError):
+                out["composeEngineVersion"] = COMPOSE_ENGINE_VERSION
+        chrome_ver = data.get("composeChromeVersion")
+        if chrome_ver is not None:
+            try:
+                out["composeChromeVersion"] = int(chrome_ver)
+            except (TypeError, ValueError):
+                out["composeChromeVersion"] = 0
     if isinstance(data.get("stationery"), dict):
         out["stationery"] = normalize_stationery(data["stationery"])
     return out
@@ -683,6 +930,7 @@ def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[d
     """Pads with a `.body-area` writing slot, plus simple header/footer and no-template wraps."""
     ensure_print_templates_table(conn)
     seed_default_templates(conn, site_root)
+    seed_template_versions(conn, site_root)
     preferred = ("tpl-mhws-letterhead", "tpl-rwa-letterhead-blank")
     found: dict[str, dict[str, Any]] = {}
     rows = conn.execute(
@@ -725,6 +973,8 @@ def compose_chromes(conn: sqlite3.Connection, site_root: pathlib.Path) -> list[d
             "paperId": paper.get("id") or "A4",
             "widthMm": paper.get("widthMm") or 210,
             "heightMm": paper.get("heightMm") or 297,
+            "fingerprint": compute_chrome_fingerprint(conn, site_root, str(doc["id"])),
+            "publishedVersion": get_latest_template_version(conn, str(doc["id"])),
         }
         try:
             from rwa_compose_export import extract_pad_chrome, rewrite_pad_urls, strip_screen_chrome
@@ -843,6 +1093,82 @@ def sanitize_compose_html(raw: str) -> str:
     return html.strip() or "<p></p>"
 
 
+def compute_chrome_fingerprint(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    chrome_id: str,
+) -> str:
+    """Stable fingerprint for the chrome template at save/render time."""
+    from rwa_compose_export import PLAIN_CHROME_IDS
+
+    cid = str(chrome_id or "simple").strip() or "simple"
+    if cid in PLAIN_CHROME_IDS or cid == "simple":
+        return f"{cid}:engine{COMPOSE_ENGINE_VERSION}"
+    try:
+        doc = get_template(conn, cid, site_root=site_root)
+    except Exception:
+        doc = None
+    if doc and isinstance(doc.get("options"), dict) and doc["options"].get("stationery"):
+        spec = normalize_stationery(doc["options"]["stationery"])
+        blob = json.dumps(spec, sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+        return f"stationery:{cid}:{digest}"
+    if doc and doc.get("staticPath"):
+        rel = _safe_static_path(doc.get("staticPath"))
+        if rel:
+            path = pathlib.Path(site_root) / rel
+            if path.is_file():
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+                return f"static:{cid}:{digest}"
+    path = resolve_template_file(site_root, doc or {})
+    if path and path.is_file():
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+        return f"file:{cid}:{digest}"
+    return f"{cid}:engine{COMPOSE_ENGINE_VERSION}"
+
+
+def read_compose_body_fragment(site_root: pathlib.Path, template_id: str) -> str:
+    """Load editable body HTML for a composed library document."""
+    from rwa_compose_export import extract_compose_body_from_html
+
+    root = pathlib.Path(site_root).resolve()
+    dest_dir = template_item_dir(root, template_id)
+    body_path = dest_dir / COMPOSE_BODY_STORE
+    if body_path.is_file():
+        return body_path.read_text(encoding="utf-8")
+    legacy = dest_dir / "doc.html"
+    if legacy.is_file():
+        return extract_compose_body_from_html(legacy.read_text(encoding="utf-8"))
+    return "<p></p>"
+
+
+def render_saved_compose_html(
+    conn: sqlite3.Connection,
+    site_root: pathlib.Path,
+    doc: dict[str, Any],
+) -> str:
+    """Wrap a saved composed document using its pinned chrome options."""
+    options = normalize_options(doc.get("options"))
+    if not options.get("composed"):
+        path = resolve_template_file(site_root, doc)
+        if path and path.is_file():
+            return path.read_text(encoding="utf-8")
+        return "<p></p>"
+    body = read_compose_body_fragment(site_root, str(doc.get("id") or ""))
+    chrome = str(options.get("composeChrome") or "simple")
+    watermark = options.get("composeWatermark", True)
+    chrome_ver = int(options.get("composeChromeVersion") or 0)
+    return wrap_composed_document(
+        title=str(doc.get("title") or "Document"),
+        body_html=body,
+        chrome=chrome,
+        watermark=watermark,
+        site_root=site_root,
+        conn=conn,
+        chrome_version=chrome_ver or None,
+    )
+
+
 def wrap_composed_document(
     *,
     title: str,
@@ -851,6 +1177,7 @@ def wrap_composed_document(
     watermark: bool | None = True,
     site_root: pathlib.Path | None = None,
     conn: sqlite3.Connection | None = None,
+    chrome_version: int | None = None,
 ) -> str:
     from rwa_compose_export import (
         COMPOSE_PAD_BODY_CSS,
@@ -923,17 +1250,23 @@ def wrap_composed_document(
             site_root,
         )
     if chrome_id != "simple" and conn is not None and site_root is not None:
+        pad_html = ""
+        if chrome_version:
+            snap = load_template_version_html(conn, chrome_id, int(chrome_version))
+            if snap:
+                pad_html = snap
         try:
-            pad_html, _doc = render_template_html(
-                conn,
-                site_root,
-                chrome_id,
-                options_override={
-                    "paperSize": "A4",
-                    "orientation": "portrait",
-                    "background": "watermark" if show_wm else "none",
-                },
-            )
+            if not pad_html:
+                pad_html, _doc = render_template_html(
+                    conn,
+                    site_root,
+                    chrome_id,
+                    options_override={
+                        "paperSize": "A4",
+                        "orientation": "portrait",
+                        "background": "watermark" if show_wm else "none",
+                    },
+                )
         except ValueError:
             pad_html = ""
         if pad_html:
@@ -964,6 +1297,34 @@ def wrap_composed_document(
         f'{margins["top"]:g}mm {margins["right"]:g}mm '
         f'{margins["bottom"]:g}mm {margins["left"]:g}mm'
     )
+    brand = load_society_branding(pathlib.Path(site_root)) if site_root else load_society_branding(_veercanvas_root())
+    try:
+        branding_py = _veercanvas_root() / "core" / "document-engine" / "branding.py"
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("veer_document_branding_shell", branding_py)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            header_inner, foot_inner, logo_src = mod.simple_compose_shell_html(brand, body, page_margin)
+        else:
+            raise RuntimeError("branding module missing")
+    except Exception:
+        society = brand.get("societyName") or "Society"
+        colony = brand.get("colonyName") or society
+        meta_line = brand.get("metaLine") or ""
+        footer = brand.get("footerLine") or society
+        logo_src = brand.get("logoPrint") or "/assets/favicon-192.png"
+        header_inner = (
+            f"<header class=\"org\">"
+            f"<img src=\"{_html_escape(str(logo_src))}\" alt=\"\">"
+            f"<h1>{_html_escape(str(society))}</h1>"
+            f"<p class=\"sub\">{_html_escape(str(colony))}</p>"
+        )
+        if meta_line:
+            header_inner += f"<p class=\"meta\">{_html_escape(str(meta_line))}</p>"
+        header_inner += "</header>"
+        foot_inner = f"<footer class=\"foot\">{_html_escape(str(footer))}</footer>"
     simple = f"""<!DOCTYPE html>
 <html lang="en" class="mhws-compose-multipage">
 <head>
@@ -1021,29 +1382,26 @@ def wrap_composed_document(
 <body>
   <div class="mhws-run-header">
     <div class="mhws-simple-chrome">
-    <header class="org">
-      <img src="/assets/mhws-logo/mhws-logo-seal-cert.png?v=20260822logo1" alt="">
-      <h1>Mandi Housing Welfare Society</h1>
-      <p class="sub">Himuda Housing Colony Sanyard</p>
-      <p class="meta">Housing Colony Sanyard, Mandi HP 175001 · Registration No. 467 dated 21/07/2012<br>
-        housingcolonysanyard@gmail.com · housingcolonysanyard.in</p>
-    </header>
+    {header_inner}
     <div class="rule" aria-hidden="true"><span class="pip"></span></div>
     </div>
   </div>
   <div class="body">{body}</div>
   <div class="mhws-run-footer">
-    <footer class="foot">Unity · Harmony · Progress · Mandi Housing Welfare Society</footer>
+    {foot_inner}
   </div>
 </body>
 </html>
 """.strip()
-    return embed_local_asset_urls(
+    wrapped = embed_local_asset_urls(
         inject_compose_chrome_layout(
             inject_compose_page_extras(inject_compose_pdf_css(simple), "simple", margins, watermark=False)
         ),
         site_root,
     )
+    if "</head>" in wrapped and 'id="mhws-compose-body"' not in wrapped:
+        wrapped = wrapped.replace("</head>", COMPOSE_PAD_BODY_CSS + "\n</head>", 1)
+    return wrapped
 
 
 def export_composed_document(
@@ -1237,6 +1595,7 @@ def list_templates(
 ) -> list[dict[str, Any]]:
     ensure_print_templates_table(conn)
     seed_default_templates(conn, site_root)
+    seed_template_versions(conn, site_root)
     clauses: list[str] = []
     params: list[Any] = []
     if status and status != "all":
@@ -1254,7 +1613,7 @@ def list_templates(
         """,
         params,
     ).fetchall()
-    return [_row_to_dto(r, site_root) for r in rows]
+    return [_enrich_template_meta(conn, site_root, _row_to_dto(r, site_root)) for r in rows]
 
 
 def get_template(
@@ -1270,7 +1629,7 @@ def get_template(
     ).fetchone()
     if not row:
         return None
-    return _row_to_dto(row, site_root)
+    return _enrich_template_meta(conn, site_root, _row_to_dto(row, site_root))
 
 
 def upsert_template(
@@ -1390,18 +1749,14 @@ def upsert_template(
     elif html_in is not None:
         from rwa_compose_export import as_bool
 
-        wrapped = wrap_composed_document(
-            title=title,
-            body_html=str(html_in or ""),
-            chrome=str(payload.get("chrome") or payload.get("composeChrome") or "simple"),
-            watermark=as_bool(payload.get("watermark"), True),
-            site_root=pathlib.Path(site_root),
-            conn=conn,
-        )
-        data = wrapped.encode("utf-8")
+        chrome = str(payload.get("chrome") or payload.get("composeChrome") or "simple")
+        watermark = as_bool(payload.get("watermark"), True)
+        body_fragment = sanitize_compose_html(str(html_in or ""))
+        fingerprint = compute_chrome_fingerprint(conn, pathlib.Path(site_root), chrome)
+        data = body_fragment.encode("utf-8")
         if len(data) > TEMPLATE_MAX_BYTES:
             raise ValueError("Document too large (max 20 MB)")
-        store_name = "doc.html"
+        store_name = COMPOSE_BODY_STORE
         dest_dir = template_item_dir(site_root, tid)
         target = dest_dir / store_name
         tmp = dest_dir / f".{store_name}.{secrets.token_hex(4)}.tmp"
@@ -1415,7 +1770,7 @@ def upsert_template(
                 except OSError:
                     pass
         for old in list(dest_dir.iterdir()):
-            if old.is_file() and old.name != store_name and not old.name.startswith("."):
+            if old.is_file() and old.name not in {store_name} and not old.name.startswith("."):
                 try:
                     old.unlink()
                 except OSError:
@@ -1428,8 +1783,13 @@ def upsert_template(
         size_bytes = len(data)
         static_path = None
         options["composed"] = True
-        options["composeChrome"] = str(payload.get("chrome") or payload.get("composeChrome") or "simple")
-        options["composeWatermark"] = as_bool(payload.get("watermark"), True)
+        options["composeChrome"] = chrome
+        options["composeWatermark"] = watermark
+        options["composeChromeFingerprint"] = fingerprint
+        options["composeEngineVersion"] = COMPOSE_ENGINE_VERSION
+        chrome_ver = get_latest_template_version(conn, chrome)
+        if chrome_ver:
+            options["composeChromeVersion"] = chrome_ver
         options_json = json.dumps(options, ensure_ascii=False)
         if "compose" not in tags:
             tags = list(tags) + ["compose"]
@@ -1540,6 +1900,12 @@ def upsert_template(
     doc = get_template(conn, tid, site_root=site_root)
     if not doc:
         raise ValueError("Failed to save template")
+    if payload.get("stationery") is not None:
+        try:
+            publish_template_version(conn, site_root, tid, actor=actor_house_id)
+            doc = get_template(conn, tid, site_root=site_root) or doc
+        except Exception:
+            pass
     return doc
 
 
@@ -1551,6 +1917,7 @@ def delete_template(conn: sqlite3.Connection, site_root: pathlib.Path, template_
     ).fetchone()
     if not row:
         raise ValueError("Template not found")
+    conn.execute("DELETE FROM template_versions WHERE template_id = ?", (template_id,))
     conn.execute("DELETE FROM print_templates WHERE id = ?", (template_id,))
     conn.commit()
     if (row["doc_type"] if hasattr(row, "keys") else row[1]) == "file":
@@ -1688,18 +2055,56 @@ def _pdf_page_layout_css(
     if mom:
         return f"""
 <style id="tpl-pdf-page">
-  @page {{ size: {page_size}; margin: 10mm; }}
+  @page {{ size: {page_size}; margin: 0; }}
+  html, body {{
+    width: {w} !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }}
   .screen-hint {{ display: none !important; }}
   .sheet {{
     position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: {w} !important;
+    height: {h} !important;
+    min-height: {h} !important;
+    max-height: {h} !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    page-break-after: always;
+    break-after: page;
+  }}
+  .sheet:last-of-type {{
+    page-break-after: auto;
+    break-after: auto;
+  }}
+  .pad {{
+    position: relative !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    padding-bottom: 9mm !important;
+    box-sizing: border-box !important;
+  }}
+  .grow {{
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }}
+  .grow .ruled-block.xl,
+  .grow .ruled-block.xxl {{
+    flex: 1 1 auto !important;
+    min-height: 24mm !important;
   }}
   .foot-bar {{
     position: absolute !important;
-    left: 0 !important;
-    right: 0 !important;
+    left: -11mm !important;
+    right: -11mm !important;
     bottom: 0 !important;
-    width: 100% !important;
-    margin-top: 0 !important;
+    margin: 0 !important;
+    z-index: 2 !important;
   }}
 </style>
 """.strip()
@@ -1793,6 +2198,7 @@ def _runtime_options_css(
     *,
     landscape: bool | None = None,
     envelope: bool = False,
+    mom: bool = False,
 ) -> str:
     colors = options.get("colors") or {}
     bg = options.get("background") or "watermark"
@@ -1854,6 +2260,29 @@ def _runtime_options_css(
     max-height: {sheet_min_h} !important;
     overflow: hidden !important;
   }}"""
+    elif mom:
+        sheet_css = f"""
+  @page {{ size: {page_size}; margin: 0; }}
+  html.pad-mom .sheet {{
+    position: relative !important;
+    width: {sheet_w} !important;
+    height: {sheet_min_h} !important;
+    min-height: {sheet_min_h} !important;
+    max-height: {sheet_min_h} !important;
+  }}
+  html.pad-mom .pad {{
+    position: relative !important;
+    padding-bottom: 9mm !important;
+    box-sizing: border-box !important;
+  }}
+  html.pad-mom .foot-bar {{
+    position: absolute !important;
+    left: -11mm !important;
+    right: -11mm !important;
+    bottom: 0 !important;
+    margin: 0 !important;
+    z-index: 2 !important;
+  }}"""
     else:
         sheet_css = f"""
   .sheet {{
@@ -1871,7 +2300,7 @@ def _runtime_options_css(
     --muted: {muted};
     --paper: #ffffff;
   }}
-  @page {{ size: {page_size}; }}
+  @page {{ size: {page_size}; margin: 0; }}
   {sheet_css}
   {wm_css}
   {plain_css}
@@ -2051,10 +2480,12 @@ def inject_template_runtime(html: str, *, options: dict[str, Any], conn: sqlite3
     """Inject print options CSS only (pads keep their authored office-bearer markup)."""
     opts = normalize_options(options)
     is_envelope = bool(re.search(r'envelope-pad|data-tpl=["\']envelope["\']', html, re.I))
+    is_mom = bool(re.search(r"pad-mom", html, re.I))
     css = _runtime_options_css(
         opts,
         landscape=True if is_envelope else None,
         envelope=is_envelope,
+        mom=is_mom,
     )
     base_tag = ""
     if base_href:

@@ -16,7 +16,7 @@
   "logoWeb": "assets/mhws-logo/mhws-logo-web-512.png",
   "societyName": "Mandi Housing Welfare Society",
   "version": "v0.1.6",
-  "lastUpdated": "2026-08-10T16:30:00Z",
+  "lastUpdated": "2026-08-29T18:30:00Z",
   "platformSiteId": "hbcsanyard",
   "publicOrigin": "https://housingcolonysanyard.in",
   "auth": {
@@ -33,5 +33,10 @@
       "https://www.hbcsanyard.veerlabs.solutions"
     ]
   },
-  "logoPdf": "assets/mhws-logo/mhws-logo-seal-cert.png"
+  "logoPdf": "assets/mhws-logo/mhws-logo-seal-cert.png",
+  "composeBranding": {
+    "addressLine": "Housing Colony Sanyard, Mandi HP 175001 \u00b7 Registration No. 467 dated 21/07/2012",
+    "email": "housingcolonysanyard@gmail.com",
+    "footerLine": "Unity \u00b7 Harmony \u00b7 Progress \u00b7 Mandi Housing Welfare Society"
+  }
 }

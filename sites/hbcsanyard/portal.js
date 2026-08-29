@@ -9162,7 +9162,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div class="sig">President / Chairman</div>
           <div class="sig">General Secretary</div>
         </div>
-        <div class="foot-bar" style="margin-top:4mm">${foot2}</div>
+        <div class="foot-bar">${foot2}</div>
       </div></div>
     </div>`;
   }
@@ -9623,9 +9623,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260817pad4">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260817pad4">
-      <style>@page { size: ${paperMap[paper]}; margin: 10mm; }</style>
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260825mom6">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260825mom6">
+      <style>@page { size: ${paperMap[paper]}; margin: 0; }</style>
       </head><body>${html}
       <script>
         (function(){
@@ -14366,8 +14366,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (el('templatesEditor')) el('templatesEditor').open = false;
     if (el('templatesStationery')) el('templatesStationery').open = false;
     mountComposeEditor().catch((e) => {
-      if (el('tplComposeStatus')) {
-        el('tplComposeStatus').textContent = e.message || 'Composer failed to load — hard refresh the page.';
+      if (el('tplComposeStatusLine')) {
+        el('tplComposeStatusLine').textContent = e.message || 'Composer failed to load — hard refresh the page.';
       }
     });
   });
@@ -14838,6 +14838,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   let templatesCategories = [];
   let templatesStarters = [];
   let templatesChromes = [];
+  let templatesSiteBranding = null;
   let composeSession = null;
   let composeDirty = false;
   let composePreviewUrl = '';
@@ -14905,6 +14906,106 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const id = chromeId || el('tplComposeChrome')?.value || 'simple';
     composeSession?.driver?.setPageMargins?.(composeMarginsForChrome(id));
     composeSession?.setChrome?.(id);
+    updateComposeChromeStaleNotice();
+  }
+
+  async function applyComposerSiteBranding(meta) {
+    try {
+      const C = await whenComposerReady();
+      if (C?.setSocietyBranding) C.setSocietyBranding(meta);
+    } catch (_) {
+      /* composer optional */
+    }
+  }
+
+  function updateComposeChromeStaleNotice(doc) {
+    const warn = el('tplComposeChromeWarn');
+    if (!warn) return;
+    const editId = String(el('tplComposeEditId')?.value || doc?.id || '').trim();
+    const cached = editId ? templatesCache.find((t) => t.id === editId) : null;
+    const status = doc?.composeChromeStatus || cached?.composeChromeStatus;
+    const pickerChrome = el('tplComposeChrome')?.value || '';
+    if (!editId || !status) {
+      warn.hidden = true;
+      warn.textContent = '';
+      return;
+    }
+    const pinnedChrome = status.composeChrome || '';
+    const pickerChanged = pickerChrome && pinnedChrome && pickerChrome !== pinnedChrome;
+    if (status.composeChromeStale && !pickerChanged) {
+      warn.hidden = false;
+      const verNote = status.composeChromeVersionLatest && status.composeChromeVersion
+        && status.composeChromeVersion < status.composeChromeVersionLatest
+        ? ` (pinned v${status.composeChromeVersion}, latest v${status.composeChromeVersionLatest})`
+        : '';
+      warn.textContent = `Letterhead changed since this document was saved${verNote}. Preview and print use today’s letterhead until you save again.`;
+      return;
+    }
+    if (pickerChanged) {
+      warn.hidden = false;
+      warn.textContent = 'You changed letterhead — save to pin the new chrome on this document.';
+      return;
+    }
+    warn.hidden = true;
+    warn.textContent = '';
+  }
+
+  function paintStationeryVersions(doc) {
+    const wrap = el('tplStationeryVersionsWrap');
+    const list = el('tplStationeryVersions');
+    if (!wrap || !list) return;
+    if (!doc?.id) {
+      wrap.hidden = true;
+      list.innerHTML = '';
+      return;
+    }
+    const versions = Array.isArray(doc.publishedVersions) ? doc.publishedVersions : [];
+    wrap.hidden = false;
+    if (!versions.length) {
+      list.innerHTML = '<li>No published versions yet — save or publish to create v1.</li>';
+      return;
+    }
+    list.innerHTML = versions.map((v) => {
+      let when = '';
+      if (v.publishedAt) {
+        try {
+          when = new Date(v.publishedAt).toLocaleDateString('en-IN', {
+            day: '2-digit', month: 'short', year: 'numeric',
+          });
+        } catch (_) {
+          when = String(v.publishedAt);
+        }
+      }
+      const by = v.publishedBy ? ` · ${escapeHtml(v.publishedBy)}` : '';
+      return `<li>v${v.version}${when ? ` · ${escapeHtml(when)}` : ''}${by}</li>`;
+    }).join('');
+  }
+
+  async function publishStationeryVersion() {
+    const id = String(el('tplStationeryEditId')?.value || '').trim();
+    const statusLine = el('tplStationeryStatusLine');
+    if (!id) {
+      if (statusLine) statusLine.textContent = 'Save the letterhead first, then publish a version.';
+      return;
+    }
+    const btn = el('tplStationeryPublishBtn');
+    if (btn) btn.disabled = true;
+    if (statusLine) statusLine.textContent = 'Publishing version…';
+    try {
+      const data = await api(`/api/rwa/templates/${encodeURIComponent(id)}/publish-version`, { method: 'POST' });
+      await loadTemplates();
+      if (data.template) paintStationeryVersions(data.template);
+      if (statusLine) {
+        const ver = data.version?.version;
+        statusLine.textContent = ver
+          ? `Published version ${ver}. New saves pin this snapshot.`
+          : 'Version published.';
+      }
+    } catch (e) {
+      if (statusLine) statusLine.textContent = e.message || 'Publish failed';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   function fillComposeChromeSelect() {
@@ -14927,6 +15028,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function composeExportPayload() {
+    if (composeSession?.driver?.saveSelection) composeSession.driver.saveSelection();
     const starter = currentComposeStarter();
     return {
       title: String(el('tplComposeTitle')?.value || '').trim() || 'Document',
@@ -14942,8 +15044,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   async function mountComposeEditor() {
     const C = await whenComposerReady();
     if (!C) {
-      if (el('tplComposeStatus')) {
-        el('tplComposeStatus').textContent = 'Composer failed to load — hard refresh the page.';
+      if (el('tplComposeStatusLine')) {
+        el('tplComposeStatusLine').textContent = 'Composer failed to load — hard refresh the page.';
       }
       return null;
     }
@@ -14951,13 +15053,14 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const host = el('tplComposeEditor');
     const toolbar = el('tplComposeToolbar');
     if (!host || !toolbar) {
-      if (el('tplComposeStatus')) el('tplComposeStatus').textContent = 'Composer markup is missing.';
+      if (el('tplComposeStatusLine')) el('tplComposeStatusLine').textContent = 'Composer markup is missing.';
       return null;
     }
     if (shell && !shell.dataset.layoutBound) {
       C.attachLayout(shell, { storageKey: 'mhws-composer-layout-templates' });
     }
     if (!composeSession) {
+      await applyComposerSiteBranding(templatesSiteBranding);
       composeSession = C.mount({
         host,
         toolbar,
@@ -15069,7 +15172,7 @@ ${foot}
   async function previewComposeDocument() {
     if (!composeSession) return;
     const title = String(el('tplComposeTitle')?.value || '').trim() || 'Document';
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     let html = '';
     try {
       const { blob } = await apiBinary('/api/rwa/templates/compose/preview', {
@@ -15102,7 +15205,7 @@ ${foot}
     composeSession?.setHTML('<p></p>');
     applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
     composeDirty = false;
-    if (el('tplComposeStatus')) el('tplComposeStatus').textContent = '';
+    if (el('tplComposeStatusLine')) el('tplComposeStatusLine').textContent = '';
     if (el('tplStarterHint')) {
       el('tplStarterHint').textContent = 'Resolution, forwarding letter, notice, MOM, circular, agenda, office note — add more starters in the catalogue without changing the editor.';
     }
@@ -15134,7 +15237,7 @@ ${foot}
     resetComposeFields();
     resetStationeryFields();
     showTemplatesWorkspace('compose');
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     try {
       const session = await mountComposeEditor();
       el('tplComposeShell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -15160,7 +15263,7 @@ ${foot}
   async function saveComposeDocument(event) {
     event.preventDefault();
     if (!hasEntitlement('manage_templates')) return;
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     const saveBtn = el('tplComposeSaveBtn');
     const title = String(el('tplComposeTitle')?.value || '').trim();
     if (!title) {
@@ -15205,7 +15308,7 @@ ${foot}
     if (el('templatesComposeForm')) el('templatesComposeForm').dataset.bound = '1';
     el('templatesComposeForm')?.addEventListener('submit', (event) => {
       saveComposeDocument(event).catch((e) => {
-        if (el('tplComposeStatus')) el('tplComposeStatus').textContent = e.message || 'Save failed';
+        if (el('tplComposeStatusLine')) el('tplComposeStatusLine').textContent = e.message || 'Save failed';
       });
     });
     el('tplStarterSelect')?.addEventListener('change', () => {
@@ -15433,7 +15536,7 @@ ${foot}
       el('tplComposeTitle').value = result.title || '';
     }
     composeDirty = true;
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     if (statusLine) {
       statusLine.textContent = `Imported “${result.sourceName || result.title || 'document'}”. Letterhead is applied when you save or download.`;
     }
@@ -15442,7 +15545,7 @@ ${foot}
 
   async function importComposeFromLocal(file) {
     if (!hasEntitlement('manage_templates')) return;
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     if (statusLine) statusLine.textContent = 'Importing…';
     try {
       const body = new FormData();
@@ -15456,7 +15559,7 @@ ${foot}
 
   async function importComposeFromDrive(fileId) {
     if (!hasEntitlement('manage_templates')) return;
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     if (statusLine) statusLine.textContent = 'Importing from Google Drive…';
     try {
       const result = await api('/api/rwa/templates/compose/import', {
@@ -15471,7 +15574,7 @@ ${foot}
 
   async function downloadComposeDocument(format, destination = 'download') {
     if (!hasEntitlement('manage_templates')) return;
-    const statusLine = el('tplComposeStatus');
+    const statusLine = el('tplComposeStatusLine');
     const title = String(el('tplComposeTitle')?.value || '').trim();
     if (!title) {
       if (statusLine) statusLine.textContent = 'Title required.';
@@ -15697,6 +15800,13 @@ ${foot}
     const C = await whenComposerReady();
     const apiSt = C?.stationery || stationeryApi();
     if (!apiSt) throw new Error('Template designer failed to load — hard refresh the page.');
+    if (templatesSiteBranding) {
+      await applyComposerSiteBranding(templatesSiteBranding);
+    }
+    const shell = el('tplStationeryShell');
+    if (shell && !shell.dataset.layoutBound && C?.attachLayout) {
+      C.attachLayout(shell, { storageKey: 'mhws-stationery-layout-templates' });
+    }
     if (!stationerySpec) stationerySpec = apiSt.normalize(apiSt.defaultSpec());
     if (el('tplStPaper') && !el('tplStPaper').options.length) {
       el('tplStPaper').innerHTML = apiSt.papers
@@ -15747,6 +15857,19 @@ ${foot}
     `).join('');
   }
 
+  function syncStationeryImageFields(spec) {
+    const logoSrc = String(spec?.logo?.src || '').trim();
+    const wmSrc = String(spec?.watermark?.src || '').trim();
+    if (el('tplStLogoSrc')) el('tplStLogoSrc').value = logoSrc;
+    if (el('tplStWmSrc')) el('tplStWmSrc').value = wmSrc;
+    if (el('tplStLogoUrl')) {
+      el('tplStLogoUrl').value = logoSrc.startsWith('data:') ? '' : logoSrc;
+    }
+    if (el('tplStWmUrl')) {
+      el('tplStWmUrl').value = wmSrc.startsWith('data:') ? '' : wmSrc;
+    }
+  }
+
   function applyStationerySpecToForm(specIn) {
     const apiSt = stationeryApi();
     if (!apiSt) return;
@@ -15773,6 +15896,7 @@ ${foot}
     if (el('tplStFootColor')) el('tplStFootColor').value = spec.footer?.color || '#5a6a80';
     syncStationeryCustomFields();
     renderStationeryHeaderLines(spec.headerLines);
+    syncStationeryImageFields(spec);
   }
 
   function readStationerySpecFromForm() {
@@ -15790,6 +15914,14 @@ ${foot}
       });
     });
     const prev = stationerySpec || apiSt.defaultSpec();
+    const logoSrc = String(el('tplStLogoUrl')?.value || '').trim()
+      || String(el('tplStLogoSrc')?.value || '').trim()
+      || prev.logo?.src
+      || '';
+    const wmSrc = String(el('tplStWmUrl')?.value || '').trim()
+      || String(el('tplStWmSrc')?.value || '').trim()
+      || prev.watermark?.src
+      || '';
     stationerySpec = apiSt.normalize({
       paper: {
         id: el('tplStPaper')?.value || 'A4',
@@ -15799,14 +15931,14 @@ ${foot}
       },
       backgroundColor: el('tplStBg')?.value || '#ffffff',
       logo: {
-        src: prev.logo?.src || '',
+        src: logoSrc,
         enabled: !!el('tplStLogoOn')?.checked,
         widthMm: el('tplStLogoW')?.value || 18,
         align: el('tplStLogoAlign')?.value || 'center',
       },
       headerLines: lines,
       watermark: {
-        src: prev.watermark?.src || '',
+        src: wmSrc,
         enabled: !!el('tplStWmOn')?.checked,
         opacity: el('tplStWmOpacity')?.value || 0.72,
       },
@@ -15819,14 +15951,15 @@ ${foot}
       },
       border: { style: el('tplStBorder')?.value || 'navy-rule' },
     });
+    syncStationeryImageFields(stationerySpec);
     return stationerySpec;
   }
 
-  function paintStationeryDesk() {
+  function paintStationeryDesk(specOptional) {
     const apiSt = stationeryApi();
     const host = el('tplStationeryPreview');
     if (!apiSt || !host) return;
-    const spec = readStationerySpecFromForm();
+    const spec = specOptional || readStationerySpecFromForm();
     apiSt.paintPreview(host, spec);
   }
 
@@ -15846,10 +15979,14 @@ ${foot}
     }
     if (el('tplStLogoFile')) el('tplStLogoFile').value = '';
     if (el('tplStWmFile')) el('tplStWmFile').value = '';
+    if (el('tplStLogoSrc')) el('tplStLogoSrc').value = '';
+    if (el('tplStWmSrc')) el('tplStWmSrc').value = '';
+    if (el('tplStLogoUrl')) el('tplStLogoUrl').value = '';
+    if (el('tplStWmUrl')) el('tplStWmUrl').value = '';
     stationerySpec = apiSt ? apiSt.normalize(apiSt.defaultSpec()) : null;
     if (stationerySpec) applyStationerySpecToForm(stationerySpec);
     stationeryDirty = false;
-    if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = '';
+    if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = '';
   }
 
   async function startNewStationeryTemplate() {
@@ -15863,11 +16000,11 @@ ${foot}
       paintStationeryDesk();
       el('templatesStationery')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       el('tplStationeryTitle')?.focus();
-      if (el('tplStationeryStatus')) {
-        el('tplStationeryStatus').textContent = 'New letterhead — adjust chrome, then save. It appears in the document letterhead list.';
+      if (el('tplStationeryStatusLine')) {
+        el('tplStationeryStatusLine').textContent = 'New letterhead — adjust chrome, then save. It appears in the document letterhead list.';
       }
     } catch (e) {
-      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Could not open template designer.';
+      if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = e.message || 'Could not open template designer.';
     }
   }
 
@@ -15880,7 +16017,7 @@ ${foot}
   async function saveStationeryTemplate(event) {
     event.preventDefault();
     if (!hasEntitlement('manage_templates')) return;
-    const statusLine = el('tplStationeryStatus');
+    const statusLine = el('tplStationeryStatusLine');
     const saveBtn = el('tplStationerySaveBtn');
     const title = String(el('tplStationeryTitle')?.value || '').trim();
     if (!title) {
@@ -15931,7 +16068,7 @@ ${foot}
     try {
       await ensureStationeryForm();
     } catch (e) {
-      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Designer not ready.';
+      if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = e.message || 'Designer not ready.';
       return;
     }
     const apiSt = stationeryApi();
@@ -15958,16 +16095,22 @@ ${foot}
         spec.logo.src = src;
         spec.logo.enabled = true;
         if (el('tplStLogoOn')) el('tplStLogoOn').checked = true;
+        if (el('tplStLogoSrc')) el('tplStLogoSrc').value = src;
+        if (el('tplStLogoUrl')) el('tplStLogoUrl').value = '';
+        if (el('tplStLogoFile')) el('tplStLogoFile').value = '';
       } else {
         spec.watermark.src = src;
         spec.watermark.enabled = true;
         if (el('tplStWmOn')) el('tplStWmOn').checked = true;
+        if (el('tplStWmSrc')) el('tplStWmSrc').value = src;
+        if (el('tplStWmUrl')) el('tplStWmUrl').value = '';
+        if (el('tplStWmFile')) el('tplStWmFile').value = '';
       }
       stationerySpec = apiSt.normalize(spec);
       stationeryDirty = true;
-      paintStationeryDesk();
+      paintStationeryDesk(stationerySpec);
     } catch (e) {
-      if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Image failed';
+      if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = e.message || 'Image failed';
     }
   }
 
@@ -15976,7 +16119,7 @@ ${foot}
     stationeryBound = true;
     el('templatesStationeryForm')?.addEventListener('submit', (event) => {
       saveStationeryTemplate(event).catch((e) => {
-        if (el('tplStationeryStatus')) el('tplStationeryStatus').textContent = e.message || 'Save failed';
+        if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = e.message || 'Save failed';
       });
     });
     el('tplStationeryNewBtn')?.addEventListener('click', (event) => {
@@ -15985,6 +16128,11 @@ ${foot}
     });
     el('tplStationeryPreviewBtn')?.addEventListener('click', () => previewStationeryTemplate());
     el('tplStationeryCloseBtn')?.addEventListener('click', () => closeStationeryDesigner());
+    el('tplStationeryPublishBtn')?.addEventListener('click', () => {
+      publishStationeryVersion().catch((e) => {
+        if (el('tplStationeryStatusLine')) el('tplStationeryStatusLine').textContent = e.message || 'Publish failed';
+      });
+    });
     el('tplStationeryTitle')?.addEventListener('input', () => { stationeryDirty = true; });
     el('tplStAddLineBtn')?.addEventListener('click', () => {
       const spec = readStationerySpecFromForm();
@@ -16016,7 +16164,7 @@ ${foot}
     el('tplStHeaderLines')?.addEventListener('change', () => markStationeryDirty());
     [
       'tplStPaper', 'tplStOrientation', 'tplStWidthMm', 'tplStHeightMm', 'tplStBg', 'tplStBorder',
-      'tplStLogoOn', 'tplStLogoW', 'tplStLogoAlign', 'tplStWmOn', 'tplStWmOpacity',
+      'tplStLogoOn', 'tplStLogoW', 'tplStLogoAlign', 'tplStLogoUrl', 'tplStWmOn', 'tplStWmOpacity', 'tplStWmUrl',
       'tplStFootText', 'tplStFootFont', 'tplStFootSize', 'tplStFootWeight', 'tplStFootColor',
       'tplStationeryCategory', 'tplStationeryStatus',
     ].forEach((id) => {
@@ -16061,15 +16209,13 @@ ${foot}
     if (!session) throw new Error('Composer is not ready');
     const headers = {};
     if (state.session?.token) headers['X-RWA-Token'] = state.session.token;
-    const res = await fetch(authDocUrl(`/api/rwa/templates/${encodeURIComponent(doc.id)}/file`), {
+    const res = await fetch(authDocUrl(`/api/rwa/templates/${encodeURIComponent(doc.id)}/file?fragment=1`), {
       credentials: 'same-origin',
       headers,
     });
     if (!res.ok) throw new Error('Could not load the document');
     const html = await res.text();
-    const C = window.MhwsComposer;
-    const body = C?.extractBody ? C.extractBody(html) : html;
-    session.setHTML(body || '<p></p>');
+    session.setHTML(html || '<p></p>');
     if (el('tplComposeEditId')) el('tplComposeEditId').value = doc.id;
     if (el('tplComposeTitle')) el('tplComposeTitle').value = doc.title || '';
     if (el('tplComposeCategory') && doc.category) el('tplComposeCategory').value = doc.category;
@@ -16087,8 +16233,9 @@ ${foot}
     composeDirty = false;
     showTemplatesWorkspace('compose');
     closeDocViewer();
-    if (el('tplComposeStatus')) {
-      el('tplComposeStatus').textContent = `Editing “${doc.title || 'document'}”. Save to update the library copy.`;
+    updateComposeChromeStaleNotice(doc);
+    if (el('tplComposeStatusLine')) {
+      el('tplComposeStatusLine').textContent = `Editing “${doc.title || 'document'}”. Save to update the library copy.`;
     }
     el('tplComposeShell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     session.driver?.focus?.();
@@ -16110,9 +16257,10 @@ ${foot}
     stationeryDirty = false;
     showTemplatesWorkspace('stationery');
     paintStationeryDesk();
+    paintStationeryVersions(doc);
     closeDocViewer();
-    if (el('tplStationeryStatus')) {
-      el('tplStationeryStatus').textContent = `Editing “${doc.title || 'letterhead'}”. Save to update the letterhead.`;
+    if (el('tplStationeryStatusLine')) {
+      el('tplStationeryStatusLine').textContent = `Editing “${doc.title || 'letterhead'}”. Save to update the letterhead.`;
     }
     el('templatesStationery')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -16238,6 +16386,9 @@ ${foot}
       const status = doc.status && doc.status !== 'published'
         ? `<span class="info-doc-badge is-draft">${escapeHtml(doc.status)}</span>`
         : '';
+      const chromeStale = doc.composeChromeStatus?.composeChromeStale
+        ? '<span class="info-doc-badge is-draft">letterhead updated</span>'
+        : '';
       const meta = templateCardMeta(doc);
       return `
         <article class="info-doc-card" data-doc-type="${escapeHtml(doc.docType || 'file')}">
@@ -16246,6 +16397,7 @@ ${foot}
               <div class="info-doc-badges">
                 <span class="info-doc-badge ${kind.cls}">${escapeHtml(kind.label)}</span>
                 ${status}
+                ${chromeStale}
               </div>
               <h4 class="info-doc-card-title tpl-open-title" data-tpl-open="${escapeHtml(doc.id)}" title="Open">${escapeHtml(doc.title || 'Untitled')}</h4>
               ${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ''}
@@ -16299,13 +16451,15 @@ ${foot}
     templatesCache = data.templates || [];
     templatesStarters = Array.isArray(data.starters) ? data.starters : templatesStarters;
     templatesChromes = Array.isArray(data.chromes) ? data.chromes : templatesChromes;
+    templatesSiteBranding = data.siteBranding || templatesSiteBranding;
+    applyComposerSiteBranding(templatesSiteBranding);
     fillComposeStarterSelect();
     fillComposeChromeSelect();
     applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
     if (el('templatesCompose')?.open) {
       mountComposeEditor().catch((e) => {
-        if (el('tplComposeStatus')) {
-          el('tplComposeStatus').textContent = e.message || 'Composer failed to load — hard refresh the page.';
+        if (el('tplComposeStatusLine')) {
+          el('tplComposeStatusLine').textContent = e.message || 'Composer failed to load — hard refresh the page.';
         }
       });
     }

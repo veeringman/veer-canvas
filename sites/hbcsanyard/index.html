@@ -22,12 +22,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260823login1">
-  <link rel="stylesheet" href="composer/composer.css?v=20260823ob10">
-  <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260813mom16">
+  <link rel="stylesheet" href="portal.css?v=20260825mom6">
+  <link rel="stylesheet" href="composer/composer.css?v=20260830studio2">
+  <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260825mom6">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260824ob13" defer></script>
-  <script type="module" src="composer/boot.js?v=20260823ob10"></script>
+  <script src="portal.js?v=20260830studio2" defer></script>
+  <script type="module" src="composer/boot.js?v=20260830studio1"></script>
 </head>
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
@@ -2893,11 +2893,12 @@
                   </div>
                 </div>
                 <p class="sr-only" id="tplStarterHint">Resolution, forwarding letter, notice, MOM, circular, agenda, office note.</p>
+                <p class="tpl-compose-chrome-warn" id="tplComposeChromeWarn" hidden role="status"></p>
                 <div id="tplComposeToolbar"></div>
                 <input type="file" id="tplComposeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
                 <input type="file" id="tplComposeImportInput" accept=".txt,.text,.doc,.docx,.pages,.pdf,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
                 <div id="tplComposeEditor" class="mhws-composer-paper" data-placeholder="Choose a document type, then write…"></div>
-                <p class="mhws-composer-status" id="tplComposeStatus"></p>
+                <p class="mhws-composer-status" id="tplComposeStatusLine"></p>
               </form>
             </div>
           </details>
@@ -2908,6 +2909,9 @@
             </summary>
             <form id="templatesStationeryForm" class="mhws-stationery-form">
               <input type="hidden" id="tplStationeryEditId" value="">
+              <input type="hidden" id="tplStLogoSrc" value="">
+              <input type="hidden" id="tplStWmSrc" value="">
+              <div id="tplStationeryShell" class="mhws-composer-shell mhws-stationery-shell" data-layout="original">
               <div class="mhws-composer-meta mhws-stationery-meta">
                 <button type="button" class="mhws-composer-btn" id="tplStationeryNewBtn" title="Create new document or template" aria-label="Create new">
                   <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -2972,7 +2976,10 @@
                           <option value="right">Right</option>
                         </select>
                       </label>
-                      <label class="span-2">Image
+                      <label class="span-2">Image URL
+                        <input type="text" id="tplStLogoUrl" placeholder="/assets/… or https://…" autocomplete="off">
+                      </label>
+                      <label class="span-2">Upload image
                         <input type="file" id="tplStLogoFile" accept="image/png,image/jpeg,image/webp,image/gif">
                       </label>
                     </div>
@@ -2989,7 +2996,10 @@
                       <label>Opacity
                         <input type="number" id="tplStWmOpacity" min="0.08" max="1" step="0.02" value="0.72">
                       </label>
-                      <label class="span-2">Image
+                      <label class="span-2">Image URL
+                        <input type="text" id="tplStWmUrl" placeholder="/assets/… or https://…" autocomplete="off">
+                      </label>
+                      <label class="span-2">Upload image
                         <input type="file" id="tplStWmFile" accept="image/png,image/jpeg,image/webp,image/gif">
                       </label>
                     </div>
@@ -3023,8 +3033,14 @@
                 <div class="mhws-stationery-preview-wrap">
                   <div id="tplStationeryPreview" class="mhws-stationery-preview" aria-label="Letterhead preview"></div>
                 </div>
+                <div class="tpl-stationery-versions" id="tplStationeryVersionsWrap" hidden>
+                  <p class="muted">Published letterhead versions — saved documents pin the version active when you save.</p>
+                  <ul class="tpl-version-list" id="tplStationeryVersions"></ul>
+                  <button type="button" class="btn secondary compact" id="tplStationeryPublishBtn">Publish version</button>
+                </div>
               </div>
-              <p class="mhws-composer-status" id="tplStationeryStatus"></p>
+              <p class="mhws-composer-status" id="tplStationeryStatusLine"></p>
+              </div>
             </form>
           </details>
           <details class="templates-editor" id="templatesEditor">

@@ -88,12 +88,13 @@
 
   /* —— MOM register pads —— */
   html.pad-mom {
-    --mom-print-h: 237mm;
+    --mom-print-h: 297mm;
   }
   html.pad-mom body {
     overflow: hidden !important;
   }
   html.pad-mom .sheet {
+    position: relative !important;
     height: var(--mom-print-h) !important;
     min-height: var(--mom-print-h) !important;
     max-height: var(--mom-print-h) !important;
@@ -106,24 +107,32 @@
     break-after: avoid-page !important;
   }
   html.pad-mom .pad {
+    position: relative !important;
     flex: 1 1 auto !important;
-    height: auto !important;
     min-height: 0 !important;
     padding-top: 2mm !important;
-    padding-bottom: 2mm !important;
+    padding-bottom: 8mm !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
   }
-  html.pad-mom .ruled-block.sm { min-height: 8mm !important; max-height: 8mm !important; }
-  html.pad-mom .ruled-block.md { min-height: 12mm !important; max-height: 12mm !important; }
-  html.pad-mom .ruled-block.lg { min-height: 18mm !important; max-height: 18mm !important; }
-  html.pad-mom .ruled-block.xl { min-height: 28mm !important; max-height: 28mm !important; }
-  html.pad-mom .ruled-block.xxl { min-height: 66mm !important; max-height: 66mm !important; flex: 0 1 auto !important; }
-  html.pad-mom .grow .ruled-block.xxl { min-height: 48mm !important; max-height: 48mm !important; }
+  html.pad-mom .grow {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+  html.pad-mom .grow .ruled-block.xl,
+  html.pad-mom .grow .ruled-block.xxl {
+    flex: 1 1 auto !important;
+    min-height: 24mm !important;
+    max-height: none !important;
+  }
   html.pad-mom .foot-bar {
+    position: absolute !important;
+    left: -6mm !important;
+    right: -6mm !important;
+    bottom: 0 !important;
+    margin: 0 !important;
     padding: 1.2mm 8mm !important;
-    margin-top: auto !important;
-    flex-shrink: 0 !important;
+    z-index: 2 !important;
   }
   html.pad-mom .sign-row { margin-top: 1.5mm !important; }
   html.pad-mom .banner { margin-bottom: 0.8mm !important; padding: 1mm 3mm !important; }

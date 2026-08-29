@@ -6873,6 +6873,7 @@ def api_rwa_print_templates():
                 "optionPresets": rwa_templates.option_presets(),
                 "starters": rwa_templates.document_starters(),
                 "chromes": rwa_templates.compose_chromes(conn, SITE_ROOT),
+                "siteBranding": rwa_templates.load_society_branding(SITE_ROOT),
             })
 
         upload = request.files.get("file") or request.files.get("document")
@@ -6902,6 +6903,31 @@ def api_rwa_print_templates():
             file_storage=upload,
         )
         return jsonify({"ok": True, "template": doc})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/rwa/templates/<template_id>/publish-version", methods=["POST"])
+def api_rwa_publish_template_version(template_id: str):
+    """Publish an immutable chrome snapshot for letterhead / pad templates."""
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
+        if not doc:
+            return jsonify({"ok": False, "error": "Template not found"}), 404
+        version = rwa_templates.publish_template_version(
+            conn,
+            SITE_ROOT,
+            template_id,
+            actor=sess["resident"].get("houseId"),
+        )
+        doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
+        return jsonify({"ok": True, "version": version, "template": doc})
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     finally:
@@ -7084,9 +7110,16 @@ def api_rwa_print_template_render(template_id: str):
                 override = json.loads(raw_opts)
             except json.JSONDecodeError:
                 override = None
-        html, doc = rwa_templates.render_template_html(
-            conn, SITE_ROOT, template_id, options_override=override
-        )
+        doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
+        if not doc:
+            return jsonify({"ok": False, "error": "Template not found"}), 404
+        options = doc.get("options") or {}
+        if options.get("composed"):
+            html = rwa_templates.render_saved_compose_html(conn, SITE_ROOT, doc)
+        else:
+            html, doc = rwa_templates.render_template_html(
+                conn, SITE_ROOT, template_id, options_override=override
+            )
         download = (request.args.get("download") or "").strip() in ("1", "true", "yes")
         headers = {
             "Cache-Control": "no-store",
@@ -7112,6 +7145,22 @@ def api_rwa_print_template_file(template_id: str):
         doc = rwa_templates.get_template(conn, template_id, site_root=SITE_ROOT)
         if not doc:
             return jsonify({"ok": False, "error": "Template not found"}), 404
+        options = doc.get("options") or {}
+        fragment = (request.args.get("fragment") or "").strip().lower() in ("1", "true", "yes")
+        if options.get("composed"):
+            if fragment:
+                body = rwa_templates.read_compose_body_fragment(SITE_ROOT, template_id)
+                return Response(body, mimetype="text/html; charset=utf-8")
+            html = rwa_templates.render_saved_compose_html(conn, SITE_ROOT, doc)
+            download = (request.args.get("download") or "").strip() in ("1", "true", "yes")
+            name = doc.get("originalName") or f"{doc.get('title') or 'document'}.html"
+            if download:
+                return Response(
+                    html,
+                    mimetype="text/html; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename={name}"},
+                )
+            return Response(html, mimetype="text/html; charset=utf-8")
         path = rwa_templates.resolve_template_file(SITE_ROOT, doc)
         if not path or not path.is_file():
             return jsonify({"ok": False, "error": "File missing"}), 404

@@ -1,5 +1,5 @@
 /* Shared MOM register print styles — matches proceedings-*-mom-pad.html */
-@page { size: A4 portrait; margin: 10mm; }
+@page { size: A4 portrait; margin: 0; }
 * { box-sizing: border-box; }
 :root {
   --navy: #0b2a56;
@@ -11,7 +11,7 @@
   --paper: #ffffff;
   --line: rgba(11, 42, 86, 0.10);
   --mom-page-h: 297mm;
-  --mom-print-h: 237mm; /* fit one page inside @page 10mm margins */
+  --mom-print-h: 297mm; /* full A4; @page margin 0 */
 }
 body {
   margin: 0;
@@ -67,7 +67,9 @@ body {
   display: flex;
   flex-direction: column;
   padding: 4mm 11mm 0;
+  padding-bottom: 9mm;
   min-height: 0;
+  box-sizing: border-box;
 }
 .brand {
   display: grid;
@@ -192,10 +194,11 @@ body {
 .ruled-block.sm { min-height: 20mm; }
 .ruled-block.md { min-height: 32mm; }
 .ruled-block.lg { min-height: 48mm; }
-.ruled-block.xl { min-height: 78mm; }
-.ruled-block.xxl { min-height: 165mm; flex: 1; }
+.ruled-block.xl { min-height: 48mm; }
+.ruled-block.xxl { min-height: 80mm; }
 .grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.grow .ruled-block.xxl { flex: 1; min-height: 110mm; }
+.grow .ruled-block.xl,
+.grow .ruled-block.xxl { flex: 1 1 auto; min-height: 36mm; }
 table.res-table {
   width: 100%;
   border-collapse: collapse;
@@ -232,7 +235,12 @@ table.res-table th {
   font-weight: 600;
 }
 .foot-bar {
-  margin: auto -11mm 0;
+  position: absolute;
+  left: -11mm;
+  right: -11mm;
+  bottom: 0;
+  margin: 0;
+  z-index: 2;
   background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
   color: #f7f3ea;
   text-align: center;
@@ -285,19 +293,27 @@ table.res-table th {
   }
   .pad {
     padding: 2mm 6mm 0;
-    padding-bottom: 3mm !important;
+    padding-bottom: 8mm !important;
     box-sizing: border-box !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
   .foot-bar {
-    margin-left: -6mm;
-    margin-right: -6mm;
+    position: absolute;
+    left: -6mm;
+    right: -6mm;
+    bottom: 0;
+    margin: 0;
   }
-  .ruled-block.sm { min-height: 9mm !important; max-height: 9mm !important; }
-  .ruled-block.md { min-height: 14mm !important; max-height: 14mm !important; }
-  .ruled-block.lg { min-height: 20mm !important; max-height: 20mm !important; }
-  .ruled-block.xl { min-height: 32mm !important; max-height: 32mm !important; }
-  .ruled-block.xxl { min-height: 72mm !important; max-height: 72mm !important; flex: 0 1 auto !important; }
-  .grow .ruled-block.xxl { min-height: 52mm !important; max-height: 52mm !important; }
+  .ruled-block.sm { min-height: 9mm !important; }
+  .ruled-block.md { min-height: 14mm !important; }
+  .ruled-block.lg { min-height: 20mm !important; }
+  .ruled-block.xl { min-height: 28mm !important; }
+  .ruled-block.xxl { min-height: 40mm !important; }
+  .grow .ruled-block.xl,
+  .grow .ruled-block.xxl { flex: 1 1 auto !important; min-height: 28mm !important; max-height: none !important; }
   .section { margin: 1.2mm 0; }
   .sign-row { margin-top: 3mm; }
   .banner { margin: 1mm 0 2mm; padding: 1.6mm 3mm; }

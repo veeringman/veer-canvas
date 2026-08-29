@@ -1,0 +1,35 @@
+{
+  "siteName": "Example Housing Colony",
+  "brandName": "Example Housing Colony",
+  "brandTag": "RWA",
+  "eyebrow": "Example Welfare Society · RWA",
+  "title": "Example Housing Colony",
+  "subtitle": "Notices, directory, payments, and community updates.",
+  "chipPrimary": "Resident portal",
+  "chipSecondary": "Managed By VeerLabs",
+  "platform": "VeerLabs",
+  "favicon": "assets/favicon-192.png",
+  "brandMark": "assets/society-logo-512.png",
+  "platformMark": "assets/veerlabs-logo-mark.webp",
+  "logoPrint": "assets/society-seal.png",
+  "logoWatermark": "assets/society-watermark.png",
+  "logoWeb": "assets/society-logo-512.png",
+  "societyName": "Example Residents Welfare Association",
+  "version": "v0.1.0",
+  "lastUpdated": "2026-08-29T00:00:00Z",
+  "platformSiteId": "example-rwa",
+  "publicOrigin": "https://example-rwa.veerlabs.solutions",
+  "composeBranding": {
+    "addressLine": "Colony address · Registration details",
+    "email": "secretary@example.org",
+    "footerLine": "Unity · Harmony · Progress · Example RWA"
+  },
+  "auth": {
+    "idpPublicUrl": "https://authbuddy.veerlabs.solutions",
+    "clientId": "example-rwa-web",
+    "publicOrigin": "https://example-rwa.veerlabs.solutions",
+    "allowedOrigins": [
+      "https://example-rwa.veerlabs.solutions"
+    ]
+  }
+}
