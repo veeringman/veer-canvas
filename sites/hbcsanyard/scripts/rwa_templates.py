@@ -147,6 +147,14 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
         "tags": ["proceedings", "mom", "ec", "register", "a4", "2-page"],
         "static_path": "documents/proceedings-ec-mom-pad.html",
     },
+    {
+        "id": "tpl-resolution-engage-advocate-path-2026",
+        "title": "Resolution — engage Advocate Shailesh Sharma (path case)",
+        "description": "Covering letter + certified EC resolution to engage counsel for Court Case No. 01 (path / link road). Professional fee ₹50,000. Fill meeting date and enrollment, then sign.",
+        "category": "correspondence",
+        "tags": ["resolution", "legal", "advocate", "path", "ec"],
+        "static_path": "documents/resolution-engage-advocate-path-case-2026.html",
+    },
 ]
 
 

@@ -44,6 +44,46 @@ Anup Vaidya, President &nbsp;&nbsp;&nbsp; Vijay Kumar Sharma, General Secretary<
 """.strip(),
     },
     {
+        "id": "resolution_engage_advocate_path",
+        "title": "Resolution — engage advocate (path case)",
+        "description": "Certified EC resolution to engage Advocate Shailesh Sharma for Court Case No. 01 (path / link road), professional fee ₹50,000.",
+        "category": "correspondence",
+        "tags": ["compose", "resolution", "ec", "legal", "advocate"],
+        "suggestedTitle": "Resolution — engage Advocate Shailesh Sharma (path case)",
+        "bodyHtml": """
+<p style="text-align:center"><strong>CERTIFIED TRUE COPY OF RESOLUTION</strong></p>
+<p>Passed by the Executive Committee of Mandi Housing Welfare Society at its meeting held on
+<strong>________</strong> at Housing Colony Sanyard, Mandi, Himachal Pradesh.</p>
+<p>The Committee noted that Civil Suit ≈ <strong>086/2023</strong> is pending before the learned
+Senior Civil Judge, Mandi (Society Court Case No. 01), in which the Society / colony association
+is a defendant, concerning the alleged right of path / link road through Himuda Housing Colony
+Sanyardh (especially near Plot 12-A and Khasra 676/68). Further hearings remain. The Committee
+considered the need to engage fresh counsel to take the matter forward, and the professional fee
+agreed with Advocate <strong>Shailesh Sharma</strong>.</p>
+<p>It was therefore unanimously:</p>
+<p><strong>RESOLVED THAT</strong> Advocate <strong>Shailesh Sharma</strong> be and is hereby
+engaged as advocate for Mandi Housing Welfare Society to appear, plead, act and take all
+necessary steps on behalf of the Society in the said pending path / link-road civil suit and any
+connected application in the same court, in supersession of any earlier engagement of counsel
+for this matter to the extent a fresh vakalatnama is required.</p>
+<p><strong>RESOLVED FURTHER THAT</strong> the professional fee of the said advocate for
+conducting the case be and is hereby sanctioned at <strong>₹50,000 (Rupees Fifty Thousand
+only)</strong>, to be paid from the Society’s Bank of Baroda account (No. 09640100004511,
+IFSC BARB0MANDIX) by any two authorised signatories. Court fees, stamps, process, certified
+copies and similar out-of-pocket expenses shall be paid by the Society separately against bills.</p>
+<p><strong>RESOLVED FURTHER THAT</strong> the President and the General Secretary, jointly or
+either of them, be authorised to execute the vakalatnama and all papers required to conduct the
+case, and that the Treasurer be authorised to process the sanctioned fee and verified bills.</p>
+<p>Certified that the above is a true extract of the resolution, that it is in force, and that it
+has not been modified or rescinded.</p>
+<p>Place: Mandi (H.P.) &nbsp;&nbsp; Date: ________</p>
+<p>For Mandi Housing Welfare Society</p>
+<p>________________________ &nbsp;&nbsp;&nbsp; ________________________<br>
+Anup Vaidya, President &nbsp;&nbsp;&nbsp; Vijay Kumar Sharma, General Secretary<br>
+<em>(Society seal)</em></p>
+""".strip(),
+    },
+    {
         "id": "forwarding_letter",
         "title": "Forwarding letter",
         "description": "Cover note forwarding an enclosure to an office or bank.",
