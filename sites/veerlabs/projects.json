@@ -354,6 +354,65 @@
     "logoHeight": 50
   },
   {
+    "slug": "egenie",
+    "name": "eGenie",
+    "subtitle": "Rust",
+    "summary": "A modular, model-agnostic AI engine that provides the common intelligence, reasoning, retrieval, agent, vision, speech, and decision capabilities consumed by any  platform.",
+    "logo": "miniapps/egenie/assets/logo.png",
+    "logoAlt": "eGenie logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "",
+        "format": "markdown"
+      },
+      {
+        "title": "The Intelligence Engine by VeerLabs",
+        "body": "**eGenie** is a modular, model-agnostic AI engine that provides the common intelligence, reasoning, retrieval, agent, vision, speech, and decision capabilities consumed by your platforms.\n\nIt is designed to be the **intelligence infrastructure layer** behind products such as **WiseEars**, **QuantumArc**, **QuantumPay**, and future VeerLabs platforms \u2014 not another standalone chatbot.\n\n> **Your Wish. My Command.**\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Vision",
+        "body": "Modern applications increasingly depend on AI, but every product should not have to independently solve:\n\n* Model routing and inference abstraction\n* Reasoning, planning, and agent workflows\n* RAG, embeddings, and knowledge graphs\n* Conversation and semantic memory\n* Vision, speech, and multimodal processing\n* Safety, policy, and output validation\n* Edge and local inference orchestration\n\n**eGenie provides this intelligence as a reusable platform.**\n\nApplications interact with eGenie through the SDK and API while eGenie handles orchestration across LLMs, SLMs, classical ML, rules, tools, and external providers.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Core promise",
+        "body": "**Understand \u2192 Think \u2192 Act**\n\n| Phase | Meaning |\n| --- | --- |\n| **Understand** | Parse intent from text, speech, vision, or structured input |\n| **Think** | Retrieve context, plan, reason, route to the right models and tools |\n| **Act** | Execute workflows, emit structured outputs, verify results |\n\neGenie is **not synonymous with an LLM**. LLMs are one component; eGenie is the intelligence orchestration layer.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Positioning",
+        "body": "| Layer | Role |\n| --- | --- |\n| **QuantumArc** | Application infrastructure platform |\n| **eGenie** | Intelligence infrastructure platform |\n\n```text\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502       YOUR PRODUCTS       \u2502\n                    \u2502 WiseEars \u2502 QuantumArc ... \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                  \u2502\n                         eGenie SDK / API\n                                  \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u2502                 eGenie                 \u2502\n              \u2502         AI / Intelligence Core        \u2502\n              \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Platform pillars",
+        "body": "| Pillar | Purpose |\n| --- | --- |\n| **eGenie Core** | Unified intelligence runtime and execution engine |\n| **eGenie Brain** | Model abstraction, routing, inference, and reasoning |\n| **eGenie Memory** | Conversation, semantic, episodic memory and knowledge stores |\n| **eGenie Knowledge** | RAG, ingestion, embeddings, vector search, knowledge graphs |\n| **eGenie Agent** | Planning, tool use, workflows, autonomous task execution |\n| **eGenie Sense** | Vision, audio, STT, TTS, multimodal processing |\n| **eGenie Decision** | Rules + ML + LLM reasoning for scoring, prediction, risk |\n| **eGenie Guard** | Safety, permissions, policy, validation, guardrails |\n| **eGenie Mesh** | Distributed / edge inference between eGenie instances |\n| **eGenie SDK** | Rust core + APIs/SDKs for consuming applications |\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/egenie",
+        "format": "markdown"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 70,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/egenie",
+    "summaryFormat": "auto",
+    "summaryAlign": "",
+    "summarySize": "",
+    "requireAuth": false,
+    "reimport": false
+  },
+  {
     "slug": "flow-cortex",
     "name": "FlowCortex",
     "subtitle": "Rust",
@@ -401,7 +460,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 70,
+    "sortOrder": 80,
     "private": false,
     "repoUrl": "https://github.com/veeringman/flow-cortex",
     "summaryFormat": "auto",
@@ -480,7 +539,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 80,
+    "sortOrder": 90,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ProofCortex",
     "summaryFormat": "auto",
@@ -534,7 +593,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 90,
+    "sortOrder": 100,
     "private": true,
     "repoUrl": "https://github.com/veeringman/tie_http_server",
     "summaryFormat": "auto",
@@ -593,7 +652,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 100,
+    "sortOrder": 110,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veermesh",
     "summaryFormat": "auto",
@@ -657,7 +716,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 110,
+    "sortOrder": 120,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-forma",
     "summaryFormat": "auto",
@@ -721,7 +780,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 120,
+    "sortOrder": 130,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veero",
     "summaryFormat": "auto",
@@ -732,11 +791,80 @@
     "logoWidth": 50
   },
   {
+    "slug": "srotiva",
+    "name": "srotiva",
+    "subtitle": "Rust",
+    "summary": "Srotiva is a high-performance, provider-neutral media infrastructure platform for ingesting, processing, storing, streaming, and intelligently delivering digital media.\n\nIt is designed to provide a common media layer for applications such as WiseEars, WiseEars Chronicle, web and mobile chat platforms, social/community applications, and future VeerLabs products.",
+    "logo": "miniapps/srotiva/assets/logo.png",
+    "logoAlt": "srotiva logo",
+    "status": [
+      "Draft"
+    ],
+    "tags": [],
+    "details": [
+      {
+        "title": "Project Overview",
+        "body": "Srotiva is a high-performance, provider-neutral media infrastructure platform for ingesting, processing, storing, streaming, and intelligently delivering digital media.\n\nIt is designed to provide a common media layer for applications such as WiseEars, WiseEars Chronicle, web and mobile chat platforms, social/community applications, and future VeerLabs products.",
+        "format": "markdown"
+      },
+      {
+        "title": "Intelligent Media Infrastructure by VeerLabs",
+        "body": "Srotiva is a high-performance, provider-neutral media infrastructure platform for **ingesting, processing, storing, streaming, and intelligently delivering digital media**.\n\nIt is designed to provide a common media layer for applications such as **WiseEars**, **WiseEars Chronicle**, web and mobile chat platforms, social/community applications, and future VeerLabs products.\n\n> **Capture. Process. Stream. Deliver.**\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Vision",
+        "body": "Modern applications increasingly depend on rich media, but every application should not have to independently solve:\n\n* Large-file uploads\n* Resumable and multipart uploads\n* Video transcoding\n* Adaptive bitrate streaming\n* Audio processing\n* Image optimization\n* Thumbnail generation\n* Media metadata\n* Object storage\n* CDN delivery\n* Secure media access\n* Edge caching\n* Intelligent prefetching\n* Media lifecycle management\n* Media analytics\n* AI-powered media processing\n\n**Srotiva provides this infrastructure as a reusable platform.**\n\nApplications interact with Srotiva through APIs and SDKs while Srotiva handles the underlying media lifecycle.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Why Srotiva?",
+        "body": "A conventional application often looks like:\n\n```text\nApplication\n    \u2502\n    \u251c\u2500\u2500 Upload service\n    \u251c\u2500\u2500 File storage\n    \u251c\u2500\u2500 FFmpeg\n    \u251c\u2500\u2500 Video streaming\n    \u251c\u2500\u2500 CDN integration\n    \u251c\u2500\u2500 Thumbnail service\n    \u251c\u2500\u2500 Access control\n    \u2514\u2500\u2500 Media metadata\n```\n\nSrotiva consolidates these capabilities into a dedicated media layer:\n\n```text\n                    Application\n                         \u2502\n                    Srotiva API\n                         \u2502\n             \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n             \u2502           \u2502           \u2502\n           Ingest     Process      Deliver\n             \u2502           \u2502           \u2502\n             \u25bc           \u25bc           \u25bc\n          Storage     Workers       CDN\n                         \u2502\n                   Media Pipeline\n```\n\nThis allows application developers to focus on their product instead of rebuilding media infrastructure.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Media Ingest",
+        "body": "Srotiva will support reliable media ingestion from web, mobile, backend and eventually live sources.\n\nPlanned capabilities:\n\n* Direct uploads\n* Multipart uploads\n* Resumable uploads\n* Upload sessions\n* Upload progress\n* Large media files\n* Background uploads\n* Signed upload URLs\n* Client-side upload SDKs\n* Live media ingest\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Media Processing",
+        "body": "Uploaded media can be processed asynchronously through a scalable worker architecture.\n\nPlanned processing capabilities include:\n\n* Video transcoding\n* Audio transcoding\n* Codec conversion\n* Resolution generation\n* Bitrate optimization\n* Thumbnail generation\n* Poster frames\n* Waveform generation\n* Metadata extraction\n* Audio normalization\n* Image optimization\n* Media validation\n* Content inspection\n\nFFmpeg will initially be supported as a primary processing engine, while the architecture will remain extensible for GPU and specialized media processors.\n\n---",
+        "format": "markdown"
+      },
+      {
+        "title": "Architecture",
+        "body": "Srotiva is a **four-plane media fabric**. CMAF is the canonical atom. HLS, DASH, and MoQ are views. Intelligence is a pipeline node, not a sidecar.\n\nFull design: [`docs/architecture.md`](docs/architecture.md)\n\n```text\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502                        CONTROL PLANE                            \u2502\n\u2502     API \u00b7 catalog \u00b7 policy \u00b7 jobs \u00b7 tenants \u00b7 capabilities      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                \u2502                             \u2502\n                \u25bc                             \u25bc\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510   \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502        DATA PLANE         \u2502   \u2502        INTELLIGENCE PLANE       \u2502\n\u2502 ingest \u00b7 CAS \u00b7 encode     \u2502   \u2502 transcribe \u00b7 embed \u00b7 scene      \u2502\n\u2502 CMAF package \u00b7 origin     \u2502   \u2502 classify \u00b7 summarize            \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n              \u2502                                  \u2502\n              \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                             \u25bc\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u2502         EDGE PLANE           \u2502\n              \u2502 MoQ relay \u00b7 LL-HLS origin    \u2502\n              \u2502 authz \u00b7 ABR \u00b7 prefetch       \u2502\n              \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```",
+        "format": "markdown"
+      },
+      {
+        "title": "Application Integration",
+        "body": "Srotiva is intended to become a shared infrastructure service across VeerLabs products.",
+        "format": "markdown"
+      },
+      {
+        "title": "Repository",
+        "body": "https://github.com/veeringman/srotiva",
+        "format": "markdown"
+      }
+    ],
+    "enabled": true,
+    "logoSize": "md",
+    "sortOrder": 140,
+    "private": true,
+    "repoUrl": "https://github.com/veeringman/srotiva",
+    "summaryFormat": "auto",
+    "summaryAlign": "",
+    "summarySize": "",
+    "requireAuth": false,
+    "reimport": false
+  },
+  {
     "slug": "quantumpay",
     "name": "QuantumPay",
     "subtitle": "Rust",
-    "summary": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>",
-    "logo": "miniapps/quantumpay/assets/quantumpay-logo.png",
+    "summary": "",
+    "logo": "miniapps/quantumpay/assets/logo.png",
     "logoAlt": "QuantumPay logo",
     "status": [
       "Draft"
@@ -745,38 +873,50 @@
     "details": [
       {
         "title": "Project Overview",
-        "body": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>"
+        "body": "<p align=\"center\"> <img src=\"assets/quantumpay.png\" alt=\"QuantumPay \u2014 the intelligent payment orchestration layer\" width=\"720\"> </p>",
+        "format": "markdown"
       },
       {
         "title": "Documentation",
-        "body": "The architecture is specified in [`docs/`](docs/README.md). Start here:\n\n| | |\n| --- | --- |\n| [Vision](docs/vision.md) | Why this product exists |\n| [Architecture](docs/architecture.md) | Modular monolith, hexagon, runtime |\n| [Payment lifecycle](docs/payment-lifecycle.md) | Intent/attempt state machines, including `UNKNOWN` |\n| [Security](docs/security.md) | Controls that are part of the runtime |\n| [Compliance](docs/compliance.md) | The regulatory fence |\n| [Legal drafts](docs/legal/README.md) | Society dues terms skeletons (not legal advice) |\n| [UPI / PhonePe / Razorpay](docs/upi-phonepe-razorpay.md) | Who does UPI vs settlement; TPAPs vs merchant |\n| [Society Razorpay KYC](docs/legal/razorpay-society-kyc.md) | Prep list; society is merchant of record |\n| [Test deploy (.78)](docs/deploy-test.md) | LAN test environment |\n| [Local Postgres](docs/local.md) | Docker Compose on a laptop |\n| [Roadmap](docs/roadmap.md) | What is built when |\n| [ADRs](docs/adr/README.md) | Why decisions were made |"
+        "body": "The architecture is specified in [`docs/`](docs/README.md). Start here:\n\n| | |\n| --- | --- |\n| [Vision](docs/vision.md) | Why this product exists |\n| [Architecture](docs/architecture.md) | Modular monolith, hexagon, runtime |\n| [Payment lifecycle](docs/payment-lifecycle.md) | Intent/attempt state machines, including `UNKNOWN` |\n| [Security](docs/security.md) | Controls that are part of the runtime |\n| [Compliance](docs/compliance.md) | The regulatory fence |\n| [Legal drafts](docs/legal/README.md) | Society dues terms skeletons (not legal advice) |\n| [UPI / PhonePe / Razorpay](docs/upi-phonepe-razorpay.md) | Who does UPI vs settlement; TPAPs vs merchant |\n| [Society Razorpay KYC](docs/legal/razorpay-society-kyc.md) | Prep list; society is merchant of record |\n| [Test deploy (.78)](docs/deploy-test.md) | LAN test environment |\n| [Local Postgres](docs/local.md) | Docker Compose on a laptop |\n| [Roadmap](docs/roadmap.md) | What is built when |\n| [ADRs](docs/adr/README.md) | Why decisions were made |",
+        "format": "markdown"
       },
       {
         "title": "Design in one page",
-        "body": "1. **Provider agnostic** \u2014 adapters behind a port; the core never speaks a PSP dialect.\n2. **Money-neutral** \u2014 orchestration facts, not custody of funds.\n3. **Deterministic** \u2014 append-only events and ledger; status is a projection.\n4. **Idempotent** \u2014 retries must not create money movement.\n5. **Event-driven** \u2014 HTTP responses are not the final financial state.\n6. **Observable** \u2014 a payment is reconstructable end to end.\n7. **Secure by default** \u2014 fail closed on auth, KMS, and webhook verify.\n8. **Independently complete** \u2014 no sibling platform required to ship a payment."
+        "body": "1. **Provider agnostic** \u2014 adapters behind a port; the core never speaks a PSP dialect.\n2. **Money-neutral** \u2014 orchestration facts, not custody of funds.\n3. **Deterministic** \u2014 append-only events and ledger; status is a projection.\n4. **Idempotent** \u2014 retries must not create money movement.\n5. **Event-driven** \u2014 HTTP responses are not the final financial state.\n6. **Observable** \u2014 a payment is reconstructable end to end.\n7. **Secure by default** \u2014 fail closed on auth, KMS, and webhook verify.\n8. **Independently complete** \u2014 no sibling platform required to ship a payment.",
+        "format": "markdown"
       },
       {
         "title": "What QuantumPay is not (Phase 1)",
-        "body": "Not a payment aggregator that handles funds, not an acquiring bank, not a UPI PSP, not an escrow, not a rail.\n\nProduction use in India requires independent legal, regulatory, contractual, security, banking, and provider review."
+        "body": "Not a payment aggregator that handles funds, not an acquiring bank, not a UPI PSP, not an escrow, not a rail.\n\nProduction use in India requires independent legal, regulatory, contractual, security, banking, and provider review.",
+        "format": "markdown"
       },
       {
         "title": "Status",
-        "body": "**Architecture and a running test API.** Implementation is a Cargo workspace. Test host: [`docs/deploy-test.md`](docs/deploy-test.md) (`192.168.29.78:18980`). No production payment traffic.\n\nPlanned stack: Rust, Tokio, Axum, PostgreSQL, Redis, OpenTelemetry, Kubernetes."
+        "body": "**Architecture and a running test API.** Implementation is a Cargo workspace. Test host: [`docs/deploy-test.md`](docs/deploy-test.md) (`192.168.29.78:18980`). No production payment traffic.\n\nPlanned stack: Rust, Tokio, Axum, PostgreSQL, Redis, OpenTelemetry, Kubernetes.",
+        "format": "markdown"
       },
       {
         "title": "License",
-        "body": "License to be determined."
+        "body": "License to be determined.",
+        "format": "markdown"
       },
       {
         "title": "Repository",
-        "body": "https://github.com/veeringman/QuantumPay"
+        "body": "https://github.com/veeringman/QuantumPay",
+        "format": "markdown"
       }
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 130,
+    "sortOrder": 150,
     "private": true,
-    "repoUrl": "https://github.com/veeringman/QuantumPay"
+    "repoUrl": "https://github.com/veeringman/QuantumPay",
+    "summaryFormat": "auto",
+    "summaryAlign": "",
+    "summarySize": "",
+    "requireAuth": false,
+    "reimport": false
   },
   {
     "slug": "veer-dharam",
@@ -838,7 +978,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 140,
+    "sortOrder": 160,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-dharam",
     "summaryFormat": "auto",
@@ -903,7 +1043,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 150,
+    "sortOrder": 170,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-artha",
     "summaryFormat": "auto",
@@ -963,7 +1103,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 160,
+    "sortOrder": 180,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veer-canvas",
     "summaryFormat": "auto",
@@ -1022,7 +1162,7 @@
     ],
     "enabled": true,
     "logoSize": "sm",
-    "sortOrder": 170,
+    "sortOrder": 190,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerion",
     "summaryFormat": "auto",
@@ -1090,7 +1230,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 180,
+    "sortOrder": 200,
     "private": true,
     "repoUrl": "https://github.com/veeringman/VeerGenesis"
   },
@@ -1117,7 +1257,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 190,
+    "sortOrder": 210,
     "private": false,
     "repoUrl": "https://github.com/veeringman/VeerParvat"
   },
@@ -1176,7 +1316,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 200,
+    "sortOrder": 220,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veer-savora",
     "summaryFormat": "auto",
@@ -1232,7 +1372,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 210,
+    "sortOrder": 230,
     "private": true,
     "repoUrl": "https://github.com/veeringman/matteros"
   },
@@ -1296,7 +1436,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 220,
+    "sortOrder": 240,
     "private": true,
     "repoUrl": "https://github.com/veeringman/woodyveer",
     "summaryFormat": "auto",
@@ -1354,7 +1494,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 230,
+    "sortOrder": 250,
     "private": true,
     "repoUrl": "https://github.com/veeringman/jee_prep_webapp",
     "summaryFormat": "auto",
@@ -1405,7 +1545,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 240,
+    "sortOrder": 260,
     "private": true,
     "repoUrl": "https://github.com/veeringman/hbcsanyard"
   },
@@ -1452,7 +1592,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 250,
+    "sortOrder": 270,
     "private": true,
     "repoUrl": "https://github.com/veeringman/cityofmandi"
   },
@@ -1499,7 +1639,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 260,
+    "sortOrder": 280,
     "private": true,
     "repoUrl": "https://github.com/veeringman/wiseears"
   },
@@ -1558,7 +1698,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 270,
+    "sortOrder": 290,
     "private": true,
     "repoUrl": "https://github.com/veeringman/edgeVault",
     "summaryFormat": "auto",
@@ -1610,7 +1750,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 280,
+    "sortOrder": 300,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veertrust"
   },
@@ -1657,7 +1797,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 290,
+    "sortOrder": 310,
     "private": true,
     "repoUrl": "https://github.com/veeringman/veerEdge"
   },
@@ -1704,7 +1844,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 300,
+    "sortOrder": 320,
     "private": false,
     "repoUrl": "https://github.com/veeringman/RK3588-SBC"
   },
@@ -1755,7 +1895,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 310,
+    "sortOrder": 330,
     "private": false,
     "repoUrl": "https://github.com/veeringman/quantum-waulta"
   },
@@ -1802,7 +1942,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 320,
+    "sortOrder": 340,
     "private": true,
     "repoUrl": "https://github.com/veeringman/synthfoundary"
   },
@@ -1849,7 +1989,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 330,
+    "sortOrder": 350,
     "private": false,
     "repoUrl": "https://github.com/veeringman/tools"
   },
@@ -1896,7 +2036,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 340,
+    "sortOrder": 360,
     "private": false,
     "repoUrl": "https://github.com/veeringman/overwatch"
   },
@@ -1947,7 +2087,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 350,
+    "sortOrder": 370,
     "private": true,
     "repoUrl": "https://github.com/veeringman/SeekPeek"
   },
@@ -1978,7 +2118,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 360,
+    "sortOrder": 380,
     "private": true,
     "repoUrl": "https://github.com/veeringman/QuantumArc"
   },
@@ -2009,7 +2149,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 370,
+    "sortOrder": 390,
     "private": true,
     "repoUrl": "https://github.com/veeringman/Shieldon"
   },
@@ -2056,7 +2196,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 380,
+    "sortOrder": 400,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroPolitics"
   },
@@ -2103,7 +2243,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 390,
+    "sortOrder": 410,
     "private": true,
     "repoUrl": "https://github.com/veeringman/ZeroServices"
   },
@@ -2154,7 +2294,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 400,
+    "sortOrder": 420,
     "private": true,
     "repoUrl": "https://github.com/veeringman/TreasurySettlement"
   },
@@ -2209,7 +2349,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 410,
+    "sortOrder": 430,
     "private": true,
     "repoUrl": "https://github.com/veeringman/FortressDigital"
   },
@@ -2260,7 +2400,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 420,
+    "sortOrder": 440,
     "private": false,
     "repoUrl": "https://github.com/veeringman/amplify-nextjs-starter-app"
   },
@@ -2283,7 +2423,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 430,
+    "sortOrder": 450,
     "private": true,
     "repoUrl": "https://github.com/veeringman/async_forge"
   },
@@ -2330,7 +2470,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 440,
+    "sortOrder": 460,
     "private": true,
     "repoUrl": "https://github.com/veeringman/brain_blocks"
   },
@@ -2357,7 +2497,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 450,
+    "sortOrder": 470,
     "private": true,
     "repoUrl": "https://github.com/veeringman/demo-workspaces"
   },
@@ -2384,7 +2524,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 460,
+    "sortOrder": 480,
     "private": true,
     "repoUrl": "https://github.com/veeringman/fd_demo_integ"
   },
@@ -2431,7 +2571,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 470,
+    "sortOrder": 490,
     "private": true,
     "repoUrl": "https://github.com/veeringman/future"
   },
@@ -2478,7 +2618,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 480,
+    "sortOrder": 500,
     "private": true,
     "repoUrl": "https://github.com/veeringman/green_thread"
   },
@@ -2525,7 +2665,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 490,
+    "sortOrder": 510,
     "private": true,
     "repoUrl": "https://github.com/veeringman/quakeguard"
   },
@@ -2572,7 +2712,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 500,
+    "sortOrder": 520,
     "private": false,
     "repoUrl": "https://github.com/veeringman/lanpeek"
   },
@@ -2619,7 +2759,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 510,
+    "sortOrder": 530,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proof-cortex"
   },
@@ -2658,7 +2798,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 520,
+    "sortOrder": 540,
     "private": true,
     "repoUrl": "https://github.com/veeringman/proofcortex-core"
   },
@@ -2709,7 +2849,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 530,
+    "sortOrder": 550,
     "private": true,
     "repoUrl": "https://github.com/veeringman/sentientos"
   },
@@ -2740,7 +2880,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 540,
+    "sortOrder": 560,
     "private": false,
     "repoUrl": "https://github.com/veeringman/sharma"
   },
@@ -2771,7 +2911,7 @@
     ],
     "enabled": false,
     "logoSize": "md",
-    "sortOrder": 550,
+    "sortOrder": 570,
     "private": true,
     "repoUrl": "https://github.com/veeringman/tie_http"
   },
@@ -2818,7 +2958,7 @@
     ],
     "enabled": true,
     "logoSize": "md",
-    "sortOrder": 560,
+    "sortOrder": 580,
     "private": false,
     "repoUrl": "https://github.com/veeringman/veeringman"
   }

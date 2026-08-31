@@ -5,6 +5,123 @@ window.addEventListener('DOMContentLoaded', function () {
   const template = document.getElementById('project-card-template');
   let allProjects = [];
   let currentPage = 1;
+  let summaryTooltipEl = null;
+  let summaryTooltipAnchor = null;
+  const canHoverSummary = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+  function getSummaryText(project) {
+    let summaryText = project.summary || '';
+    try {
+      if (window.VeerContent && typeof VeerContent.summaryPlainText === 'function') {
+        summaryText = VeerContent.summaryPlainText(project.summary, {
+          summaryFormat: project.summaryFormat,
+        });
+      }
+    } catch (_error) {
+      summaryText = typeof project.summary === 'string' ? project.summary : '';
+    }
+    return summaryText || '';
+  }
+
+  function isSummaryClamped(el) {
+    if (!el || !el.textContent) return false;
+    return el.scrollHeight > el.clientHeight + 1;
+  }
+
+  function ensureSummaryTooltip() {
+    if (!summaryTooltipEl) {
+      summaryTooltipEl = document.createElement('div');
+      summaryTooltipEl.id = 'catalog-summary-tooltip';
+      summaryTooltipEl.className = 'catalog-summary-tooltip';
+      summaryTooltipEl.setAttribute('role', 'tooltip');
+      summaryTooltipEl.hidden = true;
+      document.body.appendChild(summaryTooltipEl);
+    }
+    return summaryTooltipEl;
+  }
+
+  function positionSummaryTooltip(anchor) {
+    const tip = ensureSummaryTooltip();
+    const rect = anchor.getBoundingClientRect();
+    tip.style.visibility = 'hidden';
+    tip.hidden = false;
+    const tipRect = tip.getBoundingClientRect();
+    let top = rect.bottom + 8;
+    let left = rect.left;
+    if (left + tipRect.width > window.innerWidth - 12) {
+      left = Math.max(8, window.innerWidth - tipRect.width - 12);
+    }
+    if (top + tipRect.height > window.innerHeight - 12) {
+      top = rect.top - tipRect.height - 8;
+    }
+    tip.style.top = `${Math.max(8, top)}px`;
+    tip.style.left = `${Math.max(8, left)}px`;
+    tip.style.visibility = 'visible';
+  }
+
+  function showSummaryTooltip(text, anchor) {
+    if (!text || !anchor) return;
+    const tip = ensureSummaryTooltip();
+    tip.textContent = text;
+    summaryTooltipAnchor = anchor;
+    positionSummaryTooltip(anchor);
+  }
+
+  function hideSummaryTooltip() {
+    if (!summaryTooltipEl) return;
+    summaryTooltipEl.hidden = true;
+    summaryTooltipAnchor = null;
+  }
+
+  function wireSummaryExpand(summaryWrap, summaryEl, fullText) {
+    if (!summaryWrap || !summaryEl || !fullText) return;
+
+    function markClamped() {
+      if (!isSummaryClamped(summaryEl)) return;
+      summaryWrap.classList.add('is-clamped');
+      summaryWrap.setAttribute('aria-describedby', 'catalog-summary-tooltip');
+      summaryWrap.tabIndex = 0;
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(markClamped));
+
+    if (canHoverSummary) {
+      summaryWrap.addEventListener('mouseenter', () => {
+        if (!summaryWrap.classList.contains('is-clamped')) return;
+        showSummaryTooltip(fullText, summaryWrap);
+      });
+      summaryWrap.addEventListener('mouseleave', hideSummaryTooltip);
+      summaryWrap.addEventListener('focus', () => {
+        if (!summaryWrap.classList.contains('is-clamped')) return;
+        showSummaryTooltip(fullText, summaryWrap);
+      });
+      summaryWrap.addEventListener('blur', hideSummaryTooltip);
+    } else {
+      summaryWrap.addEventListener('click', (event) => {
+        if (!summaryWrap.classList.contains('is-clamped')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (summaryTooltipAnchor === summaryWrap && summaryTooltipEl && !summaryTooltipEl.hidden) {
+          hideSummaryTooltip();
+          return;
+        }
+        showSummaryTooltip(fullText, summaryWrap);
+      });
+    }
+
+    summaryWrap.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') hideSummaryTooltip();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!summaryTooltipEl || summaryTooltipEl.hidden) return;
+    if (event.target.closest('.project-summary-wrap') || event.target.closest('#catalog-summary-tooltip')) return;
+    hideSummaryTooltip();
+  });
+
+  window.addEventListener('scroll', hideSummaryTooltip, { passive: true });
+  window.addEventListener('resize', hideSummaryTooltip);
 
   function showStatus(message, isError) {
     if (!cardsContainer) return;
@@ -21,6 +138,7 @@ window.addEventListener('DOMContentLoaded', function () {
     const logo = cardEl.querySelector('.project-logo');
     const title = cardEl.querySelector('.project-title');
     const subtitle = cardEl.querySelector('.project-subtitle');
+    const summaryWrap = cardEl.querySelector('.project-summary-wrap');
     const summary = cardEl.querySelector('.project-summary');
     const tags = cardEl.querySelector('.project-tags');
     // Support both current and previously cached markup/selectors.
@@ -37,18 +155,10 @@ window.addEventListener('DOMContentLoaded', function () {
       subtitle.classList.toggle('is-empty', !cardSubtitle);
     }
 
-    if (summary) {
-      let summaryText = project.summary || '';
-      try {
-        if (window.VeerContent && typeof VeerContent.summaryPlainText === 'function') {
-          summaryText = VeerContent.summaryPlainText(project.summary, {
-            summaryFormat: project.summaryFormat,
-          });
-        }
-      } catch (_error) {
-        summaryText = typeof project.summary === 'string' ? project.summary : '';
-      }
-      summary.textContent = summaryText || '';
+    const summaryText = getSummaryText(project);
+    if (summary) summary.textContent = summaryText;
+    if (summaryWrap && summary && summaryText) {
+      wireSummaryExpand(summaryWrap, summary, summaryText);
     }
 
     if (link) {
@@ -112,6 +222,7 @@ window.addEventListener('DOMContentLoaded', function () {
 
   function renderPage() {
     if (!cardsContainer) return;
+    hideSummaryTooltip();
     cardsContainer.innerHTML = '';
     const totalPages = Math.max(1, Math.ceil(allProjects.length / cardsPerPage));
     const start = (currentPage - 1) * cardsPerPage;

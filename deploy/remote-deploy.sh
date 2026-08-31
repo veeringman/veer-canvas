@@ -83,7 +83,7 @@ defaults = {
     "brandTag": "Solutions",
     "eyebrow": "Veeringman studio catalog",
     "title": "VeerLabs Solutions",
-    "subtitle": "Explore secure edge fabric, browsers, operating systems, and networking stacks. Each tile opens a documentation-rich project page.",
+    "subtitle": "The VeerLabs project map — live civic portals, identity and documents, edge platforms, and research in AI and security. Each tile summarizes what it is and how mature it is; open one for architecture, status, and full documentation.",
     "chipPrimary": "Project catalog",
     "chipSecondary": "Powered by VeerCanvas",
     "platform": "VeerCanvas",
@@ -150,6 +150,9 @@ if cfg_path.exists():
     except json.JSONDecodeError:
         pass
 merged["auth"] = auth
+for key in ("subtitle", "eyebrow", "title", "chipPrimary", "chipSecondary"):
+    if defaults.get(key):
+        merged[key] = defaults[key]
 path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
 print(f"Merged site-meta keys: {', '.join(sorted(merged.keys()))}")
 print(f"brandMark={merged.get('brandMark')} favicon={merged.get('favicon')}")

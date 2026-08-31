@@ -41,7 +41,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 300,
+  "sortOrder": 320,
   "private": false,
   "repoUrl": "https://github.com/veeringman/RK3588-SBC"
 }

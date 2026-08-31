@@ -1,0 +1,59 @@
+{
+  "slug": "egenie",
+  "name": "eGenie",
+  "subtitle": "Rust",
+  "summary": "A modular, model-agnostic AI engine that provides the common intelligence, reasoning, retrieval, agent, vision, speech, and decision capabilities consumed by any  platform.",
+  "logo": "miniapps/egenie/assets/logo.png",
+  "logoAlt": "eGenie logo",
+  "status": [
+    "Draft"
+  ],
+  "tags": [],
+  "details": [
+    {
+      "title": "Project Overview",
+      "body": "",
+      "format": "markdown"
+    },
+    {
+      "title": "The Intelligence Engine by VeerLabs",
+      "body": "**eGenie** is a modular, model-agnostic AI engine that provides the common intelligence, reasoning, retrieval, agent, vision, speech, and decision capabilities consumed by your platforms.\n\nIt is designed to be the **intelligence infrastructure layer** behind products such as **WiseEars**, **QuantumArc**, **QuantumPay**, and future VeerLabs platforms \u2014 not another standalone chatbot.\n\n> **Your Wish. My Command.**\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Vision",
+      "body": "Modern applications increasingly depend on AI, but every product should not have to independently solve:\n\n* Model routing and inference abstraction\n* Reasoning, planning, and agent workflows\n* RAG, embeddings, and knowledge graphs\n* Conversation and semantic memory\n* Vision, speech, and multimodal processing\n* Safety, policy, and output validation\n* Edge and local inference orchestration\n\n**eGenie provides this intelligence as a reusable platform.**\n\nApplications interact with eGenie through the SDK and API while eGenie handles orchestration across LLMs, SLMs, classical ML, rules, tools, and external providers.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Core promise",
+      "body": "**Understand \u2192 Think \u2192 Act**\n\n| Phase | Meaning |\n| --- | --- |\n| **Understand** | Parse intent from text, speech, vision, or structured input |\n| **Think** | Retrieve context, plan, reason, route to the right models and tools |\n| **Act** | Execute workflows, emit structured outputs, verify results |\n\neGenie is **not synonymous with an LLM**. LLMs are one component; eGenie is the intelligence orchestration layer.\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Positioning",
+      "body": "| Layer | Role |\n| --- | --- |\n| **QuantumArc** | Application infrastructure platform |\n| **eGenie** | Intelligence infrastructure platform |\n\n```text\n                    \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                    \u2502       YOUR PRODUCTS       \u2502\n                    \u2502 WiseEars \u2502 QuantumArc ... \u2502\n                    \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                  \u2502\n                         eGenie SDK / API\n                                  \u2502\n              \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n              \u2502                 eGenie                 \u2502\n              \u2502         AI / Intelligence Core        \u2502\n              \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Platform pillars",
+      "body": "| Pillar | Purpose |\n| --- | --- |\n| **eGenie Core** | Unified intelligence runtime and execution engine |\n| **eGenie Brain** | Model abstraction, routing, inference, and reasoning |\n| **eGenie Memory** | Conversation, semantic, episodic memory and knowledge stores |\n| **eGenie Knowledge** | RAG, ingestion, embeddings, vector search, knowledge graphs |\n| **eGenie Agent** | Planning, tool use, workflows, autonomous task execution |\n| **eGenie Sense** | Vision, audio, STT, TTS, multimodal processing |\n| **eGenie Decision** | Rules + ML + LLM reasoning for scoring, prediction, risk |\n| **eGenie Guard** | Safety, permissions, policy, validation, guardrails |\n| **eGenie Mesh** | Distributed / edge inference between eGenie instances |\n| **eGenie SDK** | Rust core + APIs/SDKs for consuming applications |\n\n---",
+      "format": "markdown"
+    },
+    {
+      "title": "Repository",
+      "body": "https://github.com/veeringman/egenie",
+      "format": "markdown"
+    }
+  ],
+  "enabled": true,
+  "logoSize": "md",
+  "sortOrder": 70,
+  "private": true,
+  "repoUrl": "https://github.com/veeringman/egenie",
+  "summaryFormat": "auto",
+  "summaryAlign": "",
+  "summarySize": "",
+  "requireAuth": false,
+  "reimport": false
+}

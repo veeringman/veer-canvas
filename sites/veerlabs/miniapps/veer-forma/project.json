@@ -53,7 +53,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 110,
+  "sortOrder": 120,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veer-forma",
   "summaryFormat": "auto",

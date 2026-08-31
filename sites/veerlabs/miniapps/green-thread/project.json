@@ -41,7 +41,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 480,
+  "sortOrder": 500,
   "private": true,
   "repoUrl": "https://github.com/veeringman/green_thread"
 }

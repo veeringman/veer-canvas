@@ -53,7 +53,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 200,
+  "sortOrder": 220,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veer-savora",
   "summaryFormat": "auto",

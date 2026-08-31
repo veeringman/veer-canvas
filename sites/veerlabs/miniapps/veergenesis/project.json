@@ -57,7 +57,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 180,
+  "sortOrder": 200,
   "private": true,
   "repoUrl": "https://github.com/veeringman/VeerGenesis"
 }

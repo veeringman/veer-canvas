@@ -48,7 +48,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 100,
+  "sortOrder": 110,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veermesh",
   "summaryFormat": "auto",

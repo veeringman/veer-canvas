@@ -53,7 +53,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 120,
+  "sortOrder": 130,
   "private": true,
   "repoUrl": "https://github.com/veeringman/veero",
   "summaryFormat": "auto",

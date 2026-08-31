@@ -1,0 +1,9 @@
+{
+  "slug": "egenie",
+  "repo": "https://github.com/veeringman/egenie",
+  "default_branch": "main",
+  "language": "Rust",
+  "topics": [],
+  "logo_candidates": [],
+  "readme_logo_url": null
+}

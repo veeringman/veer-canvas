@@ -46,7 +46,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 70,
+  "sortOrder": 80,
   "private": false,
   "repoUrl": "https://github.com/veeringman/flow-cortex",
   "summaryFormat": "auto",

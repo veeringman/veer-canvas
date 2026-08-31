@@ -68,7 +68,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 80,
+  "sortOrder": 90,
   "private": true,
   "repoUrl": "https://github.com/veeringman/ProofCortex",
   "summaryFormat": "auto",

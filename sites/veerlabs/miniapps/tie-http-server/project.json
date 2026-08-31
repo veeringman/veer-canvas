@@ -43,7 +43,7 @@
   ],
   "enabled": true,
   "logoSize": "md",
-  "sortOrder": 90,
+  "sortOrder": 100,
   "private": true,
   "repoUrl": "https://github.com/veeringman/tie_http_server",
   "summaryFormat": "auto",
