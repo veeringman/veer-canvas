@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-22
+Last updated: 2026-08-29
 
 ---
 
@@ -170,3 +170,8 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes
+- **EC resolution — engage Advocate Shailesh Sharma** for Court Case No. 01 (path / link road), professional fee ₹50,000 — printable covering letter + certified copy (`documents/resolution-engage-advocate-path-case-2026.html`); Compose starter + EC Templates seed (2026-08-29)
+
+## Session notes
+
+- 2026-08-29: Prepared hire-advocate resolution for the pending path case (Advocate Shailesh Sharma; ₹50k for the case). Fill meeting date, enrollment / chamber, then President + General Secretary sign with seal. Out-of-pocket court expenses are extra against bills.
