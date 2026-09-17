@@ -175,7 +175,9 @@ def draft_document(
             title=title,
         )
         if egenie_out is None:
-            warnings.append("eGenie unreachable — used local intent.")
+            warnings.append(
+                f"eGenie unreachable at {cfg.get('egenieUrl')} — used local intent."
+            )
         else:
             used.append("egenie")
             local_intent = _merge_intent(local_intent, egenie_out)
@@ -196,7 +198,9 @@ def draft_document(
             current_html=current_html,
         )
         if syntheon_out is None:
-            warnings.append("Syntheon unreachable — used on-box drafting.")
+            warnings.append(
+                f"Syntheon unreachable at {cfg.get('syntheonUrl')} — used on-box drafting."
+            )
         else:
             used.append("syntheon")
             html_body = _html_from_remote(syntheon_out)
@@ -302,7 +306,7 @@ def call_egenie(
     wish = _egenie_wish_text(utterance, starter=starter, passages=passages, title=title)
     payload = {
         "wish": wish,
-        "fast": False,
+        "fast": True,
         "kind": "document.compose",
         "tenant": "hbcsanyard",
         "title": title,
