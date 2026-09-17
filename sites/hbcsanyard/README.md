@@ -99,15 +99,15 @@ SITE_ID=hbcsanyard EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
 
 ## AI Assist (Templates → Write a document)
 
-Set in `data/ai.env` (not committed). Copy host, port, and token from the eGenie and Syntheon deployments on the VeerSetu EC2:
+Set in `data/ai.env` (not committed). eGenie and Syntheon run on a **different EC2** than the portal (`egenie.veerlabs.solutions` / `syntheon.veerlabs.solutions`, currently `100.52.147.238`).
 
 | Env | Purpose |
 |-----|---------|
-| `EGENIE_URL` | Intent engine (Understand → Think). Default `http://127.0.0.1:8110` |
+| `EGENIE_URL` | Intent engine. Default `https://egenie.veerlabs.solutions` (`POST /v1/wishes`) |
 | `EGENIE_API_KEY` | Optional bearer token |
-| `SYNTHEON_URL` | Document synthesis. Default `http://127.0.0.1:8120` |
+| `SYNTHEON_URL` | Document synthesis. Default `https://syntheon.veerlabs.solutions` |
 | `SYNTHEON_API_KEY` | Optional bearer token |
-| `RWA_AI_API_KEY` | OpenAI-compatible fallback if Syntheon is down |
+| `RWA_AI_API_KEY` | OpenAI-compatible fallback if both are down |
 
 The composer still drafts from local starters + RAG if both services are unreachable.
 

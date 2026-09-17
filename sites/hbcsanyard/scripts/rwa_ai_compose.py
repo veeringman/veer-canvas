@@ -5,9 +5,9 @@ Pipeline:
   2. Think — retrieve colony templates, Info Centre docs, and meeting minutes.
   3. Act — Syntheon synthesizes HTML; OpenAI-compatible chat is the fallback.
 
-eGenie and Syntheon URLs/keys come from ``data/ai.env`` (same file as the
-message-center assistant). Defaults assume they share the VeerSetu EC2
-(``127.0.0.1``) with the portal. Copy live host/port/token from those projects.
+eGenie and Syntheon run on a **separate** EC2 (not the housingcolonysanyard
+host). Defaults point at that public Caddy front door. Override in
+``data/ai.env`` if the hostname changes.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ from rwa_template_starters import list_document_starters, starter_by_id
 from rwa_templates import sanitize_compose_html
 
 INTENT_MAX = 4000
-DEFAULT_EGENIE_URL = "http://127.0.0.1:8110"
-DEFAULT_SYNTHEON_URL = "http://127.0.0.1:8120"
+DEFAULT_EGENIE_URL = "https://egenie.veerlabs.solutions"
+DEFAULT_SYNTHEON_URL = "https://syntheon.veerlabs.solutions"
 
 EGENIE_PATHS = (
-    "/v1/fulfill",
     "/v1/wishes",
+    "/v1/fulfill",
     "/fulfill",
     "/api/v1/fulfill",
     "/v1/understand",
@@ -58,6 +58,17 @@ _STARTER_HINTS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
+def _remote_or_default(raw: str | None, default: str) -> str:
+    """Ignore leftover localhost URLs from the first portal-box draft."""
+    value = (raw or "").strip()
+    if not value:
+        return default
+    low = value.lower()
+    if "127.0.0.1" in low or "localhost" in low:
+        return default
+    return value
+
+
 def load_compose_config(site_root: pathlib.Path | None = None) -> dict[str, str]:
     ai = rwa_ai_chat.load_ai_config(site_root)
     egenie_on = (os.environ.get("EGENIE_ENABLED") or "1").strip().lower() not in {
@@ -68,11 +79,17 @@ def load_compose_config(site_root: pathlib.Path | None = None) -> dict[str, str]
     }
     return {
         **ai,
-        "egenieUrl": (os.environ.get("EGENIE_URL") or DEFAULT_EGENIE_URL).rstrip("/"),
+        "egenieUrl": _remote_or_default(
+            os.environ.get("EGENIE_URL"),
+            DEFAULT_EGENIE_URL,
+        ).rstrip("/"),
         "egenieKey": (os.environ.get("EGENIE_API_KEY") or os.environ.get("EGENIE_TOKEN") or "").strip(),
         "egenieEnabled": "1" if egenie_on else "0",
-        "egenieTimeoutMs": (os.environ.get("EGENIE_TIMEOUT_MS") or "8000").strip(),
-        "syntheonUrl": (os.environ.get("SYNTHEON_URL") or DEFAULT_SYNTHEON_URL).rstrip("/"),
+        "egenieTimeoutMs": (os.environ.get("EGENIE_TIMEOUT_MS") or "90000").strip(),
+        "syntheonUrl": _remote_or_default(
+            os.environ.get("SYNTHEON_URL"),
+            DEFAULT_SYNTHEON_URL,
+        ).rstrip("/"),
         "syntheonKey": (
             os.environ.get("SYNTHEON_API_KEY") or os.environ.get("SYNTHEON_TOKEN") or ""
         ).strip(),
@@ -83,8 +100,8 @@ def load_compose_config(site_root: pathlib.Path | None = None) -> dict[str, str]
 
 def compose_status(site_root: pathlib.Path, conn=None) -> dict[str, Any]:
     cfg = load_compose_config(site_root)
-    egenie = _service_health(cfg["egenieUrl"], cfg["egenieKey"], timeout_s=0.45)
-    syntheon = _service_health(cfg["syntheonUrl"], cfg["syntheonKey"], timeout_s=0.45)
+    egenie = _service_health(cfg["egenieUrl"], cfg["egenieKey"], timeout_s=2.0)
+    syntheon = _service_health(cfg["syntheonUrl"], cfg["syntheonKey"], timeout_s=2.0)
     llm = bool(cfg.get("apiKey"))
     engines: list[str] = []
     if cfg["egenieEnabled"] == "1" and egenie.get("ok"):
@@ -281,36 +298,58 @@ def call_egenie(
     passages: list[dict[str, str]],
     title: str,
 ) -> dict[str, Any] | None:
+    """POST ``{wish: str}`` to eGenie ``/v1/wishes`` on the dedicated EC2."""
+    wish = _egenie_wish_text(utterance, starter=starter, passages=passages, title=title)
     payload = {
-        "wish": {
-            "kind": "document.compose",
-            "utterance": utterance,
-            "tenant": "hbcsanyard",
-            "phase": "understand",
-        },
-        "utterance": utterance,
+        "wish": wish,
+        "fast": False,
         "kind": "document.compose",
         "tenant": "hbcsanyard",
         "title": title,
         "starterId": starter.get("id") or "",
-        "context": {
-            "starter": {
-                "id": starter.get("id"),
-                "title": starter.get("title"),
-                "bodyHtml": (starter.get("bodyHtml") or "")[:4000],
-            },
-            "passages": _compact_passages(passages),
-        },
     }
     return _post_first_ok(
         cfg["egenieUrl"],
         EGENIE_PATHS,
         payload,
         api_key=cfg.get("egenieKey") or "",
-        timeout_ms=cfg.get("egenieTimeoutMs") or "8000",
-        default_timeout=8.0,
-        cap=20.0,
+        timeout_ms=cfg.get("egenieTimeoutMs") or "90000",
+        default_timeout=90.0,
+        cap=120.0,
     )
+
+
+def _egenie_wish_text(
+    utterance: str,
+    *,
+    starter: dict[str, Any],
+    passages: list[dict[str, str]],
+    title: str,
+) -> str:
+    bits = [
+        "You are drafting an official document for Mandi Housing Welfare Society "
+        "(Himuda Housing Colony Sanyard, Registration No. 467 dated 21/07/2012).",
+        f"Document type: {starter.get('title') or 'letter'}.",
+    ]
+    if title:
+        bits.append(f"Working title: {title}.")
+    bits.append("Writer request:")
+    bits.append(utterance.strip())
+    starter_html = (starter.get("bodyHtml") or "").strip()
+    if starter_html:
+        bits.append("Starter HTML to follow or fill:")
+        bits.append(starter_html[:4000])
+    compact = _compact_passages(passages)
+    if compact:
+        bits.append("Colony context (templates, Information Centre, meetings) — use only these facts:")
+        for p in compact:
+            bits.append(f"- {p.get('title')}: {(p.get('text') or '')[:500]}")
+    bits.append(
+        "Write the complete document body as HTML using <p>, <ol>, <ul>, <li>, <strong>, <em>, <br>. "
+        "Do not wrap in <html> or add letterhead. Unknown facts stay as ________. "
+        "Do not invent amounts, case numbers, or legal clauses."
+    )
+    return "\n".join(bits)[:12000]
 
 
 def call_syntheon(
@@ -481,6 +520,13 @@ def _merge_intent(base: dict[str, Any], remote: dict[str, Any]) -> dict[str, Any
         topic = str(layer.get("topic") or "").strip()
         if topic:
             out["topic"] = topic[:120]
+    for item in blob.get("phases") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("phase") or "").lower() == "understand":
+            summary = str(item.get("text") or "").strip()
+            if summary:
+                out["summary"] = summary[:400]
     out["source"] = "egenie" if blob else base.get("source")
     starter = starter_by_id(out.get("starterId") or "")
     if starter:
@@ -491,13 +537,16 @@ def _merge_intent(base: dict[str, Any], remote: dict[str, Any]) -> dict[str, Any
 def _html_from_remote(data: dict[str, Any] | None) -> str:
     if not isinstance(data, dict):
         return ""
-    for key in ("htmlBody", "bodyHtml", "html", "content", "document", "text"):
+    from_phases = _html_from_egenie_phases(data)
+    if from_phases:
+        return from_phases
+    for key in ("htmlBody", "bodyHtml", "html", "content", "document", "answer", "text"):
         val = data.get(key)
         if isinstance(val, dict):
             inner = _html_from_remote(val)
             if inner:
                 return inner
-        elif isinstance(val, str) and val.strip():
+        elif isinstance(val, str) and _usable_model_text(val):
             return _coerce_html(val)
     for nested_key in ("act", "result", "output", "data", "wish"):
         nested = data.get(nested_key)
@@ -506,6 +555,36 @@ def _html_from_remote(data: dict[str, Any] | None) -> str:
             if inner:
                 return inner
     return ""
+
+
+def _html_from_egenie_phases(data: dict[str, Any]) -> str:
+    phases = data.get("phases")
+    if not isinstance(phases, list):
+        return ""
+    by_phase: dict[str, str] = {}
+    for item in phases:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("phase") or "").strip().lower()
+        text = str(item.get("text") or "").strip()
+        if name and _usable_model_text(text):
+            by_phase[name] = text
+    for name in ("act", "think", "understand"):
+        if by_phase.get(name):
+            return _coerce_html(by_phase[name])
+    return ""
+
+
+def _usable_model_text(raw: str) -> bool:
+    text = (raw or "").strip()
+    if not text:
+        return False
+    low = text.lower()
+    if "model returned no text" in low:
+        return False
+    if low in {"(no text)", "n/a", "none"}:
+        return False
+    return True
 
 
 def _title_from_remote(data: dict[str, Any] | None) -> str:
@@ -657,7 +736,7 @@ def _post_first_ok(
         timeout_s = int(timeout_ms or 0) / 1000.0
     except ValueError:
         timeout_s = default_timeout
-    timeout_s = max(0.8, min(timeout_s or default_timeout, cap))
+    timeout_s = max(0.8, min(timeout_s or default_timeout, cap))  # remote eGenie can take ~60–90s
     last_err: Exception | None = None
     for path in paths:
         url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))

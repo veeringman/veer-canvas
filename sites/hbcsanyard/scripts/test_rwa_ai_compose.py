@@ -45,10 +45,17 @@ class HtmlHelpersTest(unittest.TestCase):
         })
         self.assertIn("Resolved that", html)
 
-    def test_coerce_plain_text(self) -> None:
-        html = rwa_ai_compose._coerce_html("Hello\n\nWorld")
-        self.assertIn("<p>Hello</p>", html)
-        self.assertIn("<p>World</p>", html)
+    def test_egenie_phases_used_when_act_empty(self) -> None:
+        html = rwa_ai_compose._html_from_remote({
+            "answer": "(Act phase — model returned no text)",
+            "phases": [
+                {"phase": "understand", "text": "Intent: hire an advocate."},
+                {"phase": "think", "text": "**Colony Notice**\n\nA water tanker will arrive tomorrow."},
+                {"phase": "act", "text": "(Act phase — model returned no text)"},
+            ],
+        })
+        self.assertIn("water tanker", html)
+        self.assertNotIn("model returned no text", html)
 
 
 class DraftDocumentTest(unittest.TestCase):

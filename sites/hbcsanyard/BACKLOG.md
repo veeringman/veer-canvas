@@ -177,4 +177,4 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 ## Session notes
 
 - 2026-09-17: Accounts/ledger custom columns. EC Admin → Custom columns (up to 8). Values stored per plot (survive PDF re-import). Do not change pending/dues math.
-- 2026-09-17: Templates → Write a document AI Assist. `data/ai.env` `EGENIE_URL` / `SYNTHEON_URL` (and keys) copied from those EC2 deployments; RAG/LLM still drafts if they are down.
+- 2026-09-17: AI Assist talks to eGenie at `https://egenie.veerlabs.solutions` (separate AI EC2 `100.52.147.238`), not localhost on the portal box.
