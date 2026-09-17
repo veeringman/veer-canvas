@@ -45,7 +45,7 @@ Before first deploy of a new host, point DNS (`A`/`AAAA`) at the EC2 IP so TLS c
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `SITE_ID` | `veerlabs` | Which site package to deploy |
-| `EC2_HOST` | set in script | SSH target |
+| `EC2_HOST` | `100.61.116.25` (script default; GitHub Action uses `secrets.EC2_HOST`) | SSH target |
 | `EC2_USER` | `ubuntu` | SSH user |
 | `EC2_KEY` | `./VeerSetuHost.pem` | Private key path |
 | `OVERRIDE_CATALOG` | `0` | `1` = skip pulling live CMS catalog (dangerous) |

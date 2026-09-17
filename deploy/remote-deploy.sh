@@ -32,7 +32,7 @@ VEERCANVAS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/site-env.sh
 source "${VEERCANVAS_ROOT}/deploy/lib/site-env.sh"
 
-EC2_HOST="${EC2_HOST:-3.216.30.113}"
+EC2_HOST="${EC2_HOST:-100.61.116.25}"
 EC2_USER="${EC2_USER:-ubuntu}"
 EC2_KEY="${EC2_KEY:-$VEERCANVAS_ROOT/VeerSetuHost.pem}"
 

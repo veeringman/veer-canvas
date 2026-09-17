@@ -4,7 +4,7 @@ globs: deploy/**/*,services/veer-ai/**/*
 alwaysApply: true
 ---
 
-# EC2 host (VeerSetu `3.216.30.113`)
+# EC2 host (VeerSetu `100.61.116.25`)
 
 Root disk is **14 GB**. Do not compile or rustup on this machine.
 

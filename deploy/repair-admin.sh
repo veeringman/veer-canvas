@@ -1,7 +1,7 @@
 #!/bin/bash
 # Repair VeerCanvas admin on the server (502 Bad Gateway).
 # Run on EC2 as root/sudo, or via SSH:
-#   ssh -i ./VeerSetuHost.pem ubuntu@3.216.30.113 \
+#   ssh -i ./VeerSetuHost.pem ubuntu@100.61.116.25 \
 #     'sudo WEB_ROOT=/var/www/veerlabs.solutions DOMAIN=veerlabs.solutions bash /var/www/veerlabs.solutions/veercanvas/deploy/repair-admin.sh'
 
 set -euo pipefail

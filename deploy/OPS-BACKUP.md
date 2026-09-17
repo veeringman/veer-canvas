@@ -144,7 +144,7 @@ python3 -m venv /tmp/drive-oauth && /tmp/drive-oauth/bin/pip install -q google-a
 # Browser: sign in as housingcolonysanyard@gmail.com → Allow
 
 scp -i ~/VeerSetuHost.pem /tmp/drive-token.json \
-  ubuntu@3.216.30.113:/var/www/hbcsanyard.veerlabs.solutions/data/drive-token.json
+  ubuntu@100.61.116.25:/var/www/hbcsanyard.veerlabs.solutions/data/drive-token.json
 ```
 
 5. Folder ID is already set (`website` = `1SqOVrU9ozCFoZGWGsKuA-lQLzvua-XI7`). `DRIVE_ENABLED=1` in `data/drive.env`.

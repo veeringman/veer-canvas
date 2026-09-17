@@ -13,7 +13,7 @@ Defaults used by deploy scripts (override as needed):
 
 | Variable | Typical value |
 |----------|----------------|
-| `EC2_HOST` | production host IP |
+| `EC2_HOST` | `100.61.116.25` (override if the instance IP changes) |
 | `EC2_USER` | `ubuntu` |
 | `EC2_KEY` | path to PEM |
 

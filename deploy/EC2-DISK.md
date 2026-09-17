@@ -1,6 +1,6 @@
 # EC2 disk — backlog (14 GB root)
 
-Host: VeerSetu `ubuntu@3.216.30.113`. Surveyed 2026-08-21 at **87% full**; Rust `target/` cleanup brought it to ~74%.
+Host: VeerSetu `ubuntu@100.61.116.25`. Surveyed 2026-08-21 at **87% full**; Rust `target/` cleanup brought it to ~74%.
 
 ## Done
 
