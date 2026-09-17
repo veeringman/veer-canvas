@@ -3863,6 +3863,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   async function loadDues() {
     const data = await api('/api/rwa/payments/me');
+    if (Array.isArray(data.customColumns)) ledgerCustomColumns = data.customColumns;
     const card = el('duesCard');
     const p = data.payment;
     if (card) {
@@ -3870,6 +3871,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         card.innerHTML = '<p class="muted">No ledger row for this plot yet.</p>';
       } else {
         const pending = Number(p.pendingDues ?? p.balanceOutstanding ?? 0);
+        const extraCols = p.customColumns || ledgerCustomColumns || [];
+        const extraMetrics = extraCols.map((col) => `
+              <div><dt>${escapeHtml(col.label)}</dt><dd>${escapeHtml(formatLedgerCustomValue(col, p))}</dd></div>
+            `).join('');
         card.innerHTML = `
           <article class="dues-bill${pending <= 0 ? ' is-cleared' : ''}">
             <header class="dues-bill-head">
@@ -3881,6 +3886,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
               <div><dt>Previous paid</dt><dd>${inr(p.previousPaid ?? 0)}</dd></div>
               <div><dt>Previous pending</dt><dd>${inr(p.previousPending ?? p.balancePrev)}</dd></div>
               <div><dt>Year total</dt><dd>${inr(p.currentYearTotal ?? p.feeAmount)}</dd></div>
+              ${extraMetrics}
             </dl>
             <footer class="dues-bill-meta">
               <span>Treasury</span>
@@ -5479,7 +5485,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   let ledgerCache = [];
+  let ledgerCustomColumns = [];
   let ledgerAutoRecalc = true;
+  let ledgerColumnsDraft = [];
 
   let vaultActiveHouseId = '';
 
@@ -5692,6 +5700,48 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     }).catch(console.error);
   });
 
+  function ledgerCustomCols() {
+    return Array.isArray(ledgerCustomColumns) ? ledgerCustomColumns : [];
+  }
+
+  function formatLedgerCustomValue(col, row) {
+    const raw = row && row.customValues ? row.customValues[col.id] : undefined;
+    if (raw === null || raw === undefined || raw === '') return '—';
+    if (col.kind === 'money') return inr(raw);
+    return String(raw);
+  }
+
+  function customValuesSearchBlob(row) {
+    const vals = row.customValues || {};
+    return ledgerCustomCols().map((col) => {
+      const v = vals[col.id];
+      if (v === null || v === undefined || v === '') return '';
+      return `${col.label} ${v}`;
+    }).join(' ');
+  }
+
+  function renderLedgerHead() {
+    const tr = el('ledgerHeadRow');
+    if (!tr) return;
+    const extra = ledgerCustomCols().map((col) => `<th>${escapeHtml(col.label)}</th>`).join('');
+    tr.innerHTML = `
+                    <th>Plot</th>
+                    <th>Name</th>
+                    <th>Prev total</th>
+                    <th>Prev paid</th>
+                    <th>Prev pending</th>
+                    <th>Year total</th>
+                    <th>Pending / dues</th>
+                    ${extra}
+                    <th>HH code</th>
+                    <th>Treasury</th>
+                    <th></th>`;
+  }
+
+  function ledgerColCount() {
+    return 10 + ledgerCustomCols().length;
+  }
+
   function renderLedgerSummary(sum) {
     if (!el('ledgerSummary') || !sum) return;
     el('ledgerSummary').textContent =
@@ -5703,12 +5753,13 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const cards = el('ledgerCards');
     if (!tbody && !cards) return;
     const q = (el('ledgerSearch')?.value || '').trim().toLowerCase();
+    const extraCols = ledgerCustomCols();
     const rows = ledgerCache.filter((r) => {
       if (!q) return true;
-      return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.householdCode || ''} ${r.section || ''} ${r.remarks || ''}`.toLowerCase().includes(q);
+      return `${r.houseId} ${r.plotNo || ''} ${r.name || ''} ${r.householdCode || ''} ${r.section || ''} ${r.remarks || ''} ${customValuesSearchBlob(r)}`.toLowerCase().includes(q);
     });
     if (!rows.length) {
-      if (tbody) tbody.innerHTML = '<tr class="is-empty-row"><td colspan="10" class="muted">No matching ledger rows.</td></tr>';
+      if (tbody) tbody.innerHTML = `<tr class="is-empty-row"><td colspan="${ledgerColCount()}" class="muted">No matching ledger rows.</td></tr>`;
       if (cards) cards.innerHTML = '<p class="muted ledger-cards-empty">No matching ledger rows.</p>';
       refreshMobileListUi();
       return;
@@ -5724,6 +5775,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (tbody) {
       tbody.innerHTML = rows.map((r) => {
         const tActs = canTreasury ? treasuryActionButtons('ledger', r.houseId, r.treasuryStatus) : '';
+        const extraCells = extraCols.map((col) =>
+          `<td class="${col.kind === 'money' ? 'ledger-amt' : 'ledger-custom'}" data-label="${escapeHtml(col.label)}">${escapeHtml(formatLedgerCustomValue(col, r))}</td>`
+        ).join('');
         return `
       <tr data-house="${escapeHtml(r.houseId)}">
         <td class="ledger-plot" data-label="Plot"><code>${escapeHtml(r.houseId)}</code></td>
@@ -5733,6 +5787,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td class="ledger-amt" data-label="Prev pending">${inr(r.previousPending ?? r.balancePrev)}</td>
         <td class="ledger-amt" data-label="Year total">${inr(r.currentYearTotal ?? r.feeAmount)}</td>
         <td class="ledger-due" data-label="Pending / dues">${inr(r.pendingDues ?? r.balanceOutstanding)}</td>
+        ${extraCells}
         <td class="ledger-hh" data-label="HH code"><code class="hh-code">${escapeHtml(r.householdCode || '—')}</code></td>
         <td class="ledger-treas" data-label="Treasury">${treasuryStatusIcon(r, { showLabel: false })}</td>
         <td data-label="Actions" class="row-actions">
@@ -5765,6 +5820,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div><dt>Prev paid</dt><dd>${inr(r.previousPaid ?? 0)}</dd></div>
           <div><dt>Prev pending</dt><dd>${inr(r.previousPending ?? r.balancePrev)}</dd></div>
           <div><dt>Year total</dt><dd>${inr(r.currentYearTotal ?? r.feeAmount)}</dd></div>
+          ${extraCols.map((col) => `<div><dt>${escapeHtml(col.label)}</dt><dd>${escapeHtml(formatLedgerCustomValue(col, r))}</dd></div>`).join('')}
         </dl>
         <div class="ledger-card-meta">
           ${hh ? `<code class="hh-code">HH ${escapeHtml(hh)}</code>` : '<span class="muted">No HH code</span>'}
@@ -5784,6 +5840,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   async function loadLedger() {
     const all = await api('/api/rwa/payments');
     ledgerCache = all.rows || [];
+    if (Array.isArray(all.customColumns)) ledgerCustomColumns = all.customColumns;
+    if (el('ledgerColumnsBtn')) el('ledgerColumnsBtn').hidden = !isEcAdmin();
+    renderLedgerHead();
     renderLedgerSummary(all.summary || {});
     renderLedgerRows();
   }
@@ -5835,8 +5894,46 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     el('ledgerEditTotalDue').value = String(row.totalDue ?? 0);
     el('ledgerEditPending').value = String(row.pendingDues ?? row.balanceOutstanding ?? 0);
     el('ledgerEditRemarks').value = row.remarks || '';
+    fillLedgerEditCustomFields(row);
     syncLedgerDerivedPreview();
     showDialog(dialog);
+  }
+
+  function fillLedgerEditCustomFields(row) {
+    const box = el('ledgerEditCustomFields');
+    if (!box) return;
+    const cols = ledgerCustomCols();
+    if (!cols.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    const vals = row.customValues || {};
+    box.innerHTML = cols.map((col) => {
+      const raw = vals[col.id];
+      const value = raw === null || raw === undefined ? '' : String(raw);
+      if (col.kind === 'money') {
+        return `<label>
+            ${escapeHtml(col.label)} (₹)
+            <input data-custom-col="${escapeHtml(col.id)}" type="number" step="1" value="${escapeHtml(value)}">
+          </label>`;
+      }
+      return `<label class="span-2">
+            ${escapeHtml(col.label)}
+            <input data-custom-col="${escapeHtml(col.id)}" type="text" maxlength="200" value="${escapeHtml(value)}">
+          </label>`;
+    }).join('');
+  }
+
+  function collectLedgerCustomValues() {
+    const out = {};
+    document.querySelectorAll('#ledgerEditCustomFields [data-custom-col]').forEach((input) => {
+      const id = input.getAttribute('data-custom-col');
+      if (!id) return;
+      out[id] = input.value;
+    });
+    return out;
   }
 
   function closeLedgerEdit() {
@@ -5858,6 +5955,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       totalDue: Number(el('ledgerEditTotalDue').value),
       pendingDues: Number(el('ledgerEditPending').value),
       remarks: el('ledgerEditRemarks').value.trim(),
+      customValues: collectLedgerCustomValues(),
     };
     setLedgerEditError('');
     const btn = el('ledgerEditSaveBtn');
@@ -5914,6 +6012,141 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   el('ledgerEditDialog')?.addEventListener('cancel', (event) => {
     event.preventDefault();
     closeLedgerEdit();
+  });
+
+  function setLedgerColumnsError(msg) {
+    const box = el('ledgerColumnsError');
+    if (!box) return;
+    box.hidden = !msg;
+    box.textContent = msg || '';
+  }
+
+  function renderLedgerColumnsDraft() {
+    const list = el('ledgerColumnsList');
+    if (!list) return;
+    if (!ledgerColumnsDraft.length) {
+      list.innerHTML = '<p class="muted">No extra columns yet. Add a name and type, then Save.</p>';
+    } else {
+      list.innerHTML = ledgerColumnsDraft.map((col, i) => `
+        <div class="ledger-column-row" data-idx="${i}">
+          <label>Name
+            <input type="text" maxlength="40" data-col-field="label" value="${escapeHtml(col.label || '')}">
+          </label>
+          <label>Type
+            <select data-col-field="kind">
+              <option value="money"${col.kind === 'money' ? ' selected' : ''}>Rupees (₹)</option>
+              <option value="text"${col.kind === 'text' ? ' selected' : ''}>Text</option>
+            </select>
+          </label>
+          <button type="button" class="btn ghost compact" data-col-move="up" ${i === 0 ? 'disabled' : ''}>Up</button>
+          <button type="button" class="btn ghost compact" data-col-move="down" ${i === ledgerColumnsDraft.length - 1 ? 'disabled' : ''}>Down</button>
+          <button type="button" class="btn ghost compact" data-col-remove>Remove</button>
+        </div>
+      `).join('');
+    }
+    if (el('ledgerColumnsHint')) {
+      el('ledgerColumnsHint').textContent = `${ledgerColumnsDraft.length} of 8 columns`;
+    }
+  }
+
+  function readLedgerColumnsDraftFromDom() {
+    const rows = Array.from(document.querySelectorAll('#ledgerColumnsList .ledger-column-row'));
+    ledgerColumnsDraft = rows.map((row, i) => {
+      const prev = ledgerColumnsDraft[i] || {};
+      return {
+        id: prev.id,
+        label: row.querySelector('[data-col-field="label"]')?.value || '',
+        kind: row.querySelector('[data-col-field="kind"]')?.value || 'text',
+      };
+    });
+  }
+
+  function openLedgerColumnsDialog() {
+    if (!isEcAdmin()) return;
+    const dialog = el('ledgerColumnsDialog');
+    if (!dialog) return;
+    ledgerColumnsDraft = ledgerCustomCols().map((c) => ({ ...c }));
+    setLedgerColumnsError('');
+    if (el('ledgerColumnNewLabel')) el('ledgerColumnNewLabel').value = '';
+    renderLedgerColumnsDraft();
+    showDialog(dialog);
+  }
+
+  function closeLedgerColumnsDialog() {
+    const dialog = el('ledgerColumnsDialog');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  }
+
+  el('ledgerColumnsBtn')?.addEventListener('click', () => openLedgerColumnsDialog());
+  el('ledgerColumnsCancelBtn')?.addEventListener('click', () => closeLedgerColumnsDialog());
+  el('ledgerColumnsDialog')?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeLedgerColumnsDialog();
+  });
+  el('ledgerColumnAddBtn')?.addEventListener('click', () => {
+    readLedgerColumnsDraftFromDom();
+    if (ledgerColumnsDraft.length >= 8) {
+      setLedgerColumnsError('You can add up to 8 custom columns.');
+      return;
+    }
+    const label = (el('ledgerColumnNewLabel')?.value || '').trim();
+    if (!label) {
+      setLedgerColumnsError('Enter a column name first.');
+      return;
+    }
+    setLedgerColumnsError('');
+    ledgerColumnsDraft.push({
+      label,
+      kind: el('ledgerColumnNewKind')?.value || 'money',
+    });
+    if (el('ledgerColumnNewLabel')) el('ledgerColumnNewLabel').value = '';
+    renderLedgerColumnsDraft();
+  });
+  el('ledgerColumnsList')?.addEventListener('click', (event) => {
+    const row = event.target.closest('.ledger-column-row');
+    if (!row) return;
+    readLedgerColumnsDraftFromDom();
+    const idx = Number(row.getAttribute('data-idx'));
+    if (event.target.closest('[data-col-remove]')) {
+      ledgerColumnsDraft.splice(idx, 1);
+      renderLedgerColumnsDraft();
+      return;
+    }
+    const move = event.target.closest('[data-col-move]')?.getAttribute('data-col-move');
+    if (move === 'up' && idx > 0) {
+      const [item] = ledgerColumnsDraft.splice(idx, 1);
+      ledgerColumnsDraft.splice(idx - 1, 0, item);
+      renderLedgerColumnsDraft();
+    } else if (move === 'down' && idx < ledgerColumnsDraft.length - 1) {
+      const [item] = ledgerColumnsDraft.splice(idx, 1);
+      ledgerColumnsDraft.splice(idx + 1, 0, item);
+      renderLedgerColumnsDraft();
+    }
+  });
+  el('ledgerColumnsForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    readLedgerColumnsDraftFromDom();
+    setLedgerColumnsError('');
+    const btn = el('ledgerColumnsSaveBtn');
+    if (btn) btn.disabled = true;
+    try {
+      const data = await api('/api/rwa/ledger/columns', {
+        method: 'PUT',
+        body: JSON.stringify({ columns: ledgerColumnsDraft }),
+      });
+      ledgerCustomColumns = data.columns || [];
+      closeLedgerColumnsDialog();
+      if (el('ledgerEditStatus')) el('ledgerEditStatus').textContent = 'Custom columns saved';
+      await loadLedger();
+      loadDues().catch(() => {});
+      initReportsForm().catch(() => {});
+    } catch (err) {
+      setLedgerColumnsError(err.message || 'Could not save columns');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
 
   el('ecEditBankBtn')?.addEventListener('click', () => { openBankEdit().catch(console.error); });

@@ -621,6 +621,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     ensure_no_objection_requests_table(conn)
     ensure_document_attestations_table(conn)
     ensure_treasury_columns(conn)
+    try:
+        import rwa_ledger_columns as _rwa_ledger_columns
+
+        _rwa_ledger_columns.ensure_ledger_custom_columns(conn)
+    except Exception:
+        pass
     ensure_messages_and_push_tables(conn)
     ensure_msg_likes_and_ai(conn)
     ensure_msg_private_channels(conn)

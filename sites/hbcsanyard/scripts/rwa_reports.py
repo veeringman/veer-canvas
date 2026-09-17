@@ -446,8 +446,25 @@ DATASETS_META = {
 }
 
 
+def _dues_fields(conn=None) -> list[dict[str, Any]]:
+    fields = list(PENDING_DUES_FIELDS)
+    try:
+        import rwa_ledger_columns
+
+        extra = rwa_ledger_columns.report_field_defs(conn)
+        existing = {f["id"] for f in fields}
+        for item in extra:
+            if item["id"] not in existing:
+                fields.append(item)
+    except Exception:
+        pass
+    return fields
+
+
 def reports_meta(conn=None) -> dict:
-    datasets = DATASETS_META
+    dues_fields = _dues_fields(conn)
+    datasets = {key: dict(val) for key, val in DATASETS_META.items()}
+    datasets["dues"] = {**DATASETS_META["dues"], "fields": dues_fields}
     reports = [
         {
             "id": "pending-dues",
@@ -455,7 +472,7 @@ def reports_meta(conn=None) -> dict:
             "description": "Subscription / dues outstanding by plot from the latest ledger.",
             "kind": "builtin",
             "dataset": "dues",
-            "fields": PENDING_DUES_FIELDS,
+            "fields": dues_fields,
             "defaultFilters": {
                 "pendingOnly": True,
                 "section": "all",
@@ -596,6 +613,19 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
         (SUPERADMIN_HOUSE_ID, ADHOC_GATE_HOUSE_ID),
     ).fetchall()
 
+    custom_cols = []
+    custom_vals: dict[str, dict] = {}
+    try:
+        import rwa_ledger_columns
+
+        custom_cols = rwa_ledger_columns.list_columns(conn)
+        custom_vals = rwa_ledger_columns.values_for_houses(
+            conn, [r["house_id"] for r in rows]
+        )
+    except Exception:
+        custom_cols = []
+        custom_vals = {}
+
     out: list[dict] = []
     for r in rows:
         owner_name = r["name"] or r["house_id"]
@@ -617,6 +647,16 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
             "householdCode": (r["household_code"] or "").strip(),
             "houseId": r["house_id"],
         }
+        try:
+            import rwa_ledger_columns
+
+            rwa_ledger_columns.attach_to_payment(
+                item,
+                custom_cols,
+                custom_vals.get(r["house_id"]) or {},
+            )
+        except Exception:
+            pass
         hid = str(item["houseId"] or "").upper()
         if house_ids and hid not in house_ids and str(item["plotNo"] or "").upper() not in house_ids:
             continue
@@ -643,10 +683,11 @@ def query_pending_dues_rows(conn, enrich_payment_row, *, filters: dict | None = 
     return out
 
 
-def _resolve_fields(field_ids: list[str] | None) -> list[dict]:
-    by_id = {f["id"]: f for f in PENDING_DUES_FIELDS}
+def _resolve_fields(field_ids: list[str] | None, conn=None) -> list[dict]:
+    catalog = _dues_fields(conn)
+    by_id = {f["id"]: f for f in catalog}
     if not field_ids:
-        return [f for f in PENDING_DUES_FIELDS if f.get("default")]
+        return [f for f in catalog if f.get("default")]
     selected = []
     seen = set()
     for fid in field_ids:
@@ -656,7 +697,7 @@ def _resolve_fields(field_ids: list[str] | None) -> list[dict]:
     if "sno" not in seen:
         selected.insert(0, by_id["sno"])
     if len(selected) < 2:
-        return [f for f in PENDING_DUES_FIELDS if f.get("default")]
+        return [f for f in catalog if f.get("default")]
     return selected
 
 
@@ -1732,7 +1773,7 @@ def build_pending_dues_pdf(
     filters = filters or {}
     look = _resolve_report_style(style if style is not None else filters.get("style"))
     fs = look["fontSize"]
-    field_defs = _append_custom_columns(_resolve_fields(fields), filters)
+    field_defs = _append_custom_columns(_resolve_fields(fields, conn), filters)
     rows = query_pending_dues_rows(conn, enrich_payment_row, filters=filters)
     bearers = office_bearers_for_header(conn)
 
@@ -1871,7 +1912,14 @@ def build_pending_dues_pdf(
         for f in field_defs
     ]
     data = [header_row]
-    totals = {fid: 0 for fid in MONEY_FIELDS}
+    money_ids = set(MONEY_FIELDS)
+    try:
+        import rwa_ledger_columns
+
+        money_ids |= rwa_ledger_columns.money_field_ids(conn)
+    except Exception:
+        pass
+    totals = {fid: 0 for fid in money_ids}
 
     for i, row in enumerate(rows, 1):
         cells = []
@@ -1879,14 +1927,18 @@ def build_pending_dues_pdf(
             fid = f["id"]
             if fid == "sno":
                 val = str(i)
-            elif fid in MONEY_FIELDS:
-                num = int(row.get(fid) or 0)
-                totals[fid] = totals.get(fid, 0) + num
-                val = _fmt_inr(num)
+            elif fid in money_ids:
+                raw = row.get(fid)
+                if f.get("custom") and (raw is None or raw == ""):
+                    val = "-"
+                else:
+                    num = int(raw or 0)
+                    totals[fid] = totals.get(fid, 0) + num
+                    val = _fmt_inr(num)
             elif f.get("empty"):
                 val = ""
             else:
-                val = str(row.get(fid) or "-")
+                val = str(row.get(fid) if row.get(fid) not in (None, "") else "-")
             cells.append(_cell(
                 val,
                 align=f.get("align") or "left",
@@ -1907,7 +1959,7 @@ def build_pending_dues_pdf(
                 ))
             elif f.get("empty"):
                 total_cells.append(_cell("", font_size=fs, text_color=look["text"]))
-            elif fid in MONEY_FIELDS:
+            elif fid in money_ids:
                 total_cells.append(
                     _cell(
                         f"<b>{_fmt_inr(totals.get(fid, 0))}</b>",
@@ -2078,11 +2130,11 @@ def delete_report_template(conn, template_id: str) -> None:
         raise ValueError("Template not found")
 
 
-def _resolve_dataset_fields(dataset: str, field_ids: list[str] | None) -> list[dict]:
+def _resolve_dataset_fields(dataset: str, field_ids: list[str] | None, conn=None) -> list[dict]:
     meta = DATASETS_META.get(dataset)
     if not meta:
         raise ValueError("Unknown dataset")
-    catalog = meta["fields"]
+    catalog = _dues_fields(conn) if dataset == "dues" else meta["fields"]
     by_id = {f["id"]: f for f in catalog}
     if not field_ids:
         return [f for f in catalog if f.get("default")]
@@ -2135,8 +2187,8 @@ def _append_custom_columns(field_defs: list[dict], filters: dict | None) -> list
     return out
 
 
-def _resolve_report_fields(dataset: str, field_ids: list[str] | None, filters: dict | None) -> list[dict]:
-    return _append_custom_columns(_resolve_dataset_fields(dataset, field_ids), filters)
+def _resolve_report_fields(dataset: str, field_ids: list[str] | None, filters: dict | None, conn=None) -> list[dict]:
+    return _append_custom_columns(_resolve_dataset_fields(dataset, field_ids, conn), filters)
 
 
 def query_directory_rows(directory_fn, conn, *, filters: dict | None = None) -> list[dict]:
@@ -2583,13 +2635,17 @@ def build_tabular_pdf(
             if fid == "sno":
                 val = str(i)
             elif fid in money_fields:
-                num = int(row.get(fid) or 0)
-                totals[fid] = totals.get(fid, 0) + num
-                val = _fmt_inr(num)
+                raw = row.get(fid)
+                if f.get("custom") and (raw is None or raw == ""):
+                    val = "-"
+                else:
+                    num = int(raw or 0)
+                    totals[fid] = totals.get(fid, 0) + num
+                    val = _fmt_inr(num)
             elif f.get("empty"):
                 val = ""
             else:
-                val = str(row.get(fid) or "-")
+                val = str(row.get(fid) if row.get(fid) not in (None, "") else "-")
             cells.append(_cell(
                 val,
                 align=f.get("align") or "left",
@@ -3351,9 +3407,16 @@ def generate_report_pdf(
         dataset = str(payload.get("dataset") or filters.get("dataset") or "").strip()
         if dataset not in DATASETS_META:
             raise ValueError("Select a dataset for the custom report")
-        field_defs = _resolve_report_fields(dataset, fields, filters)
+        field_defs = _resolve_report_fields(dataset, fields, filters, conn)
         title = str(payload.get("title") or DATASETS_META[dataset]["title"])
-        money = MONEY_FIELDS
+        money = set(MONEY_FIELDS)
+        try:
+            import rwa_ledger_columns
+
+            if dataset == "dues":
+                money |= rwa_ledger_columns.money_field_ids(conn)
+        except Exception:
+            pass
 
         if dataset == "dues":
             rows = query_pending_dues_rows(conn, enrich_payment_row, filters=filters)

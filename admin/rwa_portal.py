@@ -1770,7 +1770,27 @@ def latest_payment_for(conn: sqlite3.Connection, house_id: str) -> dict | None:
     ).fetchone()
     if not row:
         return None
-    return enrich_payment_row(row)
+    return attach_ledger_custom_fields(conn, enrich_payment_row(row))
+
+
+def attach_ledger_custom_fields(
+    conn: sqlite3.Connection,
+    payment: dict | None,
+    *,
+    columns: list | None = None,
+    values: dict | None = None,
+) -> dict | None:
+    import rwa_ledger_columns
+
+    rwa_ledger_columns.ensure_ledger_custom_columns(conn)
+    cols = columns if columns is not None else rwa_ledger_columns.list_columns(conn)
+    if payment is None:
+        return None
+    hid = str(payment.get("houseId") or "")
+    vals = values if values is not None else (
+        rwa_ledger_columns.values_for_house(conn, hid) if hid else {}
+    )
+    return rwa_ledger_columns.attach_to_payment(payment, cols, vals)
 
 
 def payments_summary(conn: sqlite3.Connection) -> dict:
@@ -5283,13 +5303,17 @@ def update_payment_row(
         """,
         (ledger["id"], hid),
     ).fetchone()
+    if "customValues" in payload:
+        import rwa_ledger_columns
+
+        rwa_ledger_columns.set_values_for_house(conn, hid, payload.get("customValues"), commit=True)
     enriched = enrich_payment_row(row)
     enriched.update({
         "plotNo": row["plot_no"],
         "section": row["section"],
         "name": row["name"],
     })
-    return enriched
+    return attach_ledger_custom_fields(conn, enriched)
 
 
 
@@ -6599,6 +6623,8 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^GET /api/rwa/payments/me$"), "View own dues"),
     (re.compile(r"^GET /api/rwa/payments$"), "View ledger"),
     (re.compile(r"^PATCH /api/rwa/payments/[^/]+$"), "Edit ledger row"),
+    (re.compile(r"^GET /api/rwa/ledger/columns$"), "View ledger custom columns"),
+    (re.compile(r"^(PUT|POST) /api/rwa/ledger/columns$"), "Configure ledger custom columns"),
     (re.compile(r"^GET /api/rwa/bank"), "View bank details"),
     (re.compile(r"^PUT /api/rwa/bank"), "Update bank details"),
     (re.compile(r"^POST /api/rwa/bank"), "Update bank / QR"),

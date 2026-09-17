@@ -5145,7 +5145,13 @@ def api_rwa_payments_me():
         summary = rwa_portal.payments_summary(conn)
         if not rwa_entitlements.actor_has(sess["resident"], "manage_dues"):
             summary = {"bank": summary.get("bank")}
-        return jsonify({"ok": True, "payment": payment, "summary": summary})
+        import rwa_ledger_columns
+        return jsonify({
+            "ok": True,
+            "payment": payment,
+            "summary": summary,
+            "customColumns": rwa_ledger_columns.list_columns(conn),
+        })
     finally:
         conn.close()
 
@@ -6508,6 +6514,36 @@ def api_rwa_treasury_no_objection_revert(request_id: str):
     return _treasury_action("no_objection", request_id, "revert")
 
 
+@app.route("/api/rwa/ledger/columns", methods=["GET", "PUT", "POST"])
+def api_rwa_ledger_columns():
+    """List or replace EC-configured extra ledger columns."""
+    conn = _rwa_conn()
+    try:
+        import rwa_ledger_columns
+
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if request.method == "GET":
+            if not (
+                rwa_entitlements.actor_has(actor, "manage_dues")
+                or rwa_entitlements.is_ec_admin(actor)
+            ):
+                return jsonify({"ok": False, "error": "Admin access required"}), 403
+            return jsonify({"ok": True, "columns": rwa_ledger_columns.list_columns(conn)})
+        if not rwa_entitlements.is_ec_admin(actor):
+            return jsonify({"ok": False, "error": "EC Admin access required"}), 403
+        payload = request.get_json(force=True, silent=True) or {}
+        raw = payload.get("columns") if isinstance(payload, dict) else payload
+        columns = rwa_ledger_columns.save_columns(conn, raw)
+        return jsonify({"ok": True, "columns": columns})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/payments", methods=["GET"])
 def api_rwa_payments_all():
     conn = _rwa_conn()
@@ -6525,12 +6561,17 @@ def api_rwa_payments_all():
             """
         ).fetchall()
         from init_rwa_db import section_plot_sort_key
+        import rwa_ledger_columns
+
+        columns = rwa_ledger_columns.list_columns(conn)
+        house_ids = [r["house_id"] for r in rows]
+        values_by_house = rwa_ledger_columns.values_for_houses(conn, house_ids)
 
         enriched = []
         for r in rows:
             owner = rwa_household.primary_member(conn, r["house_id"])
             owner_name = ((owner or {}).get("name") or r["name"] or "").strip()
-            enriched.append({
+            item = {
                 **rwa_portal.enrich_payment_row(r),
                 "plotNo": r["plot_no"],
                 "section": r["section"],
@@ -6538,7 +6579,14 @@ def api_rwa_payments_all():
                 "householdCode": (r["household_code"] or "").strip(),
                 "phone": ((owner or {}).get("phone") or r["phone"] or "").strip(),
                 "email": ((owner or {}).get("email") or r["email"] or "").strip(),
-            })
+            }
+            rwa_portal.attach_ledger_custom_fields(
+                conn,
+                item,
+                columns=columns,
+                values=values_by_house.get(r["house_id"]) or {},
+            )
+            enriched.append(item)
         enriched.sort(
             key=lambda row: section_plot_sort_key(
                 row.get("section"),
@@ -6550,6 +6598,7 @@ def api_rwa_payments_all():
             "ok": True,
             "summary": rwa_portal.payments_summary(conn),
             "rows": enriched,
+            "customColumns": columns,
         })
     finally:
         conn.close()

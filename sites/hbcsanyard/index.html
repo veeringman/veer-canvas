@@ -633,8 +633,26 @@
               <input id="ledgerSearch" type="search" placeholder="Search plot or name…" autocomplete="off">
             </label>
             <button type="button" class="btn secondary compact" id="duesRemindPendingBtn" title="Push dues reminder to plots with outstanding balance">Remind pending</button>
+            <button type="button" class="btn ghost compact" id="ledgerColumnsBtn" hidden>Custom columns</button>
             <p class="muted" id="ledgerEditStatus"></p>
           </div>
+          <div id="ledgerList">
+            <div class="table-wrap ledger-wrap">
+              <table class="ledger-table cardable-table">
+                <thead>
+                  <tr id="ledgerHeadRow">
+                    <th>Plot</th>
+                    <th>Name</th>
+                    <th>Prev total</th>
+                    <th>Prev paid</th>
+                    <th>Prev pending</th>
+                    <th>Year total</th>
+                    <th>Pending / dues</th>
+                    <th>HH code</th>
+                    <th>Treasury</th>
+                    <th></th>
+                  </tr>
+                </thead>
           <div id="ledgerList">
             <div class="table-wrap ledger-wrap">
               <table class="ledger-table cardable-table">
@@ -3531,11 +3549,44 @@
             <input id="ledgerEditRemarks" name="remarks" type="text" maxlength="500" placeholder="Optional note">
           </label>
         </div>
+        <div id="ledgerEditCustomFields" class="ledger-edit-grid ledger-custom-edit" hidden></div>
         <p class="muted" id="ledgerEditDerived"></p>
         <p class="error" id="ledgerEditError" hidden></p>
         <div class="btn-row">
           <button type="submit" class="btn primary" id="ledgerEditSaveBtn">Save changes</button>
           <button type="button" class="btn ghost" id="ledgerEditCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="ledgerColumnsDialog" class="ledger-dialog">
+      <form id="ledgerColumnsForm" class="stack">
+        <header class="panel-head">
+          <h3>Custom ledger columns</h3>
+          <p class="muted">EC Admin: add up to 8 extra columns. They appear on the full ledger, each plot’s dues card, and dues reports. Rupee columns are extra data — they do not change pending / dues totals.</p>
+        </header>
+        <div id="ledgerColumnsList" class="ledger-columns-list"></div>
+        <div class="ledger-edit-grid">
+          <label>
+            New column name
+            <input id="ledgerColumnNewLabel" type="text" maxlength="40" placeholder="e.g. Water / late fee / receipt no.">
+          </label>
+          <label>
+            Type
+            <select id="ledgerColumnNewKind">
+              <option value="money">Rupees (₹)</option>
+              <option value="text">Text</option>
+            </select>
+          </label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn secondary compact" id="ledgerColumnAddBtn">Add column</button>
+        </div>
+        <p class="muted" id="ledgerColumnsHint"></p>
+        <p class="error" id="ledgerColumnsError" hidden></p>
+        <div class="btn-row">
+          <button type="submit" class="btn primary" id="ledgerColumnsSaveBtn">Save columns</button>
+          <button type="button" class="btn ghost" id="ledgerColumnsCancelBtn">Cancel</button>
         </div>
       </form>
     </dialog>

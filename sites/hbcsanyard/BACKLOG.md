@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-08-22
+Last updated: 2026-09-17
 
 ---
 
@@ -170,3 +170,8 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes
+- **Ledger custom columns** — EC Admin configures extra rupee/text columns; they appear on the full ledger, plot dues card, and dues PDF reports (2026-09-17)
+
+## Session notes
+
+- 2026-09-17: Accounts/ledger custom columns. EC Admin → Custom columns (up to 8). Values stored per plot (survive PDF re-import). Do not change pending/dues math.
