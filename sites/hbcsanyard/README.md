@@ -97,6 +97,20 @@ SITE_ID=hbcsanyard EC2_KEY=/path/to/key.pem ./deploy/remote-deploy.sh
 
 `data/rwa.db` is preserved across rsync deploys.
 
+## AI Assist (Templates → Write a document)
+
+Set in `data/ai.env` (not committed). Copy host, port, and token from the eGenie and Syntheon deployments on the VeerSetu EC2:
+
+| Env | Purpose |
+|-----|---------|
+| `EGENIE_URL` | Intent engine (Understand → Think). Default `http://127.0.0.1:8110` |
+| `EGENIE_API_KEY` | Optional bearer token |
+| `SYNTHEON_URL` | Document synthesis. Default `http://127.0.0.1:8120` |
+| `SYNTHEON_API_KEY` | Optional bearer token |
+| `RWA_AI_API_KEY` | OpenAI-compatible fallback if Syntheon is down |
+
+The composer still drafts from local starters + RAG if both services are unreachable.
+
 ## SMTP (production OTP)
 
 | Env | Purpose |

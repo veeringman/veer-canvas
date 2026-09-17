@@ -390,6 +390,11 @@ install_veer_ai() {
 VEER_AI_URL=http://127.0.0.1:8095
 VEER_AI_RAG=1
 VEER_AI_RAG_TIMEOUT_MS=1200
+# eGenie + Syntheon (Templates → Write a document). Copy live URLs/keys from those projects.
+# EGENIE_URL=http://127.0.0.1:8110
+# EGENIE_API_KEY=
+# SYNTHEON_URL=http://127.0.0.1:8120
+# SYNTHEON_API_KEY=
 EOF
     else
       cat > "$WEB_ROOT/data/ai.env" <<'EOF'
@@ -407,6 +412,17 @@ EOF
 VEER_AI_URL=http://127.0.0.1:8095
 VEER_AI_RAG=1
 VEER_AI_RAG_TIMEOUT_MS=1200
+EOF
+    chown ubuntu:ubuntu "$WEB_ROOT/data/ai.env" 2>/dev/null || true
+    systemctl restart "${SERVICE_NAME}.service" || true
+  elif [[ "${SITE_ID}" == "hbcsanyard" ]] && ! grep -q 'EGENIE_URL' "$WEB_ROOT/data/ai.env" 2>/dev/null; then
+    cat >> "$WEB_ROOT/data/ai.env" <<'EOF'
+
+# eGenie + Syntheon (Templates → Write a document). Copy live URLs/keys from those projects.
+# EGENIE_URL=http://127.0.0.1:8110
+# EGENIE_API_KEY=
+# SYNTHEON_URL=http://127.0.0.1:8120
+# SYNTHEON_API_KEY=
 EOF
     chown ubuntu:ubuntu "$WEB_ROOT/data/ai.env" 2>/dev/null || true
     systemctl restart "${SERVICE_NAME}.service" || true

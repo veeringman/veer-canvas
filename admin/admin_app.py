@@ -6983,6 +6983,40 @@ def api_rwa_publish_template_version(template_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/templates/compose/ai", methods=["GET", "POST"])
+def api_rwa_compose_ai():
+    """eGenie + Syntheon intent drafting for Templates → Write a document."""
+    conn = _rwa_conn()
+    try:
+        sess, err = _rwa_ec_session(conn, "manage_templates")
+        if err:
+            return err
+        import rwa_ai_compose  # noqa: WPS433
+
+        if request.method == "GET":
+            return jsonify({"ok": True, **rwa_ai_compose.compose_status(SITE_ROOT, conn)})
+        payload = request.get_json(force=True, silent=True) or {}
+        draft = rwa_ai_compose.draft_document(
+            conn,
+            SITE_ROOT,
+            intent_text=str(
+                payload.get("intent")
+                or payload.get("prompt")
+                or payload.get("request")
+                or ""
+            ),
+            actor=sess["resident"],
+            starter_id=str(payload.get("starterId") or payload.get("starter_id") or ""),
+            title=str(payload.get("title") or ""),
+            current_html=str(payload.get("htmlBody") or payload.get("currentHtml") or ""),
+        )
+        return jsonify({"ok": True, **draft})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/templates/compose/preview", methods=["POST"])
 def api_rwa_compose_preview():
     conn = _rwa_conn()

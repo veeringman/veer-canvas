@@ -81,6 +81,7 @@ Revisit **2** or **3** only if cost is justified by external requirements; keep 
 - [ ] **Chat: visitor / gate ping** — optional drop into a plot’s private room (not colony)
 - [ ] **Chat: quiet colony hours** — soft mute overnight for non-Official channels
 - [x] **Private RAG AI Assistant** — per-member Messages thread; answers from notices/Info Centre/FAQ; optional LLM via `data/ai.env`
+- [x] **Write a document AI Assist** — eGenie + Syntheon intent drafting in Templates compose; colony templates, Info Centre, proceedings
 - [ ] **Offline-first PWA polish** — cached notices + dues snapshot for weak network
 - [ ] **Proxy / mandate letter** — owner grants timed “act for dues/concerns” (beyond view-only)
 - [ ] **AGM mode** — attendance QR, agenda, live votes, minutes → Info Centre
@@ -171,7 +172,9 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes
 - **Ledger custom columns** — EC Admin configures extra rupee/text columns; they appear on the full ledger, plot dues card, and dues PDF reports (2026-09-17)
+- **AI Assist on Write a document** — eGenie intent + Syntheon drafting from starters, library templates, Info Centre, and meeting proceedings (2026-09-17)
 
 ## Session notes
 
 - 2026-09-17: Accounts/ledger custom columns. EC Admin → Custom columns (up to 8). Values stored per plot (survive PDF re-import). Do not change pending/dues math.
+- 2026-09-17: Templates → Write a document AI Assist. `data/ai.env` `EGENIE_URL` / `SYNTHEON_URL` (and keys) copied from those EC2 deployments; RAG/LLM still drafts if they are down.

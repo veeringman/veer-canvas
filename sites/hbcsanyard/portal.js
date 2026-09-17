@@ -15312,7 +15312,113 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       });
     }
     applyComposeChromeSettings(el('tplComposeChrome')?.value || 'simple');
+    refreshComposeAiStatus();
     return composeSession;
+  }
+
+  let composeAiStatus = null;
+  let composeAiStatusLoaded = false;
+
+  async function refreshComposeAiStatus() {
+    const statusEl = el('tplAiStatus');
+    if (!hasEntitlement('manage_templates')) {
+      if (el('tplAiAssist')) el('tplAiAssist').hidden = true;
+      return;
+    }
+    if (el('tplAiAssist')) el('tplAiAssist').hidden = false;
+    if (composeAiStatusLoaded && composeAiStatus) {
+      paintComposeAiStatus();
+      return;
+    }
+    try {
+      const data = await api('/api/rwa/templates/compose/ai');
+      composeAiStatus = data;
+      composeAiStatusLoaded = true;
+      paintComposeAiStatus();
+    } catch (e) {
+      composeAiStatusLoaded = true;
+      if (statusEl && !statusEl.textContent) {
+        statusEl.textContent = e.message || 'AI Assist status unavailable.';
+      }
+    }
+  }
+
+  function paintComposeAiStatus() {
+    const statusEl = el('tplAiStatus');
+    if (!statusEl || statusEl.dataset.busy === '1') return;
+    const mode = composeAiStatus?.mode || '';
+    const egenieOk = !!composeAiStatus?.egenie?.ok;
+    const syntheonOk = !!composeAiStatus?.syntheon?.ok;
+    const bits = [];
+    if (egenieOk) bits.push('eGenie');
+    if (syntheonOk) bits.push('Syntheon');
+    if (composeAiStatus?.llm?.configured) bits.push('LLM');
+    bits.push('colony knowledge');
+    statusEl.textContent = bits.length
+      ? `Ready · ${bits.join(' + ')}`
+      : (mode ? `Ready · ${mode}` : 'Ready · local templates and documents');
+  }
+
+  async function draftComposeWithAi() {
+    if (!hasEntitlement('manage_templates')) return;
+    const statusEl = el('tplAiStatus');
+    const btn = el('tplAiDraftBtn');
+    const intent = (el('tplAiIntent')?.value || '').trim();
+    if (!intent) {
+      if (statusEl) statusEl.textContent = 'Describe the document first.';
+      el('tplAiIntent')?.focus();
+      return;
+    }
+    if (composeDirty && !window.confirm('Replace the current draft with an AI draft?')) return;
+    const session = await mountComposeEditor();
+    if (!session) {
+      if (statusEl) statusEl.textContent = 'Composer failed to load — hard refresh the page.';
+      return;
+    }
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+      statusEl.dataset.busy = '1';
+      statusEl.textContent = 'Understanding request and gathering templates, documents, and meetings…';
+    }
+    try {
+      const data = await api('/api/rwa/templates/compose/ai', {
+        method: 'POST',
+        body: JSON.stringify({
+          intent,
+          starterId: el('tplStarterSelect')?.value || '',
+          title: el('tplComposeTitle')?.value || '',
+          htmlBody: session.getHTML?.() || '',
+        }),
+      });
+      const starterId = data.starterId || '';
+      if (starterId && el('tplStarterSelect')) {
+        el('tplStarterSelect').value = starterId;
+      }
+      if (data.title && el('tplComposeTitle')) {
+        el('tplComposeTitle').value = data.title;
+      }
+      if (data.category && el('tplComposeCategory')) {
+        el('tplComposeCategory').value = data.category;
+      }
+      session.setHTML(data.htmlBody || '<p></p>');
+      composeDirty = true;
+      const srcN = (data.sources || []).length;
+      const warn = (data.warnings || []).filter(Boolean);
+      const extra = warn.length ? ` ${warn.join(' ')}` : '';
+      const engine = data.mode || 'rag';
+      if (statusEl) {
+        statusEl.textContent = `Draft ready (${engine}${srcN ? ` · ${srcN} sources` : ''}). Review blanks and facts, then save.${extra}`;
+      }
+      if (el('tplComposeStatusLine')) {
+        el('tplComposeStatusLine').textContent = 'AI draft in the editor — review before saving to the library.';
+      }
+      session.driver?.focus?.();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = e.message || 'AI draft failed.';
+    } finally {
+      if (btn) btn.disabled = false;
+      if (statusEl) delete statusEl.dataset.busy;
+    }
   }
 
   function currentComposeStarter() {
@@ -15547,6 +15653,17 @@ ${foot}
     el('tplStarterSelect')?.addEventListener('change', () => {
       const starter = currentComposeStarter();
       if (starter) applyComposeStarter(starter);
+    });
+    el('tplAiDraftBtn')?.addEventListener('click', () => {
+      draftComposeWithAi().catch((e) => {
+        if (el('tplAiStatus')) el('tplAiStatus').textContent = e.message || 'AI draft failed.';
+      });
+    });
+    el('tplAiIntent')?.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        draftComposeWithAi().catch(() => {});
+      }
     });
     el('tplComposePreviewBtn')?.addEventListener('click', () => previewComposeDocument());
     el('tplComposeClearBtn')?.addEventListener('click', () => clearComposeDocument());
