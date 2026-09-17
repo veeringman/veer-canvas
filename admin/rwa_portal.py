@@ -6646,6 +6646,8 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^GET /api/rwa/templates/[^/]+/file$"), "Open printable template"),
     (re.compile(r"^POST /api/rwa/templates/[^/]+/mail$"), "Email printable template PDF"),
     (re.compile(r"^POST /api/rwa/templates/category/[^/]+/mail$"), "Email printable template category PDFs"),
+    (re.compile(r"^GET /api/rwa/templates/compose/ai$"), "AI document assist status"),
+    (re.compile(r"^POST /api/rwa/templates/compose/ai$"), "AI document drafting"),
     (re.compile(r"^GET /api/rwa/works$"), "Browse Works & Events"),
     (re.compile(r"^POST /api/rwa/works$"), "Create Works & Events item"),
     (re.compile(r"^PATCH /api/rwa/works/[^/]+$"), "Update Works & Events item"),

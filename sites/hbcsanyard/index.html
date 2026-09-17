@@ -22,11 +22,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260825mom6">
+  <link rel="stylesheet" href="portal.css?v=20260917ai2">
   <link rel="stylesheet" href="composer/composer.css?v=20260830studio2">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260825mom6">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260830studio2" defer></script>
+  <script src="portal.js?v=20260917ai2" defer></script>
   <script type="module" src="composer/boot.js?v=20260830studio1"></script>
 </head>
 <body>
@@ -2863,7 +2863,7 @@
           <details class="templates-editor" id="templatesCompose">
             <summary class="templates-editor-summary">
               <strong>Write a document</strong>
-              <span class="muted"> — letter, resolution, notice, or MOM</span>
+              <span class="muted"> — letter, resolution, notice, or MOM · AI Assist</span>
             </summary>
             <div id="tplComposeShell" class="mhws-composer-shell" data-layout="original">
               <form id="templatesComposeForm" class="templates-compose-meta">
@@ -2912,6 +2912,17 @@
                 </div>
                 <p class="sr-only" id="tplStarterHint">Resolution, forwarding letter, notice, MOM, circular, agenda, office note.</p>
                 <p class="tpl-compose-chrome-warn" id="tplComposeChromeWarn" hidden role="status"></p>
+                <div class="tpl-ai-assist" id="tplAiAssist">
+                  <label class="tpl-ai-assist-label" for="tplAiIntent">
+                    <strong>AI Assist</strong>
+                    <span class="muted"> — eGenie understands the request; Syntheon writes from templates, Information Centre, and meetings</span>
+                  </label>
+                  <textarea id="tplAiIntent" rows="3" maxlength="4000" placeholder="Example: Draft an EC resolution to engage Advocate Shailesh Sharma at ₹50,000 for the pending path / link-road civil suit, using the Society resolution starter and recent minutes."></textarea>
+                  <div class="tpl-ai-assist-row">
+                    <button type="button" class="btn compact" id="tplAiDraftBtn">Draft with AI</button>
+                    <p class="muted tpl-ai-assist-status" id="tplAiStatus" role="status"></p>
+                  </div>
+                </div>
                 <div id="tplComposeToolbar"></div>
                 <input type="file" id="tplComposeImageInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
                 <input type="file" id="tplComposeImportInput" accept=".txt,.text,.doc,.docx,.pages,.pdf,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
