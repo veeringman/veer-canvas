@@ -15378,7 +15378,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (btn) btn.disabled = true;
     if (statusEl) {
       statusEl.dataset.busy = '1';
-      statusEl.textContent = 'Understanding request and gathering templates, documents, and meetings…';
+      statusEl.textContent = 'Asking eGenie (up to 3 minutes — the AI host is slow today)…';
     }
     try {
       const data = await api('/api/rwa/templates/compose/ai', {

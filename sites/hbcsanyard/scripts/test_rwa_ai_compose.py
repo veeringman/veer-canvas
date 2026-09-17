@@ -126,6 +126,16 @@ class DraftDocumentTest(unittest.TestCase):
         self.assertIn("syntheon", status)
         self.assertIn("mode", status)
 
+    def test_remote_timeouts_default_to_three_minutes(self) -> None:
+        env = {
+            "EGENIE_TIMEOUT_MS": "",
+            "SYNTHEON_TIMEOUT_MS": "",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            cfg = rwa_ai_compose.load_compose_config(self.root)
+        self.assertEqual(cfg["egenieTimeoutMs"], "180000")
+        self.assertEqual(cfg["syntheonTimeoutMs"], "180000")
+
 
 if __name__ == "__main__":
     unittest.main()

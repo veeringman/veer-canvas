@@ -85,7 +85,7 @@ def load_compose_config(site_root: pathlib.Path | None = None) -> dict[str, str]
         ).rstrip("/"),
         "egenieKey": (os.environ.get("EGENIE_API_KEY") or os.environ.get("EGENIE_TOKEN") or "").strip(),
         "egenieEnabled": "1" if egenie_on else "0",
-        "egenieTimeoutMs": (os.environ.get("EGENIE_TIMEOUT_MS") or "90000").strip(),
+        "egenieTimeoutMs": (os.environ.get("EGENIE_TIMEOUT_MS") or "180000").strip(),
         "syntheonUrl": _remote_or_default(
             os.environ.get("SYNTHEON_URL"),
             DEFAULT_SYNTHEON_URL,
@@ -94,7 +94,7 @@ def load_compose_config(site_root: pathlib.Path | None = None) -> dict[str, str]
             os.environ.get("SYNTHEON_API_KEY") or os.environ.get("SYNTHEON_TOKEN") or ""
         ).strip(),
         "syntheonEnabled": "1" if syntheon_on else "0",
-        "syntheonTimeoutMs": (os.environ.get("SYNTHEON_TIMEOUT_MS") or "20000").strip(),
+        "syntheonTimeoutMs": (os.environ.get("SYNTHEON_TIMEOUT_MS") or "180000").strip(),
     }
 
 
@@ -317,9 +317,9 @@ def call_egenie(
         EGENIE_PATHS,
         payload,
         api_key=cfg.get("egenieKey") or "",
-        timeout_ms=cfg.get("egenieTimeoutMs") or "90000",
-        default_timeout=90.0,
-        cap=120.0,
+        timeout_ms=cfg.get("egenieTimeoutMs") or "180000",
+        default_timeout=180.0,
+        cap=200.0,
     )
 
 
@@ -388,9 +388,9 @@ def call_syntheon(
         SYNTHEON_PATHS,
         payload,
         api_key=cfg.get("syntheonKey") or "",
-        timeout_ms=cfg.get("syntheonTimeoutMs") or "20000",
-        default_timeout=20.0,
-        cap=45.0,
+        timeout_ms=cfg.get("syntheonTimeoutMs") or "180000",
+        default_timeout=180.0,
+        cap=200.0,
     )
 
 
@@ -740,7 +740,7 @@ def _post_first_ok(
         timeout_s = int(timeout_ms or 0) / 1000.0
     except ValueError:
         timeout_s = default_timeout
-    timeout_s = max(0.8, min(timeout_s or default_timeout, cap))  # remote eGenie can take ~60–90s
+    timeout_s = max(0.8, min(timeout_s or default_timeout, cap))  # eGenie/Syntheon: up to 3 minutes
     last_err: Exception | None = None
     for path in paths:
         url = urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
