@@ -9267,7 +9267,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td>${escapeHtml(r.text || '')}${r.votesFor != null ? `<br><span style="font-size:7pt;color:#5a6a80">For: ${r.votesFor}, Against: ${r.votesAgainst ?? 0}, Abstain: ${r.abstain ?? 0}</span>` : ''}${r.vote ? `<br><span style="font-size:7pt;color:#1a4f7a">${escapeHtml(r.vote.statusLabel || r.vote.status || '')}${r.vote.status === 'open' ? ` · ${r.vote.votesFor || 0} for / ${r.vote.votesAgainst || 0} against / ${r.vote.pendingCount || 0} pending` : ''}</span>` : ''}${r.passed === false && !r.vote ? ' · <em>Not passed</em>' : ''}</td>
         <td style="text-align:center">${r.passed === false ? 'No' : 'Yes'}</td>
       </tr>`);
-    while (rows.length < 4) {
+    while (rows.length < 1) {
       rows.push('<tr><td>&nbsp;</td><td style="height:9mm"></td><td></td></tr>');
     }
     return rows.join('');
@@ -9282,7 +9282,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td>${escapeHtml(formatIstDate(a.dueDate) || a.dueDate || '')}</td>
         <td style="text-align:center">${a.done ? 'Yes' : ''}</td>
       </tr>`);
-    while (rows.length < 3) {
+    while (rows.length < 1) {
       rows.push('<tr><td style="height:10mm"></td><td></td><td></td><td></td></tr>');
     }
     return rows.join('');
@@ -9290,35 +9290,109 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
   function splitProceedingsBodyForPrint(body) {
     const text = String(body || '').replace(/\s+$/g, '');
-    /* ~12 lines at 8.8pt in the page-1 minutes block; remainder continues on page 2. */
-    const page1Limit = 1080;
+    /* First paint only. Print/preview remeasures the boxes and moves the overflow onto page 2. */
+    const page1Limit = 900;
     if (!text) return { page1: '', page2: '', split: false };
     if (text.length <= page1Limit) return { page1: text, page2: '', split: false };
     const slice = text.slice(0, page1Limit);
-    const minKeep = Math.floor(page1Limit * 0.42);
-    const lastIndex = (needle) => {
-      const idx = slice.lastIndexOf(needle);
-      return idx >= minKeep ? idx : -1;
-    };
-    let headingCut = -1;
+    const minKeep = Math.floor(page1Limit * 0.45);
+    let cut = -1;
     const headingRe = /\n(?=[ \t]*\d+\.\d+)/g;
     let match;
     while ((match = headingRe.exec(slice)) !== null) {
-      if (match.index >= minKeep) headingCut = match.index;
+      if (match.index >= minKeep) cut = match.index;
     }
-    const paraCut = lastIndex('\n\n');
-    const lineCut = lastIndex('\n');
-    const sentenceCut = lastIndex('. ');
-    const spaceCut = lastIndex(' ');
-    let cut = page1Limit;
-    if (headingCut >= 0) cut = headingCut;
-    else if (paraCut >= 0) cut = paraCut;
-    else if (lineCut >= 0) cut = lineCut;
-    else if (sentenceCut >= 0) cut = sentenceCut + 1;
-    else if (spaceCut >= 0) cut = spaceCut;
-    const page1 = text.slice(0, cut).trimEnd();
-    const page2 = text.slice(cut).trimStart();
-    return { page1, page2, split: Boolean(page2) };
+    if (cut < 0) cut = slice.lastIndexOf('\n\n');
+    if (cut < minKeep) cut = slice.lastIndexOf('\n');
+    if (cut < minKeep) cut = slice.lastIndexOf(' ');
+    if (cut < minKeep) cut = page1Limit;
+    return {
+      page1: text.slice(0, cut).trimEnd(),
+      page2: text.slice(cut).trimStart(),
+      split: true,
+    };
+  }
+
+  function fitMomMinutesAcrossPages(root) {
+    if (!root) return false;
+    let full = '';
+    try { full = decodeURIComponent(root.getAttribute('data-minutes') || ''); }
+    catch (err) { full = root.getAttribute('data-minutes') || ''; }
+    full = full.replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+    const page1 = root.querySelector('[aria-label="MOM page 1"] .ruled-block.xl');
+    const page2 = root.querySelector('[aria-label="MOM page 2"] .ruled-block.xxl');
+    if (!page1 || !page2 || page1.clientHeight < 8) return false;
+    const heading = root.querySelector('[aria-label="MOM page 1"] .section.grow h2');
+    const note = root.querySelector('[aria-label="MOM page 1"] .cont-note');
+
+    function paint(el, text) { el.textContent = text || ''; }
+    function clipped(el) { return el.scrollHeight > el.clientHeight + 2; }
+    function snapBack(text, idx) {
+      if (idx >= text.length || idx <= 0) return Math.max(0, Math.min(idx, text.length));
+      const start = Math.max(0, idx - 280);
+      const slice = text.slice(start, idx);
+      let best = -1;
+      ['\n\n', '\n', '. ', ' '].forEach((brk) => {
+        const at = slice.lastIndexOf(brk);
+        if (at < 0) return;
+        const pos = start + at + (brk === '. ' ? 2 : brk.length);
+        if (pos <= idx && pos > best) best = pos;
+      });
+      return best > idx * 0.5 ? best : idx;
+    }
+    function prefixFits(n) {
+      paint(page1, full.slice(0, n));
+      return !clipped(page1);
+    }
+    function fitAtSize(pt) {
+      page1.style.fontSize = `${pt}pt`;
+      page2.style.fontSize = `${pt}pt`;
+      page1.style.lineHeight = '1.22';
+      page2.style.lineHeight = '1.22';
+      let lo = 0;
+      let hi = full.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (prefixFits(mid)) lo = mid;
+        else hi = mid - 1;
+      }
+      let cut = lo;
+      const snapped = snapBack(full, cut);
+      if (snapped < cut && prefixFits(snapped)) cut = snapped;
+      else prefixFits(cut);
+      paint(page1, full.slice(0, cut));
+      while (cut > 0 && clipped(page1)) {
+        const prev = full.lastIndexOf('\n', Math.max(0, cut - 2));
+        cut = prev > 40 ? prev : Math.max(0, cut - 80);
+        paint(page1, full.slice(0, cut));
+      }
+      const rest = full.slice(cut).replace(/^\s+/, '');
+      paint(page2, rest);
+      return { rest, page2Clipped: page2.clientHeight >= 8 && clipped(page2), page1Clipped: clipped(page1) };
+    }
+
+    let result = fitAtSize(8.6);
+    if (clipped(page1)) {
+      const text = page1.textContent || '';
+      const prev = text.lastIndexOf('\n', Math.max(0, text.length - 2));
+      if (prev > 40) {
+        const extra = text.slice(prev).replace(/^\s+/, '');
+        page1.textContent = text.slice(0, prev);
+        if (extra) page2.textContent = `${extra}\n${page2.textContent || ''}`.trim();
+      }
+    }
+    result.page1Clipped = clipped(page1);
+    result.page2Clipped = page2.clientHeight >= 8 && clipped(page2);
+    result.rest = page2.textContent || '';
+    const continued = Boolean(result.rest);
+    if (heading) {
+      heading.textContent = continued
+        ? 'Proceedings / minutes (continued on page 2)'
+        : 'Proceedings / minutes';
+    }
+    if (note) note.hidden = !continued;
+    root.setAttribute('data-minutes-fit', (result.page1Clipped || result.page2Clipped) ? 'clipped' : 'ok');
+    return true;
   }
 
   function buildProceedingsMomHtml(p) {
@@ -9371,7 +9445,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           </div>
         </header>`;
 
-    return `<div class="mom-print-root">
+    return `<div class="mom-print-root" data-minutes="${encodeURIComponent(body)}">
       <div class="sheet" aria-label="MOM page 1">
         ${sheetHead('Page 1 of 2', addr1)}
         <div class="banner">${banner1} <span class="sep">·</span> Minutes of Meeting</div>
@@ -9397,7 +9471,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <div class="section grow">
           <h2>Proceedings / minutes${bodySplit ? ' (continued on page 2)' : ''}</h2>
           <div class="ruled-block xl">${momText(bodyP1)}</div>
-          ${bodySplit ? '<p class="cont-note">→ Continued on page 2</p>' : ''}
+          <p class="cont-note" ${bodySplit ? '' : 'hidden'}>→ Continued on page 2</p>
         </div>
         </div>
         <div class="foot-bar">Unity<span class="sep">·</span>Harmony<span class="sep">·</span>Progress · housingcolonysanyard.in</div>
@@ -9477,6 +9551,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const body = el('proceedingsDetailBody');
     if (!body || !p) return;
     body.innerHTML = buildProceedingsMomHtml(p);
+    const minutesRoot = body.querySelector('.mom-print-root');
+    const refitMinutes = () => fitMomMinutesAcrossPages(minutesRoot);
+    requestAnimationFrame(() => requestAnimationFrame(refitMinutes));
+    if (document.fonts?.ready) document.fonts.ready.then(refitMinutes);
     renderProceedingsVoteBar(p);
   }
 
@@ -9912,22 +9990,32 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom11">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom11">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom13">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom13">
       <style>
         @page { size: ${paperMap[paper]}; margin: 0; }
         html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }
       </style>
       </head><body>${html}
       <script>
+        ${fitMomMinutesAcrossPages.toString()}
         (function(){
-          function go(){ try { window.focus(); window.print(); } catch(e) {} }
+          function go(){
+            requestAnimationFrame(function(){
+              requestAnimationFrame(function(){
+                try { fitMomMinutesAcrossPages(document.querySelector('.mom-print-root')); } catch (e) {}
+                try { window.focus(); window.print(); } catch (e) {}
+              });
+            });
+          }
           var links = Array.prototype.slice.call(document.querySelectorAll('link[rel=stylesheet]'));
-          if (!links.length) { setTimeout(go, 200); return; }
+          var fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+          function afterStyles(){ fonts.then(function(){ setTimeout(go, 60); }); }
+          if (!links.length) { setTimeout(afterStyles, 80); return; }
           var left = links.length;
-          function done(){ if (--left <= 0) setTimeout(go, 120); }
+          function done(){ if (--left <= 0) afterStyles(); }
           links.forEach(function(l){ l.addEventListener('load', done); l.addEventListener('error', done); });
-          setTimeout(go, 1800);
+          setTimeout(afterStyles, 1800);
         })();
       <\/script>
       </body></html>`;

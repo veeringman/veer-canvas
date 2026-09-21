@@ -216,14 +216,21 @@ body {
   line-height: 1.45;
   white-space: pre-wrap;
 }
-.ruled-block.sm { min-height: 20mm; }
-.ruled-block.md { min-height: 32mm; }
-.ruled-block.lg { min-height: 48mm; }
-.ruled-block.xl { min-height: 48mm; }
-.ruled-block.xxl { min-height: 80mm; }
-.grow { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 40mm; overflow: hidden; }
+.ruled-block.sm { min-height: 12mm; max-height: 18mm; overflow: hidden; }
+.ruled-block.md { min-height: 14mm; max-height: 24mm; overflow: hidden; }
+.ruled-block.lg { min-height: 14mm; max-height: 28mm; overflow: hidden; }
+.ruled-block.xl { min-height: 0; }
+.ruled-block.xxl { min-height: 0; }
+.grow { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .grow .ruled-block.xl,
-.grow .ruled-block.xxl { flex: 1 1 auto; min-height: 36mm; overflow: hidden; }
+.grow .ruled-block.xxl { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.grow .ruled-block.xxl {
+  flex: 1 1 0;
+  height: 0;
+  column-count: 3;
+  column-gap: 3.5mm;
+  column-fill: auto;
+}
 table.res-table {
   width: 100%;
   border-collapse: collapse;
@@ -392,23 +399,29 @@ table.res-table th {
   }
   .page-tag { top: 2.4mm !important; }
   .grow {
-    flex: 1 1 auto !important;
-    min-height: 32mm !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
     max-height: none !important;
     overflow: hidden !important;
   }
-  .ruled-block { overflow: hidden; }
-  .ruled-block.sm { min-height: 8mm !important; max-height: 16mm !important; }
-  .ruled-block.md { min-height: 10mm !important; max-height: 24mm !important; }
-  .ruled-block.lg { min-height: 12mm !important; max-height: 26mm !important; }
-  .ruled-block.xl { min-height: 40mm !important; }
-  .ruled-block.xxl { min-height: 28mm !important; }
+  .ruled-block.sm { min-height: 8mm !important; max-height: 16mm !important; overflow: hidden !important; }
+  .ruled-block.md { min-height: 10mm !important; max-height: 22mm !important; overflow: hidden !important; }
+  .ruled-block.lg { min-height: 12mm !important; max-height: 24mm !important; overflow: hidden !important; }
+  .ruled-block.xl,
+  .ruled-block.xxl { min-height: 0 !important; }
   .grow .ruled-block.xl,
   .grow .ruled-block.xxl {
     flex: 1 1 auto !important;
-    min-height: 28mm !important;
+    min-height: 0 !important;
     max-height: none !important;
     overflow: hidden !important;
+  }
+  .grow .ruled-block.xxl {
+    flex: 1 1 0 !important;
+    height: 0 !important;
+    column-count: 3 !important;
+    column-gap: 3.5mm !important;
+    column-fill: auto !important;
   }
   .section { margin: 1mm 0; }
   .sign-row { margin-top: 2.5mm; }
@@ -422,9 +435,9 @@ table.res-table th {
     flex-shrink: 0 !important;
   }
   .sign-stamp .box {
-    min-height: 28mm !important;
+    min-height: 20mm !important;
   }
-  .sign-stamp .box .space { min-height: 14mm !important; }
+  .sign-stamp .box .space { min-height: 10mm !important; }
   .banner { margin: 1mm 0 1.6mm; padding: 1.4mm 3mm; }
   .brand { padding-bottom: 1mm; }
   .meta-grid { margin-bottom: 1.2mm; gap: 1.2mm 3mm; }

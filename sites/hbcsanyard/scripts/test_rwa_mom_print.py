@@ -36,7 +36,7 @@ class MomPrintLayoutTests(unittest.TestCase):
         docs = ROOT.parent / "documents"
         for name in ("proceedings-ec-mom-pad.html", "proceedings-gh-mom-pad.html"):
             html = (docs / name).read_text()
-            self.assertIn("proceedings-mom-print.css?v=20260921mom11", html)
+            self.assertIn("proceedings-mom-print.css?v=20260921mom13", html)
             self.assertNotIn("class=\\\"foot-bar\\\"", html)
             self.assertIn('<div class="foot-bar"', html)
             # Footer sits after .pad, not inside it.
@@ -47,13 +47,14 @@ class MomPrintLayoutTests(unittest.TestCase):
         js = (ROOT.parent / "portal.js").read_text()
         self.assertIn('<h2>Proceedings / minutes (continued)</h2>', js)
         self.assertIn("ruled-block xxl", js)
-        self.assertNotIn("${bodySplit ? `<div class=\"section\">", js)
+        self.assertIn("data-minutes=", js)
+        self.assertIn("function fitMomMinutesAcrossPages", js)
         self.assertIn("const bodyP2 = split.page2", js)
         self.assertNotIn("bodySplit ? split.page2 : split.page1", js)
-        self.assertIn("const page1Limit = 1080", js)
         css = (ROOT.parent / "documents" / "proceedings-mom-print.css").read_text()
-        self.assertIn(".grow { flex: 1 1 auto;", css)
-        self.assertIn("min-height: 40mm", css)
+        self.assertIn(".grow { flex: 1 1 0;", css)
+        self.assertIn("min-height: 0 !important", css)
+        self.assertIn("column-count: 3", css)
 
     def test_watermark_visible_through_tables(self):
         docs = ROOT.parent / "documents"
