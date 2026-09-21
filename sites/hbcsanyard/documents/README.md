@@ -14,6 +14,7 @@ These files are **for print production only**. They are not linked from the resi
 | `ec-committee-pad.html` | **Executive Committee Charter** — office bearers + members (letterhead theme; regenerate from DB) |
 | `proceedings-gh-mom-pad.html` | **General House MOM Register** — 2-page blank form for detailed minutes |
 | `proceedings-ec-mom-pad.html` | **Executive Committee MOM Register** — 2-page blank form for detailed minutes |
+| `ResolutionAppointmentOfNewAdvocate.docx` | **Certified EC resolution** — appoint Advocate Shailesh Sharma; ₹50,000 fee 50/50 Society and B.C. Sharma |
 
 These are also catalogued under **EC Desk → Templates** (upload more with title / category / tags).
 

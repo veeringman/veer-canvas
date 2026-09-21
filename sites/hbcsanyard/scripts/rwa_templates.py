@@ -150,6 +150,14 @@ _SEED_TEMPLATES: list[dict[str, Any]] = [
         "tags": ["proceedings", "mom", "ec", "register", "a4", "2-page"],
         "static_path": "documents/proceedings-ec-mom-pad.html",
     },
+    {
+        "id": "tpl-resolution-appoint-advocate-2026",
+        "title": "Resolution — appoint Advocate Shailesh Sharma (path case)",
+        "description": "Certified EC resolution: Shailesh Sharma appointed; ₹50,000 fee shared 50/50 Society and B.C. Sharma (EC MOM 12/09/2026).",
+        "category": "correspondence",
+        "tags": ["resolution", "legal", "advocate", "path", "ec", "docx"],
+        "static_path": "documents/ResolutionAppointmentOfNewAdvocate.docx",
+    },
 ]
 
 

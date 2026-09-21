@@ -44,6 +44,53 @@ Anup Vaidya, President &nbsp;&nbsp;&nbsp; Vijay Kumar Sharma, General Secretary<
 """.strip(),
     },
     {
+        "id": "resolution_appoint_advocate_path",
+        "title": "Resolution — appoint advocate (path case)",
+        "description": "Certified EC resolution appointing Advocate Shailesh Sharma; ₹50,000 fee shared 50/50 with B.C. Sharma.",
+        "category": "correspondence",
+        "tags": ["compose", "resolution", "ec", "legal", "advocate"],
+        "suggestedTitle": "Resolution — appoint Advocate Shailesh Sharma (path case)",
+        "bodyHtml": """
+<p style="text-align:center"><strong>CERTIFIED TRUE COPY OF RESOLUTION</strong></p>
+<p>Passed by the Executive Committee of Mandi Housing Welfare Society at its meeting held on
+<strong>15/08/2026</strong> at Housing Colony Sanyard, Mandi (H.P.), with the sharing of professional
+fee as recorded in the minutes of the Executive Committee meeting held on <strong>12/09/2026</strong>
+(Register No. <strong>1/2026</strong>).</p>
+<p><strong>Subject:</strong> Appointment of Advocate Mr. Shailesh Sharma for conduct of pending civil
+litigation; engagement of Mr. Bimal Sharma for continued guidance; sharing of professional fee
+between the Society and Shri B.C. Sharma.</p>
+<p>The Committee considered that the civil suit concerning the <em>right of path / link road through
+Himuda Housing Colony Sanyard</em> (pending before the Senior Civil Judge, Mandi, Civil Suit No.
+≈ 086/2023) is of vital importance; that Mr. <strong>Bimal Sharma</strong>, Advocate, has hitherto
+represented the Society; and that Mr. <strong>Shailesh Sharma</strong>, Advocate, has been confirmed
+to take forward the conduct of the case.</p>
+<p><strong>RESOLVED THAT</strong> Mr. Shailesh Sharma, Advocate, be and is hereby appointed and
+confirmed as counsel of Mandi Housing Welfare Society to take over, conduct, and pursue the
+aforesaid pending civil suit and all connected applications, hearings, and proceedings.</p>
+<p><strong>RESOLVED FURTHER THAT</strong> Mr. Shailesh Sharma shall be paid a lump-sum professional
+fee of <strong>Rs. 50,000/- (Rupees Fifty Thousand only)</strong> for this case.</p>
+<p><strong>RESOLVED FURTHER THAT</strong>, as decided at the EC meeting of 12/09/2026 (Register 1/2026;
+passed 4–0–0), the said fee shall be borne equally: <strong>50% (Rs. 25,000/-) by the Society</strong>
+from Society funds, and <strong>50% (Rs. 25,000/-) by Shri B.C. Sharma</strong>, who is also a party
+in the case and has accepted this proposal. Rs. 1,500/- has already been paid to the counsel by
+Shri B.C. Sharma toward his share; the pending amount shall be paid in due course. Out-of-pocket
+court expenses are separate from the Rs. 50,000/- fee.</p>
+<p><strong>RESOLVED FURTHER THAT</strong> conduct of the case shall transfer from Mr. Bimal Sharma
+to Mr. Shailesh Sharma for future court work; Mr. Bimal Sharma shall continue to provide guidance
+as required, on terms to be recorded separately if necessary.</p>
+<p><strong>RESOLVED FURTHER THAT</strong> the President and the General Secretary be jointly and
+severally authorised to sign the vakalatnama and papers, instruct counsel, and release payment of
+the Society’s share of Rs. 25,000/- and incidental lawful expenses.</p>
+<p>Certified that the above is a true extract of the resolution, that it is in force, and that it
+has not been modified or rescinded.</p>
+<p>Place: Mandi (H.P.) &nbsp;&nbsp; Date: ________</p>
+<p>For Mandi Housing Welfare Society</p>
+<p>________________________ &nbsp;&nbsp;&nbsp; ________________________<br>
+Anup Vaidya, President &nbsp;&nbsp; Vijay Kumar Sharma, General Secretary<br>
+<em>(Society seal)</em></p>
+""".strip(),
+    },
+    {
         "id": "forwarding_letter",
         "title": "Forwarding letter",
         "description": "Cover note forwarding an enclosure to an office or bank.",
