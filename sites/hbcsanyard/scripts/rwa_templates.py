@@ -2140,13 +2140,14 @@ def _pdf_page_layout_css(
   }}
   .grow {{
     flex: 1 1 auto !important;
-    min-height: 36mm !important;
-    flex-shrink: 0 !important;
+    min-height: 32mm !important;
+    overflow: hidden !important;
   }}
   .grow .ruled-block.xl,
   .grow .ruled-block.xxl {{
     flex: 1 1 auto !important;
-    min-height: 36mm !important;
+    min-height: 28mm !important;
+    overflow: hidden !important;
   }}
   .foot-bar {{
     position: relative !important;

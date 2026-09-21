@@ -120,6 +120,7 @@
   html.pad-mom .accent-edge,
   html.pad-mom .accent-edge-thin,
   html.pad-mom .brand,
+  html.pad-mom .banner,
   html.pad-mom .foot-bar,
   html.pad-mom .sign-stamp {
     flex-shrink: 0 !important;
@@ -135,14 +136,18 @@
   }
   html.pad-mom .grow {
     flex: 1 1 auto !important;
-    min-height: 36mm !important;
-    flex-shrink: 0 !important;
+    min-height: 32mm !important;
+    overflow: hidden !important;
   }
+  html.pad-mom .ruled-block.sm { max-height: 16mm !important; overflow: hidden !important; }
+  html.pad-mom .ruled-block.md { max-height: 24mm !important; overflow: hidden !important; }
+  html.pad-mom .ruled-block.lg { max-height: 26mm !important; overflow: hidden !important; }
   html.pad-mom .grow .ruled-block.xl,
   html.pad-mom .grow .ruled-block.xxl {
     flex: 1 1 auto !important;
-    min-height: 36mm !important;
+    min-height: 28mm !important;
     max-height: none !important;
+    overflow: hidden !important;
   }
   html.pad-mom .sign-stamp {
     margin-top: auto !important;

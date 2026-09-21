@@ -221,9 +221,9 @@ body {
 .ruled-block.lg { min-height: 48mm; }
 .ruled-block.xl { min-height: 48mm; }
 .ruled-block.xxl { min-height: 80mm; }
-.grow { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 36mm; }
+.grow { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 40mm; overflow: hidden; }
 .grow .ruled-block.xl,
-.grow .ruled-block.xxl { flex: 1 1 auto; min-height: 36mm; }
+.grow .ruled-block.xxl { flex: 1 1 auto; min-height: 36mm; overflow: hidden; }
 table.res-table {
   width: 100%;
   border-collapse: collapse;
@@ -367,11 +367,13 @@ table.res-table th {
   .accent-edge-thin,
   .brand,
   .banner,
-  .foot-bar {
+  .foot-bar,
+  .sign-stamp,
+  .meta-grid {
     flex-shrink: 0 !important;
   }
   .pad {
-    padding: 2mm 6mm 2mm !important;
+    padding: 2mm 8mm 2mm !important;
     box-sizing: border-box !important;
     display: flex;
     flex-direction: column;
@@ -391,16 +393,23 @@ table.res-table th {
   .page-tag { top: 2.4mm !important; }
   .grow {
     flex: 1 1 auto !important;
-    min-height: 36mm !important;
-    flex-shrink: 0 !important;
+    min-height: 32mm !important;
+    max-height: none !important;
+    overflow: hidden !important;
   }
-  .ruled-block.sm { min-height: 8mm !important; }
-  .ruled-block.md { min-height: 12mm !important; }
-  .ruled-block.lg { min-height: 16mm !important; }
-  .ruled-block.xl { min-height: 42mm !important; }
-  .ruled-block.xxl { min-height: 36mm !important; }
+  .ruled-block { overflow: hidden; }
+  .ruled-block.sm { min-height: 8mm !important; max-height: 16mm !important; }
+  .ruled-block.md { min-height: 10mm !important; max-height: 24mm !important; }
+  .ruled-block.lg { min-height: 12mm !important; max-height: 26mm !important; }
+  .ruled-block.xl { min-height: 40mm !important; }
+  .ruled-block.xxl { min-height: 28mm !important; }
   .grow .ruled-block.xl,
-  .grow .ruled-block.xxl { flex: 1 1 auto !important; min-height: 36mm !important; max-height: none !important; }
+  .grow .ruled-block.xxl {
+    flex: 1 1 auto !important;
+    min-height: 28mm !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
   .section { margin: 1mm 0; }
   .sign-row { margin-top: 2.5mm; }
   .sign-row .sig {

@@ -9289,18 +9289,36 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   }
 
   function splitProceedingsBodyForPrint(body) {
-    const text = String(body || '');
-    const limit = 2400;
-    if (text.length <= limit) return { page1: text, page2: '', split: false };
-    let cut = text.lastIndexOf('\n\n', limit);
-    if (cut < limit * 0.55) cut = text.lastIndexOf('\n', limit);
-    if (cut < limit * 0.55) cut = text.lastIndexOf(' ', limit);
-    if (cut < limit * 0.55) cut = limit;
-    return {
-      page1: text.slice(0, cut).trimEnd(),
-      page2: text.slice(cut).trimStart(),
-      split: true,
+    const text = String(body || '').replace(/\s+$/g, '');
+    /* ~12 lines at 8.8pt in the page-1 minutes block; remainder continues on page 2. */
+    const page1Limit = 1080;
+    if (!text) return { page1: '', page2: '', split: false };
+    if (text.length <= page1Limit) return { page1: text, page2: '', split: false };
+    const slice = text.slice(0, page1Limit);
+    const minKeep = Math.floor(page1Limit * 0.42);
+    const lastIndex = (needle) => {
+      const idx = slice.lastIndexOf(needle);
+      return idx >= minKeep ? idx : -1;
     };
+    let headingCut = -1;
+    const headingRe = /\n(?=[ \t]*\d+\.\d+)/g;
+    let match;
+    while ((match = headingRe.exec(slice)) !== null) {
+      if (match.index >= minKeep) headingCut = match.index;
+    }
+    const paraCut = lastIndex('\n\n');
+    const lineCut = lastIndex('\n');
+    const sentenceCut = lastIndex('. ');
+    const spaceCut = lastIndex(' ');
+    let cut = page1Limit;
+    if (headingCut >= 0) cut = headingCut;
+    else if (paraCut >= 0) cut = paraCut;
+    else if (lineCut >= 0) cut = lineCut;
+    else if (sentenceCut >= 0) cut = sentenceCut + 1;
+    else if (spaceCut >= 0) cut = spaceCut;
+    const page1 = text.slice(0, cut).trimEnd();
+    const page2 = text.slice(cut).trimStart();
+    return { page1, page2, split: Boolean(page2) };
   }
 
   function buildProceedingsMomHtml(p) {
@@ -9327,7 +9345,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const split = splitProceedingsBodyForPrint(body);
     const bodySplit = split.split;
     const bodyP1 = split.page1;
-    const bodyP2 = bodySplit ? split.page2 : split.page1;
+    const bodyP2 = split.page2;
 
     const page1MetaGh = isGh ? `
         <div class="field"><label>Quorum met (Yes / No)</label><div class="ruled">${escapeHtml(quorum) || '&nbsp;'}</div></div>` : '';
@@ -9379,7 +9397,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <div class="section grow">
           <h2>Proceedings / minutes${bodySplit ? ' (continued on page 2)' : ''}</h2>
           <div class="ruled-block xl">${momText(bodyP1)}</div>
-          ${bodySplit ? '<p class="cont-note">→ Continue detailed proceedings on page 2</p>' : ''}
+          ${bodySplit ? '<p class="cont-note">→ Continued on page 2</p>' : ''}
         </div>
         </div>
         <div class="foot-bar">Unity<span class="sep">·</span>Harmony<span class="sep">·</span>Progress · housingcolonysanyard.in</div>
@@ -9894,8 +9912,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom10">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom10">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom11">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom11">
       <style>
         @page { size: ${paperMap[paper]}; margin: 0; }
         html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }
