@@ -156,6 +156,28 @@ def _next_register_no(conn: sqlite3.Connection, meeting_type: str, meeting_date:
     return int(row["mx"] or 0) + 1
 
 
+def _register_no_from_payload(
+    payload: dict,
+    existing: sqlite3.Row | None,
+    conn: sqlite3.Connection,
+    meeting_type: str,
+    meeting_date: str,
+) -> int:
+    raw = payload.get("registerNo")
+    if raw is None or raw == "":
+        return int(existing["register_no"]) if existing else _next_register_no(conn, meeting_type, meeting_date)
+    text = str(raw).strip()
+    if "/" in text:
+        text = text.split("/", 1)[0].strip()
+    try:
+        number = int(text)
+    except (TypeError, ValueError):
+        raise ValueError("Register No. must be a positive whole number") from None
+    if number < 1:
+        raise ValueError("Register No. must be a positive whole number")
+    return number
+
+
 def _proceeding_public(r: sqlite3.Row | dict) -> dict:
     if hasattr(r, "keys"):
         data = {k: r[k] for k in r.keys()}
@@ -330,9 +352,7 @@ def upsert_meeting_proceeding(
     if visibility not in {"draft", "published"}:
         visibility = "published"
 
-    register_no = int(existing["register_no"]) if existing else _next_register_no(conn, meeting_type, meeting_date)
-    if existing and "registerNo" in payload and payload.get("registerNo") not in (None, ""):
-        register_no = int(payload["registerNo"])
+    register_no = _register_no_from_payload(payload, existing, conn, meeting_type, meeting_date)
 
     resolutions = _parse_resolutions(
         payload.get("resolutions") if "resolutions" in payload else (existing["resolutions_json"] if existing else [])
@@ -352,6 +372,21 @@ def upsert_meeting_proceeding(
 
     quorum_raw = payload.get("quorumMet") if "quorumMet" in payload else (existing["quorum_met"] if existing else None)
     quorum_met = None if quorum_raw is None or quorum_raw == "" else (1 if bool(quorum_raw) else 0)
+
+    year = _year_from_date(meeting_date)
+    clash = conn.execute(
+        """
+        SELECT id FROM meeting_proceedings
+        WHERE meeting_type = ?
+          AND substr(meeting_date, 1, 4) = ?
+          AND register_no = ?
+          AND id != ?
+        LIMIT 1
+        """,
+        (meeting_type, year, register_no, pid),
+    ).fetchone()
+    if clash:
+        raise ValueError("That Register No. is already used for this meeting type in the same year.")
 
     fields = {
         "register_no": register_no,
@@ -379,66 +414,71 @@ def upsert_meeting_proceeding(
         "updated_at": now,
     }
 
-    if existing:
-        conn.execute(
-            """
-            UPDATE meeting_proceedings SET
-              register_no = :register_no,
-              meeting_type = :meeting_type,
-              meeting_subtype = :meeting_subtype,
-              title = :title,
-              meeting_date = :meeting_date,
-              meeting_time = :meeting_time,
-              venue = :venue,
-              chair_person = :chair_person,
-              members_present = :members_present,
-              members_absent = :members_absent,
-              quorum_met = :quorum_met,
-              agenda = :agenda,
-              proceedings_body = :proceedings_body,
-              resolutions_json = :resolutions_json,
-              action_items_json = :action_items_json,
-              next_meeting_date = :next_meeting_date,
-              signed_by = :signed_by,
-              approved_at = :approved_at,
-              status = :status,
-              visibility = :visibility,
-              published_at = :published_at,
-              published_by = :published_by,
-              updated_at = :updated_at
-            WHERE id = :id
-            """,
-            {**fields, "id": pid},
-        )
-    else:
-        conn.execute(
-            """
-            INSERT INTO meeting_proceedings(
-              id, register_no, meeting_type, meeting_subtype, title,
-              meeting_date, meeting_time, venue, chair_person,
-              members_present, members_absent, quorum_met,
-              agenda, proceedings_body, resolutions_json, action_items_json,
-              next_meeting_date, signed_by, approved_at,
-              status, visibility, published_at, published_by,
-              created_by, created_at, updated_at
-            ) VALUES (
-              :id, :register_no, :meeting_type, :meeting_subtype, :title,
-              :meeting_date, :meeting_time, :venue, :chair_person,
-              :members_present, :members_absent, :quorum_met,
-              :agenda, :proceedings_body, :resolutions_json, :action_items_json,
-              :next_meeting_date, :signed_by, :approved_at,
-              :status, :visibility, :published_at, :published_by,
-              :created_by, :created_at, :updated_at
+    try:
+        if existing:
+            conn.execute(
+                """
+                UPDATE meeting_proceedings SET
+                  register_no = :register_no,
+                  meeting_type = :meeting_type,
+                  meeting_subtype = :meeting_subtype,
+                  title = :title,
+                  meeting_date = :meeting_date,
+                  meeting_time = :meeting_time,
+                  venue = :venue,
+                  chair_person = :chair_person,
+                  members_present = :members_present,
+                  members_absent = :members_absent,
+                  quorum_met = :quorum_met,
+                  agenda = :agenda,
+                  proceedings_body = :proceedings_body,
+                  resolutions_json = :resolutions_json,
+                  action_items_json = :action_items_json,
+                  next_meeting_date = :next_meeting_date,
+                  signed_by = :signed_by,
+                  approved_at = :approved_at,
+                  status = :status,
+                  visibility = :visibility,
+                  published_at = :published_at,
+                  published_by = :published_by,
+                  updated_at = :updated_at
+                WHERE id = :id
+                """,
+                {**fields, "id": pid},
             )
-            """,
-            {
-                **fields,
-                "id": pid,
-                "created_by": created_by,
-                "created_at": now,
-            },
-        )
-    conn.commit()
+        else:
+            conn.execute(
+                """
+                INSERT INTO meeting_proceedings(
+                  id, register_no, meeting_type, meeting_subtype, title,
+                  meeting_date, meeting_time, venue, chair_person,
+                  members_present, members_absent, quorum_met,
+                  agenda, proceedings_body, resolutions_json, action_items_json,
+                  next_meeting_date, signed_by, approved_at,
+                  status, visibility, published_at, published_by,
+                  created_by, created_at, updated_at
+                ) VALUES (
+                  :id, :register_no, :meeting_type, :meeting_subtype, :title,
+                  :meeting_date, :meeting_time, :venue, :chair_person,
+                  :members_present, :members_absent, :quorum_met,
+                  :agenda, :proceedings_body, :resolutions_json, :action_items_json,
+                  :next_meeting_date, :signed_by, :approved_at,
+                  :status, :visibility, :published_at, :published_by,
+                  :created_by, :created_at, :updated_at
+                )
+                """,
+                {
+                    **fields,
+                    "id": pid,
+                    "created_by": created_by,
+                    "created_at": now,
+                },
+            )
+        conn.commit()
+    except sqlite3.IntegrityError as exc:
+        raise ValueError(
+            "That Register No. is already used for this meeting type in the same year."
+        ) from exc
     return get_meeting_proceeding(conn, pid, as_admin=True) or {"id": pid}
 
 

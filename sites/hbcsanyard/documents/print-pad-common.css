@@ -120,7 +120,8 @@
   html.pad-mom .accent-edge,
   html.pad-mom .accent-edge-thin,
   html.pad-mom .brand,
-  html.pad-mom .foot-bar {
+  html.pad-mom .foot-bar,
+  html.pad-mom .sign-stamp {
     flex-shrink: 0 !important;
   }
   html.pad-mom .pad {
@@ -134,13 +135,21 @@
   }
   html.pad-mom .grow {
     flex: 1 1 auto !important;
-    min-height: 0 !important;
+    min-height: 36mm !important;
+    flex-shrink: 0 !important;
   }
   html.pad-mom .grow .ruled-block.xl,
   html.pad-mom .grow .ruled-block.xxl {
     flex: 1 1 auto !important;
-    min-height: 18mm !important;
+    min-height: 36mm !important;
     max-height: none !important;
+  }
+  html.pad-mom .sign-stamp {
+    margin-top: auto !important;
+    flex-shrink: 0 !important;
+  }
+  html.pad-mom .sign-stamp .box {
+    min-height: 28mm !important;
   }
   html.pad-mom .foot-bar {
     position: relative !important;
@@ -155,6 +164,36 @@
   }
   html.pad-mom .sign-row { margin-top: 1.5mm !important; }
   html.pad-mom .banner { margin-bottom: 0.8mm !important; padding: 1mm 3mm !important; }
+  html.pad-mom .sheet { isolation: isolate !important; }
+  html.pad-mom .wm,
+  html.pad-mom img.wm {
+    z-index: 3 !important;
+    opacity: 0.7 !important;
+    mix-blend-mode: multiply !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html.pad-mom .pad,
+  html.pad-mom .section,
+  html.pad-mom .grow,
+  html.pad-mom .ruled-block {
+    background: transparent !important;
+  }
+  html.pad-mom table.res-table,
+  html.pad-mom table.res-table thead,
+  html.pad-mom table.res-table tbody,
+  html.pad-mom table.res-table tfoot,
+  html.pad-mom table.res-table tr,
+  html.pad-mom table.res-table td {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+  }
+  html.pad-mom table.res-table th {
+    background: rgba(232, 238, 246, 0.35) !important;
+    background-color: rgba(232, 238, 246, 0.35) !important;
+    color: #0b2a56 !important;
+  }
 
   /* —— Envelope faces —— */
   html.envelope-pad,

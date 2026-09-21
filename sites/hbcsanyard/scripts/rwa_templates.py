@@ -2092,6 +2092,7 @@ def _pdf_page_layout_css(
   .screen-hint {{ display: none !important; }}
   .sheet {{
     position: relative !important;
+    isolation: isolate !important;
     display: flex !important;
     flex-direction: column !important;
     width: {w} !important;
@@ -2104,6 +2105,21 @@ def _pdf_page_layout_css(
     break-after: auto;
     page-break-before: always;
     break-before: page;
+  }}
+  img.wm, .wm {{
+    z-index: 3 !important;
+    opacity: 0.7 !important;
+    mix-blend-mode: multiply !important;
+  }}
+  .pad, .section, .grow, table.res-table,
+  table.res-table thead, table.res-table tbody,
+  table.res-table tr, table.res-table td {{
+    background: transparent !important;
+    background-color: transparent !important;
+  }}
+  table.res-table th {{
+    background: rgba(232, 238, 246, 0.35) !important;
+    color: #0b2a56 !important;
   }}
   .sheet:first-of-type {{
     page-break-before: auto;
@@ -2124,12 +2140,13 @@ def _pdf_page_layout_css(
   }}
   .grow {{
     flex: 1 1 auto !important;
-    min-height: 0 !important;
+    min-height: 36mm !important;
+    flex-shrink: 0 !important;
   }}
   .grow .ruled-block.xl,
   .grow .ruled-block.xxl {{
     flex: 1 1 auto !important;
-    min-height: 18mm !important;
+    min-height: 36mm !important;
   }}
   .foot-bar {{
     position: relative !important;
@@ -2306,6 +2323,7 @@ def _runtime_options_css(
   }}
   html.pad-mom .sheet {{
     position: relative !important;
+    isolation: isolate !important;
     display: flex !important;
     flex-direction: column !important;
     width: {sheet_w} !important;
@@ -2313,10 +2331,30 @@ def _runtime_options_css(
     min-height: {fit_h} !important;
     max-height: {fit_h} !important;
   }}
+  html.pad-mom img.wm,
+  html.pad-mom .wm {{
+    z-index: 3 !important;
+    opacity: 0.7 !important;
+    mix-blend-mode: multiply !important;
+  }}
   html.pad-mom .pad {{
     position: relative !important;
+    z-index: 1 !important;
+    background: transparent !important;
     padding-bottom: 2mm !important;
     box-sizing: border-box !important;
+  }}
+  html.pad-mom table.res-table,
+  html.pad-mom table.res-table thead,
+  html.pad-mom table.res-table tbody,
+  html.pad-mom table.res-table tr,
+  html.pad-mom table.res-table td {{
+    background: transparent !important;
+    background-color: transparent !important;
+  }}
+  html.pad-mom table.res-table th {{
+    background: rgba(232, 238, 246, 0.35) !important;
+    color: #0b2a56 !important;
   }}
   html.pad-mom .foot-bar {{
     position: relative !important;
