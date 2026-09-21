@@ -36,11 +36,25 @@ class MomPrintLayoutTests(unittest.TestCase):
         docs = ROOT.parent / "documents"
         for name in ("proceedings-ec-mom-pad.html", "proceedings-gh-mom-pad.html"):
             html = (docs / name).read_text()
-            self.assertIn("proceedings-mom-print.css?v=20260921mom8", html)
+            self.assertIn("proceedings-mom-print.css?v=20260921mom9", html)
             self.assertNotIn("class=\\\"foot-bar\\\"", html)
             self.assertIn('<div class="foot-bar"', html)
             # Footer sits after .pad, not inside it.
             self.assertRegex(html, r"</div>\s*<div class=\"foot-bar\"")
+
+    def test_watermark_visible_through_tables(self):
+        docs = ROOT.parent / "documents"
+        css = (docs / "proceedings-mom-print.css").read_text()
+        self.assertIn("mix-blend-mode: multiply", css)
+        self.assertIn("table.res-table td {", css)
+        common = (docs / "print-pad-common.css").read_text()
+        self.assertIn("mix-blend-mode: multiply", common)
+        pdf = rwa_templates._pdf_page_layout_css({"paperSize": "A4"}, mom=True)
+        self.assertIn("mix-blend-mode: multiply", pdf)
+        self.assertIn("table.res-table td", pdf)
+        runtime = rwa_templates._runtime_options_css({"paperSize": "A4"}, mom=True)
+        self.assertIn("mix-blend-mode: multiply", runtime)
+        self.assertIn("background: transparent", runtime)
 
 
 if __name__ == "__main__":

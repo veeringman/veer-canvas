@@ -9894,8 +9894,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom8">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom8">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom9">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom9">
       <style>
         @page { size: ${paperMap[paper]}; margin: 0; }
         html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }
