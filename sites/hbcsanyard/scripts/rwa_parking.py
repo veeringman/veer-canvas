@@ -1852,6 +1852,54 @@ def _kind_of_row(row: sqlite3.Row | None) -> str:
     return KIND_VISITOR
 
 
+def _actor_can_manage_plot_passes(actor: dict | None, house_id: str) -> bool:
+    """Own plot, or EC household manager for another plot."""
+    if not actor or not house_id:
+        return False
+    if actor.get("viewOnly") and not actor.get("superAdmin"):
+        return False
+    actor_house = str(actor.get("houseId") or actor.get("house_id") or "").strip()
+    if actor_house and actor_house == house_id:
+        return True
+    if actor.get("superAdmin"):
+        return True
+    import rwa_household
+
+    return rwa_household.can_actor_manage_household(actor, house_id)
+
+
+def resolve_pass_house_id(
+    conn: sqlite3.Connection,
+    actor: dict,
+    payload: dict | None = None,
+    *,
+    requested: str | None = None,
+) -> str:
+    """Actor's plot, or another plot EC may manage (directory / EC desk)."""
+    payload = payload or {}
+    want = (requested if requested is not None else "") or str(
+        payload.get("houseId") or payload.get("house_id") or payload.get("plot") or ""
+    ).strip()
+    actor_house = str(actor.get("houseId") or "").strip()
+    if not want:
+        return actor_house
+    row = conn.execute(
+        """
+        SELECT house_id FROM residents
+        WHERE house_id = ? OR plot_no = ?
+           OR UPPER(REPLACE(TRIM(plot_no), ' ', '')) = UPPER(REPLACE(TRIM(?), ' ', ''))
+        LIMIT 1
+        """,
+        (want, want, want),
+    ).fetchone()
+    if not row:
+        raise ValueError("Plot not found")
+    hid = (row["house_id"] or "").strip()
+    if not _actor_can_manage_plot_passes(actor, hid):
+        raise PermissionError("Not allowed to update vehicles for that plot")
+    return hid
+
+
 def issue_pass(
     conn: sqlite3.Connection,
     *,
@@ -1865,7 +1913,7 @@ def issue_pass(
         raise PermissionError("View-only access cannot request a parking pass")
     if actor.get("superAdmin"):
         raise PermissionError("Super admin cannot register a vehicle as a plot")
-    house_id = (actor.get("houseId") or "").strip()
+    house_id = resolve_pass_house_id(conn, actor, payload)
     if not house_id or house_id == SUPERADMIN_HOUSE_ID:
         raise ValueError("Sign in from your plot to request a pass")
     kind = normalize_kind(payload.get("kind") or payload.get("passKind"))
@@ -2365,7 +2413,7 @@ def renew_pass(
     if not item:
         raise ValueError("Pass not found")
     house_id = (actor.get("houseId") or "").strip()
-    if item["houseId"] != house_id and not actor.get("superAdmin"):
+    if item["houseId"] != house_id and not _actor_can_manage_plot_passes(actor, item["houseId"]):
         raise PermissionError("You can only renew passes for your plot")
     if item.get("permanent") or item.get("kind") == KIND_MEMBER:
         raise ValueError("Member vehicle passes are permanent and do not need renewal")
@@ -2643,11 +2691,11 @@ def remove_own_pass(
     if not item:
         raise ValueError("Pass not found")
     house_id = (actor.get("houseId") or "").strip()
-    if item["houseId"] != house_id and not actor.get("superAdmin"):
+    if item["houseId"] != house_id and not _actor_can_manage_plot_passes(actor, item["houseId"]):
         raise PermissionError("You can only remove passes registered to your plot")
     kind = item.get("kind")
-    if kind not in (KIND_MEMBER, KIND_STAFF):
-        raise ValueError("Only a registered member vehicle or household staff pass can be ended this way")
+    if kind not in (KIND_MEMBER, KIND_STAFF, KIND_TENANT):
+        raise ValueError("Only a registered member, tenant, or household staff pass can be ended this way")
     if item["status"] == "revoked":
         return item
     note = "Ended by household" if kind == KIND_STAFF else "Removed by member"

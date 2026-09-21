@@ -1683,6 +1683,76 @@ def directory(
     return out
 
 
+def household_directory(
+    conn: sqlite3.Connection,
+    house_id: str,
+    *,
+    actor: dict | None = None,
+    site_root=None,
+) -> dict:
+    """Full plot record for EC desk: profile, delegates, tenants, vehicles."""
+    resident = find_resident(conn, house_id, include_inactive=True)
+    if not resident:
+        raise ValueError("Plot not found")
+    hid = resident["house_id"]
+    actor = actor or {}
+    same_house = (actor.get("houseId") or "") == hid
+    can_manage = household.can_actor_manage_household(actor, hid)
+    can_edit_profile = can_manage or entitlements.actor_has(actor, "manage_roster") or entitlements.actor_has(
+        actor, "sensitive_ops"
+    ) or bool(actor.get("superAdmin"))
+    include_contacts = can_manage or same_house or can_edit_profile
+    owner = household.primary_member(conn, hid)
+    members = [
+        household.public_member(m, include_contacts=include_contacts)
+        for m in household.list_members(conn, hid, include_inactive=can_manage)
+    ]
+    import rwa_tenants
+    import rwa_parking
+
+    tenants = rwa_tenants.list_tenants(conn, hid, include_ended=can_manage or same_house)
+    vehicles = []
+    for item in rwa_parking.list_passes(conn, house_id=hid, site_root=site_root, limit=80):
+        kind = (item.get("kind") or "").strip().lower()
+        if kind not in ("member", "tenant"):
+            continue
+        if (item.get("status") or "") not in ("active", "pending_renewal", "expired"):
+            continue
+        vehicles.append({
+            "id": item.get("id"),
+            "plate": item.get("plateDisplay") or item.get("plate") or "",
+            "kind": kind,
+            "kindLabel": item.get("kindLabel") or kind,
+            "vehicleType": item.get("vehicleType") or "",
+            "vehicleTypeLabel": item.get("vehicleTypeLabel") or "",
+            "colour": item.get("colour") or "",
+            "status": item.get("status") or "",
+            "tenantName": item.get("tenantName") or "",
+            "driverName": item.get("visitorName") or item.get("memberName") or "",
+        })
+    return {
+        "houseId": hid,
+        "plotNo": resident.get("plot_no") or hid,
+        "householdName": resident.get("name") or "",
+        "canManage": can_manage,
+        "canEditProfile": can_edit_profile,
+        "resident": {
+            "title": (owner or {}).get("title") or resident.get("title") or "",
+            "name": (owner or {}).get("name") or resident.get("name") or "",
+            "profession": resident.get("profession") or "",
+            "employmentStatus": resident.get("employment_status") or "unknown",
+            "email": ((owner or {}).get("email") or resident.get("email") or "").strip(),
+            "phone": ((owner or {}).get("phone") or resident.get("phone") or "").strip(),
+            "officialTitle": resident.get("official_title") or "",
+            "notes": resident.get("notes") or "",
+            "status": resident.get("status") or "active",
+        },
+        "members": members,
+        "tenants": tenants,
+        "vehicles": vehicles,
+    }
+
+
 def roster_stats(conn: sqlite3.Connection) -> dict:
     exclude_sql, exclude_ids = system_house_exclude_sql("house_id")
     row = conn.execute(
@@ -6608,6 +6678,11 @@ _ACCESS_ACTION_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^POST /api/rwa/household/[^/]+/members$"), "Add household member"),
     (re.compile(r"^PATCH /api/rwa/household/[^/]+/members/[^/]+$"), "Update household member"),
     (re.compile(r"^DELETE /api/rwa/household/[^/]+/members/[^/]+$"), "Remove household member"),
+    (re.compile(r"^GET /api/rwa/household/[^/]+/directory$"), "View plot directory record"),
+    (re.compile(r"^GET /api/rwa/household/[^/]+/tenants$"), "View plot tenants"),
+    (re.compile(r"^POST /api/rwa/household/[^/]+/tenants$"), "Add plot tenant"),
+    (re.compile(r"^PATCH /api/rwa/household/[^/]+/tenants/[^/]+$"), "Update plot tenant"),
+    (re.compile(r"^DELETE /api/rwa/household/[^/]+/tenants/[^/]+$"), "End plot occupancy"),
     (re.compile(r"^PUT /api/rwa/notices/[^/]+/shares$"), "Share draft"),
     (re.compile(r"^GET /api/rwa/notices/[^/]+/shares$"), "View draft shares"),
     (re.compile(r"^GET /api/rwa/ec-members$"), "List EC members"),

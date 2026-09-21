@@ -3709,6 +3709,38 @@ def api_rwa_household_member_item(house_id: str, member_id: str):
         conn.close()
 
 
+@app.route("/api/rwa/household/<path:house_id>/directory", methods=["GET"])
+def api_rwa_household_directory(house_id: str):
+    """EC desk: one plot's directory record (profile, delegates, tenants, vehicles)."""
+    conn = _rwa_conn()
+    try:
+        sess = rwa_portal.session_from_token(conn, _rwa_token())
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        resident = rwa_portal.find_resident(conn, house_id, include_inactive=True)
+        if not resident:
+            return jsonify({"ok": False, "error": "Plot not found"}), 404
+        hid = resident["house_id"]
+        same_house = actor.get("houseId") == hid
+        can_edit_profile = (
+            rwa_household.can_actor_manage_household(actor, hid)
+            or rwa_entitlements.actor_has(actor, "manage_roster")
+            or rwa_entitlements.actor_has(actor, "sensitive_ops")
+            or bool(actor.get("superAdmin"))
+        )
+        if not same_house and not rwa_household.actor_can_use_ec_desk(actor) and not can_edit_profile:
+            return jsonify({"ok": False, "error": "Not allowed"}), 403
+        payload = rwa_portal.household_directory(
+            conn, hid, actor=actor, site_root=SITE_ROOT
+        )
+        return jsonify({"ok": True, **payload})
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    finally:
+        conn.close()
+
+
 @app.route("/api/rwa/household/<path:house_id>/tenants", methods=["GET", "POST"])
 def api_rwa_household_tenants(house_id: str):
     """List or add plot tenants (occupancy records — not household logins)."""
@@ -5092,9 +5124,13 @@ def api_rwa_resident_patch(house_id: str):
     conn = _rwa_conn()
     try:
         sess = rwa_portal.session_from_token(conn, _rwa_token())
-        if not sess or not (
-            rwa_entitlements.actor_has(sess["resident"], "manage_roster")
-            or rwa_entitlements.actor_has(sess["resident"], "sensitive_ops")
+        if not sess:
+            return jsonify({"ok": False, "error": "Sign in required"}), 401
+        actor = sess["resident"]
+        if not (
+            rwa_entitlements.actor_has(actor, "manage_roster")
+            or rwa_entitlements.actor_has(actor, "sensitive_ops")
+            or rwa_household.can_actor_manage_household(actor, house_id)
         ):
             return jsonify({"ok": False, "error": "Admin access required"}), 403
         payload = request.get_json(force=True, silent=True) or {}
@@ -5103,7 +5139,7 @@ def api_rwa_resident_patch(house_id: str):
             house_id,
             payload,
             as_admin=True,
-            actor=sess["resident"],
+            actor=actor,
             change_source="roster",
         )
         return jsonify({"ok": True, "resident": updated, "stats": rwa_portal.roster_stats(conn)})
@@ -9216,7 +9252,18 @@ def api_rwa_parking_passes():
             return jsonify({"ok": False, "error": "Sign in required"}), 401
         actor = sess["resident"]
         if request.method == "GET":
-            house_id = (actor.get("houseId") or "").strip()
+            requested = (request.args.get("houseId") or request.args.get("plot") or "").strip()
+            if requested:
+                try:
+                    house_id = rwa_parking.resolve_pass_house_id(
+                        conn, actor, requested=requested
+                    )
+                except PermissionError as exc:
+                    return jsonify({"ok": False, "error": str(exc)}), 403
+                except ValueError as exc:
+                    return jsonify({"ok": False, "error": str(exc)}), 400
+            else:
+                house_id = (actor.get("houseId") or "").strip()
             passes = []
             if house_id and not actor.get("superAdmin"):
                 passes = rwa_parking.list_passes(conn, house_id=house_id, site_root=SITE_ROOT)

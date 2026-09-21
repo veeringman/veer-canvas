@@ -2,7 +2,7 @@
 
 Future work for the resident portal / RWA app. Not scheduled; pick items when ready.
 
-Last updated: 2026-09-17
+Last updated: 2026-09-21
 
 ---
 
@@ -154,6 +154,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - Dues / ledger + bank QR
 - Colony mailbox (concerns)
 - Directory, profile, household members (owner + delegates, view-only)
+- **EC plot directory** — EC desk Plot directory updates owner profile, delegates, tenants, and member/tenant vehicles for any plot (2026-09-21)
 - Info Centre, Works & Events
 - **Shared document composer** — Templates Compose and Info Centre HTML pages use the same editor (icons, panel / full-window / original layout) (2026-08-21)
 - **Composer download + letterhead pads + image tools** — save draft/published to the library; download Word / PDF (with chosen pad) or text (body only); save to Google Drive; click an image to resize, float, or drag (2026-08-22)
@@ -176,5 +177,6 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 
 ## Session notes
 
+- 2026-09-21: EC desk “Add delegate” expanded to Plot directory (profile, delegates, tenants, vehicles) for any household.
 - 2026-09-17: Accounts/ledger custom columns. EC Admin → Custom columns (up to 8). Values stored per plot (survive PDF re-import). Do not change pending/dues math.
 - 2026-09-17: AI Assist talks to eGenie at `https://egenie.veerlabs.solutions` (separate AI EC2 `100.52.147.238`), not localhost on the portal box.

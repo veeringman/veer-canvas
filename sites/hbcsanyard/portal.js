@@ -1256,7 +1256,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       node.hidden = !allowed;
     });
     const delegateBlock = el('ecDelegateBlock');
-    if (delegateBlock) delegateBlock.hidden = !isEcAdmin();
+    if (delegateBlock) {
+      delegateBlock.hidden = !(isEcAdmin() || hasEntitlement('manage_roster'));
+    }
     const charterBlock = el('ecCharterBlock');
     if (charterBlock) {
       charterBlock.hidden = !(hasEntitlement('manage_roles') || hasEntitlement('sensitive_ops'));
@@ -17730,7 +17732,7 @@ ${foot}
   }
 
   async function populateEcDelegateHouseList() {
-    if (!isEcAdmin()) return;
+    if (!isEcAdmin() && !hasEntitlement('manage_roster')) return;
     if (rosterCache.length) {
       populateEcDelegateHouseListFromCache();
       return;
@@ -17749,6 +17751,28 @@ ${foot}
     return (el('ecDelegateHouse')?.value || '').trim();
   }
 
+  function setEcPlotFormsEnabled(canManage, canEditProfile) {
+    const profileForm = el('ecPlotProfileForm');
+    if (profileForm) {
+      profileForm.querySelectorAll('input, select, button').forEach((node) => {
+        node.disabled = !canEditProfile;
+      });
+    }
+    [el('ecDelegateForm'), el('ecPlotTenantForm'), el('ecPlotMemberVehicleForm'), el('ecPlotTenantVehicleForm')].forEach((form) => {
+      if (!form) return;
+      form.hidden = !canManage;
+    });
+  }
+
+  function fillEcPlotTenantVehicleSelect(tenants) {
+    const sel = el('ecPlotTenantVehicleSelect');
+    if (!sel) return;
+    const active = (tenants || []).filter((t) => t.status !== 'ended');
+    sel.innerHTML = '<option value="">Select a registered tenant</option>' + active.map((t) =>
+      `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name || 'Tenant')}</option>`
+    ).join('');
+  }
+
   function renderEcDelegateMembers(data) {
     const list = el('ecDelegateMemberList');
     if (!list) return;
@@ -17762,6 +17786,25 @@ ${foot}
           m.isPrimary ? 'Owner' : (m.isPrimaryDelegate ? 'Primary delegate' : (m.relationLabel || m.relation)),
           m.viewOnly ? 'View only' : null,
         ].filter(Boolean).join(' · ');
+        const relationSelect = m.isPrimary ? '' : `
+          <label>Relation
+            <select class="ec-hh-relation" data-id="${escapeHtml(m.id)}">
+              <option value="spouse"${m.relation === 'spouse' ? ' selected' : ''}>Spouse</option>
+              <option value="parent"${m.relation === 'parent' ? ' selected' : ''}>Parent</option>
+              <option value="child"${m.relation === 'child' ? ' selected' : ''}>Child</option>
+              <option value="other"${m.relation === 'other' || !m.relation ? ' selected' : ''}>Other</option>
+            </select>
+          </label>`;
+        const edit = canManage ? `
+          <form class="ec-hh-edit stack" data-id="${escapeHtml(m.id)}">
+            <div class="settings-grid">
+              <label>Name <input name="name" required maxlength="120" value="${escapeHtml(m.name || '')}"></label>
+              ${relationSelect}
+              <label>Email <input name="email" type="email" value="${escapeHtml(m.email || '')}"></label>
+              <label>Phone <input name="phone" type="tel" value="${escapeHtml(m.phone || '')}"></label>
+            </div>
+            <button type="submit" class="btn ghost compact">Save person</button>
+          </form>` : `<span class="muted">${escapeHtml(m.email || '—')} · ${escapeHtml(m.phone || '—')}</span>`;
         const actions = canManage && !m.isPrimary ? `
           <div class="btn-row">
             <label class="check compact"><input type="checkbox" class="ec-hh-primary-delegate" data-id="${escapeHtml(m.id)}" ${m.isPrimaryDelegate ? 'checked' : ''}> Primary delegate</label>
@@ -17773,33 +17816,108 @@ ${foot}
             ${hhAvatarHtml(m)}
             <strong>${escapeHtml(m.name)}</strong>
             <span class="muted">${escapeHtml(badges)}</span>
+            ${edit}
             ${actions}
           </article>`;
       }).join('') || '<p class="muted">No household members yet.</p>'}`;
     hydrateAvatars(list).catch(() => {});
   }
 
+  function renderEcPlotTenants(data) {
+    const list = el('ecPlotTenantList');
+    if (!list) return;
+    const canManage = Boolean(data?.canManage);
+    const tenants = data.tenants || [];
+    list.innerHTML = tenants.length ? tenants.map((t) => {
+      const ended = t.status === 'ended';
+      const edit = canManage && !ended ? `
+        <form class="ec-ht-edit stack" data-id="${escapeHtml(t.id)}">
+          <div class="settings-grid">
+            <label>Name <input name="name" required maxlength="120" value="${escapeHtml(t.name || '')}"></label>
+            <label>Mobile <input name="phone" type="tel" required value="${escapeHtml(t.phone || '')}"></label>
+            <label>Email <input name="email" type="email" value="${escapeHtml(t.email || '')}"></label>
+            <label>From <input name="occupancyStart" type="date" value="${escapeHtml(t.occupancyStart || '')}"></label>
+            <label>Until <input name="occupancyEnd" type="date" value="${escapeHtml(t.occupancyEnd || '')}"></label>
+          </div>
+          <label>Note <input name="note" maxlength="240" value="${escapeHtml(t.note || '')}"></label>
+          <div class="btn-row">
+            <button type="submit" class="btn ghost compact">Save tenant</button>
+            <button type="button" class="btn ghost compact ec-ht-end" data-id="${escapeHtml(t.id)}">End occupancy</button>
+          </div>
+        </form>` : `
+          <span class="muted">${escapeHtml(t.phone || '—')} · ${escapeHtml(t.email || '—')}</span>
+          <span class="muted">${escapeHtml([t.occupancyStart, t.occupancyEnd].filter(Boolean).join(' → ') || 'Dates not set')}</span>`;
+      return `
+        <article class="household-member-card${ended ? ' is-ended' : ''}" data-id="${escapeHtml(t.id)}">
+          <strong>${escapeHtml(t.name)}</strong>
+          <span class="muted">${ended ? 'Occupancy ended' : 'Current tenant'} · not a household login</span>
+          ${edit}
+        </article>`;
+    }).join('') : '<p class="muted">No tenants recorded for this plot.</p>';
+    fillEcPlotTenantVehicleSelect(tenants);
+  }
+
+  function renderEcPlotVehicles(data) {
+    const list = el('ecPlotVehicleList');
+    if (!list) return;
+    const canManage = Boolean(data?.canManage);
+    const vehicles = data.vehicles || [];
+    list.innerHTML = vehicles.length ? vehicles.map((v) => {
+      const bits = [v.vehicleTypeLabel, v.kindLabel, v.colour, v.tenantName || v.driverName, v.status].filter(Boolean);
+      const actions = canManage && v.status === 'active'
+        ? `<div class="btn-row"><button type="button" class="btn ghost compact ec-plot-vehicle-remove" data-id="${escapeHtml(v.id)}">Remove</button></div>`
+        : '';
+      return `
+        <article class="household-member-card" data-id="${escapeHtml(v.id || '')}">
+          <strong class="dir-plate">${escapeHtml(v.plate || '')}</strong>
+          <span class="muted">${escapeHtml(bits.join(' · '))}</span>
+          ${actions}
+        </article>`;
+    }).join('') : '<p class="muted">No member or tenant vehicles registered.</p>';
+  }
+
+  function fillEcPlotProfile(resident) {
+    const r = resident || {};
+    if (el('ecPlotTitle')) el('ecPlotTitle').value = r.title || '';
+    if (el('ecPlotName')) el('ecPlotName').value = r.name || '';
+    if (el('ecPlotProfession')) el('ecPlotProfession').value = r.profession || '';
+    if (el('ecPlotEmployment')) el('ecPlotEmployment').value = r.employmentStatus || 'unknown';
+    if (el('ecPlotEmail')) el('ecPlotEmail').value = r.email || '';
+    if (el('ecPlotPhone')) el('ecPlotPhone').value = r.phone || '';
+    if (el('ecPlotNotes')) el('ecPlotNotes').value = r.notes || '';
+  }
+
   async function loadEcDelegateHousehold() {
     const hid = ecDelegateHouseId();
     const status = el('ecDelegateStatus');
-    const list = el('ecDelegateMemberList');
+    const panel = el('ecPlotDirectoryPanel');
     if (!hid) {
-      if (list) list.innerHTML = '';
+      if (panel) panel.hidden = true;
       return;
     }
-    if (status) status.textContent = 'Loading household…';
+    if (status) status.textContent = 'Loading plot directory…';
     try {
-      const data = await api(`/api/rwa/household/${encodeURIComponent(hid)}/members`);
-      data.houseId = hid;
+      const data = await api(`/api/rwa/household/${encodeURIComponent(hid)}/directory`);
+      if (el('ecDelegateHouse') && data.houseId) el('ecDelegateHouse').value = data.houseId;
+      fillEcPlotProfile(data.resident);
       renderEcDelegateMembers(data);
-      if (status) status.textContent = '';
+      renderEcPlotTenants(data);
+      renderEcPlotVehicles(data);
+      setEcPlotFormsEnabled(Boolean(data.canManage), Boolean(data.canEditProfile));
+      if (panel) panel.hidden = false;
+      if (status) {
+        status.textContent = data.canManage
+          ? `Editing plot ${data.houseId}.`
+          : `Plot ${data.houseId} loaded${data.canEditProfile ? ' (profile only)' : ''}.`;
+      }
     } catch (err) {
-      if (list) list.innerHTML = `<p class="error">${escapeHtml(err.message || 'Could not load household')}</p>`;
-      if (status) status.textContent = err.message || 'Could not load household';
+      if (panel) panel.hidden = true;
+      if (status) status.textContent = err.message || 'Could not load plot directory';
     }
   }
 
-  el('ecDelegateLoadBtn')?.addEventListener('click', () => {
+  el('ecPlotLookupForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
     loadEcDelegateHousehold().catch(console.error);
   });
 
@@ -17807,11 +17925,36 @@ ${foot}
     loadEcDelegateHousehold().catch(console.error);
   });
 
+  el('ecPlotProfileForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const status = el('ecPlotProfileStatus');
+    if (!hid) return;
+    if (status) status.textContent = 'Saving…';
+    try {
+      await api(`/api/rwa/residents/${encodeURIComponent(hid)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: el('ecPlotTitle')?.value.trim() || '',
+          name: el('ecPlotName')?.value.trim() || '',
+          profession: el('ecPlotProfession')?.value.trim() || '',
+          employmentStatus: el('ecPlotEmployment')?.value || 'unknown',
+          email: el('ecPlotEmail')?.value.trim() || '',
+          phone: el('ecPlotPhone')?.value.trim() || '',
+          notes: el('ecPlotNotes')?.value.trim() || '',
+        }),
+      });
+      if (status) status.textContent = 'Profile saved.';
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save profile';
+    }
+  });
+
   el('ecDelegateForm')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!isEcAdmin()) return;
     const hid = ecDelegateHouseId();
-    const status = el('ecDelegateStatus');
+    const status = el('ecDelegateAddStatus');
     const name = (el('ecDelegateName')?.value || '').trim();
     if (!hid || !name) return;
     if (status) status.textContent = 'Adding…';
@@ -17821,17 +17964,41 @@ ${foot}
         body: JSON.stringify({
           name,
           relation: el('ecDelegateRelation')?.value || 'other',
+          email: el('ecDelegateEmail')?.value.trim() || '',
+          phone: el('ecDelegatePhone')?.value.trim() || '',
           viewOnly: Boolean(el('ecDelegateViewOnly')?.checked),
           isPrimaryDelegate: Boolean(el('ecDelegatePrimary')?.checked),
         }),
       });
-      if (el('ecDelegateName')) el('ecDelegateName').value = '';
-      if (el('ecDelegateViewOnly')) el('ecDelegateViewOnly').checked = false;
-      if (el('ecDelegatePrimary')) el('ecDelegatePrimary').checked = false;
+      el('ecDelegateForm')?.reset();
+      if (el('ecDelegateRelation')) el('ecDelegateRelation').value = 'other';
       if (status) status.textContent = `Delegate added for ${hid}.`;
       await loadEcDelegateHousehold();
     } catch (err) {
       if (status) status.textContent = err.message || 'Could not add delegate';
+    }
+  });
+
+  el('ecDelegateMemberList')?.addEventListener('submit', async (event) => {
+    const form = event.target.closest('.ec-hh-edit');
+    if (!form) return;
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const id = form.getAttribute('data-id');
+    if (!hid || !id) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/members/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: form.querySelector('input[name="name"]')?.value.trim() || '',
+          email: form.querySelector('input[name="email"]')?.value.trim() || '',
+          phone: form.querySelector('input[name="phone"]')?.value.trim() || '',
+          relation: form.querySelector('.ec-hh-relation')?.value || undefined,
+        }),
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not update household member');
     }
   });
 
@@ -17884,6 +18051,147 @@ ${foot}
       await loadEcDelegateHousehold();
     } catch (err) {
       alert(err.message || 'Could not remove member');
+    }
+  });
+
+  el('ecPlotTenantForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const status = el('ecPlotTenantStatus');
+    if (!hid) return;
+    if (status) status.textContent = 'Saving…';
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/tenants`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: el('ecPlotTenantName')?.value.trim() || '',
+          phone: el('ecPlotTenantPhone')?.value.trim() || '',
+          email: el('ecPlotTenantEmail')?.value.trim() || '',
+          note: el('ecPlotTenantNote')?.value.trim() || '',
+          occupancyStart: el('ecPlotTenantFrom')?.value || '',
+          occupancyEnd: el('ecPlotTenantUntil')?.value || '',
+        }),
+      });
+      el('ecPlotTenantForm')?.reset();
+      if (status) status.textContent = 'Tenant saved.';
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not save tenant';
+    }
+  });
+
+  el('ecPlotTenantList')?.addEventListener('submit', async (event) => {
+    const form = event.target.closest('.ec-ht-edit');
+    if (!form) return;
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const id = form.getAttribute('data-id');
+    if (!hid || !id) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/tenants/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: form.querySelector('input[name="name"]')?.value.trim() || '',
+          phone: form.querySelector('input[name="phone"]')?.value.trim() || '',
+          email: form.querySelector('input[name="email"]')?.value.trim() || '',
+          occupancyStart: form.querySelector('input[name="occupancyStart"]')?.value || '',
+          occupancyEnd: form.querySelector('input[name="occupancyEnd"]')?.value || '',
+          note: form.querySelector('input[name="note"]')?.value.trim() || '',
+        }),
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not update tenant');
+    }
+  });
+
+  el('ecPlotTenantList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.ec-ht-end');
+    if (!btn) return;
+    const hid = ecDelegateHouseId();
+    const id = btn.getAttribute('data-id');
+    if (!hid || !id) return;
+    if (!window.confirm('End this occupancy?')) return;
+    try {
+      await api(`/api/rwa/household/${encodeURIComponent(hid)}/tenants/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        body: '{}',
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not end occupancy');
+    }
+  });
+
+  el('ecPlotMemberVehicleForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const status = el('ecPlotMemberVehicleStatus');
+    if (!hid) return;
+    if (status) status.textContent = 'Registering…';
+    try {
+      await api('/api/rwa/parking/passes', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'member',
+          houseId: hid,
+          plate: el('ecPlotMemberPlate')?.value || '',
+          colour: el('ecPlotMemberColour')?.value || '',
+          vehicleType: el('ecPlotMemberType')?.value || 'car',
+          driverName: el('ecPlotMemberDriver')?.value || '',
+        }),
+      });
+      el('ecPlotMemberVehicleForm')?.reset();
+      if (el('ecPlotMemberType')) el('ecPlotMemberType').value = 'car';
+      if (status) status.textContent = 'Vehicle registered.';
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not register vehicle';
+    }
+  });
+
+  el('ecPlotTenantVehicleForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const hid = ecDelegateHouseId();
+    const status = el('ecPlotTenantVehicleStatus');
+    if (!hid) return;
+    if (status) status.textContent = 'Issuing…';
+    try {
+      await api('/api/rwa/parking/passes', {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'tenant',
+          houseId: hid,
+          tenantId: el('ecPlotTenantVehicleSelect')?.value || '',
+          plate: el('ecPlotTenantPlate')?.value || '',
+          colour: el('ecPlotTenantColour')?.value || '',
+          vehicleType: el('ecPlotTenantType')?.value || 'car',
+          months: el('ecPlotTenantMonths')?.value || '6',
+        }),
+      });
+      if (el('ecPlotTenantPlate')) el('ecPlotTenantPlate').value = '';
+      if (el('ecPlotTenantColour')) el('ecPlotTenantColour').value = '';
+      if (status) status.textContent = 'Tenant pass issued.';
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      if (status) status.textContent = err.message || 'Could not issue tenant pass';
+    }
+  });
+
+  el('ecPlotVehicleList')?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.ec-plot-vehicle-remove');
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    if (!id) return;
+    if (!window.confirm('Remove this registered vehicle from the plot?')) return;
+    try {
+      await api(`/api/rwa/parking/passes/${encodeURIComponent(id)}/remove`, {
+        method: 'POST',
+        body: '{}',
+      });
+      await loadEcDelegateHousehold();
+    } catch (err) {
+      alert(err.message || 'Could not remove vehicle');
     }
   });
 

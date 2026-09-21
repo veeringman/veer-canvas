@@ -2280,6 +2280,29 @@ input:focus, textarea:focus, select:focus {
   gap: 0.5rem;
   align-items: center;
 }
+.ec-plot-directory {
+  margin-top: 1.1rem;
+  display: grid;
+  gap: 1.25rem;
+}
+.ec-plot-section {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+.ec-plot-section h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+.ec-plot-section h5 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.92rem;
+}
+.ec-plot-directory .settings-grid {
+  margin-bottom: 0.35rem;
+}
+.ec-plot-directory .household-member-card.is-ended {
+  opacity: 0.72;
+}
 body.is-view-only .mailbox-reply,
 body.is-view-only #grievanceForm {
   display: none !important;

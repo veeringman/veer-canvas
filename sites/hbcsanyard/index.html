@@ -22,11 +22,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="portal.css?v=20260917ai2">
+  <link rel="stylesheet" href="portal.css?v=20260921dir1">
   <link rel="stylesheet" href="composer/composer.css?v=20260830studio2">
   <link rel="stylesheet" href="documents/proceedings-mom-print.css?v=20260825mom6">
   <script src="auth.js?v=20260819ab6" defer></script>
-  <script src="portal.js?v=20260917ai2" defer></script>
+  <script src="portal.js?v=20260921dir1" defer></script>
   <script type="module" src="composer/boot.js?v=20260830studio1"></script>
 </head>
 <body>
@@ -2460,33 +2460,163 @@
         <div class="roster-block" id="ecDelegateBlock" hidden>
           <div class="roster-toolbar">
             <div>
-              <h3>Add delegate</h3>
-              <p class="muted">Add a household login for any plot. Mark one delegate as <strong>primary</strong> to make them EC-eligible. Each person needs a unique email/phone identity.</p>
+              <h3>Plot directory</h3>
+              <p class="muted">Look up a household and update directory data: owner profile, delegates, tenants, and registered vehicles. Same facts as Directory — EC can correct them here.</p>
             </div>
           </div>
-          <form id="ecDelegateForm" class="stack narrow ec-delegate-form">
+          <form id="ecPlotLookupForm" class="stack narrow ec-delegate-form">
             <label>Plot
               <input id="ecDelegateHouse" list="ecDelegateHouseList" name="houseId" required placeholder="e.g. 43 or 12B-1" autocomplete="off">
               <datalist id="ecDelegateHouseList"></datalist>
             </label>
-            <label>Delegate name <input id="ecDelegateName" name="name" required maxlength="120" autocomplete="off"></label>
-            <label>Relation
-              <select id="ecDelegateRelation" name="relation">
-                <option value="spouse">Spouse</option>
-                <option value="parent">Parent</option>
-                <option value="child">Child</option>
-                <option value="other" selected>Other</option>
-              </select>
-            </label>
-            <label class="check"><input type="checkbox" id="ecDelegatePrimary" name="isPrimaryDelegate"> Mark as primary delegate (EC-eligible)</label>
-            <label class="check"><input type="checkbox" id="ecDelegateViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
             <div class="btn-row">
-              <button type="submit" class="btn secondary">Add delegate</button>
-              <button type="button" class="btn ghost" id="ecDelegateLoadBtn">Show household</button>
+              <button type="submit" class="btn primary" id="ecDelegateLoadBtn">Load plot</button>
             </div>
             <p class="muted" id="ecDelegateStatus"></p>
           </form>
-          <div id="ecDelegateMemberList" class="household-member-list"></div>
+
+          <div id="ecPlotDirectoryPanel" class="ec-plot-directory" hidden>
+            <form id="ecPlotProfileForm" class="stack narrow ec-plot-section">
+              <h4>Owner profile</h4>
+              <p class="muted">Name, contacts, profession, and notes shown on Directory and the roster.</p>
+              <div class="settings-grid">
+                <label>Title <input id="ecPlotTitle" name="title" maxlength="40" placeholder="e.g. Mr / Mrs / Dr"></label>
+                <label>Name <input id="ecPlotName" name="name" required maxlength="120"></label>
+                <label>Profession <input id="ecPlotProfession" name="profession" maxlength="80" placeholder="e.g. Teacher"></label>
+                <label>Employment
+                  <select id="ecPlotEmployment" name="employmentStatus">
+                    <option value="unknown">Not specified</option>
+                    <option value="working">Still working</option>
+                    <option value="retired">Retired</option>
+                  </select>
+                </label>
+                <label>Email <input id="ecPlotEmail" name="email" type="email"></label>
+                <label>Phone <input id="ecPlotPhone" name="phone" type="tel" placeholder="10-digit mobile"></label>
+              </div>
+              <label>Notes <input id="ecPlotNotes" name="notes" maxlength="240" placeholder="e.g. EC: Father full name"></label>
+              <div class="btn-row">
+                <button type="submit" class="btn secondary">Save profile</button>
+              </div>
+              <p class="muted" id="ecPlotProfileStatus"></p>
+            </form>
+
+            <div class="ec-plot-section">
+              <h4>Delegates &amp; household logins</h4>
+              <p class="muted">Owner plus delegates. Mark one delegate as <strong>primary</strong> to make them EC-eligible. Each person needs a unique email or phone.</p>
+              <div id="ecDelegateMemberList" class="household-member-list"></div>
+              <form id="ecDelegateForm" class="stack narrow">
+                <h5>Add delegate</h5>
+                <div class="settings-grid">
+                  <label>Name <input id="ecDelegateName" name="name" required maxlength="120" autocomplete="off"></label>
+                  <label>Relation
+                    <select id="ecDelegateRelation" name="relation">
+                      <option value="spouse">Spouse</option>
+                      <option value="parent">Parent</option>
+                      <option value="child">Child</option>
+                      <option value="other" selected>Other</option>
+                    </select>
+                  </label>
+                  <label>Email <input id="ecDelegateEmail" name="email" type="email" placeholder="optional"></label>
+                  <label>Phone <input id="ecDelegatePhone" name="phone" type="tel" placeholder="optional"></label>
+                </div>
+                <label class="check"><input type="checkbox" id="ecDelegatePrimary" name="isPrimaryDelegate"> Mark as primary delegate (EC-eligible)</label>
+                <label class="check"><input type="checkbox" id="ecDelegateViewOnly" name="viewOnly"> View only (cannot post concerns, like, or comment)</label>
+                <div class="btn-row">
+                  <button type="submit" class="btn secondary">Add delegate</button>
+                </div>
+                <p class="muted" id="ecDelegateAddStatus"></p>
+              </form>
+            </div>
+
+            <div class="ec-plot-section">
+              <h4>Tenants</h4>
+              <p class="muted">Occupancy records only — tenants do not get a colony login. Register them here before issuing a tenant vehicle pass.</p>
+              <div id="ecPlotTenantList" class="household-member-list"></div>
+              <form id="ecPlotTenantForm" class="stack narrow">
+                <h5>Add tenant</h5>
+                <div class="settings-grid">
+                  <label>Name <input id="ecPlotTenantName" name="name" required maxlength="120"></label>
+                  <label>Mobile <input id="ecPlotTenantPhone" name="phone" type="tel" required placeholder="10-digit mobile"></label>
+                  <label>Email <input id="ecPlotTenantEmail" name="email" type="email" placeholder="optional"></label>
+                  <label>Occupancy from <input id="ecPlotTenantFrom" name="occupancyStart" type="date"></label>
+                  <label>Occupancy until <input id="ecPlotTenantUntil" name="occupancyEnd" type="date"></label>
+                </div>
+                <label>ID / address / note
+                  <input id="ecPlotTenantNote" name="note" maxlength="240" placeholder="Optional ID number or occupancy note">
+                </label>
+                <div class="btn-row">
+                  <button type="submit" class="btn secondary">Save tenant</button>
+                </div>
+                <p class="muted" id="ecPlotTenantStatus"></p>
+              </form>
+            </div>
+
+            <div class="ec-plot-section">
+              <h4>Vehicles</h4>
+              <p class="muted">Member and tenant vehicles that appear on Directory. Visitor and staff passes stay on Pass.</p>
+              <div id="ecPlotVehicleList" class="household-member-list"></div>
+              <form id="ecPlotMemberVehicleForm" class="stack narrow">
+                <h5>Register member vehicle</h5>
+                <div class="settings-grid">
+                  <label>Vehicle number
+                    <input id="ecPlotMemberPlate" maxlength="14" required autocomplete="off" placeholder="HP 33 A 1234" autocapitalize="characters">
+                  </label>
+                  <label>Colour <input id="ecPlotMemberColour" maxlength="40" placeholder="White"></label>
+                  <label>Type
+                    <select id="ecPlotMemberType">
+                      <option value="car" selected>Car</option>
+                      <option value="suv">SUV</option>
+                      <option value="van">Van</option>
+                      <option value="bike">Motorcycle</option>
+                      <option value="scooter">Scooter</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                </div>
+                <label>Registered to <input id="ecPlotMemberDriver" maxlength="80" placeholder="Owner / driver name"></label>
+                <div class="btn-row">
+                  <button type="submit" class="btn secondary">Register vehicle</button>
+                </div>
+                <p class="muted" id="ecPlotMemberVehicleStatus"></p>
+              </form>
+              <form id="ecPlotTenantVehicleForm" class="stack narrow">
+                <h5>Issue tenant vehicle pass</h5>
+                <label>Tenant
+                  <select id="ecPlotTenantVehicleSelect" required>
+                    <option value="">Select a registered tenant</option>
+                  </select>
+                </label>
+                <div class="settings-grid">
+                  <label>Vehicle number
+                    <input id="ecPlotTenantPlate" maxlength="14" required autocomplete="off" placeholder="HP 33 A 1234" autocapitalize="characters">
+                  </label>
+                  <label>Colour <input id="ecPlotTenantColour" maxlength="40" placeholder="White"></label>
+                  <label>Type
+                    <select id="ecPlotTenantType">
+                      <option value="car" selected>Car</option>
+                      <option value="suv">SUV</option>
+                      <option value="van">Van</option>
+                      <option value="bike">Motorcycle</option>
+                      <option value="scooter">Scooter</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  <label>Lease
+                    <select id="ecPlotTenantMonths">
+                      <option value="1">1 month</option>
+                      <option value="3">3 months</option>
+                      <option value="6" selected>6 months</option>
+                      <option value="12">12 months</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="btn-row">
+                  <button type="submit" class="btn secondary">Issue tenant pass</button>
+                </div>
+                <p class="muted" id="ecPlotTenantVehicleStatus"></p>
+              </form>
+            </div>
+          </div>
         </div>
 
         <div class="roster-block" id="ecCharterBlock" data-entitlement="manage_roles" hidden>
