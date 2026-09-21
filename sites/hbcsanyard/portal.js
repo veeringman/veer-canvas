@@ -9365,8 +9365,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div class="ruled-block xl">${momText(bodyP1)}</div>
           ${bodySplit ? '<p class="cont-note">→ Continue detailed proceedings on page 2</p>' : ''}
         </div>
+        </div>
         <div class="foot-bar">Unity<span class="sep">·</span>Harmony<span class="sep">·</span>Progress · housingcolonysanyard.in</div>
-      </div></div>
+      </div>
 
       <div class="sheet" aria-label="MOM page 2">
         ${sheetHead('Page 2 of 2', addr2)}
@@ -9397,8 +9398,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div class="sig">President / Chairman</div>
           <div class="sig">General Secretary</div>
         </div>
+        </div>
         <div class="foot-bar">${foot2}</div>
-      </div></div>
+      </div>
     </div>`;
   }
 
@@ -9852,15 +9854,24 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     };
     const paper = paperMap[paperRaw] ? paperRaw : 'a4';
     try { localStorage.setItem('mhws-mom-paper', paper); } catch (_) {}
+    const paperFit = {
+      a4: { w: '210mm', h: '277mm' },
+      a5: { w: '148mm', h: '196mm' },
+      letter: { w: '215.9mm', h: '269mm' },
+      legal: { w: '215.9mm', h: '345mm' },
+    }[paper];
 
     const docHtml = `<!DOCTYPE html><html lang="en" class="pad-mom" data-paper="${paper}"><head><meta charset="utf-8">
       <title>${escapeHtml(p.title || 'Proceedings')}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260825mom6">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260825mom6">
-      <style>@page { size: ${paperMap[paper]}; margin: 0; }</style>
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom7">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom7">
+      <style>
+        @page { size: ${paperMap[paper]}; margin: 0; }
+        html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }
+      </style>
       </head><body>${html}
       <script>
         (function(){

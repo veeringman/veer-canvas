@@ -1999,6 +1999,22 @@ def _sheet_metrics(
     }
 
 
+def _mom_fit_height(sheet_h: str, *, shrink_mm: float = 20.0) -> str:
+    """Keep each MOM sheet inside the PDF page (full 297mm overflows and clips the next header)."""
+    text = str(sheet_h or "").strip()
+    low = text.lower()
+    try:
+        if low.endswith("mm"):
+            return f"{max(float(low[:-2]) - shrink_mm, 80.0):g}mm"
+        if low.endswith("cm"):
+            return f"{max(float(low[:-2]) - (shrink_mm / 10.0), 8.0):g}cm"
+        if low.endswith("in"):
+            return f"{max(float(low[:-2]) - (shrink_mm / 25.4), 3.0):g}in"
+    except ValueError:
+        pass
+    return f"calc({text} - {shrink_mm:g}mm)"
+
+
 def _pdf_page_layout_css(
     options: dict[str, Any],
     *,
@@ -2053,13 +2069,16 @@ def _pdf_page_layout_css(
 </style>
 """.strip()
     if mom:
+        fit_h = _mom_fit_height(h)
         return f"""
 <style id="tpl-pdf-page">
   @page {{ size: {page_size}; margin: 0; }}
   html, body {{
     width: {w} !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
     background: #fff !important;
   }}
   .screen-hint {{ display: none !important; }}
@@ -2068,17 +2087,22 @@ def _pdf_page_layout_css(
     display: flex !important;
     flex-direction: column !important;
     width: {w} !important;
-    height: {h} !important;
-    min-height: {h} !important;
-    max-height: {h} !important;
+    height: {fit_h} !important;
+    min-height: {fit_h} !important;
+    max-height: {fit_h} !important;
     margin: 0 !important;
     overflow: hidden !important;
-    page-break-after: always;
-    break-after: page;
-  }}
-  .sheet:last-of-type {{
     page-break-after: auto;
     break-after: auto;
+    page-break-before: always;
+    break-before: page;
+  }}
+  .sheet:first-of-type {{
+    page-break-before: auto;
+    break-before: auto;
+  }}
+  .accent-edge, .accent-edge-thin, .brand, .foot-bar {{
+    flex-shrink: 0 !important;
   }}
   .pad {{
     position: relative !important;
@@ -2086,8 +2110,9 @@ def _pdf_page_layout_css(
     display: flex !important;
     flex-direction: column !important;
     min-height: 0 !important;
-    padding-bottom: 9mm !important;
+    padding-bottom: 2mm !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
   }}
   .grow {{
     flex: 1 1 auto !important;
@@ -2096,14 +2121,16 @@ def _pdf_page_layout_css(
   .grow .ruled-block.xl,
   .grow .ruled-block.xxl {{
     flex: 1 1 auto !important;
-    min-height: 24mm !important;
+    min-height: 18mm !important;
   }}
   .foot-bar {{
-    position: absolute !important;
-    left: -11mm !important;
-    right: -11mm !important;
-    bottom: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
     margin: 0 !important;
+    flex: 0 0 auto !important;
     z-index: 2 !important;
   }}
 </style>
@@ -2261,26 +2288,36 @@ def _runtime_options_css(
     overflow: hidden !important;
   }}"""
     elif mom:
+        fit_h = _mom_fit_height(sheet_min_h)
         sheet_css = f"""
   @page {{ size: {page_size}; margin: 0; }}
+  html.pad-mom,
+  html.pad-mom body {{
+    height: auto !important;
+    overflow: visible !important;
+  }}
   html.pad-mom .sheet {{
     position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
     width: {sheet_w} !important;
-    height: {sheet_min_h} !important;
-    min-height: {sheet_min_h} !important;
-    max-height: {sheet_min_h} !important;
+    height: {fit_h} !important;
+    min-height: {fit_h} !important;
+    max-height: {fit_h} !important;
   }}
   html.pad-mom .pad {{
     position: relative !important;
-    padding-bottom: 9mm !important;
+    padding-bottom: 2mm !important;
     box-sizing: border-box !important;
   }}
   html.pad-mom .foot-bar {{
-    position: absolute !important;
-    left: -11mm !important;
-    right: -11mm !important;
-    bottom: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
     margin: 0 !important;
+    flex: 0 0 auto !important;
     z-index: 2 !important;
   }}"""
     else:
