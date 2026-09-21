@@ -36,7 +36,7 @@ class MomPrintLayoutTests(unittest.TestCase):
         docs = ROOT.parent / "documents"
         for name in ("proceedings-ec-mom-pad.html", "proceedings-gh-mom-pad.html"):
             html = (docs / name).read_text()
-            self.assertIn("proceedings-mom-print.css?v=20260921mom7", html)
+            self.assertIn("proceedings-mom-print.css?v=20260921mom8", html)
             self.assertNotIn("class=\\\"foot-bar\\\"", html)
             self.assertIn('<div class="foot-bar"', html)
             # Footer sits after .pad, not inside it.

@@ -178,6 +178,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 
 ## Session notes
 
+- 2026-09-21: Proceedings edit can change Register No.; print keeps minutes on page 1 and reserve signature/stamp boxes on page 2.
 - 2026-09-21: Certified resolution (Word) appointing Advocate Shailesh Sharma; ₹50,000 legal fee split 50/50 Society / B.C. Sharma per EC MOM 12/09/2026.
 - 2026-09-21: Proceedings/MoM print + PDF — sheets shorter than paper; footer in-flow so pages no longer overflow and headers are not clipped.
 - 2026-09-21: EC desk “Add delegate” expanded to Plot directory (profile, delegates, tenants, vehicles) for any household.

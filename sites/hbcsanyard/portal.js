@@ -9288,6 +9288,21 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     return rows.join('');
   }
 
+  function splitProceedingsBodyForPrint(body) {
+    const text = String(body || '');
+    const limit = 2400;
+    if (text.length <= limit) return { page1: text, page2: '', split: false };
+    let cut = text.lastIndexOf('\n\n', limit);
+    if (cut < limit * 0.55) cut = text.lastIndexOf('\n', limit);
+    if (cut < limit * 0.55) cut = text.lastIndexOf(' ', limit);
+    if (cut < limit * 0.55) cut = limit;
+    return {
+      page1: text.slice(0, cut).trimEnd(),
+      page2: text.slice(cut).trimStart(),
+      split: true,
+    };
+  }
+
   function buildProceedingsMomHtml(p) {
     if (!p) return '';
     const isGh = p.meetingType === 'gh';
@@ -9309,9 +9324,10 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       : 'Executive Committee Proceedings Register · Himuda Housing Colony Sanyard · housingcolonysanyard.in';
     const nextLabel = isGh ? 'Next GH meeting date' : 'Next EC meeting date';
     const body = p.proceedingsBody || '';
-    const bodySplit = body.length > 600;
-    const bodyP1 = bodySplit ? `${body.slice(0, 597)}…` : body;
-    const bodyP2 = bodySplit ? body.slice(597).trimStart() : '';
+    const split = splitProceedingsBodyForPrint(body);
+    const bodySplit = split.split;
+    const bodyP1 = split.page1;
+    const bodyP2 = split.page2;
 
     const page1MetaGh = isGh ? `
         <div class="field"><label>Quorum met (Yes / No)</label><div class="ruled">${escapeHtml(quorum) || '&nbsp;'}</div></div>` : '';
@@ -9371,11 +9387,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
       <div class="sheet" aria-label="MOM page 2">
         ${sheetHead('Page 2 of 2', addr2)}
-        <div class="banner">Proceedings continued <span class="sep">·</span> ${isGh ? 'Resolutions &amp; Actions' : 'Decisions &amp; Actions'}</div>
-        <div class="section grow">
+        <div class="banner">${bodySplit ? 'Proceedings continued' : 'Decisions'} <span class="sep">·</span> ${isGh ? 'Resolutions &amp; Actions' : 'Decisions &amp; Actions'}</div>
+        ${bodySplit ? `<div class="section">
           <h2>Proceedings / minutes (continued)</h2>
-          <div class="ruled-block xxl">${momText(bodyP2)}</div>
-        </div>
+          <div class="ruled-block lg">${momText(bodyP2)}</div>
+        </div>` : ''}
         <div class="section">
           <h2>Resolutions / decisions</h2>
           <table class="res-table">
@@ -9394,9 +9410,15 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
           <div class="field"><label>${nextLabel}</label><div class="ruled">${escapeHtml(formatIstDate(p.nextMeetingDate) || '') || '&nbsp;'}</div></div>
           <div class="field"><label>Signed / approved by</label><div class="ruled">${escapeHtml(p.signedBy || '') || '&nbsp;'}</div></div>
         </div>
-        <div class="sign-row">
-          <div class="sig">President / Chairman</div>
-          <div class="sig">General Secretary</div>
+        <div class="sign-stamp" aria-label="Signature and stamp">
+          <div class="box">
+            <div class="space"></div>
+            <div class="lbl">President / Chairman — signature &amp; stamp</div>
+          </div>
+          <div class="box">
+            <div class="space"></div>
+            <div class="lbl">General Secretary — signature &amp; stamp</div>
+          </div>
         </div>
         </div>
         <div class="foot-bar">${foot2}</div>
@@ -9697,6 +9719,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
   function resetProceedingsForm() {
     if (el('proceedingsEditId')) el('proceedingsEditId').value = '';
     if (el('proceedingsFormTitle')) el('proceedingsFormTitle').textContent = 'New register entry';
+    if (el('proceedingsRegisterNoInput')) el('proceedingsRegisterNoInput').value = '';
     if (el('proceedingsDateInput')) el('proceedingsDateInput').value = todayIstDate();
     ['proceedingsTimeInput', 'proceedingsTitleInput', 'proceedingsVenueInput', 'proceedingsChairInput',
       'proceedingsPresentInput', 'proceedingsAbsentInput', 'proceedingsAgendaInput', 'proceedingsBodyInput',
@@ -9719,6 +9742,9 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (!p) return;
     if (el('proceedingsEditId')) el('proceedingsEditId').value = p.id || '';
     if (el('proceedingsFormTitle')) el('proceedingsFormTitle').textContent = `Edit register entry ${p.registerLabel || ''}`.trim();
+    if (el('proceedingsRegisterNoInput')) {
+      el('proceedingsRegisterNoInput').value = p.registerNo ? String(p.registerNo) : '';
+    }
     if (el('proceedingsTypeInput')) el('proceedingsTypeInput').value = p.meetingType || proceedingsState.type;
     fillProceedingsSubtypeSelect(p.meetingType || proceedingsState.type, p.meetingSubtype || 'regular');
     syncProceedingsQuorumField();
@@ -9813,6 +9839,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     if (meetingType === 'gh' && quorumVal !== '') payload.quorumMet = quorumVal === '1';
     const editId = String(el('proceedingsEditId')?.value || '').trim();
     if (editId) payload.id = editId;
+    const registerRaw = String(el('proceedingsRegisterNoInput')?.value || '').trim();
+    if (registerRaw) payload.registerNo = registerRaw;
     if (saveBtn) saveBtn.disabled = true;
     if (statusLine) statusLine.textContent = 'Saving to register…';
     try {
@@ -9866,8 +9894,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom7">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom7">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom8">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom8">
       <style>
         @page { size: ${paperMap[paper]}; margin: 0; }
         html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }
