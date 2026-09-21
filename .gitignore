@@ -20,6 +20,7 @@ imported_projects/
 
 # Local scratch (renders, OCR, logo experiments)
 tmp/
+/Downloads/
 
 # Prebuilt Linux sidecar (rsync to EC2; never commit)
 services/veer-ai/dist/
