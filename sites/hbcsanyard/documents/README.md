@@ -15,6 +15,8 @@ These files are **for print production only**. They are not linked from the resi
 | `proceedings-gh-mom-pad.html` | **General House MOM Register** — 2-page blank form for detailed minutes |
 | `proceedings-ec-mom-pad.html` | **Executive Committee MOM Register** — 2-page blank form for detailed minutes |
 | `ResolutionAppointmentOfNewAdvocate.docx` | **Certified EC resolution** — appoint Advocate Shailesh Sharma; ₹50,000 fee 50/50 Society and B.C. Sharma |
+| `ec-mom-2026-09-12.html` / `.pdf` / `.txt` | **EC minutes** — 12 September 2026 (Register 1/2026), standardised wording |
+| `ec-meeting-agenda.html` / `.pdf` / `.txt` | **EC meeting agenda** — next sitting (date to fill) |
 
 These are also catalogued under **EC Desk → Templates** (upload more with title / category / tags).
 
