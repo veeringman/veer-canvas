@@ -9282,7 +9282,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
         <td>${escapeHtml(formatIstDate(a.dueDate) || a.dueDate || '')}</td>
         <td style="text-align:center">${a.done ? 'Yes' : ''}</td>
       </tr>`);
-    while (rows.length < 6) {
+    while (rows.length < 3) {
       rows.push('<tr><td style="height:10mm"></td><td></td><td></td><td></td></tr>');
     }
     return rows.join('');
@@ -9327,7 +9327,7 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
     const split = splitProceedingsBodyForPrint(body);
     const bodySplit = split.split;
     const bodyP1 = split.page1;
-    const bodyP2 = split.page2;
+    const bodyP2 = bodySplit ? split.page2 : split.page1;
 
     const page1MetaGh = isGh ? `
         <div class="field"><label>Quorum met (Yes / No)</label><div class="ruled">${escapeHtml(quorum) || '&nbsp;'}</div></div>` : '';
@@ -9387,11 +9387,11 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
 
       <div class="sheet" aria-label="MOM page 2">
         ${sheetHead('Page 2 of 2', addr2)}
-        <div class="banner">${bodySplit ? 'Proceedings continued' : 'Decisions'} <span class="sep">·</span> ${isGh ? 'Resolutions &amp; Actions' : 'Decisions &amp; Actions'}</div>
-        ${bodySplit ? `<div class="section">
+        <div class="banner">Proceedings continued <span class="sep">·</span> ${isGh ? 'Resolutions &amp; Actions' : 'Decisions &amp; Actions'}</div>
+        <div class="section grow">
           <h2>Proceedings / minutes (continued)</h2>
-          <div class="ruled-block lg">${momText(bodyP2)}</div>
-        </div>` : ''}
+          <div class="ruled-block xxl">${momText(bodyP2)}</div>
+        </div>
         <div class="section">
           <h2>Resolutions / decisions</h2>
           <table class="res-table">
@@ -9894,8 +9894,8 @@ html.is-capture-guard body>*:not(#ic-protect-shield){visibility:hidden!important
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Source+Sans+3:wght@500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom9">
-      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom9">
+      <link rel="stylesheet" href="${location.origin}/documents/proceedings-mom-print.css?v=20260921mom10">
+      <link rel="stylesheet" href="${location.origin}/documents/print-pad-common.css?v=20260921mom10">
       <style>
         @page { size: ${paperMap[paper]}; margin: 0; }
         html.pad-mom { --mom-print-w: ${paperFit.w}; --mom-print-h: ${paperFit.h}; }

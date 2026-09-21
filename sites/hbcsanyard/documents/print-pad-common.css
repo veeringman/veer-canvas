@@ -135,12 +135,13 @@
   }
   html.pad-mom .grow {
     flex: 1 1 auto !important;
-    min-height: 0 !important;
+    min-height: 36mm !important;
+    flex-shrink: 0 !important;
   }
   html.pad-mom .grow .ruled-block.xl,
   html.pad-mom .grow .ruled-block.xxl {
     flex: 1 1 auto !important;
-    min-height: 42mm !important;
+    min-height: 36mm !important;
     max-height: none !important;
   }
   html.pad-mom .sign-stamp {
@@ -148,7 +149,7 @@
     flex-shrink: 0 !important;
   }
   html.pad-mom .sign-stamp .box {
-    min-height: 34mm !important;
+    min-height: 28mm !important;
   }
   html.pad-mom .foot-bar {
     position: relative !important;
