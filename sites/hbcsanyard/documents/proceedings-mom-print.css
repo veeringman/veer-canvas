@@ -11,20 +11,34 @@
   --paper: #ffffff;
   --line: rgba(11, 42, 86, 0.10);
   --mom-page-h: 297mm;
-  --mom-print-h: 297mm; /* full A4; @page margin 0 */
+  /* Print/PDF: stay inside the paper box. 297mm + Chrome rounding overflows onto the next page and clips the following header. */
+  --mom-print-h: 277mm;
+  --mom-print-w: 210mm;
 }
+html[data-paper="a4"] { --mom-print-w: 210mm; --mom-print-h: 277mm; }
+html[data-paper="a5"] { --mom-print-w: 148mm; --mom-print-h: 196mm; }
+html[data-paper="letter"] { --mom-print-w: 215.9mm; --mom-print-h: 269mm; }
+html[data-paper="legal"] { --mom-print-w: 215.9mm; --mom-print-h: 345mm; }
 body {
   margin: 0;
   color: var(--ink);
   background: #cfd8e6;
   font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
 }
+.screen-hint {
+  text-align: center;
+  padding: 10px 14px;
+  font: 500 13px/1.45 system-ui, sans-serif;
+  color: #445;
+  max-width: 210mm;
+  margin: 0 auto;
+}
 .mom-print-root { max-width: 210mm; margin: 0 auto; }
 .sheet {
   position: relative;
   width: 210mm;
-  min-height: 297mm;
-  height: 297mm;
+  min-height: var(--mom-page-h);
+  height: var(--mom-page-h);
   margin: 0 auto 16px;
   padding: 0;
   background: var(--paper);
@@ -63,12 +77,12 @@ body {
 .pad {
   position: relative;
   z-index: 1;
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  padding: 4mm 11mm 0;
-  padding-bottom: 9mm;
+  padding: 4mm 11mm 2.5mm;
   min-height: 0;
+  overflow: hidden;
   box-sizing: border-box;
 }
 .brand {
@@ -77,6 +91,7 @@ body {
   gap: 4mm;
   align-items: center;
   padding: 0 0 2mm;
+  flex: 0 0 auto;
 }
 .brand .logo { width: 20mm; height: auto; display: block; border: 0; outline: 0; box-shadow: none; background: transparent; }
 .brand h1 {
@@ -101,6 +116,13 @@ body {
   font-weight: 600;
   color: var(--green);
 }
+.brand .reg-no {
+  margin: 0.5mm 0 0;
+  font-size: 6.8pt;
+  font-weight: 700;
+  color: var(--muted, #5a6a80);
+  letter-spacing: 0.02em;
+}
 .reg-box {
   border: 1pt solid rgba(11, 42, 86, 0.4);
   padding: 1.8mm 2.4mm;
@@ -124,7 +146,7 @@ body {
 }
 .page-tag {
   position: absolute;
-  top: 5mm;
+  top: 3.2mm;
   right: 12mm;
   z-index: 2;
   font-size: 7pt;
@@ -143,6 +165,7 @@ body {
   text-transform: uppercase;
   padding: 2.2mm 3mm;
   margin: 1.5mm 0 3mm;
+  flex: 0 0 auto;
 }
 .banner .sep { color: var(--gold); margin: 0 1.2mm; letter-spacing: 0; }
 .meta-grid {
@@ -226,6 +249,7 @@ table.res-table th {
   gap: 8mm;
   margin-top: 6mm;
   font-size: 8.4pt;
+  flex: 0 0 auto;
 }
 .sign-row .sig {
   border-top: 1pt solid rgba(11, 42, 86, 0.45);
@@ -235,12 +259,15 @@ table.res-table th {
   font-weight: 600;
 }
 .foot-bar {
-  position: absolute;
-  left: -11mm;
-  right: -11mm;
-  bottom: 0;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
   margin: 0;
+  flex: 0 0 auto;
   z-index: 2;
+  box-sizing: border-box;
   background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 48%, #124a38 100%);
   color: #f7f3ea;
   text-align: center;
@@ -264,61 +291,75 @@ table.res-table th {
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
     background: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .screen-hint { display: none !important; }
   .mom-print-root {
     max-width: none;
     margin: 0;
   }
   .sheet {
-    width: 100% !important;
+    width: var(--mom-print-w) !important;
     height: var(--mom-print-h) !important;
-    min-height: 0 !important;
+    min-height: var(--mom-print-h) !important;
     max-height: var(--mom-print-h) !important;
-    margin: 0 0 0 !important;
+    margin: 0 !important;
     border: 0 !important;
     background: #fff !important;
     box-shadow: none !important;
     overflow: hidden !important;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: auto;
+    break-after: auto;
+    page-break-before: always;
+    break-before: page;
     break-inside: avoid;
     page-break-inside: avoid;
   }
-  .sheet:last-of-type {
-    page-break-after: auto;
-    break-after: auto;
+  .sheet:first-of-type {
+    page-break-before: auto;
+    break-before: auto;
+  }
+  .accent-edge,
+  .accent-edge-thin,
+  .brand,
+  .banner,
+  .foot-bar {
+    flex-shrink: 0 !important;
   }
   .pad {
-    padding: 2mm 6mm 0;
-    padding-bottom: 8mm !important;
+    padding: 2mm 6mm 2mm !important;
     box-sizing: border-box !important;
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden !important;
   }
   .foot-bar {
-    position: absolute;
-    left: -6mm;
-    right: -6mm;
-    bottom: 0;
-    margin: 0;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 1.2mm 8mm !important;
   }
-  .ruled-block.sm { min-height: 9mm !important; }
-  .ruled-block.md { min-height: 14mm !important; }
-  .ruled-block.lg { min-height: 20mm !important; }
-  .ruled-block.xl { min-height: 28mm !important; }
-  .ruled-block.xxl { min-height: 40mm !important; }
+  .page-tag { top: 2.4mm !important; }
+  .ruled-block.sm { min-height: 8mm !important; }
+  .ruled-block.md { min-height: 12mm !important; }
+  .ruled-block.lg { min-height: 16mm !important; }
+  .ruled-block.xl { min-height: 22mm !important; }
+  .ruled-block.xxl { min-height: 28mm !important; }
   .grow .ruled-block.xl,
-  .grow .ruled-block.xxl { flex: 1 1 auto !important; min-height: 28mm !important; max-height: none !important; }
-  .section { margin: 1.2mm 0; }
-  .sign-row { margin-top: 3mm; }
-  .banner { margin: 1mm 0 2mm; padding: 1.6mm 3mm; }
-  .brand { padding-bottom: 1.2mm; }
-  .meta-grid { margin-bottom: 1.5mm; gap: 1.5mm 3mm; }
+  .grow .ruled-block.xxl { flex: 1 1 auto !important; min-height: 18mm !important; max-height: none !important; }
+  .section { margin: 1mm 0; }
+  .sign-row { margin-top: 2.5mm; }
+  .banner { margin: 1mm 0 1.6mm; padding: 1.4mm 3mm; }
+  .brand { padding-bottom: 1mm; }
+  .meta-grid { margin-bottom: 1.2mm; gap: 1.2mm 3mm; }
   .wm { opacity: 0.7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pad, .section, .grow { background: transparent !important; }
   table.res-table,

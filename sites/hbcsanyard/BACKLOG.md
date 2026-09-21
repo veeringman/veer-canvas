@@ -169,6 +169,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 - **MOM resolution voting** — circulate accept/reject from Proceedings; email + members area + Home Screen alerts; one vote per plot (2026-08-18)
 - **Matters tab** — app header renamed from “Concerns” to “Matters” (2026-08-17)
 - **Print pad footer fix** — shared `print-pad-common.css` caps central writing area (not header/footer) so full sheet fits printable A4 (2026-08-17)
+- **Proceedings/MoM print overflow** — each sheet stays on one paper page; in-flow footer; header no longer clipped (2026-09-21)
 - Vehicle pass Wallet plumbing (Apple `.pkpass` + Google save-link; disabled until issuer credentials)
 - **Treasury entitlement** — explicit grant (default Treasurer); validate → confirm on payments, ledger rows, No Dues; download gated until confirmed; ledger amounts still show after EC verify with status icons
 - Portal attestation (HMAC + QR) for No Dues / cash notes
@@ -177,6 +178,7 @@ Take the Himuda Housing Colony Sanyard resident portal beyond one colony — con
 
 ## Session notes
 
+- 2026-09-21: Proceedings/MoM print + PDF — sheets shorter than paper; footer in-flow so pages no longer overflow and headers are not clipped.
 - 2026-09-21: EC desk “Add delegate” expanded to Plot directory (profile, delegates, tenants, vehicles) for any household.
 - 2026-09-17: Accounts/ledger custom columns. EC Admin → Custom columns (up to 8). Values stored per plot (survive PDF re-import). Do not change pending/dues math.
 - 2026-09-17: AI Assist talks to eGenie at `https://egenie.veerlabs.solutions` (separate AI EC2 `100.52.147.238`), not localhost on the portal box.

@@ -3626,6 +3626,13 @@ body.is-view-only #grievanceForm {
   min-height: 297mm;
   max-height: 297mm;
 }
+@media print {
+  #proceedingsDetailBody .sheet {
+    height: var(--mom-print-h, 277mm);
+    min-height: var(--mom-print-h, 277mm);
+    max-height: var(--mom-print-h, 277mm);
+  }
+}
 @media (max-width: 900px) {
   #proceedingsDetailBody .sheet {
     width: 100%;

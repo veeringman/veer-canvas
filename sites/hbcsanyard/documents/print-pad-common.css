@@ -86,32 +86,49 @@
     margin-right: -14mm !important;
   }
 
-  /* —— MOM register pads —— */
+  /* —— MOM register pads (multi-page; never clip html/body) —— */
   html.pad-mom {
-    --mom-print-h: 297mm;
+    --mom-print-h: 277mm;
+    --mom-print-w: 210mm;
   }
+  html.pad-mom[data-paper="a5"] { --mom-print-w: 148mm; --mom-print-h: 196mm; }
+  html.pad-mom[data-paper="letter"] { --mom-print-w: 215.9mm; --mom-print-h: 269mm; }
+  html.pad-mom[data-paper="legal"] { --mom-print-w: 215.9mm; --mom-print-h: 345mm; }
+  html.pad-mom,
   html.pad-mom body {
-    overflow: hidden !important;
+    height: auto !important;
+    overflow: visible !important;
   }
   html.pad-mom .sheet {
     position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: var(--mom-print-w) !important;
     height: var(--mom-print-h) !important;
     min-height: var(--mom-print-h) !important;
     max-height: var(--mom-print-h) !important;
     overflow: hidden !important;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: auto !important;
+    break-after: auto !important;
+    page-break-before: always;
+    break-before: page;
   }
-  html.pad-mom .sheet:last-of-type {
-    page-break-after: avoid !important;
-    break-after: avoid-page !important;
+  html.pad-mom .sheet:first-of-type {
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+  html.pad-mom .accent-edge,
+  html.pad-mom .accent-edge-thin,
+  html.pad-mom .brand,
+  html.pad-mom .foot-bar {
+    flex-shrink: 0 !important;
   }
   html.pad-mom .pad {
     position: relative !important;
     flex: 1 1 auto !important;
     min-height: 0 !important;
     padding-top: 2mm !important;
-    padding-bottom: 8mm !important;
+    padding-bottom: 2mm !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
   }
@@ -122,17 +139,19 @@
   html.pad-mom .grow .ruled-block.xl,
   html.pad-mom .grow .ruled-block.xxl {
     flex: 1 1 auto !important;
-    min-height: 24mm !important;
+    min-height: 18mm !important;
     max-height: none !important;
   }
   html.pad-mom .foot-bar {
-    position: absolute !important;
-    left: -6mm !important;
-    right: -6mm !important;
-    bottom: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
     margin: 0 !important;
     padding: 1.2mm 8mm !important;
     z-index: 2 !important;
+    flex: 0 0 auto !important;
   }
   html.pad-mom .sign-row { margin-top: 1.5mm !important; }
   html.pad-mom .banner { margin-bottom: 0.8mm !important; padding: 1mm 3mm !important; }
